@@ -45,3 +45,4 @@ kvm:!::
 render:!::
 netdev:!::
 student:!::
+_ssh:!::

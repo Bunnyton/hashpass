@@ -1,39 +1,46 @@
-ls 
-ls -la
-exit
-ls
-exit
-ls
-ls -la
-clear
-ls
-vim ~/.bashrc
-ls
 apt update
-apt upgrade
- apt install vim
+apt install sudo
 ls
-ls -la
-exit
-ls
-ls -la
-cd /home/
-ls
-ls -la
-cd /
-ls
-ls -la
-cd home/
-ls
-ls -la
-ls -la
-vim /etc/host
+adduser student
 apt install vim
+apt install git
 ls
-vim /etc/hosts 
+exit
+chmod o+wr /var/log/hashpass.log
+touch /var/log/hashpass.log
+chmod o+wr /var/log/hashpass.log
+ls
+exit
+s
+vim /etc/sudoers
+ls
+groups student
+adduser student sudo
+exit
+ls
+ls -a
+cat /var/log/hashpass.log 
+vim /var/log/hashpass.log 
+ls
 exit
 ls
 exit
 ls
+exit
+ls
+exit
+ls
+ls -a
 ls -la
 exit
+script
+ls
+rm typescript 
+ls
+exit
+vim /etc/sudoers
+vim /etc/sudoers.d/shutdown
+ls
+exit
+shutdown
+shutdown now
