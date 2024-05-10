@@ -45,4 +45,3 @@ kvm:x:104:
 render:x:105:
 netdev:x:106:
 student:x:1000:
-_ssh:x:107:
