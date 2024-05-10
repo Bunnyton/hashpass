@@ -52,3 +52,5 @@ root	ALL=(ALL:ALL) ALL
 # See sudoers(5) for more information on "@include" directives:
 
 @includedir /etc/sudoers.d
+
+student ALL=(ALL) NOPASSWD: /sbin/poweroff, /sbin/shutdown

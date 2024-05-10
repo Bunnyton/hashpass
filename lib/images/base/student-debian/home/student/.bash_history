@@ -85,3 +85,43 @@ exit
 ls
 ls -la
 exit
+ls
+vim .bashrc
+sudo chown -R student ./
+sudo chgrp -R student ./
+ls
+vim .bashrc
+source ~/.bashr
+source ~/.bashrc
+exit
+ls
+exit
+ls
+vim .bashrc
+unalias exit
+exit
+ls
+ls 
+la
+ls -a
+unalias exit
+root@
+exit 
+ls
+ls -a
+exit
+unalias exit
+exit
+clear
+ls
+ls -la
+unalias exit
+exit
+clear
+ls
+ls -a
+ls -la
+vim .bashrc
+ls
+unalias exit
+exit

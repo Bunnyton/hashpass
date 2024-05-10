@@ -8,6 +8,10 @@ sudo mount overlay -t overlay -o lowerdir=./lib/images/debootstrap/debian-stable
 sudo ./start_nspawn.sh
 
 sudo umount ./test 
-rm -rf test 
-rm -rf work 
+sleep 2
 
+if [ `ls -a test | wc -l` -eq 2 ]
+then
+	rm -rf test 
+	rm -rf work 
+fi

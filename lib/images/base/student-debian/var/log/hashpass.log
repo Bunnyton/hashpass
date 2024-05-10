@@ -1,18 +1,133 @@
-Script started on 2024-05-10 00:40:01+03:00 [COMMAND="bash" TERM="xterm-24bit" TTY="/dev/pts/0" COLUMNS="85" LINES="24"]
-]0;student@debian-stable: ~[01;32mstudent@debian-stable[00m in [01;34m~[00m
-[00:40:01] [97mξ[0m ls
-]0;student@debian-stable: ~[01;32mstudent@debian-stable[00m in [01;34m~[00m
-[00:40:04] [97mξ[0m ls -la
-total 32
-drwx------ 2 student student 4096 May 10 00:39 [0m[01;34m.[0m
-drwxr-xr-x 1 root    root    4096 May  9 22:29 [01;34m..[0m
--rw------- 1 student student  711 May 10 00:40 .bash_history
--rw-r--r-- 1 student student  220 May  9 22:29 .bash_logout
--rw-r--r-- 1 student student 3691 May 10 00:39 .bashrc
--rw-r--r-- 1 student student  807 May  9 22:29 .profile
--rw------- 1 student student 8041 May 10 00:39 .viminfo
-]0;student@debian-stable: ~[01;32mstudent@debian-stable[00m in [01;34m~[00m
-[00:40:05] [97mξ[0m exit
-exit
+Script started on 2024-05-10 13:52:53+03:00 [COMMAND="sudo -u student bash" TERM="xterm-256color" TTY="/dev/pts/0" COLUMNS="238" LINES="55"]
+[?2004h]0;student@anton-MS-7C09: ~[01;32mstudent@anton-MS-7C09[00m in [01;34m~[00m
+[13:52:53] [97mξ[0m clear
+[?2004l[H[2J[3J[?2004h]0;student@anton-MS-7C09: ~[01;32mstudent@anton-MS-7C09[00m in [01;34m~[00m
+[13:52:53] [97mξ[0m ls
+[?2004l[?2004h]0;student@anton-MS-7C09: ~[01;32mstudent@anton-MS-7C09[00m in [01;34m~[00m
+[13:52:54] [97mξ[0m ls -l[Ka
+[?2004l[0m[01;34m.[0m  [01;34m..[0m  .bash_history  .bash_logout  .bashrc  .profile  .sudo_as_admin_successful  .viminfo
+[?2004h]0;student@anton-MS-7C09: ~[01;32mstudent@anton-MS-7C09[00m in [01;34m~[00m
+[13:52:56] [97mξ[0m ls -la
+[?2004ltotal 36
+drwxr-xr-x 2 student student 4096 May 10 13:32 [0m[01;34m.[0m
+drwxr-xr-x 1 root    root    4096 May 10 03:59 [01;34m..[0m
+-rw-r--r-- 1 student student  992 May 10 13:43 .bash_history
+-rw-r--r-- 1 student student  220 May 10 03:59 .bash_logout
+-rw-r--r-- 1 student student 3723 May 10 13:05 .bashrc
+-rw-r--r-- 1 student student  807 May 10 03:59 .profile
+-rw-r--r-- 1 student student    0 May 10 13:05 .sudo_as_admin_successful
+-rw-r--r-- 1 student student 8371 May 10 13:32 .viminfo
+[?2004h]0;student@anton-MS-7C09: ~[01;32mstudent@anton-MS-7C09[00m in [01;34m~[00m
+[13:52:58] [97mξ[0m vim .s[Kbashrc
+[?2004l[?1006;1000h[?1002h[?1049h[22;0;0t[>4;2m[?1h=[?2004h[?1004h[1;55r[?12h[?12l[22;2t[22;1t[27m[23m[29m[m[H[2J[?25l[55;1H".bashrc" 119L, 3723B[2;1H▽[6n[2;1H  [3;1HPzz\[0%m[6n[3;1H           [1;1H[>c]10;?]11;?[1;1H[34m# If this is an xterm set the title to user@host:dir[m
+[38;5;130mcase[m [38;5;130m"[m[35m$TERM[m[38;5;130m"[m [38;5;130min[m[2;16H[K[3;1Hxterm*|rxvt*[38;5;130m)[m[3;14H[K[4;5H[35mPS1[m[38;5;130m="[m[35m\[\e[m[31m]0;[m[35m${debian_chroot[m[38;5;130m:+[m([35m$debian_chroot[m)[35m}[m[35m\u[m[31m@[m[35m\h[m[31m: [m[35m\w\a\][m[35m$PS1[m[38;5;130m"
+[m    [38;5;130m;;[m
+*[38;5;130m)
+[m    [38;5;130m;;
+esac[m
 
-Script done on 2024-05-10 00:40:09+03:00 [COMMAND_EXIT_CODE="0"]
+[34m# enable color support of ls and also add handy aliases[m
+[38;5;130mif [[m [38;5;130m-x[m /usr/bin/dircolors [38;5;130m];[m [38;5;130mthen
+[m    [38;5;130mtest[m [38;5;130m-r[m ~/.dircolors [38;5;130m&&[m [38;5;130meval[m [38;5;130m"[m[35m$([m[35mdircolors -b ~/.dircolors[m[35m)[m[38;5;130m"[m [38;5;130m||[m [38;5;130meval[m [38;5;130m"[m[35m$([m[35mdircolors -b[m[35m)[m[38;5;130m"
+[m    [38;5;130malias [m[36mls[m[38;5;130m='[m[31mls --color=auto[m[38;5;130m'[m
+    [34m#alias dir='dir --color=auto'
+[m    [34m#alias vdir='vdir --color=auto'[17;5H#alias grep='grep --color=auto'
+[m    [34m#alias fgrep='fgrep --color=auto'
+[m    [34m#alias egrep='egrep --color=auto'[m
+[38;5;130mfi[m
+
+[34m# colored GCC warnings and errors
+#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+
+# some more ls aliases
+#alias ll='ls -l'
+#alias la='ls -A'
+#alias l='ls -CF'
+
+# Alias definitions.
+# You may want to put all your additions into a separate file like
+# ~/.bash_aliases, instead of adding them here directly.
+# See /usr/share/doc/bash-doc/examples in the bash-doc package.[m
+
+[38;5;130mif [[m [38;5;130m-f[m ~/.bash_aliases [38;5;130m];[m [38;5;130mthen
+[m   [38;5;130m . [m~/.bash_aliases
+[38;5;130mfi[m
+
+[34m# enable programmable completion features (you don't need to enable
+# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
+# sources /etc/bash.bashrc).[m
+[38;5;130mif ![m [38;5;130mshopt[m [35m-oq[m posix[38;5;130m;[m [38;5;130mthen
+[m  [38;5;130mif [[m [38;5;130m-f[m /usr/share/bash-completion/bash_completion [38;5;130m];[m [38;5;130mthen
+[m   [38;5;130m . [m/usr/share/bash-completion/bash_completion
+  [38;5;130melif[m [38;5;130m[[m [38;5;130m-f[m /etc/bash_completion [38;5;130m];[m [38;5;130mthen
+[m   [38;5;130m . [m/etc/bash_completion
+  [38;5;130mfi
+fi
+
+export[m [36mPS1[m=[38;5;130m'[m[31m\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\] in \[\033[01;34m\]\w\[\033[00m\]\n[\t] \033[97mξ[50;148H\033[0m [m[38;5;130m'
+
+cd[m ~
+
+[38;5;130malias [m[36mexit[m[38;5;130m='[m[31msudo shutdown now[m[38;5;130m'[m[55;221H119,1[9CBot[54;1H[?25h[?4mP+q436f\P+q6b75\P+q6b64\P+q6b72\P+q6b6c\P+q2332\P+q2334\P+q2569\P+q2a37\P+q6b31\P$q q\[?12$p[?25l[55;211H:[54;1H[55;212H2[54;1H[55;213H8[54;1H[55;214H2[54;1H[55;215H8[54;1H[55;216H/[54;1H[55;217H2[54;1H[55;218Ha[54;1H[55;219H2[54;1H[55;220Ha[54;1H[55;211H          [54;1H[27m[23m[29m[m[H[2J[1;1H[96m# If this is an xterm set the title to user@host:dir[m
+[93mcase[m [93m"[m[38;5;81m$TERM[m[93m"[m [93min[m
+xterm*|rxvt*[93m)[m
+    [38;5;81mPS1[m[93m="[m[38;5;224m\[\e[m[95m]0;[m[38;5;81m${debian_chroot[m[93m:+[m([38;5;81m$debian_chroot[m)[38;5;81m}[m[38;5;224m\u[m[95m@[m[38;5;224m\h[m[95m: [m[38;5;224m\w\a\][m[38;5;81m$PS1[m[93m"
+[m    [93m;;[m
+*[93m)
+[m    [93m;;
+esac[m
+
+[96m# enable color support of ls and also add handy aliases[m
+[93mif [[m [93m-x[m /usr/bin/dircolors [93m];[m [93mthen
+[m    [93mtest[m [93m-r[m ~/.dircolors [93m&&[m [93meval[m [93m"[m[38;5;81m$([m[38;5;224mdircolors -b ~/.dircolors[m[38;5;81m)[m[93m"[m [93m||[m [93meval[m [93m"[m[38;5;81m$([m[38;5;224mdircolors -b[m[38;5;81m)[m[93m"
+[m    [93malias [m[1m[96mls[m[93m='[m[95mls --color=auto[m[93m'[m
+    [96m#alias dir='dir --color=auto'
+[m    [96m#alias vdir='vdir --color=auto'[17;5H#alias grep='grep --color=auto'
+[m    [96m#alias fgrep='fgrep --color=auto'
+[m    [96m#alias egrep='egrep --color=auto'[m
+[93mfi[m
+
+[96m# colored GCC warnings and errors
+#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+
+# some more ls aliases
+#alias ll='ls -l'
+#alias la='ls -A'
+#alias l='ls -CF'
+
+# Alias definitions.
+# You may want to put all your additions into a separate file like
+# ~/.bash_aliases, instead of adding them here directly.
+# See /usr/share/doc/bash-doc/examples in the bash-doc package.[m
+
+[93mif [[m [93m-f[m ~/.bash_aliases [93m];[m [93mthen
+[m   [93m . [m~/.bash_aliases
+[93mfi[m
+
+[96m# enable programmable completion features (you don't need to enable
+# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
+# sources /etc/bash.bashrc).[m
+[93mif ![m [93mshopt[m [38;5;224m-oq[m posix[93m;[m [93mthen
+[m  [93mif [[m [93m-f[m /usr/share/bash-completion/bash_completion [93m];[m [93mthen
+[m   [93m . [m/usr/share/bash-completion/bash_completion
+  [93melif[m [93m[[m [93m-f[m /etc/bash_completion [93m];[m [93mthen
+[m   [93m . [m/etc/bash_completion
+  [93mfi
+fi
+
+export[m [1m[96mPS1[m=[93m'[m[95m\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\] in \[\033[01;34m\]\w\[\033[00m\]\n[\t] \033[97mξ[50;148H\033[0m [m[93m'
+
+cd[m ~
+
+[93malias [m[1m[96mexit[m[93m='[m[95msudo shutdown now[m[93m'[m[55;221H119,1[9CBot".bashrc" 119L, 3723B[54;1H[?25h[?25l[55;211H^[[54;1H[55;211H  [54;1H[55;211H^[[54;1H[55;211H  [54;1H[?25h[?25l[55;211Hj[54;1H[55;211H [54;1H[?25h[?25l[55;211HG[54;1H[55;211H [54;1H[?25h[?25l[55;211H^[[54;1H[55;211H  [54;1H[55;211H^[[54;1H[55;211H  [54;1H[?25h[?25l[55;211Hd[54;1H[?25h[?25l[55;212Hd[54;1H[55;211H  [53;1H
+[94m~                                                                                                                                                                                                                                             [m[55;223H8,0-1[53;1H[?25h[?25l[55;211Hd[53;1H[?25h[?25l[55;212Hd[53;1H[55;211H  [52;1H
+[94m~                                                                                                                                                                                                                                             [m[55;223H7,1  [52;1H[?25h[?25l[55;211H^[[52;1H[55;211H  [52;1H[55;211H^[[52;1H[55;211H  [52;1H[?25h[?25l[55;211H^[[52;1H[55;211H  [52;1H[55;211H^[[52;1H[55;211H  [52;1H[?25h[?25l[55;211H:[52;1H[55;1H[K[55;1H:[?25hwq[?25l[?1006;1000l[?1002l[?2004l[>4;m".bashrc" 117L, 3691B written[23;2t[23;1t
+[?1004l[?2004l[?1l>[?1049l[23;0;0t[?25h[>4;m[?2004h]0;student@anton-MS-7C09: ~[01;32mstudent@anton-MS-7C09[00m in [01;34m~[00m
+[13:53:07] [97mξ[0m ls
+[?2004l[?2004h]0;student@anton-MS-7C09: ~[01;32mstudent@anton-MS-7C09[00m in [01;34m~[00m
+[13:53:08] [97mξ[0m a[Kunalias exit
+[?2004l[?2004h]0;student@anton-MS-7C09: ~[01;32mstudent@anton-MS-7C09[00m in [01;34m~[00m
+[13:53:17] [97mξ[0m exit
+[?2004lexit
+
+Script done on 2024-05-10 13:53:17+03:00 [COMMAND_EXIT_CODE="0"]
