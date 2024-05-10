@@ -1,10 +1,0 @@
-Script started on 2024-05-09 22:55:20+03:00 [TERM="xterm-24bit" TTY="/dev/pts/2" COLUMNS="80" LINES="24"]
-Welcome to fish, the friendly interactive shell
-Type `help` for instructions on how to use fish
-[1 q[?2004h]7;file://anton-MS-7C09/home/anton/LinuxWork/study/8/nirs]0;fish /home/anton/LinuxWork/study/8/nirs[30m(B[m[K[1m[32m[I](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
-[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[K[4Cl[5C[38;2;164;0;0ml[5C[30m(B[m[38;2;119;119;119ms[5C[30m(B[m[38;2;164;0;0ms[6C[30m(B[m[38;2;0;255;0mls[6C[30m(B[m[6C
-[30m(B[m[1 q[?2004l]0;ls /home/anton/LinuxWork/study/8/nirs[30m(B[m[0m[01;32mhashpass[0m  [01;34mlib[0m  log.txt  [01;34mnhi[0m  [01;32mnhi_clear.sh[0m  [01;34mtest[0m  typescript
-[1 q[2m⏎(B[m                                                                               ⏎ [K[?2004h]0;fish /home/anton/LinuxWork/study/8/nirs[30m(B[m[K[1m[32m[I](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
-[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[K[4Ce[5C[38;2;119;119;119mxit[5C[30m(B[m[38;2;164;0;0me[38;2;119;119;119mxit[5C[30m(B[m[38;2;164;0;0mx[38;2;119;119;119mit[6C[30m(B[m[38;2;0;255;0mex[38;2;119;119;119mit[6C[30m(B[m[38;2;0;255;0mi[38;2;119;119;119mt[7C[30m(B[m[38;2;164;0;0mexi[38;2;119;119;119mt[7C[30m(B[m[38;2;164;0;0mt[8C[30m(B[m[38;2;0;255;0mexit[8C[30m(B[m[8C
-[30m(B[m[1 q[?2004l]0;exit /home/anton/LinuxWork/study/8/nirs[30m(B[m[1 q[30m(B[m[?2004l
-Script done on 2024-05-09 22:55:23+03:00 [COMMAND_EXIT_CODE="0"]
