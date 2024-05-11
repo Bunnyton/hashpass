@@ -125,3 +125,5 @@ vim .bashrc
 ls
 unalias exit
 exit
+history
+exit

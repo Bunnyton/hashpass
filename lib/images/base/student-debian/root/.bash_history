@@ -52,3 +52,5 @@ script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
 script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
 script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
 script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now

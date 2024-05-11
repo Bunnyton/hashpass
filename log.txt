@@ -1,0 +1,40 @@
+Script started on 2024-05-11 03:20:52+03:00 [TERM="xterm-256color" TTY="/dev/pts/1" COLUMNS="238" LINES="55"]
+Welcome to fish, the friendly interactive shell
+Type `help` for instructions on how to use fish
+[1 q[?2004h]7;file://anton-MS-7C09/home/anton/LinuxWork/study/8/nirs]0;fish /home/anton/LinuxWork/study/8/nirs[30m(B[m[K[1m[32m[I](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
+[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[K[4Cb[5C[38;2;164;0;0mb[5C[30m(B[m[38;2;119;119;119mash[5C[30m(B[m[38;2;164;0;0ma[38;2;119;119;119msh[6C[30m(B[m[38;2;164;0;0ms[38;2;119;119;119mh[7C[30m(B[m[38;2;164;0;0mh[8C[30m(B[m[38;2;0;255;0mbash[8C[30m(B[m[8C
+[30m(B[m[1 q[?2004l]0;bash /home/anton/LinuxWork/study/8/nirs[30m(B[m]0;anton@anton-MS-7C09: ~/LinuxWork/study/8/nirs[01;32manton@anton-MS-7C09[00m in [01;34m~/LinuxWork/study/8/nirs[00m
+[03:20:53] [97mξ[0m ls
+[0m[01;32mget_last_command_output.sh[0m  [01;32mhashpass[0m  [01;34mlib[0m  log.txt  [01;34mnhi[0m  [01;32mnhi_clear.sh[0m  [01;32mstart_nspawn.sh[0m  [01;32mstart.sh[0m  trap.txt
+]0;anton@anton-MS-7C09: ~/LinuxWork/study/8/nirs[01;32manton@anton-MS-7C09[00m in [01;34m~/LinuxWork/study/8/nirs[00m
+[03:20:55] [97mξ[0m ls -l
+итого 36
+-rwxrwxr-x  1 anton anton  372 мая 11 03:19 [0m[01;32mget_last_command_output.sh[0m
+-rwxrwxr-x  1 anton anton  531 мая  8 05:24 [01;32mhashpass[0m
+drwxrwxr-x  3 anton anton 4096 мая  9 22:25 [01;34mlib[0m
+-rw-rw-r--  1 anton anton 1463 мая 11 03:21 log.txt
+drwxrwxr-x 11 anton anton 4096 мая  9 19:12 [01;34mnhi[0m
+-rwxrwxr-x  1 anton anton  182 мая  9 20:55 [01;32mnhi_clear.sh[0m
+-rwxrwxr-x  1 anton anton  497 мая 10 13:42 [01;32mstart_nspawn.sh[0m
+-rwxrwxr-x  1 anton anton  336 мая 10 12:59 [01;32mstart.sh[0m
+-rw-rw-r--  1 anton anton  195 мая 11 03:20 trap.txt
+]0;anton@anton-MS-7C09: ~/LinuxWork/study/8/nirs[01;32manton@anton-MS-7C09[00m in [01;34m~/LinuxWork/study/8/nirs[00m
+[03:21:06] [97mξ[0m echo      echo 
+
+]0;anton@anton-MS-7C09: ~/LinuxWork/study/8/nirs[01;32manton@anton-MS-7C09[00m in [01;34m~/LinuxWork/study/8/nirs[00m
+[03:21:22] [97mξ[0m touch trap    log.txt
+]0;anton@anton-MS-7C09: ~/LinuxWork/study/8/nirs[01;32manton@anton-MS-7C09[00m in [01;34m~/LinuxWork/study/8/nirs[00m
+[03:21:39] [97mξ[0m exit
+exit
+[1 q[2m⏎(B[m                                                                                                                                                                                                                                             ⏎ [K[?2004h]0;fish /home/anton/LinuxWork/study/8/nirs[30m(B[m[K[1m[32m[I](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
+[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[K[4Cs[5C[38;2;119;119;119mcript -f log.txt[5C[30m(B[m[38;2;164;0;0ms[38;2;119;119;119mcript -f log.txt[5C[30m(B[m[38;2;164;0;0mh[30m(B[m[K[6C[38;2;0;255;0msh[6C[30m(B[m[38;2;119;119;119m --help[6C[30m(B[m[38;2;0;255;0mu[30m(B[m[K[7C[38;2;164;0;0mshu[7C[30m(B[m[38;2;119;119;119mtdown 40[7C[30m(B[m[38;2;164;0;0mt[38;2;119;119;119mdown 40[8C[30m(B[m[38;2;164;0;0md[38;2;119;119;119mown 40[9C[30m(B[m[38;2;164;0;0mo[38;2;119;119;119mwn 40[10C[30m(B[m[38;2;164;0;0mw[38;2;119;119;119mn 40[11C[30m(B[m[38;2;164;0;0mn[38;2;119;119;119m 40[12C[30m(B[m[38;2;0;255;0mshutdown[38;2;119;119;119m 40[12C[30m(B[m[38;2;0;255;0m [38;2;119;119;119m40[13C[30m(B[m [38;2;119;119;119m40[13C[30m(B[mo[K[14C[38;2;48;190;48mo[14C[30m(B[m[38;2;48;190;48mw[15C[30m(B[m
+[30m(B[m[1 q[?2004l]0;shutdown ow /home/anton/LinuxWork/study/8/nirs[30m(B[mFailed to parse time specification: ow
+[1 q[2m⏎(B[m                                                                                                                                                                                                                                             ⏎ [K[?2004h]0;fish /home/anton/LinuxWork/study/8/nirs[30m(B[m[K[1m[32m[I](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
+[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[K[4Cshutdown ow[15C[11D[38;2;0;255;0mshutdown[30m(B[m [38;2;48;190;48mow[15C[30m(B[m[1 q[14C[A[K[1m[31m[N](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
+[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[38;2;0;255;0mshutdown[30m(B[m [38;2;48;190;48mow[30m(B[m[K[14C[14C[1 q[1m[100mw[14C(B[m[30m[30m(B[m[A[K[1m[35m[V](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
+[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[38;2;0;255;0mshutdown[30m(B[m [38;2;48;190;48mo[1m[30m(B[m[100mw(B[m[30m[30m(B[m[K[14C[1 q[38;2;48;190;48mw[14C[30m(B[m[A[K[1m[31m[N](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
+[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[38;2;0;255;0mshutdown[30m(B[m [38;2;48;190;48mow[30m(B[m[K[14C[13C[1 q[A[K[1m[32m[I](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
+[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[38;2;0;255;0mshutdown[30m(B[m [38;2;48;190;48mow[30m(B[m[K[13C[38;2;48;190;48mnow[14C[30m(B[m[14C[16C
+[30m(B[m[1 q[?2004l]0;shutdown now /home/anton/LinuxWork/study/8/nirs[30m(B[m[1 q[2m⏎(B[m                                                                                                                                                                                                                                             ⏎ [K[?2004h]0;fish /home/anton/LinuxWork/study/8/nirs[30m(B[m[K[1m[32m[I](B[m [38;2;255;255;255m╭─[38;2;223;0;95manton [38;2;255;255;255mat [38;2;223;95;0manton-MS-7C09(B[m[38;2;255;255;255m in [38;2;135;255;0m/home/anton/LinuxWork/study/8/nirs[38;2;95;223;255m
+[38;2;255;255;255m╰[38;2;255;255;255m─λ (B[m[K[4C
+[30m(B[m[30m(B[m[?2004l

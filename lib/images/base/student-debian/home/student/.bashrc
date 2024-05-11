@@ -112,6 +112,6 @@ if ! shopt -oq posix; then
   fi
 fi
 
-export PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\] in \[\033[01;34m\]\w\[\033[00m\]\n[\t] \033[97mξ\033[0m '
+export PS1="\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\] in \[\033[01;34m\]\w\[\033[00m\]\n[\t] \[\033[97m\]ξ\[\033[0m "
 
 cd ~
