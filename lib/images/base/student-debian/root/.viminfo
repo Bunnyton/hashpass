@@ -12,7 +12,7 @@
 ~h
 # Command Line History (newest to oldest):
 :q
-|2,0,1715337180,,"q"
+|2,0,1715439883,,"q"
 :wq
 |2,0,1715334982,,"wq"
 
@@ -30,26 +30,44 @@
 |3,1,36,0,1,0,1715336874,"#"
 
 # File marks:
-'0  18  0  ~/.bashrc
-|4,48,18,0,1715337180,"~/.bashrc"
-'1  41  0  ~/.bash_history
-|4,49,41,0,1715337174,"~/.bash_history"
-'2  18  0  ~/.bashrc
-|4,50,18,0,1715336900,"~/.bashrc"
-'3  56  57  /etc/sudoers
-|4,51,56,57,1715334982,"/etc/sudoers"
+'0  56  0  /etc/sudoers
+|4,48,56,0,1715439883,"/etc/sudoers"
+'1  18  0  ~/.bashrc
+|4,49,18,0,1715337180,"~/.bashrc"
+'2  41  0  ~/.bash_history
+|4,50,41,0,1715337174,"~/.bash_history"
+'3  18  0  ~/.bashrc
+|4,51,18,0,1715336900,"~/.bashrc"
+'4  56  57  /etc/sudoers
+|4,52,56,57,1715334982,"/etc/sudoers"
 
 # Jumplist (newest first):
+-'  56  0  /etc/sudoers
+|4,39,56,0,1715439883,"/etc/sudoers"
+-'  18  0  ~/.bashrc
+|4,39,18,0,1715337180,"~/.bashrc"
 -'  18  0  ~/.bashrc
 |4,39,18,0,1715337180,"~/.bashrc"
 -'  41  0  ~/.bash_history
 |4,39,41,0,1715337174,"~/.bash_history"
 -'  41  0  ~/.bash_history
 |4,39,41,0,1715337174,"~/.bash_history"
+-'  41  0  ~/.bash_history
+|4,39,41,0,1715337174,"~/.bash_history"
+-'  41  0  ~/.bash_history
+|4,39,41,0,1715337174,"~/.bash_history"
 -'  1  0  ~/.bash_history
 |4,39,1,0,1715337173,"~/.bash_history"
 -'  1  0  ~/.bash_history
 |4,39,1,0,1715337173,"~/.bash_history"
+-'  1  0  ~/.bash_history
+|4,39,1,0,1715337173,"~/.bash_history"
+-'  1  0  ~/.bash_history
+|4,39,1,0,1715337173,"~/.bash_history"
+-'  18  0  ~/.bashrc
+|4,39,18,0,1715336900,"~/.bashrc"
+-'  18  0  ~/.bashrc
+|4,39,18,0,1715336900,"~/.bashrc"
 -'  18  0  ~/.bashrc
 |4,39,18,0,1715336900,"~/.bashrc"
 -'  18  0  ~/.bashrc
@@ -60,6 +78,18 @@
 |4,39,19,0,1715336899,"~/.bashrc"
 -'  19  0  ~/.bashrc
 |4,39,19,0,1715336899,"~/.bashrc"
+-'  19  0  ~/.bashrc
+|4,39,19,0,1715336899,"~/.bashrc"
+-'  19  0  ~/.bashrc
+|4,39,19,0,1715336899,"~/.bashrc"
+-'  19  0  ~/.bashrc
+|4,39,19,0,1715336899,"~/.bashrc"
+-'  1  0  ~/.bashrc
+|4,39,1,0,1715336870,"~/.bashrc"
+-'  1  0  ~/.bashrc
+|4,39,1,0,1715336870,"~/.bashrc"
+-'  1  0  ~/.bashrc
+|4,39,1,0,1715336870,"~/.bashrc"
 -'  1  0  ~/.bashrc
 |4,39,1,0,1715336870,"~/.bashrc"
 -'  1  0  ~/.bashrc
@@ -82,6 +112,8 @@
 |4,39,56,57,1715334982,"/etc/sudoers"
 -'  56  57  /etc/sudoers
 |4,39,56,57,1715334982,"/etc/sudoers"
+-'  1  0  /etc/sudoers
+|4,39,1,0,1715334848,"/etc/sudoers"
 -'  1  0  /etc/sudoers
 |4,39,1,0,1715334848,"/etc/sudoers"
 -'  1  0  /etc/sudoers
@@ -101,6 +133,13 @@
 
 # History of marks within files (newest to oldest):
 
+> /etc/sudoers
+	*	1715439883	0
+	"	56	0
+	^	56	58
+	.	56	58
+	+	56	58
+
 > ~/.bashrc
 	*	1715337176	0
 	"	18	0
@@ -110,10 +149,3 @@
 > ~/.bash_history
 	*	1715337173	0
 	"	41	0
-
-> /etc/sudoers
-	*	1715334981	0
-	"	56	57
-	^	56	58
-	.	56	58
-	+	56	58

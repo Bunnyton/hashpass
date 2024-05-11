@@ -54,3 +54,37 @@ script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
 script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
 script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
 script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+ls
+ls -la
+users
+vim /etc/sudoers
+users
+cd /home/
+ls
+cd student/
+ls
+ ls -la
+cd ../
+ls
+adduser student sudo 
+adduser student 
+ls
+ls -la
+cd student/
+ls
+ls -la
+cd ../
+su - student
+sudo chmod 4644 /etc/sudoers 
+chmod 4644 /etc/sudoers 
+ls
+chown -R student ./student/
+chgrp -R student ./student/
+su - student
+ls
+chmod 444 /etc/sudoers
+ls -l /etc/sudoers
+chmod 4755 /usr/bin/sudo
+su - student
+exit

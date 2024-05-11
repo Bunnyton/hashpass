@@ -11,8 +11,8 @@ spawn systemd-nspawn -b -q \
 
 expect "login" { send "root\r" }
 expect "Password" { send "root\r" }
-expect "root@" { send "script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now\r" }
-expect "@" { send "clear\r" }
+# expect "root@" { send "script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now\r" }
+# expect "@" { send "clear\r" }
 
 interact 
 

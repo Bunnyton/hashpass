@@ -127,3 +127,19 @@ unalias exit
 exit
 history
 exit
+id
+chown -R student /home/student
+sudo chown -R student /home/student
+ls
+ls -la
+sudo chown -R student ./
+exit
+sudo apt update
+exit
+sudo apt update
+ls -l /etc/sudo.conf 
+chmod 440 /etc/sudo.conf
+sudo chmod 440 /etc/sudo.conf
+sudo apt update
+exit
+sudo shutdown now
