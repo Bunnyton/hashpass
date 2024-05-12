@@ -13,7 +13,7 @@ fi
 
 if [ `ls -a lib/images/debootstrap | wc -l` -eq 2 ]
 then
-	cd lib/images/deboostrap
+	cd lib/images/debootstrap
 	debootstrap stable ./debian-stable http://mirror.yandex.ru/debian
 	cd -
 fi
