@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 if [[ $(whoami) != "root" && $EUID -ne 0 ]]
 then
     echo "Скрипт должен иметь права суперпользователя, пожалуйста, воспользуйтесь sudo"
@@ -13,9 +14,10 @@ fi
 
 if [ `ls -a lib/images/debootstrap | wc -l` -eq 2 ]
 then
+	CURDIR=$PWD
 	cd lib/images/debootstrap
 	debootstrap stable ./debian-stable http://mirror.yandex.ru/debian
-	cd -
+	cd $CURDIR
 fi
 
 
