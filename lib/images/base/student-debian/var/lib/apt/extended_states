@@ -126,3 +126,111 @@ Package: openssl
 Architecture: amd64
 Auto-Installed: 1
 
+Package: python3.11
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libmagic-mgc
+Architecture: amd64
+Auto-Installed: 1
+
+Package: python3-minimal
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libmagic1
+Architecture: amd64
+Auto-Installed: 1
+
+Package: file
+Architecture: amd64
+Auto-Installed: 1
+
+Package: bzip2
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libpipeline1
+Architecture: amd64
+Auto-Installed: 1
+
+Package: python3
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libpython3.11-minimal
+Architecture: amd64
+Auto-Installed: 1
+
+Package: xz-utils
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libuchardet0
+Architecture: amd64
+Auto-Installed: 1
+
+Package: lynx
+Architecture: amd64
+Auto-Installed: 1
+
+Package: man-db
+Architecture: amd64
+Auto-Installed: 1
+
+Package: mailcap
+Architecture: amd64
+Auto-Installed: 1
+
+Package: media-types
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libnsl2
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libpython3.11-stdlib
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libsqlite3-0
+Architecture: amd64
+Auto-Installed: 1
+
+Package: xsel
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libpython3-stdlib
+Architecture: amd64
+Auto-Installed: 1
+
+Package: lynx-common
+Architecture: amd64
+Auto-Installed: 1
+
+Package: python3.11-minimal
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libpcre2-32-0
+Architecture: amd64
+Auto-Installed: 1
+
+Package: fish-common
+Architecture: amd64
+Auto-Installed: 1
+
+Package: groff-base
+Architecture: amd64
+Auto-Installed: 1
+
+Package: bsdextrautils
+Architecture: amd64
+Auto-Installed: 1
+
+Package: libcurl4
+Architecture: amd64
+Auto-Installed: 1
+

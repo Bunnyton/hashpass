@@ -1,0 +1,9 @@
+0216c07fbf12c16920b2ae976872278d  usr/bin/fish
+bf0e82bce9527170f21f16ad60c26a94  usr/bin/fish_indent
+cea98a18be0a4e708d388b2eaeb50452  usr/bin/fish_key_reader
+fe3f52ec18508151bece6bbdf42d7626  usr/share/doc/fish/NEWS.Debian.gz
+caec0ab7957229b26c387f92059dbdbe  usr/share/doc/fish/README.rst.gz
+03099a691f8a3143340e42cf4b505499  usr/share/doc/fish/changelog.Debian.gz
+838ca962e6aa1594b5610f39e151f136  usr/share/doc/fish/changelog.gz
+c1af1bff7c4ed68093255ff109343929  usr/share/doc/fish/copyright
+9a1c791e1dacbb0afea7d7a8909e4de4  usr/share/menu/fish

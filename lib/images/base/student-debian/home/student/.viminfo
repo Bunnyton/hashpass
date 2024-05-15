@@ -11,10 +11,14 @@
 # hlsearch on (H) or off (h):
 ~h
 # Command Line History (newest to oldest):
-:wq
-|2,0,1715386681,,"wq"
 :q
-|2,0,1715386613,,"q"
+|2,0,1715732634,,"q"
+:qw
+|2,0,1715728894,,"qw"
+:q!
+|2,0,1715728825,,"q!"
+:wq
+|2,0,1715728823,,"wq"
 
 # Search String History (newest to oldest):
 
@@ -25,282 +29,304 @@
 # Debug Line History (newest to oldest):
 
 # Registers:
-""1	LINE	0
-	export PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\] in \[\033[01;34m\]\w\[\033[00m\]\n[\t] \[\033[97m\]ξ\[\033[0m\] '
-|3,1,1,1,1,0,1715386680,"export PS1='\\[\\e]0;\\u@\\h: \\w\\a\\]${debian_chroot:+($debian_chroot)}\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\] in \\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\n[\\t] \\[\\033[97m\\]ξ\\[\\033[0m\\] '"
+"1	LINE	0
+	
+|3,0,1,1,1,0,1715728214,""
 "2	LINE	0
-	
-|3,0,2,1,1,0,1715338384,""
+	export PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\] in \[\033[01;34m\]\w\[\033[00m\]\n[\t] \[\033[97m\]¿\[\033[0m\] '
+|3,0,2,1,1,0,1715386680,"export PS1='\\[\\e]0;\\u@\\h: \\w\\a\\]${debian_chroot:+($debian_chroot)}\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\] in \\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\n[\\t] \\[\\033[97m\\]¿\\[\\033[0m\\] '"
 "3	LINE	0
-	alias exit='sudo shutdown now'
-|3,0,3,1,1,0,1715338384,"alias exit='sudo shutdown now'"
+	
+|3,0,3,1,1,0,1715338384,""
 "4	LINE	0
-	k
-|3,0,4,1,1,0,1715290798,"k"
+	alias exit='sudo shutdown now'
+|3,0,4,1,1,0,1715338384,"alias exit='sudo shutdown now'"
 "5	LINE	0
-	
-|3,0,5,1,1,0,1715286257,""
+	k
+|3,0,5,1,1,0,1715290798,"k"
 "6	LINE	0
-	export PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\] in \[\033[01;34m\]\w\[\033[00m\]\n[\t] \033[97mÎ¾\033[0m '
-|3,0,6,1,1,0,1715284818,"export PS1='\\[\\e]0;\\u@\\h: \\w\\a\\]${debian_chroot:+($debian_chroot)}\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\] in \\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\n[\\t] \\033[97mÎ¾\\033[0m '"
-"7	LINE	0
 	
-|3,0,7,1,1,0,1715284795,""
+|3,0,6,1,1,0,1715286257,""
+"7	LINE	0
+	export PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\] in \[\033[01;34m\]\w\[\033[00m\]\n[\t] \033[97mÎ¾\033[0m '
+|3,0,7,1,1,0,1715284818,"export PS1='\\[\\e]0;\\u@\\h: \\w\\a\\]${debian_chroot:+($debian_chroot)}\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\] in \\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\n[\\t] \\033[97mÎ¾\\033[0m '"
 "8	LINE	0
-	script -c bash /var/log/hashpass.log
-|3,0,8,1,1,0,1715284626,"script -c bash /var/log/hashpass.log"
+	
+|3,0,8,1,1,0,1715284795,""
 "9	LINE	0
 	script -c bash /var/log/hashpass.log
-|3,0,9,1,1,0,1715284611,"script -c bash /var/log/hashpass.log"
-"-	CHAR	0
-	-
-|3,0,36,0,1,0,1715386677,"-"
+|3,0,9,1,1,0,1715284626,"script -c bash /var/log/hashpass.log"
+""-	CHAR	0
+	log
+|3,1,36,0,1,0,1715728819,"log"
 
 # File marks:
-'0  115  0  ~/.bashrc
-|4,48,115,0,1715386682,"~/.bashrc"
-'1  115  163  ~/.bashrc
-|4,49,115,163,1715386632,"~/.bashrc"
-'2  114  0  ~/.bashrc
-|4,50,114,0,1715386613,"~/.bashrc"
-'3  114  0  ~/.bashrc
-|4,51,114,0,1715386613,"~/.bashrc"
-'4  114  0  ~/.bashrc
-|4,52,114,0,1715386613,"~/.bashrc"
-'5  114  0  ~/.bashrc
-|4,53,114,0,1715386613,"~/.bashrc"
-'6  115  162  ~/.bashrc
-|4,54,115,162,1715386584,"~/.bashrc"
-'7  115  162  ~/.bashrc
-|4,55,115,162,1715386584,"~/.bashrc"
-'8  115  162  ~/.bashrc
-|4,56,115,162,1715386584,"~/.bashrc"
-'9  115  162  ~/.bashrc
-|4,57,115,162,1715386584,"~/.bashrc"
+'0  1  0  ~/usr/bin/bash.bashrc
+|4,48,1,0,1715732634,"~/usr/bin/bash.bashrc"
+'1  1  1  /usr/bin/hash
+|4,49,1,1,1715730821,"/usr/bin/hash"
+'2  1  0  ~/hash
+|4,50,1,0,1715728970,"~/hash"
+'3  1  0  ~/hash
+|4,51,1,0,1715728895,"~/hash"
+'4  1  0  ~/hash
+|4,52,1,0,1715728879,"~/hash"
+'5  1  0  ~/hash
+|4,53,1,0,1715728879,"~/hash"
+'6  9  27  /usr/bin/hash
+|4,54,9,27,1715728825,"/usr/bin/hash"
+'7  9  27  /usr/bin/hash
+|4,55,9,27,1715728825,"/usr/bin/hash"
+'8  1  3  /usr/bin/hash
+|4,56,1,3,1715728758,"/usr/bin/hash"
+'9  1  3  /usr/bin/hash
+|4,57,1,3,1715728758,"/usr/bin/hash"
 
 # Jumplist (newest first):
--'  115  0  ~/.bashrc
-|4,39,115,0,1715386682,"~/.bashrc"
--'  115  163  ~/.bashrc
-|4,39,115,163,1715386632,"~/.bashrc"
--'  114  0  ~/.bashrc
-|4,39,114,0,1715386614,"~/.bashrc"
--'  114  0  ~/.bashrc
-|4,39,114,0,1715386614,"~/.bashrc"
--'  114  0  ~/.bashrc
-|4,39,114,0,1715386613,"~/.bashrc"
--'  115  159  ~/.bashrc
-|4,39,115,159,1715386607,"~/.bashrc"
--'  115  162  ~/.bashrc
-|4,39,115,162,1715386584,"~/.bashrc"
--'  118  0  ~/.bashrc
-|4,39,118,0,1715386567,"~/.bashrc"
--'  117  0  ~/.bashrc
-|4,39,117,0,1715386567,"~/.bashrc"
--'  117  0  ~/.bashrc
-|4,39,117,0,1715386567,"~/.bashrc"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  1  0  ~/log.txt
-|4,39,1,0,1715381225,"~/log.txt"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  61  0  /var/log/hashpass.log
-|4,39,61,0,1715380280,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  1  0  /var/log/hashpass.log
-|4,39,1,0,1715380278,"/var/log/hashpass.log"
--'  117  0  ~/.bashrc
-|4,39,117,0,1715338387,"~/.bashrc"
--'  117  0  ~/.bashrc
-|4,39,117,0,1715338387,"~/.bashrc"
--'  117  0  ~/.bashrc
-|4,39,117,0,1715338387,"~/.bashrc"
--'  117  0  ~/.bashrc
-|4,39,117,0,1715338387,"~/.bashrc"
--'  119  0  ~/.bashrc
-|4,39,119,0,1715338383,"~/.bashrc"
--'  117  0  ~/.bashrc
-|4,39,117,0,1715338383,"~/.bashrc"
--'  118  0  ~/.bashrc
-|4,39,118,0,1715338383,"~/.bashrc"
--'  118  0  ~/.bashrc
-|4,39,118,0,1715338383,"~/.bashrc"
--'  118  0  ~/.bashrc
-|4,39,118,0,1715338383,"~/.bashrc"
--'  118  0  ~/.bashrc
-|4,39,118,0,1715338383,"~/.bashrc"
+-'  1  0  ~/usr/bin/bash.bashrc
+|4,39,1,0,1715732634,"~/usr/bin/bash.bashrc"
+-'  1  1  /usr/bin/hash
+|4,39,1,1,1715730821,"/usr/bin/hash"
+-'  1  1  /usr/bin/hash
+|4,39,1,1,1715730821,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715730811,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715730811,"/usr/bin/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728970,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728970,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728970,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728970,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728895,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728895,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728895,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728895,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728879,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728879,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728879,"~/hash"
+-'  1  0  ~/hash
+|4,39,1,0,1715728879,"~/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  9  27  /usr/bin/hash
+|4,39,9,27,1715728825,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728793,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  3  /usr/bin/hash
+|4,39,1,3,1715728758,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  1  6  /usr/bin/hash
+|4,39,1,6,1715728739,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
+-'  3  0  /usr/bin/hash
+|4,39,3,0,1715728731,"/usr/bin/hash"
 
 # History of marks within files (newest to oldest):
 
+> ~/usr/bin/bash.bashrc
+	*	1715732633	0
+	"	1	0
+
+> /usr/bin/hash
+	*	1715730820	0
+	"	1	1
+	^	1	2
+	.	10	30
+	+	20	0
+	+	3	5
+	+	1	3
+	+	10	30
+
+> ~/hash
+	*	1715728968	0
+	"	1	0
+
+> ~/.hash
+	*	1715728722	0
+	"	1	0
+
 > ~/.bashrc
-	*	1715386681	0
-	"	115	0
-	^	115	11
-	.	115	0
+	*	1715728430	0
+	"	118	0
+	^	116	7
+	.	116	6
 	+	114	0
-	+	118	157
-	+	119	23
-	+	118	0
+	+	119	157
+	+	120	23
 	+	119	0
-	+	118	62
+	+	120	0
+	+	119	62
+	+	120	0
 	+	119	0
-	+	118	0
 	+	115	157
-	+	118	0
+	+	119	0
 	+	115	167
-	+	118	0
+	+	119	0
 	+	115	163
-	+	118	0
+	+	119	0
 	+	115	160
 	+	115	0
 	+	115	163
@@ -308,14 +334,23 @@
 	+	115	163
 	+	115	152
 	+	115	0
+	+	116	98
+	+	116	6
+
+> ~/.config/fish/config.fish
+	*	1715728215	0
+	"	3	0
+	.	4	0
+	+	3	24
+	+	4	0
+
+> /var/log/hashpass.log
+	*	1715518741	0
+	"	1	0
 
 > ~/log.txt
 	*	1715381223	0
 	"	1	0
-
-> /var/log/hashpass.log
-	*	1715380278	0
-	"	61	0
 
 > ~/.hashpassrc
 	*	1715284751	0

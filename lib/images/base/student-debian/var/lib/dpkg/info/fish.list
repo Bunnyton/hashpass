@@ -1,0 +1,16 @@
+/.
+/usr
+/usr/bin
+/usr/bin/fish
+/usr/bin/fish_indent
+/usr/bin/fish_key_reader
+/usr/share
+/usr/share/doc
+/usr/share/doc/fish
+/usr/share/doc/fish/NEWS.Debian.gz
+/usr/share/doc/fish/README.rst.gz
+/usr/share/doc/fish/changelog.Debian.gz
+/usr/share/doc/fish/changelog.gz
+/usr/share/doc/fish/copyright
+/usr/share/menu
+/usr/share/menu/fish

@@ -1,0 +1,182 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "COMMANDLINE" "1" "Dec 21, 2023" "3.6" "fish-shell"
+.SH NAME
+commandline \- set or get the current command line buffer
+.SH SYNOPSIS
+.nf
+\fBcommandline\fP [\fIOPTIONS\fP] [\fICMD\fP]
+.fi
+.sp
+.SH DESCRIPTION
+.sp
+\fBcommandline\fP can be used to set or get the current contents of the command line buffer.
+.sp
+With no parameters, \fBcommandline\fP returns the current value of the command line.
+.sp
+With \fBCMD\fP specified, the command line buffer is erased and replaced with the contents of \fBCMD\fP\&.
+.sp
+The following options are available:
+.INDENT 0.0
+.TP
+\fB\-C\fP or \fB\-\-cursor\fP
+Set or get the current cursor position, not the contents of the buffer.
+If no argument is given, the current cursor position is printed, otherwise the argument is interpreted as the new cursor position.
+If one of the options \fB\-j\fP, \fB\-p\fP or \fB\-t\fP is given, the position is relative to the respective substring instead of the entire command line buffer.
+.TP
+\fB\-B\fP or \fB\-\-selection\-start\fP
+Get current position of the selection start in the buffer.
+.TP
+\fB\-E\fP or \fB\-\-selection\-end\fP
+Get current position of the selection end in the buffer.
+.TP
+\fB\-f\fP or \fB\-\-function\fP
+Causes any additional arguments to be interpreted as input functions, and puts them into the queue, so that they will be read before any additional actual key presses are.
+This option cannot be combined with any other option.
+See \fI\%bind\fP for a list of input functions.
+.TP
+\fB\-h\fP or \fB\-\-help\fP
+Displays help about using this command.
+.UNINDENT
+.sp
+The following options change the way \fBcommandline\fP updates the command line buffer:
+.INDENT 0.0
+.TP
+\fB\-a\fP or \fB\-\-append\fP
+Do not remove the current commandline, append the specified string at the end of it.
+.TP
+\fB\-i\fP or \fB\-\-insert\fP
+Do not remove the current commandline, insert the specified string at the current cursor position
+.TP
+\fB\-r\fP or \fB\-\-replace\fP
+Remove the current commandline and replace it with the specified string (default)
+.UNINDENT
+.sp
+The following options change what part of the commandline is printed or updated:
+.INDENT 0.0
+.TP
+\fB\-b\fP or \fB\-\-current\-buffer\fP
+Select the entire commandline, not including any displayed autosuggestion (default).
+.TP
+\fB\-j\fP or \fB\-\-current\-job\fP
+Select the current job \- a \fBjob\fP here is one pipeline.
+Stops at logical operators or terminators (\fB;\fP, \fB&\fP, and newlines).
+.TP
+\fB\-p\fP or \fB\-\-current\-process\fP
+Select the current process \- a \fBprocess\fP here is one command.
+Stops at logical operators, terminators, and pipes.
+.TP
+\fB\-s\fP or \fB\-\-current\-selection\fP
+Selects the current selection
+.TP
+\fB\-t\fP or \fB\-\-current\-token\fP
+Selects the current token
+.UNINDENT
+.sp
+The following options change the way \fBcommandline\fP prints the current commandline buffer:
+.INDENT 0.0
+.TP
+\fB\-c\fP or \fB\-\-cut\-at\-cursor\fP
+Only print selection up until the current cursor position.
+.TP
+\fB\-o\fP or \fB\-\-tokenize\fP
+Tokenize the selection and print one string\-type token per line.
+.UNINDENT
+.sp
+If \fBcommandline\fP is called during a call to complete a given string using \fBcomplete \-C STRING\fP, \fBcommandline\fP will consider the specified string to be the current contents of the command line.
+.sp
+The following options output metadata about the commandline state:
+.INDENT 0.0
+.TP
+\fB\-L\fP or \fB\-\-line\fP
+Print the line that the cursor is on, with the topmost line starting at 1.
+.TP
+\fB\-S\fP or \fB\-\-search\-mode\fP
+Evaluates to true if the commandline is performing a history search.
+.TP
+\fB\-P\fP or \fB\-\-paging\-mode\fP
+Evaluates to true if the commandline is showing pager contents, such as tab completions.
+.TP
+\fB\-\-paging\-full\-mode\fP
+Evaluates to true if the commandline is showing pager contents, such as tab completions and all lines are shown (no \(dq<n> more rows\(dq message).
+.TP
+\fB\-\-is\-valid\fP
+Returns true when the commandline is syntactically valid and complete.
+If it is, it would be executed when the \fBexecute\fP bind function is called.
+If the commandline is incomplete, return 2, if erroneus, return 1.
+.UNINDENT
+.SH EXAMPLE
+.sp
+\fBcommandline \-j $history[3]\fP replaces the job under the cursor with the third item from the command line history.
+.sp
+If the commandline contains
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ echo $flounder >&2 | less; and echo $catfish
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+(with the cursor on the \(dqo\(dq of \(dqflounder\(dq)
+.sp
+The \fBecho $flounder >&\fP is the first process, \fBless\fP the second and \fBand echo $catfish\fP the third.
+.sp
+\fBecho $flounder >&2 | less\fP is the first job, \fBand echo $catfish\fP the second.
+.sp
+\fB$flounder\fP is the current token.
+.sp
+More examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ commandline \-t
+$flounder
+>_ commandline \-ct
+$fl
+>_ commandline \-b # or just commandline
+echo $flounder >&2 | less; and echo $catfish
+>_ commandline \-p
+echo $flounder >&2
+>_ commandline \-j
+echo $flounder >&2 | less
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH COPYRIGHT
+2023, fish-shell developers
+.\" Generated by docutils manpage writer.
+.

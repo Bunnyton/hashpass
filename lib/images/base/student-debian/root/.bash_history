@@ -88,3 +88,40 @@ ls -l /etc/sudoers
 chmod 4755 /usr/bin/sudo
 su - student
 exit
+ls -la
+exit
+shutdown now
+ls
+ls -la
+shutdown now
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+su - student
+ls
+ls -la
+bash
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+vim /etc/fish/config.fish 
+sudo vim /etc/fish/config.fist
+exit
+ls
+ls -la
+exit
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+ls
+./hash
+sudo vi m/etc/fish/config.fish
+sudo vim /etc/fish/config.fish
+vim /home/student/.config/fish/config.fish 
+./hash
+ls /tmp/.hashpass_cmd.out 
+ls -l /tmp/.hashpass_cmd.out 
+ls
+ls -l
+su - student
+script -fc 'sudo -u student bash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash -i /usr/bin/hash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash ' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash ' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash -i /usr/bin/hash' /var/log/hashpass.log; shutdown now

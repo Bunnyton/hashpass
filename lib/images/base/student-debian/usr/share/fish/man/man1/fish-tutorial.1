@@ -1,0 +1,1165 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "FISH-TUTORIAL" "1" "Dec 21, 2023" "3.6" "fish-shell"
+.SH WHY FISH?
+.sp
+Fish is a fully\-equipped command line shell (like bash or zsh) that is smart and user\-friendly. Fish supports powerful features like syntax highlighting, autosuggestions, and tab completions that just work, with nothing to learn or configure.
+.sp
+If you want to make your command line more productive, more useful, and more fun, without learning a bunch of arcane syntax and configuration options, then fish might be just what you\(aqre looking for!
+.SH GETTING STARTED
+.sp
+Once installed, just type in \fBfish\fP into your current shell to try it out!
+.sp
+You will be greeted by the standard fish prompt,
+which means you are all set up and can start using fish:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> fish
+Welcome to fish, the friendly interactive shell
+Type help for instructions on how to use fish
+you@hostname ~>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This prompt that you see above is the fish default prompt: it shows your username, hostname, and working directory.
+\- to change this prompt see \fI\%how to change your prompt\fP
+\- to switch to fish permanently see \fI\%Default Shell\fP\&.
+.sp
+From now on, we\(aqll pretend your prompt is just a \fB>\fP to save space.
+.SH LEARNING FISH
+.sp
+This tutorial assumes a basic understanding of command line shells and Unix commands, and that you have a working copy of fish.
+.sp
+If you have a strong understanding of other shells, and want to know what fish does differently, search for the magic phrase \fIunlike other shells\fP, which is used to call out important differences.
+.sp
+Or, if you want a quick overview over the differences to other shells like Bash, see \fI\%Fish For Bash Users\fP\&.
+.sp
+For the full, detailed description of how to use fish interactively, see \fI\%Interactive Use\fP\&.
+.sp
+For a comprehensive description of fish\(aqs scripting language, see \fI\%The Fish Language\fP\&.
+.SH RUNNING COMMANDS
+.sp
+Fish runs commands like other shells: you type a command, followed by its arguments. Spaces are separators:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo hello world
+hello world
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This runs the command \fBecho\fP with the arguments \fBhello\fP and \fBworld\fP\&. In this case that\(aqs the same as one argument \fBhello world\fP, but in many cases it\(aqs not. If you need to pass an argument that includes a space, you can \fI\%escape\fP with a backslash, or \fI\%quote\fP it using single or double quotes:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> mkdir My\e Files
+# Makes a directory called \(dqMy Files\(dq, with a space in the name
+> cp ~/Some\e File \(aqMy Files\(aq
+# Copies a file called \(dqSome File\(dq in the home directory to \(dqMy Files\(dq
+> ls \(dqMy Files\(dq
+Some File
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH GETTING HELP
+.sp
+Run \fBhelp\fP to open fish\(aqs help in a web browser, and \fBman\fP with the page (like \fBfish\-language\fP) to open it in a man page. You can also ask for help with a specific command, for example, \fBhelp set\fP to open in a web browser, or \fBman set\fP to see it in the terminal.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> man set
+set \- handle shell variables
+  Synopsis...
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To open this section, use \fBhelp getting\-help\fP\&.
+.sp
+Fish works by running commands, which are often also installed on your computer. Usually these commands also provide help in the man system, so you can get help for them there. Try \fBman ls\fP to get help on your computer\(aqs \fBls\fP command.
+.SH SYNTAX HIGHLIGHTING
+.sp
+You\(aqll quickly notice that fish performs syntax highlighting as you type. Invalid commands are colored red by default:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> /bin/mkd
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+A command may be invalid because it does not exist, or refers to a file that you cannot execute. When the command becomes valid, it is shown in a different color:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> /bin/mkdir
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Valid file paths are underlined as you type them:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> cat ~/somefi
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This tells you that there exists a file that starts with \fBsomefi\fP, which is useful feedback as you type.
+.sp
+These colors, and many more, can be changed by running \fBfish_config\fP, or by modifying \fI\%color variables\fP directly.
+.sp
+For example, if you want to disable (almost) all coloring:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+fish_config theme choose none
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This picks the \(dqnone\(dq theme. To see all themes:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+fish_config theme show
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Just running \fBfish_config\fP will open up a browser interface that allows you to pick from the available themes.
+.SH WILDCARDS
+.sp
+Fish supports the familiar wildcard \fB*\fP\&. To list all JPEG files:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> ls *.jpg
+lena.jpg
+meena.jpg
+santa maria.jpg
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can include multiple wildcards:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> ls l*.p*
+lena.png
+lesson.pdf
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The recursive wildcard \fB**\fP searches directories recursively:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> ls /var/**.log
+/var/log/system.log
+/var/run/sntp.log
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If that directory traversal is taking a long time, you can \fBControl\fP+\fBC\fP out of it.
+.sp
+For more, see \fI\%Wildcards\fP\&.
+.SH PIPES AND REDIRECTIONS
+.sp
+You can pipe between commands with the usual vertical bar:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo hello world | wc
+      1       2      12
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+stdin and stdout can be redirected via the familiar \fB<\fP and \fB>\fP\&. stderr is redirected with a \fB2>\fP\&.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> grep fish < /etc/shells > ~/output.txt 2> ~/errors.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To redirect stdout and stderr into one file, you can use \fB&>\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> make &> make_output.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For more, see \fI\%Input and output redirections\fP and \fI\%Pipes\fP\&.
+.SH AUTOSUGGESTIONS
+.sp
+As you type fish will suggest commands to the right of the cursor, in gray. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> /bin/hostname
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+It knows about paths and options:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> grep \-\-ignore\-case
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+And history too. Type a command once, and you can re\-summon it by just typing a few letters:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> rsync \-avze ssh . myname@somelonghost.com:/some/long/path/doo/dee/doo/dee/doo
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To accept the autosuggestion, hit \fB→\fP (right arrow) or \fBControl\fP+\fBF\fP\&. To accept a single word of the autosuggestion, \fBAlt\fP+\fB→\fP (right arrow). If the autosuggestion is not what you want, just ignore it.
+.sp
+If you don\(aqt like autosuggestions, you can disable them by setting \fB$fish_autosuggestion_enabled\fP to 0:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-g fish_autosuggestion_enabled 0
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH TAB COMPLETIONS
+.sp
+A rich set of tab completions work \(dqout of the box\(dq.
+.sp
+Press \fBTab\fP and fish will attempt to complete the command, argument, or path:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> /pri\fBTab\fP => /private/
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If there\(aqs more than one possibility, it will list them:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> ~/stuff/s\fBTab\fP
+~/stuff/script.sh  (command)  ~/stuff/sources/  (directory)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Hit tab again to cycle through the possibilities. The part in parentheses there (that \(dqcommand\(dq and \(dqdirectory\(dq) is the completion description. It\(aqs just a short hint to explain what kind of argument it is.
+.sp
+fish can also complete many commands, like git branches:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> git merge pr\fBTab\fP => git merge prompt_designer
+> git checkout b\fBTab\fP
+builtin_list_io_merge (Branch)  builtin_set_color (Branch) busted_events (Tag)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Try hitting tab and see what fish can do!
+.SH VARIABLES
+.sp
+Like other shells, a dollar sign followed by a variable name is replaced with the value of that variable:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo My home directory is $HOME
+My home directory is /home/tutorial
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This is known as variable substitution, and it also happens in double quotes, but not single quotes:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo \(dqMy current directory is $PWD\(dq
+My current directory is /home/tutorial
+> echo \(aqMy current directory is $PWD\(aq
+My current directory is $PWD
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Unlike other shells, fish has an ordinary command to set variables: \fBset\fP, which takes a variable name, and then its value.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set name \(aqMister Noodle\(aq
+> echo $name
+Mister Noodle
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+(Notice the quotes: without them, \fBMister\fP and \fBNoodle\fP would have been separate arguments, and \fB$name\fP would have been made into a list of two elements.)
+.sp
+Unlike other shells, variables are not further split after substitution:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> mkdir $name
+> ls
+Mister Noodle
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+In bash, this would have created two directories \(dqMister\(dq and \(dqNoodle\(dq. In fish, it created only one: the variable had the value \(dqMister Noodle\(dq, so that is the argument that was passed to \fBmkdir\fP, spaces and all.
+.sp
+You can erase (or \(dqdelete\(dq) a variable with \fB\-e\fP or \fB\-\-erase\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set \-e MyVariable
+> env | grep MyVariable
+(no output)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For more, see \fI\%Variable expansion\fP\&.
+.SH EXPORTS (SHELL VARIABLES)
+.sp
+Sometimes you need to have a variable available to an external command, often as a setting. For example many programs like \fBgit\fP or \fBman\fP read the \fB$PAGER\fP variable to figure out your preferred pager (the program that lets you scroll text). Other variables used like this include \fB$BROWSER\fP, \fB$LANG\fP (to configure your language) and \fB$PATH\fP\&. You\(aqll note these are written in ALLCAPS, but that\(aqs just a convention.
+.sp
+To give a variable to an external command, it needs to be \(dqexported\(dq. This is done with a flag to \fBset\fP, either \fB\-\-export\fP or just \fB\-x\fP\&.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set \-x MyVariable SomeValue
+> env | grep MyVariable
+MyVariable=SomeValue
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+It can also be unexported with \fB\-\-unexport\fP or \fB\-u\fP\&.
+.sp
+This works the other way around as well! If fish is started by something else, it inherits that parents exported variables. So if your terminal emulator starts fish, and it exports \fB$LANG\fP set to \fBen_US.UTF\-8\fP, fish will receive that setting. And whatever started your terminal emulator also gave \fIit\fP some variables that it will then pass on unless it specifically decides not to. This is how fish usually receives the values for things like \fB$LANG\fP, \fB$PATH\fP and \fB$TERM\fP, without you having to specify them again.
+.sp
+Exported variables can be local or global or universal \- \(dqexported\(dq is not a \fI\%scope\fP! Usually you\(aqd make them global via \fBset \-gx MyVariable SomeValue\fP\&.
+.sp
+For more, see \fI\%Exporting variables\fP\&.
+.SH LISTS
+.sp
+The \fBset\fP command above used quotes to ensure that \fBMister Noodle\fP was one argument. If it had been two arguments, then \fBname\fP would have been a list of length 2.  In fact, all variables in fish are really lists, that can contain any number of values, or none at all.
+.sp
+Some variables, like \fB$PWD\fP, only have one value. By convention, we talk about that variable\(aqs value, but we really mean its first (and only) value.
+.sp
+Other variables, like \fB$PATH\fP, really do have multiple values. During variable expansion, the variable expands to become multiple arguments:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo $PATH
+/usr/bin /bin /usr/sbin /sbin /usr/local/bin
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Variables whose name ends in \(dqPATH\(dq are automatically split on colons to become lists. They are joined using colons when exported to subcommands. This is for compatibility with other tools, which expect $PATH to use colons. You can also explicitly add this quirk to a variable with \fBset \-\-path\fP, or remove it with \fBset \-\-unpath\fP\&.
+.sp
+Lists cannot contain other lists: there is no recursion.  A variable is a list of strings, full stop.
+.sp
+Get the length of a list with \fBcount\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> count $PATH
+5
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can append (or prepend) to a list by setting the list to itself, with some additional arguments. Here we append /usr/local/bin to $PATH:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set PATH $PATH /usr/local/bin
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can access individual elements with square brackets. Indexing starts at 1 from the beginning, and \-1 from the end:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo $PATH
+/usr/bin /bin /usr/sbin /sbin /usr/local/bin
+> echo $PATH[1]
+/usr/bin
+> echo $PATH[\-1]
+/usr/local/bin
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can also access ranges of elements, known as \(dqslices\(dq:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo $PATH[1..2]
+/usr/bin /bin
+> echo $PATH[\-1..2]
+/usr/local/bin /sbin /usr/sbin /bin
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can iterate over a list (or a slice) with a for loop:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+for val in $PATH
+  echo \(dqentry: $val\(dq
+end
+# Will print:
+# entry: /usr/bin/
+# entry: /bin
+# entry: /usr/sbin
+# entry: /sbin
+# entry: /usr/local/bin
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Lists adjacent to other lists or strings are expanded as \fI\%cartesian products\fP unless quoted (see \fI\%Variable expansion\fP):
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set a 1 2 3
+> set 1 a b c
+> echo $a$1
+1a 2a 3a 1b 2b 3b 1c 2c 3c
+> echo $a\(dq banana\(dq
+1 banana 2 banana 3 banana
+> echo \(dq$a banana\(dq
+1 2 3 banana
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This is similar to \fI\%Brace expansion\fP\&.
+.sp
+For more, see \fI\%Lists\fP\&.
+.SH COMMAND SUBSTITUTIONS
+.sp
+Command substitutions use the output of one command as an argument to another. Unlike other shells, fish does not use backticks \(ga\(ga for command substitutions. Instead, it uses parentheses with or without a dollar:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo In (pwd), running $(uname)
+In /home/tutorial, running FreeBSD
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+A common idiom is to capture the output of a command in a variable:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set os (uname)
+> echo $os
+Linux
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Command substitutions without a dollar are not expanded within quotes, so the version with a dollar is simpler:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> touch \(dqtesting_$(date +%s).txt\(dq
+> ls *.txt
+testing_1360099791.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Unlike other shells, fish does not split command substitutions on any whitespace (like spaces or tabs), only newlines. Usually this is a big help because unix commands operate on a line\-by\-line basis. Sometimes it can be an issue with commands like \fBpkg\-config\fP that print what is meant to be multiple arguments on a single line. To split it on spaces too, use \fBstring split\fP\&.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> printf \(aq%s\en\(aq (pkg\-config \-\-libs gio\-2.0)
+\-lgio\-2.0 \-lgobject\-2.0 \-lglib\-2.0
+> printf \(aq%s\en\(aq (pkg\-config \-\-libs gio\-2.0 | string split \-n \(dq \(dq)
+\-lgio\-2.0
+\-lgobject\-2.0
+\-lglib\-2.0
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If you need a command substitutions output as one argument, without any splits, use quoted command substitution:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo \(dqfirst line
+second line\(dq > myfile
+> set myfile \(dq$(cat myfile)\(dq
+> printf \(aq|%s|\(aq $myfile
+|first line
+second line|
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For more, see \fI\%Command substitution\fP\&.
+.SH SEPARATING COMMANDS (SEMICOLON)
+.sp
+Like other shells, fish allows multiple commands either on separate lines or the same line.
+.sp
+To write them on the same line, use the semicolon (\(dq;\(dq). That means the following two examples are equivalent:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo fish; echo chips
+
+# or
+echo fish
+echo chips
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This is useful interactively to enter multiple commands. In a script it\(aqs easier to read if the commands are on separate lines.
+.SH EXIT STATUS
+.sp
+When a command exits, it returns a status code as a non\-negative integer (that\(aqs a whole number >= 0).
+.sp
+Unlike other shells, fish stores the exit status of the last command in \fB$status\fP instead of \fB$?\fP\&.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> false
+> echo $status
+1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This indicates how the command fared \- 0 usually means success, while the others signify kinds of failure. For instance fish\(aqs \fBset \-\-query\fP returns the number of variables it queried that weren\(aqt set \- \fBset \-\-query PATH\fP usually returns 0, \fBset \-\-query arglbargl boogagoogoo\fP usually returns 2.
+.sp
+There is also a \fB$pipestatus\fP list variable for the exit statuses [1] of processes in a pipe.
+.sp
+For more, see \fI\%The status variable\fP\&.
+.IP [1] 5
+or \(dqstati\(dq if you prefer, or \(dqstatūs\(dq if you\(aqve time\-travelled from ancient Rome or work as a latin teacher
+.SH COMBINERS (AND, OR, NOT)
+.sp
+fish supports the familiar \fB&&\fP and \fB||\fP to combine commands, and \fB!\fP to negate them:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> ./configure && make && sudo make install
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Here, \fBmake\fP is only executed if \fB\&./configure\fP succeeds (returns 0), and \fBsudo make install\fP is only executed if both \fB\&./configure\fP and \fBmake\fP succeed.
+.sp
+fish also supports \fI\%and\fP, \fI\%or\fP, and \fI\%not\fP\&. The first two are job modifiers and have lower precedence. Example usage:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> cp file1 file1_bak && cp file2 file2_bak; and echo \(dqBackup successful\(dq; or echo \(dqBackup failed\(dq
+Backup failed
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+As mentioned in \fI\%the section on the semicolon\fP, this can also be written in multiple lines, like so:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+cp file1 file1_bak && cp file2 file2_bak
+and echo \(dqBackup successful\(dq
+or echo \(dqBackup failed\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH CONDITIONALS (IF, ELSE, SWITCH)
+.sp
+Use \fI\%if\fP and \fI\%else\fP to conditionally execute code, based on the exit status of a command.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if grep fish /etc/shells
+    echo Found fish
+else if grep bash /etc/shells
+    echo Found bash
+else
+    echo Got nothing
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To compare strings or numbers or check file properties (whether a file exists or is writeable and such), use \fI\%test\fP, like
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if test \(dq$fish\(dq = \(dqflounder\(dq
+    echo FLOUNDER
+end
+
+# or
+
+if test \(dq$number\(dq \-gt 5
+    echo $number is greater than five
+else
+    echo $number is five or less
+end
+
+# or
+
+# This test is true if the path /etc/hosts exists
+# \- it could be a file or directory or symlink (or possibly something else).
+if test \-e /etc/hosts
+    echo We most likely have a hosts file
+else
+    echo We do not have a hosts file
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fI\%Combiners\fP can also be used to make more complex conditions, like
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if command \-sq fish; and grep fish /etc/shells
+    echo fish is installed and configured
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For even more complex conditions, use \fI\%begin\fP and \fI\%end\fP to group parts of them.
+.sp
+There is also a \fI\%switch\fP command:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+switch (uname)
+case Linux
+    echo Hi Tux!
+case Darwin
+    echo Hi Hexley!
+case FreeBSD NetBSD DragonFly
+    echo Hi Beastie!
+case \(aq*\(aq
+    echo Hi, stranger!
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+As you see, \fI\%case\fP does not fall through, and can accept multiple arguments or (quoted) wildcards.
+.sp
+For more, see \fI\%Conditions\fP\&.
+.SH FUNCTIONS
+.sp
+A fish function is a list of commands, which may optionally take arguments. Unlike other shells, arguments are not passed in \(dqnumbered variables\(dq like \fB$1\fP, but instead in a single list \fB$argv\fP\&. To create a function, use the \fI\%function\fP builtin:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function say_hello
+    echo Hello $argv
+end
+say_hello
+# prints: Hello
+say_hello everybody!
+# prints: Hello everybody!
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Unlike other shells, fish does not have aliases or special prompt syntax. Functions take their place. [2]
+.sp
+You can list the names of all functions with the \fI\%functions\fP builtin (note the plural!). fish starts out with a number of functions:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> functions
+N_, abbr, alias, bg, cd, cdh, contains_seq, dirh, dirs, disown, down\-or\-search, edit_command_buffer, export, fg, fish_add_path, fish_breakpoint_prompt, fish_clipboard_copy, fish_clipboard_paste, fish_config, fish_default_key_bindings, fish_default_mode_prompt, fish_git_prompt, fish_hg_prompt, fish_hybrid_key_bindings, fish_indent, fish_is_root_user, fish_job_summary, fish_key_reader, fish_md5, fish_mode_prompt, fish_npm_helper, fish_opt, fish_print_git_action, fish_print_hg_root, fish_prompt, fish_sigtrap_handler, fish_svn_prompt, fish_title, fish_update_completions, fish_vcs_prompt, fish_vi_cursor, fish_vi_key_bindings, funced, funcsave, grep, help, history, hostname, isatty, kill, la, ll, ls, man, nextd, open, popd, prevd, prompt_hostname, prompt_pwd, psub, pushd, realpath, seq, setenv, suspend, trap, type, umask, up\-or\-search, vared, wait
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can see the source for any function by passing its name to \fBfunctions\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> functions ls
+function ls \-\-description \(aqList contents of directory\(aq
+    command ls \-G $argv
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For more, see \fI\%Functions\fP\&.
+.IP [2] 5
+There is a function called \fI\%alias\fP, but it\(aqs just a shortcut to make functions. fish also provides \fI\%abbreviations\fP, through the \fI\%abbr\fP command.
+.SH LOOPS
+.sp
+While loops:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+while true
+    echo \(dqLoop forever\(dq
+end
+# Prints:
+# Loop forever
+# Loop forever
+# Loop forever
+# yes, this really will loop forever. Unless you abort it with ctrl\-c.
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For loops can be used to iterate over a list. For example, a list of files:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+for file in *.txt
+    cp $file $file.bak
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Iterating over a list of numbers can be done with \fBseq\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+for x in (seq 5)
+    touch file_$x.txt
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For more, see \fI\%Loops and blocks\fP\&.
+.SH PROMPT
+.sp
+Unlike other shells, there is no prompt variable like \fBPS1\fP\&. To display your prompt, fish executes the \fI\%fish_prompt\fP function and uses its output as the prompt. And if it exists, fish also executes the \fI\%fish_right_prompt\fP function and uses its output as the right prompt.
+.sp
+You can define your own prompt from the command line:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> function fish_prompt; echo \(dqNew Prompt % \(dq; end
+New Prompt % _
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Then, if you are happy with it, you can save it to disk by typing \fBfuncsave fish_prompt\fP\&. This saves the prompt in \fB~/.config/fish/functions/fish_prompt.fish\fP\&. (Or, if you want, you can create that file manually from the start.)
+.sp
+Multiple lines are OK. Colors can be set via \fI\%set_color\fP, passing it named ANSI colors, or hex RGB values:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_prompt
+    set_color purple
+    date \(dq+%m/%d/%y\(dq
+    set_color F00
+    echo (pwd) \(aq>\(aq (set_color normal)
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This prompt would look like:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+02/06/13
+/home/tutorial > _
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can choose among some sample prompts by running \fBfish_config\fP for a web UI or \fBfish_config prompt\fP for a simpler version inside your terminal.
+.SH $PATH
+.sp
+\fB$PATH\fP is an environment variable containing the directories that fish searches for commands. Unlike other shells, $PATH is a \fI\%list\fP, not a colon\-delimited string.
+.sp
+Fish takes care to set \fB$PATH\fP to a default, but typically it is just inherited from fish\(aqs parent process and is set to a value that makes sense for the system \- see \fI\%Exports\fP\&.
+.sp
+To prepend /usr/local/bin and /usr/sbin to \fB$PATH\fP, you can write:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set PATH /usr/local/bin /usr/sbin $PATH
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To remove /usr/local/bin from \fB$PATH\fP, you can write:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set PATH (string match \-v /usr/local/bin $PATH)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For compatibility with other shells and external commands, $PATH is a \fI\%path variable\fP, and so will be joined with colons (not spaces) when you quote it:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo \(dq$PATH\(dq
+/usr/local/sbin:/usr/local/bin:/usr/bin
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+and it will be exported like that, and when fish starts it splits the $PATH it receives into a list on colon.
+.sp
+You can do so directly in \fBconfig.fish\fP, like you might do in other shells with \fB\&.profile\fP\&. See \fI\%this example\fP\&.
+.sp
+A faster way is to use the \fI\%fish_add_path\fP function, which adds given directories to the path if they aren\(aqt already included. It does this by modifying the \fB$fish_user_paths\fP \fI\%universal variable\fP, which is automatically prepended to \fB$PATH\fP\&. For example, to permanently add \fB/usr/local/bin\fP to your \fB$PATH\fP, you could write:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> fish_add_path /usr/local/bin
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The advantage is that you don\(aqt have to go mucking around in files: just run this once at the command line, and it will affect the current session and all future instances too. You can also add this line to \fI\%config.fish\fP, as it only adds the component if necessary.
+.sp
+Or you can modify $fish_user_paths yourself, but you should be careful \fInot\fP to append to it unconditionally in config.fish, or it will grow longer and longer.
+.SH STARTUP (WHERE'S .BASHRC?)
+.sp
+Fish starts by executing commands in \fB~/.config/fish/config.fish\fP\&. You can create it if it does not exist.
+.sp
+It is possible to directly create functions and variables in \fBconfig.fish\fP file, using the commands shown above. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> cat ~/.config/fish/config.fish
+
+set \-x PATH $PATH /sbin/
+
+function ll
+    ls \-lh $argv
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+However, it is more common and efficient to use  autoloading functions and universal variables.
+.sp
+If you want to organize your configuration, fish also reads commands in .fish files in \fB~/.config/fish/conf.d/\fP\&. See \fI\%Configuration Files\fP for the details.
+.SH AUTOLOADING FUNCTIONS
+.sp
+When fish encounters a command, it attempts to autoload a function for that command, by looking for a file with the name of that command in \fB~/.config/fish/functions/\fP\&.
+.sp
+For example, if you wanted to have a function \fBll\fP, you would add a text file \fBll.fish\fP to \fB~/.config/fish/functions\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> cat ~/.config/fish/functions/ll.fish
+function ll
+    ls \-lh $argv
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This is the preferred way to define your prompt as well:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> cat ~/.config/fish/functions/fish_prompt.fish
+function fish_prompt
+    echo (pwd) \(dq> \(dq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+See the documentation for \fI\%funced\fP and \fI\%funcsave\fP for ways to create these files automatically, and \fI\%$fish_function_path\fP to control their location.
+.SH UNIVERSAL VARIABLES
+.sp
+A universal variable is a variable whose value is shared across all instances of fish, now and in the future – even after a reboot. You can make a variable universal with \fBset \-U\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set \-U EDITOR vim
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Now in another shell:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo $EDITOR
+vim
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH READY FOR MORE?
+.sp
+If you want to learn more about fish, there is \fI\%lots of detailed documentation\fP, the \fI\%official gitter channel\fP, an \fI\%official mailing list\fP, and the \fI\%github page\fP\&.
+.SH AUTHOR
+fish-shell developers
+.SH COPYRIGHT
+2023, fish-shell developers
+.\" Generated by docutils manpage writer.
+.

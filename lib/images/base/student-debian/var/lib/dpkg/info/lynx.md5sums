@@ -1,0 +1,5 @@
+730a13fe145c44e0df3860f2ff8690d7  usr/bin/lynx
+8025c2aa8308ba15b63cb2672d424644  usr/share/doc/lynx/changelog.Debian.gz
+90320c5554b5183793a7b5a668ec4912  usr/share/doc/lynx/copyright
+cd626f99eec27e8bf60cd12aac03e9c7  usr/share/lintian/overrides/lynx
+207ceb1e2c89ac3be7d9370ac3decde0  usr/share/menu/lynx

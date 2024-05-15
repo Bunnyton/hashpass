@@ -171,6 +171,26 @@ Description: GNU Bourne Again SHell
  the bash-completion package.
 Homepage: http://tiswww.case.edu/php/chet/bash/bashtop.html
 
+Package: bsdextrautils
+Status: install ok installed
+Priority: optional
+Section: utils
+Installed-Size: 338
+Maintainer: util-linux packagers <util-linux@packages.debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Source: util-linux (2.38.1-5)
+Version: 2.38.1-5+b1
+Replaces: bsdmainutils (<< 12.1.3), nwrite
+Depends: libc6 (>= 2.34), libsmartcols1 (>= 2.38), libtinfo6 (>= 6)
+Breaks: bsdmainutils (<< 12.1.3), nwrite
+Conflicts: nwrite
+Description: extra utilities from 4.4BSD-Lite
+ This package contains some extra BSD utilities: col, colcrt, colrm, column,
+ hd, hexdump, look, ul and write.
+ Other BSD utilities are provided by bsdutils and calendar.
+Homepage: https://www.kernel.org/pub/linux/utils/util-linux/
+
 Package: bsdutils
 Essential: yes
 Status: install ok installed
@@ -189,6 +209,32 @@ Description: basic utilities from 4.4BSD-Lite
  system: logger, renice, script, scriptlive, scriptreplay and wall. The
  remaining standard BSD utilities are provided by bsdextrautils.
 Homepage: https://www.kernel.org/pub/linux/utils/util-linux/
+
+Package: bzip2
+Status: install ok installed
+Priority: standard
+Section: utils
+Installed-Size: 121
+Maintainer: Anibal Monsalve Salazar <anibal@debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Source: bzip2 (1.0.8-5)
+Version: 1.0.8-5+b1
+Replaces: libbz2 (<< 0.9.5d-3)
+Depends: libbz2-1.0 (= 1.0.8-5+b1), libc6 (>= 2.34)
+Suggests: bzip2-doc
+Description: high-quality block-sorting file compressor - utilities
+ bzip2 is a freely available, patent free, data compressor.
+ .
+ bzip2 compresses files using the Burrows-Wheeler block-sorting text
+ compression algorithm, and Huffman coding.  Compression is generally
+ considerably better than that achieved by more conventional
+ LZ77/LZ78-based compressors, and approaches the performance of the PPM
+ family of statistical compressors.
+ .
+ The archive file format of bzip2 (.bz2) is incompatible with that of its
+ predecessor, bzip (.bz).
+Homepage: https://sourceware.org/bzip2/
 
 Package: ca-certificates
 Status: install ok installed
@@ -322,6 +368,27 @@ Description: process scheduling daemon's configuration files
  This package provides configuration files which must be there to
  define scheduled process sets.
 Homepage: https://ftp.isc.org/isc/cron/
+
+Package: curl
+Status: install ok installed
+Priority: optional
+Section: web
+Installed-Size: 488
+Maintainer: Alessandro Ghedini <ghedo@debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Version: 7.88.1-10+deb12u5
+Depends: libc6 (>= 2.34), libcurl4 (= 7.88.1-10+deb12u5), zlib1g (>= 1:1.1.4)
+Description: command line tool for transferring data with URL syntax
+ curl is a command line tool for transferring data with URL syntax, supporting
+ DICT, FILE, FTP, FTPS, GOPHER, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, POP3,
+ POP3S, RTMP, RTSP, SCP, SFTP, SMTP, SMTPS, TELNET and TFTP.
+ .
+ curl supports SSL certificates, HTTP POST, HTTP PUT, FTP uploading, HTTP form
+ based upload, proxies, cookies, user+password authentication (Basic, Digest,
+ NTLM, Negotiate, kerberos...), file transfer resume, proxy tunneling and a
+ busload of other useful tricks.
+Homepage: https://curl.se/
 
 Package: dash
 Essential: yes
@@ -580,6 +647,24 @@ Description: collection of partitioning utilities
  The sfdisk utility is mostly for automation and scripting uses.
 Homepage: https://www.kernel.org/pub/linux/utils/util-linux/
 
+Package: file
+Status: install ok installed
+Priority: standard
+Section: utils
+Installed-Size: 79
+Maintainer: Christoph Biedl <debian.axhn@manchmal.in-ulm.de>
+Architecture: amd64
+Multi-Arch: foreign
+Version: 1:5.44-3
+Depends: libc6 (>= 2.34), libmagic1 (= 1:5.44-3)
+Breaks: debhelper (<< 12.2~)
+Description: Recognize the type of data in a file using "magic" numbers
+ The file command is "a file type guesser", a command-line tool that
+ tells you in words what kind of data a file contains.
+ .
+ This package contains the file program itself.
+Homepage: https://www.darwinsys.com/file/
+
 Package: findutils
 Essential: yes
 Status: install ok installed
@@ -598,6 +683,44 @@ Description: utilities for finding files--find, xargs
  This package contains 'find' and 'xargs'; however, 'locate' has
  been split off into a separate package.
 Homepage: https://savannah.gnu.org/projects/findutils/
+
+Package: fish
+Status: install ok installed
+Priority: optional
+Section: shells
+Installed-Size: 5594
+Maintainer: Tristan Seligmann <mithrandi@debian.org>
+Architecture: amd64
+Version: 3.6.0-3.1+deb12u1
+Depends: fish-common (= 3.6.0-3.1+deb12u1), bsdextrautils, groff-base, man-db, procps, python3, libc6 (>= 2.34), libpcre2-32-0 (>= 10.22), libstdc++6 (>= 12), libtinfo6 (>= 6)
+Recommends: xsel, lynx | www-browser
+Suggests: doc-base
+Description: friendly interactive shell
+ Fish is a shell geared towards interactive use.  Its features are focused on
+ user friendliness and discoverability.  The language syntax is simple but
+ incompatible with other shell languages.
+Homepage: http://fishshell.com/
+
+Package: fish-common
+Status: install ok installed
+Priority: optional
+Section: shells
+Installed-Size: 12229
+Maintainer: Tristan Seligmann <mithrandi@debian.org>
+Architecture: all
+Multi-Arch: foreign
+Source: fish
+Version: 3.6.0-3.1+deb12u1
+Recommends: fish
+Conffiles:
+ /etc/fish/config.fish ca4086840404c6360337a9a7a7b08259
+Description: friendly interactive shell (architecture-independent files)
+ Fish is a shell geared towards interactive use.  Its features are focused on
+ user friendliness and discoverability.  The language syntax is simple but
+ incompatible with other shell languages.
+ .
+ This package contains the common fish files shared by all architectures.
+Homepage: http://fishshell.com/
 
 Package: gcc-12-base
 Status: install ok installed
@@ -723,6 +846,33 @@ Description: GNU grep, egrep and fgrep
  than Unix grep or egrep. (Regular expressions containing backreferencing
  will run more slowly, however.)
 Homepage: https://www.gnu.org/software/grep/
+
+Package: groff-base
+Status: install ok installed
+Priority: important
+Section: text
+Installed-Size: 3673
+Maintainer: Colin Watson <cjwatson@debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Source: groff
+Version: 1.22.4-10
+Depends: libc6 (>= 2.35), libgcc-s1 (>= 4.0), libstdc++6 (>= 4.1.1), libuchardet0 (>= 0.0.1)
+Suggests: groff
+Conffiles:
+ /etc/groff/man.local c8d6e2bf36a23e2e9599f7f66ab05463
+ /etc/groff/mdoc.local 4bc6267468942826b757fa2f868c8237
+Description: GNU troff text-formatting system (base system components)
+ This package contains the traditional UN*X text formatting tools
+ troff, nroff, tbl, eqn, and pic. These utilities, together with the
+ man-db package, are essential for displaying the on-line manual pages.
+ .
+ groff-base is a stripped-down package containing the necessary components
+ to read manual pages in ASCII, Latin-1, and UTF-8, plus the PostScript
+ device (groff's default). Users who want a full groff installation, with
+ the standard set of devices, fonts, macros, and documentation, should
+ install the groff package.
+Homepage: https://www.gnu.org/software/groff/
 
 Package: gzip
 Essential: yes
@@ -1465,6 +1615,37 @@ Description: easy-to-use client-side URL transfer library (GnuTLS flavour)
  successful companies and numerous applications.
  .
  SSL support is provided by GnuTLS.
+Homepage: https://curl.se/
+
+Package: libcurl4
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 843
+Maintainer: Alessandro Ghedini <ghedo@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: curl
+Version: 7.88.1-10+deb12u5
+Replaces: libcurl3
+Depends: libbrotli1 (>= 0.6.0), libc6 (>= 2.34), libgssapi-krb5-2 (>= 1.17), libidn2-0 (>= 0.6), libldap-2.5-0 (>= 2.5.4), libnghttp2-14 (>= 1.50.0), libpsl5 (>= 0.16.0), librtmp1 (>= 2.3), libssh2-1 (>= 1.7.0), libssl3 (>= 3.0.0), libzstd1 (>= 1.5.2), zlib1g (>= 1:1.1.4)
+Recommends: ca-certificates
+Conflicts: libcurl3
+Description: easy-to-use client-side URL transfer library (OpenSSL flavour)
+ libcurl is an easy-to-use client-side URL transfer library, supporting DICT,
+ FILE, FTP, FTPS, GOPHER, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, POP3, POP3S,
+ RTMP, RTSP, SCP, SFTP, SMTP, SMTPS, TELNET and TFTP.
+ .
+ libcurl supports SSL certificates, HTTP POST, HTTP PUT, FTP uploading, HTTP
+ form based upload, proxies, cookies, user+password authentication (Basic,
+ Digest, NTLM, Negotiate, Kerberos), file transfer resume, http proxy tunneling
+ and more!
+ .
+ libcurl is free, thread-safe, IPv6 compatible, feature rich, well supported,
+ fast, thoroughly documented and is already used by many known, big and
+ successful companies and numerous applications.
+ .
+ SSL support is provided by OpenSSL.
 Homepage: https://curl.se/
 
 Package: libdb5.3
@@ -2232,6 +2413,45 @@ Description: XZ-format compression library
  format, use the p7zip package instead.)
 Homepage: https://tukaani.org/xz/
 
+Package: libmagic-mgc
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 8130
+Maintainer: Christoph Biedl <debian.axhn@manchmal.in-ulm.de>
+Architecture: amd64
+Multi-Arch: foreign
+Source: file
+Version: 1:5.44-3
+Replaces: libmagic1 (<< 1:5.28-4~)
+Breaks: libmagic1 (<< 1:5.28-4~)
+Description: File type determination library using "magic" numbers (compiled magic file)
+ This package provides the compiled magic file "magic.mgc". It has
+ been separated from libmagic1 in order to meet the multiarch
+ requirements without breaking applications that expect this file
+ at its absolute path.
+Homepage: https://www.darwinsys.com/file/
+
+Package: libmagic1
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 232
+Maintainer: Christoph Biedl <debian.axhn@manchmal.in-ulm.de>
+Architecture: amd64
+Multi-Arch: same
+Source: file
+Version: 1:5.44-3
+Depends: libbz2-1.0, libc6 (>= 2.33), liblzma5 (>= 5.1.1alpha+20120614), zlib1g (>= 1:1.1.4), libmagic-mgc (= 1:5.44-3)
+Suggests: file
+Conffiles:
+ /etc/magic 272913026300e7ae9b5e2d51f138e674
+ /etc/magic.mime 272913026300e7ae9b5e2d51f138e674
+Description: Recognize the type of data in a file using "magic" numbers - library
+ This library can be used to classify files according to magic number
+ tests. It implements the core functionality of the file command.
+Homepage: https://www.darwinsys.com/file/
+
 Package: libmd0
 Status: install ok installed
 Priority: optional
@@ -2439,6 +2659,23 @@ Description: library implementing HTTP/2 protocol (shared library)
  This package installs a shared library.
 Homepage: https://nghttp2.org/
 
+Package: libnsl2
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 127
+Maintainer: GNU Libc Maintainers <debian-glibc@lists.debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: libnsl
+Version: 1.3.0-2
+Depends: libc6 (>= 2.14), libtirpc3 (>= 1.0.2)
+Description: Public client interface for NIS(YP) and NIS+
+ This package contains the libnsl library, which contains the public client
+ interface for NIS(YP) and NIS+. This code was formerly part of glibc, but is
+ now standalone to be able to link against TI-RPC for IPv6 support.
+Homepage: https://github.com/thkukuk/libnsl
+
 Package: libnumber-compare-perl
 Status: install ok installed
 Priority: optional
@@ -2568,6 +2805,28 @@ Description: Pluggable Authentication Modules library
  the applications themselves.
 Homepage: http://www.linux-pam.org/
 
+Package: libpcre2-32-0
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 608
+Maintainer: Matthew Vernon <matthew@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: pcre2
+Version: 10.42-1
+Depends: libc6 (>= 2.34)
+Description: New Perl Compatible Regular Expression Library - 32 bit runtime files
+ This is PCRE2, the new implementation of PCRE, a library of functions
+ to support regular expressions whose syntax and semantics are as
+ close as possible to those of the Perl 5 language. New projects
+ should use this library in preference to the older library,
+ confusingly called pcre3 in Debian.
+ .
+ This package contains the 32 bit runtime library, which operates on
+ UTF-32 input.
+Homepage: https://pcre.org/
+
 Package: libpcre2-8-0
 Status: install ok installed
 Priority: optional
@@ -2612,6 +2871,23 @@ Description: shared Perl library
  library (and depends on perl-modules-5.36 which contains the
  architecture-independent parts).
 Homepage: http://dev.perl.org/perl5/
+
+Package: libpipeline1
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 96
+Maintainer: Colin Watson <cjwatson@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: libpipeline
+Version: 1.5.7-1
+Depends: libc6 (>= 2.34)
+Description: Unix process pipeline manipulation library
+ This is a C library for setting up and running pipelines of processes,
+ without needing to involve shell command-line parsing which is often
+ error-prone and insecure.
+Homepage: https://libpipeline.gitlab.io/libpipeline/
 
 Package: libpopt0
 Status: install ok installed
@@ -2677,6 +2953,65 @@ Description: Library for Public Suffix List (shared libraries)
  .
  This package contains runtime libraries.
 Homepage: https://github.com/rockdaboot/libpsl
+
+Package: libpython3-stdlib
+Status: install ok installed
+Priority: optional
+Section: python
+Installed-Size: 27
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: python3-defaults (3.11.2-1)
+Version: 3.11.2-1+b1
+Depends: libpython3.11-stdlib (>= 3.11.2-1~)
+Description: interactive high-level object-oriented language (default python3 version)
+ This package contains the majority of the standard library for the Python
+ language (default python3 version).
+ .
+ This package is a dependency package, which depends on Debian's default
+ Python 3 version's standard library (currently v3.11).
+Homepage: https://www.python.org/
+
+Package: libpython3.11-minimal
+Status: install ok installed
+Priority: optional
+Section: python
+Installed-Size: 5198
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: python3.11
+Version: 3.11.2-6
+Depends: libc6 (>= 2.14), libssl3 (>= 3.0.0)
+Recommends: libpython3.11-stdlib
+Conflicts: binfmt-support (<< 1.1.2)
+Conffiles:
+ /etc/python3.11/sitecustomize.py d6b276695157bde06a56ba1b2bc53670
+Description: Minimal subset of the Python language (version 3.11)
+ This package contains some essential modules. It is normally not
+ used on it's own, but as a dependency of python3.11-minimal.
+
+Package: libpython3.11-stdlib
+Status: install ok installed
+Priority: optional
+Section: python
+Installed-Size: 8323
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: python3.11
+Version: 3.11.2-6
+Replaces: python3-gdbm (<< 3.9.9-1~)
+Depends: libpython3.11-minimal (= 3.11.2-6), media-types | mime-support, libbz2-1.0, libc6 (>= 2.34), libcrypt1 (>= 1:4.1.0), libdb5.3, libffi8 (>= 3.4), liblzma5 (>= 5.1.1alpha+20120614), libncursesw6 (>= 6.1), libnsl2 (>= 1.0), libreadline8 (>= 7.0~beta), libsqlite3-0 (>= 3.36.0), libtinfo6 (>= 6), libtirpc3 (>= 1.0.2), libuuid1 (>= 2.20.1)
+Breaks: python3-gdbm (<< 3.9.9-1~)
+Description: Interactive high-level object-oriented language (standard library, version 3.11)
+ Python is a high-level, interactive, object-oriented language. Its 3.11 version
+ includes an extensive class library with lots of goodies for
+ network programming, system administration, sounds and graphics.
+ .
+ This package contains Python 3.11's standard library. It is normally not
+ used on its own, but as a dependency of python3.11.
 
 Package: libreadline8
 Status: install ok installed
@@ -2981,6 +3316,24 @@ Description: Network communication, cryptography and signaturing library
  with a compatible API.
 Homepage: https://www.libsodium.org/
 
+Package: libsqlite3-0
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 1682
+Maintainer: Laszlo Boszormenyi (GCS) <gcs@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: sqlite3
+Version: 3.40.1-2
+Depends: libc6 (>= 2.34)
+Breaks: crowdsec (<< 1.4), python-migrate (<< 0.11.0-4~), python3-migrate (<< 0.11.0-4~)
+Description: SQLite 3 shared library
+ SQLite is a C library that implements an SQL database engine.
+ Programs that link with the SQLite library can have SQL database
+ access without running a separate RDBMS process.
+Homepage: https://www.sqlite.org/
+
 Package: libss2
 Status: install ok installed
 Priority: optional
@@ -3247,6 +3600,28 @@ Description: transport-independent RPC library
  Linux. The library is intended as a replacement for the RPC code in the GNU C
  library, providing among others support for RPC (and in turn, NFS) over IPv6.
 Homepage: http://sourceforge.net/projects/libtirpc
+
+Package: libuchardet0
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 208
+Maintainer: James Cowgill <jcowgill@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: uchardet
+Version: 0.0.7-1
+Depends: libc6 (>= 2.4), libgcc-s1 (>= 3.0), libstdc++6 (>= 4.1.1)
+Description: universal charset detection library - shared library
+ uchardet is a C language binding of the original C++ implementation
+ of the universal charset detection library by Mozilla.
+ .
+ uchardet is a encoding detector library, which takes a sequence of
+ bytes in an unknown character encoding without any additional
+ information, and attempts to determine the encoding of the text.
+ .
+ This package contains the shared library.
+Homepage: https://www.freedesktop.org/wiki/Software/uchardet/
 
 Package: libudev1
 Status: install ok installed
@@ -3622,6 +3997,113 @@ Description: save the output of a command in a log file
  of the output will also be written to standard output.
 Homepage: http://e2fsprogs.sourceforge.net
 
+Package: lynx
+Status: install ok installed
+Priority: optional
+Section: web
+Installed-Size: 1935
+Maintainer: Debian Lynx Packaging Team <pkg-lynx-maint@lists.alioth.debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Version: 2.9.0dev.12-1
+Replaces: lynx-cur (<< 2.8.9dev8-2~), lynx-cur-wrapper (<< 2.8.8dev.8-2)
+Provides: news-reader, www-browser
+Depends: lynx-common, libbsd0 (>= 0.0), libbz2-1.0, libc6 (>= 2.34), libgnutls30 (>= 3.7.5), libidn2-0 (>= 2.0.0), libncursesw6 (>= 6), libtinfo6 (>= 6), zlib1g (>= 1:1.1.4)
+Recommends: mailcap
+Breaks: lynx-cur (<< 2.8.9dev8-2~), lynx-cur-wrapper (<< 2.8.8dev.8-2)
+Conflicts: lynx-ssl
+Description: classic non-graphical (text-mode) web browser
+ In continuous development since 1992, Lynx sets the standard for
+ text-mode web clients. It is fast and simple to use, with support for
+ browsing via FTP, Gopher, HTTP, HTTPS, NNTP, and the local file system.
+Homepage: https://lynx.invisible-island.net/
+
+Package: lynx-common
+Status: install ok installed
+Priority: optional
+Section: web
+Installed-Size: 3687
+Maintainer: Debian Lynx Packaging Team <pkg-lynx-maint@lists.alioth.debian.org>
+Architecture: all
+Multi-Arch: foreign
+Source: lynx
+Version: 2.9.0dev.12-1
+Replaces: lynx-cur (<< 2.8.9dev8-2~), lynx-cur-wrapper (<< 2.8.8dev.8-2)
+Recommends: lynx
+Breaks: lynx-cur (<< 2.8.9dev8-2~), lynx-cur-wrapper (<< 2.8.8dev.8-2)
+Conffiles:
+ /etc/lynx/lynx.cfg ea13586bc21294b02ef418c0a96a2872
+ /etc/lynx/lynx.lss 38cb5a12468abaa8f99804534fe38ca9
+Description: shared files for lynx package
+ In continuous development since 1992, Lynx sets the standard for
+ text-mode web clients.
+ .
+ This package contains architecture-independent files shared by the
+ lynx package over any architecture available in Debian.  Examples of
+ such shared files are: manpages, locale and mimetype definitions, and
+ configuration files.
+Homepage: https://lynx.invisible-island.net/
+
+Package: mailcap
+Status: install ok installed
+Priority: optional
+Section: utils
+Installed-Size: 86
+Maintainer: Mime-Support Packagers <team+debian-mimesupport-packagers@tracker.debian.org>
+Architecture: all
+Multi-Arch: foreign
+Version: 3.70+nmu1
+Replaces: mime-support (<< 3.65)
+Provides: run-mailcap
+Depends: perl, media-types
+Recommends: bzip2, file, xz-utils
+Breaks: mime-support (<< 3.65)
+Conffiles:
+ /etc/mailcap.order ba07e08a7fe3741d0b8339127963190e
+Description: Debian's mailcap system, and support programs
+ The mailcap system associates media types with programs that can handle them,
+ using system and user configuration files.  A file's media type is determined
+ by its extension or by running the "file" command if available.
+ .
+ Other packages register their programs as viewers/editors/composers/etc by
+ placing mailcap entry files or FreeDesktop menu entries in predetermined
+ directories monitored by this package's dpkg triggers.
+ .
+ This package provides a "run-mailcap" program to open arbitrary files, and in
+ addition the "see", "edit", "compose", and "print" aliases to display, alter,
+ create, and print (respectively).
+ .
+ This package also provides the "debian-view" utility to handle Debian packages
+ interactively.
+
+Package: man-db
+Status: install ok installed
+Priority: important
+Section: doc
+Installed-Size: 2963
+Maintainer: Colin Watson <cjwatson@debian.org>
+Architecture: amd64
+Multi-Arch: foreign
+Version: 2.11.2-2
+Replaces: man, nlsutils
+Provides: man, man-browser
+Depends: bsdextrautils | bsdmainutils (<< 12.1.1~), groff-base, debconf (>= 0.5) | debconf-2.0, libc6 (>= 2.34), libgdbm6 (>= 1.16), libpipeline1 (>= 1.5.0), libseccomp2 (>= 2.1.0), zlib1g (>= 1:1.1.4)
+Suggests: apparmor, groff, less, www-browser
+Conflicts: man
+Conffiles:
+ /etc/apparmor.d/usr.bin.man 4f614d75041882370498f7fe2d43a44b
+ /etc/cron.daily/man-db 62423d7fa68568c9c0aefceac182d9ea
+ /etc/cron.weekly/man-db eebc5bb3e1dac973301570da3f453334
+ /etc/manpath.config 6d70333de0a08c7a71018da458201eb6
+Description: tools for reading manual pages
+ This package provides the man command, the primary way of examining the
+ system help files (manual pages). Other utilities provided include the
+ whatis and apropos commands for searching the manual page database, the
+ manpath utility for determining the manual page search path, and the
+ maintenance utilities mandb, catman and zsoelim. man-db uses the groff
+ suite of programs to format and display the manual pages.
+Homepage: https://man-db.gitlab.io/man-db/
+
 Package: mawk
 Status: install ok installed
 Priority: required
@@ -3647,6 +4129,30 @@ Description: Pattern scanning and text processing language
  Mawk is smaller and much faster than gawk. It has some compile-time
  limits such as NF = 32767 and sprintf buffer = 1020.
 Homepage: https://invisible-island.net/mawk/
+
+Package: media-types
+Status: install ok installed
+Priority: standard
+Section: net
+Installed-Size: 92
+Maintainer: Mime-Support Packagers <team+debian-mimesupport-packagers@tracker.debian.org>
+Architecture: all
+Multi-Arch: foreign
+Version: 10.0.0
+Replaces: mime-support (<< 3.65)
+Breaks: mime-support (<< 3.65)
+Conffiles:
+ /etc/mime.types e8937e06f21a0edb49813f91567be8e6
+Description: List of standard media types and their usual file extension
+ This package installs the configuration file /etc/mime.types, that lists
+ standard media types (originally known as "MIME" types) and their usual file
+ extension.  This provides a simple way for programs to have a first guess at a
+ file's content.  On standard Debian desktop systems, one will also find more
+ sophisticated tools, for instance provided by the "file" and "xdg-utils"
+ packages.
+ .
+ The /etc/mime.types file is compiled by hand using mostly information provided
+ by the Internet Assigned Numbers Authority (IANA).
 
 Package: mount
 Status: install ok installed
@@ -4042,6 +4548,90 @@ Description: accurate, machine-readable list of domain name suffixes
  the list useful for grouping cookies, deciding same-origin policies,
  collating spam, and other activities.
 Homepage: https://publicsuffix.org
+
+Package: python3
+Status: install ok installed
+Priority: optional
+Section: python
+Installed-Size: 81
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Multi-Arch: allowed
+Source: python3-defaults (3.11.2-1)
+Version: 3.11.2-1+b1
+Replaces: python3-minimal (<< 3.1.2-2)
+Provides: python3-profiler, python3-supported-max (= 3.11), python3-supported-min (= 3.11)
+Depends: python3.11 (>= 3.11.2-1~), libpython3-stdlib (= 3.11.2-1+b1)
+Pre-Depends: python3-minimal (= 3.11.2-1+b1)
+Suggests: python3-doc (>= 3.11.2-1+b1), python3-tk (>= 3.11.2-1~), python3-venv (>= 3.11.2-1+b1)
+Description: interactive high-level object-oriented language (default python3 version)
+ Python, the high-level, interactive object oriented language,
+ includes an extensive class library with lots of goodies for
+ network programming, system administration, sounds and graphics.
+ .
+ This package is a dependency package, which depends on Debian's default
+ Python 3 version (currently v3.11).
+Homepage: https://www.python.org/
+
+Package: python3-minimal
+Status: install ok installed
+Priority: optional
+Section: python
+Installed-Size: 111
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Multi-Arch: allowed
+Source: python3-defaults (3.11.2-1)
+Version: 3.11.2-1+b1
+Depends: dpkg (>= 1.13.20)
+Pre-Depends: python3.11-minimal (>= 3.11.2-1~)
+Description: minimal subset of the Python language (default python3 version)
+ This package contains the interpreter and some essential modules.  It's used
+ in the boot process for some basic tasks.
+ See /usr/share/doc/python3.11-minimal/README.Debian for a list of the modules
+ contained in this package.
+Homepage: https://www.python.org/
+Cnf-Visible-Pkgname: python3
+
+Package: python3.11
+Status: install ok installed
+Priority: optional
+Section: python
+Installed-Size: 648
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Multi-Arch: allowed
+Version: 3.11.2-6
+Depends: python3.11-minimal (= 3.11.2-6), libpython3.11-stdlib (= 3.11.2-6), media-types | mime-support
+Recommends: ca-certificates
+Suggests: python3.11-venv, python3.11-doc, binutils
+Breaks: python3-all (<< 3.6.5~rc1-1), python3-dev (<< 3.6.5~rc1-1), python3-venv (<< 3.6.5-2)
+Description: Interactive high-level object-oriented language (version 3.11)
+ Python is a high-level, interactive, object-oriented language. Its 3.11 version
+ includes an extensive class library with lots of goodies for
+ network programming, system administration, sounds and graphics.
+
+Package: python3.11-minimal
+Status: install ok installed
+Priority: optional
+Section: python
+Installed-Size: 6761
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Multi-Arch: allowed
+Source: python3.11
+Version: 3.11.2-6
+Depends: libpython3.11-minimal (= 3.11.2-6), libexpat1 (>= 2.1~beta3), zlib1g (>= 1:1.2.0)
+Pre-Depends: libc6 (>= 2.35)
+Recommends: python3.11
+Suggests: binfmt-support
+Conflicts: binfmt-support (<< 1.1.2)
+Description: Minimal subset of the Python language (version 3.11)
+ This package contains the interpreter and some essential modules.  It can
+ be used in the boot process for some basic tasks.
+ See /usr/share/doc/python3.11-minimal/README.Debian for a list of the modules
+ contained in this package.
+Cnf-Visible-Pkgname: python3.11
 
 Package: readline-common
 Status: install ok installed
@@ -4501,6 +5091,56 @@ Description: X authentication utility
  xauth is a small utility to read and manipulate Xauthority files, which
  are used by servers and clients alike to control authentication and access
  to X sessions.
+
+Package: xsel
+Status: install ok installed
+Priority: optional
+Section: x11
+Installed-Size: 55
+Maintainer: Josue Ortega <josue@debian.org>
+Architecture: amd64
+Version: 1.2.0+git9bfc13d.20180109-4
+Depends: libc6 (>= 2.34), libx11-6
+Description: command-line tool to access X clipboard and selection buffers
+ XSel is a command-line program for getting and setting the contents of
+ the X selection.  It can also append and have it follow a growing file
+ (similar to tail -f).
+Homepage: http://www.vergenet.net/~conrad/software/xsel/
+
+Package: xz-utils
+Status: install ok installed
+Priority: standard
+Section: utils
+Installed-Size: 1226
+Maintainer: Jonathan Nieder <jrnieder@gmail.com>
+Architecture: amd64
+Multi-Arch: foreign
+Version: 5.4.1-0.2
+Replaces: lzip (<< 1.8~rc2), manpages-de (<< 4.17.0-2~bpo11+1), manpages-fr (<< 4.17.0-2~bpo11+1), xz-lzma
+Provides: lzma
+Depends: libc6 (>= 2.34), liblzma5 (>= 5.4.0)
+Breaks: lzip (<< 1.8~rc2), manpages-de (<< 4.17.0-2~bpo11+1), manpages-fr (<< 4.17.0-2~bpo11+1)
+Conflicts: lzma (<< 9.22-1), xz-lzma
+Description: XZ-format compression utilities
+ XZ is the successor to the Lempel-Ziv/Markov-chain Algorithm
+ compression format, which provides memory-hungry but powerful
+ compression (often better than bzip2) and fast, easy decompression.
+ .
+ This package provides the command line tools for working with XZ
+ compression, including xz, unxz, xzcat, xzgrep, and so on. They can
+ also handle the older LZMA format, and if invoked via appropriate
+ symlinks will emulate the behavior of the commands in the lzma
+ package.
+ .
+ The XZ format is similar to the older LZMA format but includes some
+ improvements for general use:
+ .
+  * 'file' magic for detecting XZ files;
+  * crc64 data integrity check;
+  * limited random-access reading support;
+  * improved support for multithreading (not used in xz-utils);
+  * support for flushing the encoder.
+Homepage: https://tukaani.org/xz/
 
 Package: zlib1g
 Status: install ok installed

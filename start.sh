@@ -26,8 +26,6 @@ mkdir ./work 2> /dev/null
 
 mount overlay -t overlay -o lowerdir=./lib/images/debootstrap/debian-stable/,upperdir=./lib/images/base/student-debian,workdir=./work ./test
 
-sleep 5
-
 ./start_nspawn.sh
 
 umount ./test 

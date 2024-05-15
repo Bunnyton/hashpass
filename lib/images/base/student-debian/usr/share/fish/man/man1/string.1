@@ -1,0 +1,792 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "STRING" "1" "Dec 21, 2023" "3.6" "fish-shell"
+.SH NAME
+string \- manipulate strings
+.SH SYNOPSIS
+.nf
+\fBstring\fP \fBcollect\fP [\fB\-a\fP | \fB\-\-allow\-empty\fP] [\fB\-N\fP | \fB\-\-no\-trim\-newlines\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBescape\fP [\fB\-n\fP | \fB\-\-no\-quoted\fP] [\fB\-\-style\fP\fB=\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBjoin\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-n\fP | \fB\-\-no\-empty\fP] \fISEP\fP [\fISTRING\fP \&...]
+\fBstring\fP \fBjoin0\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBlength\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBlower\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBmatch\fP [\fB\-a\fP | \fB\-\-all\fP] [\fB\-e\fP | \fB\-\-entire\fP] [\fB\-i\fP | \fB\-\-ignore\-case\fP]
+             [\fB\-g\fP | \fB\-\-groups\-only\fP] [\fB\-r\fP | \fB\-\-regex\fP] [\fB\-n\fP | \fB\-\-index\fP]
+             [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-v\fP | \fB\-\-invert\fP]
+             \fIPATTERN\fP [\fISTRING\fP \&...]
+\fBstring\fP \fBpad\fP [\fB\-r\fP | \fB\-\-right\fP] [(\fB\-c\fP | \fB\-\-char\fP) \fICHAR\fP] [(\fB\-w\fP | \fB\-\-width\fP) \fIINTEGER\fP]
+           [\fISTRING\fP \&...]
+\fBstring\fP \fBrepeat\fP [(\fB\-n\fP | \fB\-\-count\fP) \fICOUNT\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIMAX\fP] [\fB\-N\fP | \fB\-\-no\-newline\fP]
+              [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBreplace\fP [\fB\-a\fP | \fB\-\-all\fP] [\fB\-f\fP | \fB\-\-filter\fP] [\fB\-i\fP | \fB\-\-ignore\-case\fP]
+               [\fB\-r\fP | \fB\-\-regex\fP] [\fB\-q\fP | \fB\-\-quiet\fP] \fIPATTERN\fP \fIREPLACE\fP [\fISTRING\fP \&...]
+\fBstring\fP \fBshorten\fP [(\fB\-c\fP | \fB\-\-char\fP) \fICHARS\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIINTEGER\fP]
+               [\fB\-N\fP | \fB\-\-no\-newline\fP] [\fB\-l\fP | \fB\-\-left\fP] [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBsplit\fP [(\fB\-f\fP | \fB\-\-fields\fP) \fIFIELDS\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIMAX\fP] [\fB\-n\fP | \fB\-\-no\-empty\fP]
+             [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-r\fP | \fB\-\-right\fP] \fISEP\fP [\fISTRING\fP \&...]
+\fBstring\fP \fBsplit0\fP [(\fB\-f\fP | \fB\-\-fields\fP) \fIFIELDS\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIMAX\fP] [\fB\-n\fP | \fB\-\-no\-empty\fP]
+              [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-r\fP | \fB\-\-right\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBsub\fP [(\fB\-s\fP | \fB\-\-start\fP) \fISTART\fP] [(\fB\-e\fP | \fB\-\-end\fP) \fIEND\fP] [(\fB\-l\fP | \fB\-\-length\fP) \fILENGTH\fP]
+           [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBtrim\fP [\fB\-l\fP | \fB\-\-left\fP] [\fB\-r\fP | \fB\-\-right\fP] [(\fB\-c\fP | \fB\-\-chars\fP) \fICHARS\fP]
+            [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBunescape\fP [\fB\-\-style\fP\fB=\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBupper\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.SH DESCRIPTION
+.sp
+\fBstring\fP performs operations on strings.
+.sp
+\fISTRING\fP arguments are taken from the command line unless standard input is connected to a pipe or a file, in which case they are read from standard input, one \fISTRING\fP per line. It is an error to supply \fISTRING\fP arguments on the command line and on standard input.
+.sp
+Arguments beginning with \fB\-\fP are normally interpreted as switches; \fB\-\-\fP causes the following arguments not to be treated as switches even if they begin with \fB\-\fP\&. Switches and required arguments are recognized only on the command line.
+.sp
+Most subcommands accept a \fB\-q\fP or \fB\-\-quiet\fP switch, which suppresses the usual output but exits with the documented status. In this case these commands will quit early, without reading all of the available input.
+.sp
+The following subcommands are available.
+.SH "COLLECT" SUBCOMMAND
+.nf
+\fBstring\fP \fBcollect\fP [\fB\-a\fP | \fB\-\-allow\-empty\fP] [\fB\-N\fP | \fB\-\-no\-trim\-newlines\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring collect\fP collects its input into a single output argument, without splitting the output when used in a command substitution. This is useful when trying to collect multiline output from another command into a variable. Exit status: 0 if any output argument is non\-empty, or 1 otherwise.
+.sp
+A command like \fBecho (cmd | string collect)\fP is mostly equivalent to a quoted command substitution (\fBecho \(dq$(cmd)\(dq\fP). The main difference is that the former evaluates to zero or one elements whereas the quoted command substitution always evaluates to one element due to string interpolation.
+.sp
+If invoked with multiple arguments instead of input, \fBstring collect\fP preserves each argument separately, where the number of output arguments is equal to the number of arguments given to \fBstring collect\fP\&.
+.sp
+Any trailing newlines on the input are trimmed, just as with \fB\(dq$(cmd)\(dq\fP substitution. Use \fB\-\-no\-trim\-newlines\fP to disable this behavior, which may be useful when running a command such as \fBset contents (cat filename | string collect \-N)\fP\&.
+.sp
+With \fB\-\-allow\-empty\fP, \fBstring collect\fP always prints one (empty) argument. This can be used to prevent an argument from disappearing.
+.SS Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ echo \(dqzero $(echo one\entwo\enthree) four\(dq
+zero one
+two
+three four
+
+>_ echo \e\(dq(echo one\entwo\enthree | string collect)\e\(dq
+\(dqone
+two
+three\(dq
+
+>_ echo \e\(dq(echo one\entwo\enthree | string collect \-N)\e\(dq
+\(dqone
+two
+three
+\(dq
+
+>_ echo foo(true | string collect \-\-allow\-empty)bar
+foobar
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "ESCAPE" AND "UNESCAPE" SUBCOMMANDS
+.nf
+\fBstring\fP \fBescape\fP [\fB\-n\fP | \fB\-\-no\-quoted\fP] [\fB\-\-style\fP\fB=\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBunescape\fP [\fB\-\-style\fP\fB=\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring escape\fP escapes each \fISTRING\fP in one of three ways. The first is \fB\-\-style=script\fP\&. This is the default. It alters the string such that it can be passed back to \fBeval\fP to produce the original argument again. By default, all special characters are escaped, and quotes are used to simplify the output when possible. If \fB\-n\fP or \fB\-\-no\-quoted\fP is given, the simplifying quoted format is not used. Exit status: 0 if at least one string was escaped, or 1 otherwise.
+.sp
+\fB\-\-style=var\fP ensures the string can be used as a variable name by hex encoding any non\-alphanumeric characters. The string is first converted to UTF\-8 before being encoded.
+.sp
+\fB\-\-style=url\fP ensures the string can be used as a URL by hex encoding any character which is not legal in a URL. The string is first converted to UTF\-8 before being encoded.
+.sp
+\fB\-\-style=regex\fP escapes an input string for literal matching within a regex expression. The string is first converted to UTF\-8 before being encoded.
+.sp
+\fBstring unescape\fP performs the inverse of the \fBstring escape\fP command. If the string to be unescaped is not properly formatted it is ignored. For example, doing \fBstring unescape \-\-style=var (string escape \-\-style=var $str)\fP will return the original string. There is no support for unescaping \fB\-\-style=regex\fP\&.
+.SS Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ echo \ex07 | string escape
+\ecg
+
+>_ string escape \-\-style=var \(aqa1 b2\(aq\eu6161
+a1_20_b2_E6_85_A1_
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "JOIN" AND "JOIN0" SUBCOMMANDS
+.nf
+\fBstring\fP \fBjoin\fP [\fB\-q\fP | \fB\-\-quiet\fP] \fISEP\fP [\fISTRING\fP \&...]
+\fBstring\fP \fBjoin0\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring join\fP joins its \fISTRING\fP arguments into a single string separated by \fISEP\fP, which can be an empty string. Exit status: 0 if at least one join was performed, or 1 otherwise. If \fB\-n\fP or \fB\-\-no\-empty\fP is specified, empty strings are excluded from consideration (e.g. \fBstring join \-n + a b \(dq\(dq c\fP would expand to \fBa+b+c\fP not \fBa+b++c\fP).
+.sp
+\fBstring join0\fP joins its \fISTRING\fP arguments into a single string separated by the zero byte (NUL), and adds a trailing NUL. This is most useful in conjunction with tools that accept NUL\-delimited input, such as \fBsort \-z\fP\&. Exit status: 0 if at least one join was performed, or 1 otherwise.
+.sp
+Because Unix uses NUL as the string terminator, passing the output of \fBstring join0\fP as an \fIargument\fP to a command (via a \fI\%command substitution\fP) won\(aqt actually work. Fish will pass the correct bytes along, but the command won\(aqt be able to tell where the argument ends. This is a limitation of Unix\(aq argument passing.
+.SS Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ seq 3 | string join ...
+1...2...3
+
+# Give a list of NUL\-separated filenames to du (this is a GNU extension)
+>_ string join0 file1 file2 file\enwith\enmultiple\enlines | du \-\-files0\-from=\-
+
+# Just put the strings together without a separator
+>_ string join \(aq\(aq a b c
+abc
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "LENGTH" SUBCOMMAND
+.nf
+\fBstring\fP \fBlength\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-V\fP | \fB\-\-visible\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring length\fP reports the length of each string argument in characters. Exit status: 0 if at least one non\-empty \fISTRING\fP was given, or 1 otherwise.
+.sp
+With \fB\-V\fP or \fB\-\-visible\fP, it uses the visible width of the arguments. That means it will discount escape sequences fish knows about, account for $fish_emoji_width and $fish_ambiguous_width. It will also count each line (separated by \fB\en\fP) on its own, and with a carriage return (\fB\er\fP) count only the widest stretch on a line. The intent is to measure the number of columns the \fISTRING\fP would occupy in the current terminal.
+.SS Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string length \(aqhello, world\(aq
+12
+
+>_ set str foo
+>_ string length \-q $str; echo $status
+0
+# Equivalent to test \-n \(dq$str\(dq
+
+>_ string length \-\-visible (set_color red)foobar
+# the set_color is discounted, so this is the width of \(dqfoobar\(dq
+6
+
+>_ string length \-\-visible 🐟🐟🐟🐟
+# depending on $fish_emoji_width, this is either 4 or 8
+# in new terminals it should be
+8
+
+>_ string length \-\-visible abcdef\er123
+# this displays as \(dq123def\(dq, so the width is 6
+6
+
+>_ string length \-\-visible a\enbc
+# counts \(dqa\(dq and \(dqbc\(dq as separate lines, so it prints width for each
+1
+2
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "LOWER" SUBCOMMAND
+.nf
+\fBstring\fP \fBlower\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring lower\fP converts each string argument to lowercase. Exit status: 0 if at least one string was converted to lowercase, else 1. This means that in conjunction with the \fB\-q\fP flag you can readily test whether a string is already lowercase.
+.SH "MATCH" SUBCOMMAND
+.nf
+\fBstring\fP \fBmatch\fP [\fB\-a\fP | \fB\-\-all\fP] [\fB\-e\fP | \fB\-\-entire\fP] [\fB\-i\fP | \fB\-\-ignore\-case\fP]
+             [\fB\-g\fP | \fB\-\-groups\-only\fP] [\fB\-r\fP | \fB\-\-regex\fP] [\fB\-n\fP | \fB\-\-index\fP]
+             [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-v\fP | \fB\-\-invert\fP]
+             \fIPATTERN\fP [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring match\fP tests each \fISTRING\fP against \fIPATTERN\fP and prints matching substrings. Only the first match for each \fISTRING\fP is reported unless \fB\-a\fP or \fB\-\-all\fP is given, in which case all matches are reported.
+.sp
+If you specify the \fB\-e\fP or \fB\-\-entire\fP then each matching string is printed including any prefix or suffix not matched by the pattern (equivalent to \fBgrep\fP without the \fB\-o\fP flag). You can, obviously, achieve the same result by prepending and appending \fB*\fP or \fB\&.*\fP depending on whether or not you have specified the \fB\-\-regex\fP flag. The \fB\-\-entire\fP flag is simply a way to avoid having to complicate the pattern in that fashion and make the intent of the \fBstring match\fP clearer. Without \fB\-\-entire\fP and \fB\-\-regex\fP, a \fIPATTERN\fP will need to match the entire \fISTRING\fP before it will be reported.
+.sp
+Matching can be made case\-insensitive with \fB\-\-ignore\-case\fP or \fB\-i\fP\&.
+.sp
+If \fB\-\-groups\-only\fP or \fB\-g\fP is given, only the capturing groups will be reported \- meaning the full match will be skipped. This is incompatible with \fB\-\-entire\fP and \fB\-\-invert\fP, and requires \fB\-\-regex\fP\&. It is useful as a simple cutting tool instead of \fBstring replace\fP, so you can simply choose \(dqthis part\(dq of a string.
+.sp
+If \fB\-\-index\fP or \fB\-n\fP is given, each match is reported as a 1\-based start position and a length. By default, PATTERN is interpreted as a glob pattern matched against each entire \fISTRING\fP argument. A glob pattern is only considered a valid match if it matches the entire \fISTRING\fP\&.
+.sp
+If \fB\-\-regex\fP or \fB\-r\fP is given, \fIPATTERN\fP is interpreted as a Perl\-compatible regular expression, which does not have to match the entire \fISTRING\fP\&. For a regular expression containing capturing groups, multiple items will be reported for each match, one for the entire match and one for each capturing group. With this, only the matching part of the \fISTRING\fP will be reported, unless \fB\-\-entire\fP is given.
+.sp
+When matching via regular expressions, \fBstring match\fP automatically sets variables for all named capturing groups (\fB(?<name>expression)\fP). It will create a variable with the name of the group, in the default scope, for each named capturing group, and set it to the value of the capturing group in the first matched argument. If a named capture group matched an empty string, the variable will be set to the empty string (like \fBset var \(dq\(dq\fP). If it did not match, the variable will be set to nothing (like \fBset var\fP).  When \fB\-\-regex\fP is used with \fB\-\-all\fP, this behavior changes. Each named variable will contain a list of matches, with the first match contained in the first element, the second match in the second, and so on. If the group was empty or did not match, the corresponding element will be an empty string.
+.sp
+If \fB\-\-invert\fP or \fB\-v\fP is used the selected lines will be only those which do not match the given glob pattern or regular expression.
+.sp
+Exit status: 0 if at least one match was found, or 1 otherwise.
+.SS Match Glob Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string match \(aq?\(aq a
+a
+
+>_ string match \(aqa*b\(aq axxb
+axxb
+
+>_ string match \-i \(aqa??B\(aq Axxb
+Axxb
+
+>_ echo \(aqok?\(aq | string match \(aq*\e?\(aq
+ok?
+
+# Note that only the second STRING will match here.
+>_ string match \(aqfoo\(aq \(aqfoo1\(aq \(aqfoo\(aq \(aqfoo2\(aq
+foo
+
+>_ string match \-e \(aqfoo\(aq \(aqfoo1\(aq \(aqfoo\(aq \(aqfoo2\(aq
+foo1
+foo
+foo2
+
+>_ string match \(aqfoo?\(aq \(aqfoo1\(aq \(aqfoo\(aq \(aqfoo2\(aq
+foo1
+foo2
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Match Regex Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string match \-r \(aqcat|dog|fish\(aq \(aqnice dog\(aq
+dog
+
+>_ string match \-r \-v \(dqc.*[12]\(dq {cat,dog}(seq 1 4)
+dog1
+dog2
+cat3
+dog3
+cat4
+dog4
+
+>_ string match \-r \(aq(\ed\ed?):(\ed\ed):(\ed\ed)\(aq 2:34:56
+2:34:56
+2
+34
+56
+
+>_ string match \-r \(aq^(\ew{2,4})\e1$\(aq papa mud murmur
+papa
+pa
+murmur
+mur
+
+>_ string match \-r \-a \-n at ratatat
+2 2
+4 2
+6 2
+
+>_ string match \-r \-i \(aq0x[0\-9a\-f]{1,8}\(aq \(aqint magic = 0xBadC0de;\(aq
+0xBadC0de
+
+>_ echo $version
+3.1.2\-1575\-ga2ff32d90
+>_ string match \-rq \(aq(?<major>\ed+).(?<minor>\ed+).(?<revision>\ed+)\(aq \-\- $version
+>_ echo \(dqYou are using fish $major!\(dq
+You are using fish 3!
+
+>_ string match \-raq \(aq *(?<sentence>[^.!?]+)(?<punctuation>[.!?])?\(aq \(dqhello, friend. goodbye\(dq
+>_ printf \(dq%s\en\(dq \-\- $sentence
+hello, friend
+goodbye
+>_ printf \(dq%s\en\(dq \-\- $punctuation
+\&.
+
+>_ string match \-rq \(aq(?<word>hello)\(aq \(aqhi\(aq
+>_ count $word
+0
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "PAD" AND "SHORTEN" SUBCOMMANDS
+.nf
+\fBstring\fP \fBpad\fP [\fB\-r\fP | \fB\-\-right\fP] [(\fB\-c\fP | \fB\-\-char\fP) \fICHAR\fP] [(\fB\-w\fP | \fB\-\-width\fP) \fIINTEGER\fP]
+           [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring pad\fP extends each \fISTRING\fP to the given visible width by adding \fICHAR\fP to the left. That means the width of all visible characters added together, excluding escape sequences and accounting for \fI\%fish_emoji_width\fP and \fI\%fish_ambiguous_width\fP\&. It is the amount of columns in a terminal the \fISTRING\fP occupies.
+.sp
+The escape sequences reflect what fish knows about, and how it computes its output. Your terminal might support more escapes, or not support escape sequences that fish knows about.
+.sp
+If \fB\-r\fP or \fB\-\-right\fP is given, add the padding after a string.
+.sp
+If \fB\-c\fP or \fB\-\-char\fP is given, pad with \fICHAR\fP instead of whitespace.
+.sp
+The output is padded to the maximum width of all input strings. If \fB\-w\fP or \fB\-\-width\fP is given, use at least that.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string pad \-w 10 abc abcdef
+       abc
+    abcdef
+
+>_ string pad \-\-right \-\-char=🐟 \(dqfish are pretty\(dq \(dqrich. \(dq
+fish are pretty
+rich.  🐟🐟🐟🐟
+
+>_ string pad \-w$COLUMNS (date)
+# Prints the current time on the right edge of the screen.
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH SEE ALSO
+.INDENT 0.0
+.IP \(bu 2
+The \fI\%printf\fP command can do simple padding, for example \fBprintf %10s\en\fP works like \fBstring pad \-w10\fP\&.
+.IP \(bu 2
+\fI\%string length\fP with the \fB\-\-visible\fP option can be used to show what fish thinks the width is.
+.UNINDENT
+.nf
+\fBstring\fP \fBshorten\fP [(\fB\-c\fP | \fB\-\-char\fP) \fICHARS\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIINTEGER\fP]
+               [\fB\-N\fP | \fB\-\-no\-newline\fP] [\fB\-l\fP | \fB\-\-left\fP] [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring shorten\fP truncates each \fISTRING\fP to the given visible width and adds an ellipsis to indicate it. \(dqVisible width\(dq means the width of all visible characters added together, excluding escape sequences and accounting for \fI\%fish_emoji_width\fP and \fI\%fish_ambiguous_width\fP\&. It is the amount of columns in a terminal the \fISTRING\fP occupies.
+.sp
+The escape sequences reflect what fish knows about, and how it computes its output. Your terminal might support more escapes, or not support escape sequences that fish knows about.
+.sp
+If \fB\-m\fP or \fB\-\-max\fP is given, truncate at the given width. Otherwise, the lowest non\-zero width of all input strings is used. A max of 0 means no shortening takes place, all STRINGs are printed as\-is.
+.sp
+If \fB\-N\fP or \fB\-\-no\-newline\fP is given, only the first line (or last line with \fB\-\-left\fP) of each STRING is used, and an ellipsis is added if it was multiline. This only works for STRINGs being given as arguments, multiple lines given on stdin will be interpreted as separate STRINGs instead.
+.sp
+If \fB\-c\fP or \fB\-\-char\fP is given, add \fICHAR\fP instead of an ellipsis. This can also be empty or more than one character.
+.sp
+If \fB\-l\fP or \fB\-\-left\fP is given, remove text from the left on instead, so this prints the longest \fIsuffix\fP of the string that fits. With \fB\-\-no\-newline\fP, this will take from the last line instead of the first.
+.sp
+If \fB\-q\fP or \fB\-\-quiet\fP is given, \fBstring shorten\fP only runs for the return value \- if anything would be shortened, it returns 0, else 1.
+.sp
+The default ellipsis is \fB…\fP\&. If fish thinks your system is incapable because of your locale, it will use \fB\&...\fP instead.
+.sp
+The return value is 0 if any shortening occured, 1 otherwise.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string shorten foo foobar
+# No width was given, we infer, and \(dqfoo\(dq is the shortest.
+foo
+fo…
+
+>_ string shorten \-\-char=\(dq...\(dq foo foobar
+# The target width is 3 because of \(dqfoo\(dq,
+# and our ellipsis is 3 too, so we can\(aqt really show anything.
+# This is the default ellipsis if your locale doesn\(aqt allow \(dq…\(dq.
+foo
+\&...
+
+>_ string shorten \-\-char=\(dq\(dq \-\-max 4 abcdef 123456
+# Leaving the char empty makes us not add an ellipsis
+# So this truncates at 4 columns:
+abcd
+1234
+
+>_ touch \(dqa multiline\(dq\en\(dqfile\(dq
+>_ for file in *; string shorten \-N \-\- $file; end
+# Shorten the multiline file so we only show one line per file:
+a multiline…
+
+>_ ss \-p | string shorten \-m$COLUMNS \-c \(dq\(dq
+# \(gass\(ga from Linux\(aq iproute2 shows socket information, but prints extremely long lines.
+# This shortens input so it fits on the screen without overflowing lines.
+
+>_ git branch | string match \-rg \(aq^\e* (.*)\(aq | string shorten \-m20
+# Take the current git branch and shorten it at 20 columns.
+# Here the branch is \(dqbuiltin\-path\-with\-expand\(dq
+builtin\-path\-with\-e…
+
+>_ git branch | string match \-rg \(aq^\e* (.*)\(aq | string shorten \-m20 \-\-left
+# Taking 20 columns from the right instead:
+…in\-path\-with\-expand
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH SEE ALSO
+.INDENT 0.0
+.IP \(bu 2
+\fI\%string\fP\(aqs \fBpad\fP subcommand does the inverse of this command, adding padding to a specific width instead.
+.IP \(bu 2
+The \fI\%printf\fP command can do simple padding, for example \fBprintf %10s\en\fP works like \fBstring pad \-w10\fP\&.
+.IP \(bu 2
+\fI\%string length\fP with the \fB\-\-visible\fP option can be used to show what fish thinks the width is.
+.UNINDENT
+.SH "REPEAT" SUBCOMMAND
+.nf
+\fBstring\fP \fBrepeat\fP [(\fB\-n\fP | \fB\-\-count\fP) \fICOUNT\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIMAX\fP] [\fB\-N\fP | \fB\-\-no\-newline\fP]
+              [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring repeat\fP repeats the \fISTRING\fP \fB\-n\fP or \fB\-\-count\fP times. The \fB\-m\fP or \fB\-\-max\fP option will limit the number of outputted characters (excluding the newline). This option can be used by itself or in conjunction with \fB\-\-count\fP\&. If both \fB\-\-count\fP and \fB\-\-max\fP are present, max char will be outputed unless the final repeated string size is less than max, in that case, the string will repeat until count has been reached. Both \fB\-\-count\fP and \fB\-\-max\fP will accept a number greater than or equal to zero, in the case of zero, nothing will be outputed. If \fB\-N\fP or \fB\-\-no\-newline\fP is given, the output won\(aqt contain a newline character at the end. Exit status: 0 if yielded string is not empty, 1 otherwise.
+.SS Examples
+.SS Repeat Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string repeat \-n 2 \(aqfoo \(aq
+foo foo
+
+>_ echo foo | string repeat \-n 2
+foofoo
+
+>_ string repeat \-n 2 \-m 5 \(aqfoo\(aq
+foofo
+
+>_ string repeat \-m 5 \(aqfoo\(aq
+foofo
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "REPLACE" SUBCOMMAND
+.nf
+\fBstring\fP \fBreplace\fP [\fB\-a\fP | \fB\-\-all\fP] [\fB\-f\fP | \fB\-\-filter\fP] [\fB\-i\fP | \fB\-\-ignore\-case\fP]
+               [\fB\-r\fP | \fB\-\-regex\fP] [\fB\-q\fP | \fB\-\-quiet\fP] \fIPATTERN\fP \fIREPLACEMENT\fP [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring replace\fP is similar to \fBstring match\fP but replaces non\-overlapping matching substrings with a replacement string and prints the result. By default, \fIPATTERN\fP is treated as a literal substring to be matched.
+.sp
+If \fB\-r\fP or \fB\-\-regex\fP is given, \fIPATTERN\fP is interpreted as a Perl\-compatible regular expression, and \fIREPLACEMENT\fP can contain C\-style escape sequences like \fBt\fP as well as references to capturing groups by number or name as \fI$n\fP or \fI${n}\fP\&.
+.sp
+If you specify the \fB\-f\fP or \fB\-\-filter\fP flag then each input string is printed only if a replacement was done. This is useful where you would otherwise use this idiom: \fBa_cmd | string match pattern | string replace pattern new_pattern\fP\&. You can instead just write \fBa_cmd | string replace \-\-filter pattern new_pattern\fP\&.
+.sp
+Exit status: 0 if at least one replacement was performed, or 1 otherwise.
+.SS Replace Literal Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string replace is was \(aqblue is my favorite\(aq
+blue was my favorite
+
+>_ string replace 3rd last 1st 2nd 3rd
+1st
+2nd
+last
+
+>_ string replace \-a \(aq \(aq _ \(aqspaces to underscores\(aq
+spaces_to_underscores
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Replace Regex Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string replace \-r \-a \(aq[^\ed.]+\(aq \(aq \(aq \(aq0 one two 3.14 four 5x\(aq
+0 3.14 5
+
+>_ string replace \-r \(aq(\ew+)\es+(\ew+)\(aq \(aq$2 $1 $$\(aq \(aqleft right\(aq
+right left $
+
+>_ string replace \-r \(aq\es*newline\es*\(aq \(aq\en\(aq \(aqput a newline here\(aq
+put a
+here
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "SPLIT" AND "SPLIT0" SUBCOMMANDS
+.nf
+\fBstring\fP \fBsplit\fP [(\fB\-f\fP | \fB\-\-fields\fP) \fIFIELDS\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIMAX\fP] [\fB\-n\fP | \fB\-\-no\-empty\fP]
+             [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-r\fP | \fB\-\-right\fP] \fISEP\fP [\fISTRING\fP \&...]
+\fBstring\fP \fBsplit0\fP [(\fB\-f\fP | \fB\-\-fields\fP) \fIFIELDS\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIMAX\fP] [\fB\-n\fP | \fB\-\-no\-empty\fP]
+              [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-r\fP | \fB\-\-right\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring split\fP splits each \fISTRING\fP on the separator \fISEP\fP, which can be an empty string. If \fB\-m\fP or \fB\-\-max\fP is specified, at most MAX splits are done on each \fISTRING\fP\&. If \fB\-r\fP or \fB\-\-right\fP is given, splitting is performed right\-to\-left. This is useful in combination with \fB\-m\fP or \fB\-\-max\fP\&. With \fB\-n\fP or \fB\-\-no\-empty\fP, empty results are excluded from consideration (e.g. \fBhello\en\enworld\fP would expand to two strings and not three). Exit status: 0 if at least one split was performed, or 1 otherwise.
+.sp
+Use \fB\-f\fP or \fB\-\-fields\fP to print out specific fields. FIELDS is a comma\-separated string of field numbers and/or spans. Each field is one\-indexed, and will be printed on separate lines. If a given field does not exist, then the command exits with status 1 and does not print anything, unless \fB\-\-allow\-empty\fP is used.
+.sp
+See also the \fB\-\-delimiter\fP option of the \fI\%read\fP command.
+.sp
+\fBstring split0\fP splits each \fISTRING\fP on the zero byte (NUL). Options are the same as \fBstring split\fP except that no separator is given.
+.sp
+\fBsplit0\fP has the important property that its output is not further split when used in a command substitution, allowing for the command substitution to produce elements containing newlines. This is most useful when used with Unix tools that produce zero bytes, such as \fBfind \-print0\fP or \fBsort \-z\fP\&. See split0 examples below.
+.SS Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string split . example.com
+example
+com
+
+>_ string split \-r \-m1 / /usr/local/bin/fish
+/usr/local/bin
+fish
+
+>_ string split \(aq\(aq abc
+a
+b
+c
+
+>_ string split \-\-allow\-empty \-f1,3\-4,5 \(aq\(aq abcd
+a
+c
+d
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS NUL Delimited Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ # Count files in a directory, without being confused by newlines.
+>_ count (find . \-print0 | string split0)
+42
+
+>_ # Sort a list of elements which may contain newlines
+>_ set foo beta alpha\engamma
+>_ set foo (string join0 $foo | sort \-z | string split0)
+>_ string escape $foo[1]
+alpha\engamma
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "SUB" SUBCOMMAND
+.nf
+\fBstring\fP \fBsub\fP [(\fB\-s\fP | \fB\-\-start\fP) \fISTART\fP] [(\fB\-e\fP | \fB\-\-end\fP) \fIEND\fP] [(\fB\-l\fP | \fB\-\-length\fP) \fILENGTH\fP]
+           [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring sub\fP prints a substring of each string argument. The start/end of the substring can be specified with \fB\-s\fP/\fB\-e\fP or \fB\-\-start\fP/\fB\-\-end\fP followed by a 1\-based index value. Positive index values are relative to the start of the string and negative index values are relative to the end of the string. The default start value is 1. The length of the substring can be specified with \fB\-l\fP or \fB\-\-length\fP\&. If the length or end is not specified, the substring continues to the end of each STRING. Exit status: 0 if at least one substring operation was performed, 1 otherwise. \fB\-\-length\fP is mutually exclusive with \fB\-\-end\fP\&.
+.SS Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string sub \-\-length 2 abcde
+ab
+
+>_ string sub \-s 2 \-l 2 abcde
+bc
+
+>_ string sub \-\-start=\-2 abcde
+de
+
+>_ string sub \-\-end=3 abcde
+abc
+
+>_ string sub \-e \-1 abcde
+abcd
+
+>_ string sub \-s 2 \-e \-1 abcde
+bcd
+
+>_ string sub \-s \-3 \-e \-2 abcde
+c
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "TRIM" SUBCOMMAND
+.nf
+\fBstring\fP \fBtrim\fP [\fB\-l\fP | \fB\-\-left\fP] [\fB\-r\fP | \fB\-\-right\fP] [(\fB\-c\fP | \fB\-\-chars\fP) \fICHARS\fP]
+            [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring trim\fP removes leading and trailing whitespace from each \fISTRING\fP\&. If \fB\-l\fP or \fB\-\-left\fP is given, only leading whitespace is removed. If \fB\-r\fP or \fB\-\-right\fP is given, only trailing whitespace is trimmed. The \fB\-c\fP or \fB\-\-chars\fP switch causes the characters in \fICHARS\fP to be removed instead of whitespace. Exit status: 0 if at least one character was trimmed, or 1 otherwise.
+.SS Examples
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ string trim \(aq abc  \(aq
+abc
+
+>_ string trim \-\-right \-\-chars=yz xyzzy zany
+x
+zan
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH "UPPER" SUBCOMMAND
+.nf
+\fBstring\fP \fBupper\fP [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+.fi
+.sp
+.sp
+\fBstring upper\fP converts each string argument to uppercase. Exit status: 0 if at least one string was converted to uppercase, else 1. This means that in conjunction with the \fB\-q\fP flag you can readily test whether a string is already uppercase.
+.SH REGULAR EXPRESSIONS
+.sp
+Both the \fBmatch\fP and \fBreplace\fP subcommand support regular expressions when used with the \fB\-r\fP or \fB\-\-regex\fP option. The dialect is that of PCRE2.
+.sp
+In general, special characters are special by default, so \fBa+\fP matches one or more \(dqa\(dqs, while \fBa\e+\fP matches an \(dqa\(dq and then a \(dq+\(dq. \fB(a+)\fP matches one or more \(dqa\(dqs in a capturing group (\fB(?:XXXX)\fP denotes a non\-capturing group). For the replacement parameter of \fBreplace\fP, \fB$n\fP refers to the n\-th group of the match. In the match parameter, \fB\en\fP (e.g. \fB\e1\fP) refers back to groups.
+.sp
+Some features include repetitions:
+.INDENT 0.0
+.IP \(bu 2
+\fB*\fP refers to 0 or more repetitions of the previous expression
+.IP \(bu 2
+\fB+\fP 1 or more
+.IP \(bu 2
+\fB?\fP 0 or 1.
+.IP \(bu 2
+\fB{n}\fP to exactly n (where n is a number)
+.IP \(bu 2
+\fB{n,m}\fP at least n, no more than m.
+.IP \(bu 2
+\fB{n,}\fP n or more
+.UNINDENT
+.sp
+Character classes, some of the more important:
+.INDENT 0.0
+.IP \(bu 2
+\fB\&.\fP any character except newline
+.IP \(bu 2
+\fB\ed\fP a decimal digit and \fB\eD\fP, not a decimal digit
+.IP \(bu 2
+\fB\es\fP whitespace and \fB\eS\fP, not whitespace
+.IP \(bu 2
+\fB\ew\fP a \(dqword\(dq character and \fB\eW\fP, a \(dqnon\-word\(dq character
+.IP \(bu 2
+\fB[...]\fP (where \(dq...\(dq is some characters) is a character set
+.IP \(bu 2
+\fB[^...]\fP is the inverse of the given character set
+.IP \(bu 2
+\fB[x\-y]\fP is the range of characters from x\-y
+.IP \(bu 2
+\fB[[:xxx:]]\fP is a named character set
+.IP \(bu 2
+\fB[[:^xxx:]]\fP is the inverse of a named character set
+.IP \(bu 2
+\fB[[:alnum:]]\fP  : \(dqalphanumeric\(dq
+.IP \(bu 2
+\fB[[:alpha:]]\fP  : \(dqalphabetic\(dq
+.IP \(bu 2
+\fB[[:ascii:]]\fP  : \(dq0\-127\(dq
+.IP \(bu 2
+\fB[[:blank:]]\fP  : \(dqspace or tab\(dq
+.IP \(bu 2
+\fB[[:cntrl:]]\fP  : \(dqcontrol character\(dq
+.IP \(bu 2
+\fB[[:digit:]]\fP  : \(dqdecimal digit\(dq
+.IP \(bu 2
+\fB[[:graph:]]\fP  : \(dqprinting, excluding space\(dq
+.IP \(bu 2
+\fB[[:lower:]]\fP  : \(dqlower case letter\(dq
+.IP \(bu 2
+\fB[[:print:]]\fP  : \(dqprinting, including space\(dq
+.IP \(bu 2
+\fB[[:punct:]]\fP  : \(dqprinting, excluding alphanumeric\(dq
+.IP \(bu 2
+\fB[[:space:]]\fP  : \(dqwhite space\(dq
+.IP \(bu 2
+\fB[[:upper:]]\fP  : \(dqupper case letter\(dq
+.IP \(bu 2
+\fB[[:word:]]\fP   : \(dqsame as w\(dq
+.IP \(bu 2
+\fB[[:xdigit:]]\fP : \(dqhexadecimal digit\(dq
+.UNINDENT
+.sp
+Groups:
+.INDENT 0.0
+.IP \(bu 2
+\fB(...)\fP is a capturing group
+.IP \(bu 2
+\fB(?:...)\fP is a non\-capturing group
+.IP \(bu 2
+\fB\en\fP is a backreference (where n is the number of the group, starting with 1)
+.IP \(bu 2
+\fB$n\fP is a reference from the replacement expression to a group in the match expression.
+.UNINDENT
+.sp
+And some other things:
+.INDENT 0.0
+.IP \(bu 2
+\fB\eb\fP denotes a word boundary, \fB\eB\fP is not a word boundary.
+.IP \(bu 2
+\fB^\fP is the start of the string or line, \fB$\fP the end.
+.IP \(bu 2
+\fB|\fP is \(dqalternation\(dq, i.e. the \(dqor\(dq.
+.UNINDENT
+.SH COMPARISON TO OTHER TOOLS
+.sp
+Most operations \fBstring\fP supports can also be done by external tools. Some of these include \fBgrep\fP, \fBsed\fP and \fBcut\fP\&.
+.sp
+If you are familiar with these, it is useful to know how \fBstring\fP differs from them.
+.sp
+In contrast to these classics, \fBstring\fP reads input either from stdin or as arguments. \fBstring\fP also does not deal with files, so it requires redirections to be used with them.
+.sp
+In contrast to \fBgrep\fP, \fBstring\fP\(aqs \fBmatch\fP defaults to glob\-mode, while \fBreplace\fP defaults to literal matching. If set to regex\-mode, they use PCRE regular expressions, which is comparable to \fBgrep\fP\(aqs \fB\-P\fP option. \fBmatch\fP defaults to printing just the match, which is like \fBgrep\fP with \fB\-o\fP (use \fB\-\-entire\fP to enable grep\-like behavior).
+.sp
+Like \fBsed\fP\(aqs \fBs/old/new/\fP command, \fBstring replace\fP still prints strings that don\(aqt match. \fBsed\fP\(aqs \fB\-n\fP in combination with a \fB/p\fP modifier or command is like \fBstring replace \-f\fP\&.
+.sp
+\fBstring split somedelimiter\fP is a replacement for \fBtr somedelimiter \en\fP\&.
+.SH COPYRIGHT
+2023, fish-shell developers
+.\" Generated by docutils manpage writer.
+.

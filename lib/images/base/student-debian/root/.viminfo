@@ -11,10 +11,14 @@
 # hlsearch on (H) or off (h):
 ~h
 # Command Line History (newest to oldest):
-:q
-|2,0,1715439883,,"q"
 :wq
-|2,0,1715334982,,"wq"
+|2,0,1715732700,,"wq"
+:w
+|2,0,1715732000,,"w"
+:vert term
+|2,0,1715729497,,"vert term"
+:q
+|2,0,1715729561,,"q"
 
 # Search String History (newest to oldest):
 
@@ -25,113 +29,343 @@
 # Debug Line History (newest to oldest):
 
 # Registers:
-""-	CHAR	0
-	#
-|3,1,36,0,1,0,1715336874,"#"
+"0	LINE	0
+	alias ll="ls -l"
+|3,0,0,1,1,0,1715732651,"alias ll=\"ls -l\""
+""1	LINE	0
+	alias ll="ls -l"
+	alias la="ls -la"
+	alias grep="
+|3,1,1,1,3,0,1715732694,"alias ll=\"ls -l\"","alias la=\"ls -la\"","alias grep=\""
+"2	LINE	0
+	trap '' SIGTERM SIGINT SIGKILL 
+|3,0,2,1,1,0,1715732561,"trap '' SIGTERM SIGINT SIGKILL "
+"3	LINE	0
+	trap '' "$sig"
+|3,0,3,1,1,0,1715732535,"trap '' \"$sig\""
+"4	LINE	0
+	# Игнорировать все сигналы
+|3,0,4,1,1,0,1715732532,"# Игнорировать все сигналы"
+"5	LINE	0
+	for sig in $signals; do
+|3,0,5,1,1,0,1715732532,"for sig in $signals; do"
+"6	LINE	0
+	done
+|3,0,6,1,1,0,1715732531,"done"
+"7	LINE	0
+	# bind 'set'
+	# bind 'set show-all-if-ambiguous on'
+	# bind 'TAB:menu-complete'
+	# # bind -o default
+|3,0,7,1,4,0,1715731973,"# bind 'set'","# bind 'set show-all-if-ambiguous on'","# bind 'TAB:menu-complete'","# # bind -o default"
+"8	LINE	0
+	
+|3,0,8,1,1,0,1715731557,""
+"9	LINE	0
+	
+|3,0,9,1,1,0,1715731556,""
+"-	CHAR	0
+	l
+|3,0,36,0,1,0,1715732653,"l"
 
 # File marks:
-'0  56  0  /etc/sudoers
-|4,48,56,0,1715439883,"/etc/sudoers"
-'1  18  0  ~/.bashrc
-|4,49,18,0,1715337180,"~/.bashrc"
-'2  41  0  ~/.bash_history
-|4,50,41,0,1715337174,"~/.bash_history"
-'3  18  0  ~/.bashrc
-|4,51,18,0,1715336900,"~/.bashrc"
-'4  56  57  /etc/sudoers
-|4,52,56,57,1715334982,"/etc/sudoers"
+'0  61  0  /etc/bash.bashrc
+|4,48,61,0,1715732700,"/etc/bash.bashrc"
+'1  14  62  /usr/bin/hash
+|4,49,14,62,1715732569,"/usr/bin/hash"
+'2  60  33  /etc/bash.bashrc
+|4,50,60,33,1715731578,"/etc/bash.bashrc"
+'3  60  33  /etc/bash.bashrc
+|4,51,60,33,1715731578,"/etc/bash.bashrc"
+'4  1  0  /usr/bin/hash
+|4,52,1,0,1715730847,"/usr/bin/hash"
+'5  1  0  /usr/bin/hash
+|4,53,1,0,1715730847,"/usr/bin/hash"
+'6  3  0  /home/student/.config/fish/config.fish
+|4,54,3,0,1715729608,"/home/student/.config/fish/config.fish"
+'7  16  0  /etc/fish/config.fish
+|4,55,16,0,1715729586,"/etc/fish/config.fish"
+'8  1  0  /usr/bin/m/etc/fish/config.fish
+|4,56,1,0,1715729561,"/usr/bin/m/etc/fish/config.fish"
+'9  29  7  /usr/bin/hash
+|4,57,29,7,1715729330,"/usr/bin/hash"
 
 # Jumplist (newest first):
--'  56  0  /etc/sudoers
-|4,39,56,0,1715439883,"/etc/sudoers"
--'  18  0  ~/.bashrc
-|4,39,18,0,1715337180,"~/.bashrc"
--'  18  0  ~/.bashrc
-|4,39,18,0,1715337180,"~/.bashrc"
--'  41  0  ~/.bash_history
-|4,39,41,0,1715337174,"~/.bash_history"
--'  41  0  ~/.bash_history
-|4,39,41,0,1715337174,"~/.bash_history"
--'  41  0  ~/.bash_history
-|4,39,41,0,1715337174,"~/.bash_history"
--'  41  0  ~/.bash_history
-|4,39,41,0,1715337174,"~/.bash_history"
--'  1  0  ~/.bash_history
-|4,39,1,0,1715337173,"~/.bash_history"
--'  1  0  ~/.bash_history
-|4,39,1,0,1715337173,"~/.bash_history"
--'  1  0  ~/.bash_history
-|4,39,1,0,1715337173,"~/.bash_history"
--'  1  0  ~/.bash_history
-|4,39,1,0,1715337173,"~/.bash_history"
--'  18  0  ~/.bashrc
-|4,39,18,0,1715336900,"~/.bashrc"
--'  18  0  ~/.bashrc
-|4,39,18,0,1715336900,"~/.bashrc"
--'  18  0  ~/.bashrc
-|4,39,18,0,1715336900,"~/.bashrc"
--'  18  0  ~/.bashrc
-|4,39,18,0,1715336900,"~/.bashrc"
--'  19  0  ~/.bashrc
-|4,39,19,0,1715336899,"~/.bashrc"
--'  19  0  ~/.bashrc
-|4,39,19,0,1715336899,"~/.bashrc"
--'  19  0  ~/.bashrc
-|4,39,19,0,1715336899,"~/.bashrc"
--'  19  0  ~/.bashrc
-|4,39,19,0,1715336899,"~/.bashrc"
--'  19  0  ~/.bashrc
-|4,39,19,0,1715336899,"~/.bashrc"
--'  19  0  ~/.bashrc
-|4,39,19,0,1715336899,"~/.bashrc"
--'  1  0  ~/.bashrc
-|4,39,1,0,1715336870,"~/.bashrc"
--'  1  0  ~/.bashrc
-|4,39,1,0,1715336870,"~/.bashrc"
--'  1  0  ~/.bashrc
-|4,39,1,0,1715336870,"~/.bashrc"
--'  1  0  ~/.bashrc
-|4,39,1,0,1715336870,"~/.bashrc"
--'  1  0  ~/.bashrc
-|4,39,1,0,1715336870,"~/.bashrc"
--'  1  0  ~/.bashrc
-|4,39,1,0,1715336870,"~/.bashrc"
--'  56  57  /etc/sudoers
-|4,39,56,57,1715334982,"/etc/sudoers"
--'  56  57  /etc/sudoers
-|4,39,56,57,1715334982,"/etc/sudoers"
--'  56  57  /etc/sudoers
-|4,39,56,57,1715334982,"/etc/sudoers"
--'  56  57  /etc/sudoers
-|4,39,56,57,1715334982,"/etc/sudoers"
--'  56  57  /etc/sudoers
-|4,39,56,57,1715334982,"/etc/sudoers"
--'  56  57  /etc/sudoers
-|4,39,56,57,1715334982,"/etc/sudoers"
--'  56  57  /etc/sudoers
-|4,39,56,57,1715334982,"/etc/sudoers"
--'  56  57  /etc/sudoers
-|4,39,56,57,1715334982,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
--'  1  0  /etc/sudoers
-|4,39,1,0,1715334848,"/etc/sudoers"
+-'  61  0  /etc/bash.bashrc
+|4,39,61,0,1715732700,"/etc/bash.bashrc"
+-'  60  33  /etc/bash.bashrc
+|4,39,60,33,1715732645,"/etc/bash.bashrc"
+-'  14  62  /usr/bin/hash
+|4,39,14,62,1715732569,"/usr/bin/hash"
+-'  14  62  /usr/bin/hash
+|4,39,14,62,1715732569,"/usr/bin/hash"
+-'  60  33  /etc/bash.bashrc
+|4,39,60,33,1715731578,"/etc/bash.bashrc"
+-'  60  33  /etc/bash.bashrc
+|4,39,60,33,1715731578,"/etc/bash.bashrc"
+-'  70  0  /etc/bash.bashrc
+|4,39,70,0,1715731553,"/etc/bash.bashrc"
+-'  61  0  /etc/bash.bashrc
+|4,39,61,0,1715731553,"/etc/bash.bashrc"
+-'  61  0  /etc/bash.bashrc
+|4,39,61,0,1715731553,"/etc/bash.bashrc"
+-'  1  0  /usr/bin/hash
+|4,39,1,0,1715730847,"/usr/bin/hash"
+-'  1  0  /usr/bin/hash
+|4,39,1,0,1715730847,"/usr/bin/hash"
+-'  1  0  /usr/bin/hash
+|4,39,1,0,1715730847,"/usr/bin/hash"
+-'  1  0  /usr/bin/hash
+|4,39,1,0,1715730847,"/usr/bin/hash"
+-'  1  0  /usr/bin/hash
+|4,39,1,0,1715730847,"/usr/bin/hash"
+-'  1  0  /usr/bin/hash
+|4,39,1,0,1715730847,"/usr/bin/hash"
+-'  23  0  /usr/bin/hash
+|4,39,23,0,1715730830,"/usr/bin/hash"
+-'  26  0  /usr/bin/hash
+|4,39,26,0,1715730830,"/usr/bin/hash"
+-'  26  0  /usr/bin/hash
+|4,39,26,0,1715730830,"/usr/bin/hash"
+-'  23  0  /usr/bin/hash
+|4,39,23,0,1715730830,"/usr/bin/hash"
+-'  26  0  /usr/bin/hash
+|4,39,26,0,1715730830,"/usr/bin/hash"
+-'  26  0  /usr/bin/hash
+|4,39,26,0,1715730830,"/usr/bin/hash"
+-'  24  7  /usr/bin/hash
+|4,39,24,7,1715730827,"/usr/bin/hash"
+-'  27  7  /usr/bin/hash
+|4,39,27,7,1715730827,"/usr/bin/hash"
+-'  27  7  /usr/bin/hash
+|4,39,27,7,1715730827,"/usr/bin/hash"
+-'  24  7  /usr/bin/hash
+|4,39,24,7,1715730827,"/usr/bin/hash"
+-'  27  7  /usr/bin/hash
+|4,39,27,7,1715730827,"/usr/bin/hash"
+-'  27  7  /usr/bin/hash
+|4,39,27,7,1715730827,"/usr/bin/hash"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  3  0  /home/student/.config/fish/config.fish
+|4,39,3,0,1715729608,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  1  0  /home/student/.config/fish/config.fish
+|4,39,1,0,1715729602,"/home/student/.config/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  16  0  /etc/fish/config.fish
+|4,39,16,0,1715729586,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
+-'  1  0  /etc/fish/config.fish
+|4,39,1,0,1715729565,"/etc/fish/config.fish"
 
 # History of marks within files (newest to oldest):
+
+> /etc/bash.bashrc
+	*	1715732699	0
+	"	61	0
+	^	69	0
+	.	61	0
+	+	60	14
+	+	59	0
+	+	70	0
+	+	60	33
+	+	61	15
+	+	61	11
+	+	68	26
+	+	61	0
+
+> /usr/bin/hash
+	*	1715732569	0
+	"	14	62
+	^	14	63
+	.	14	62
+	+	49	0
+	+	24	0
+	+	18	9
+	+	44	22
+	+	4	0
+	+	2	0
+	+	3	0
+	+	2	0
+	+	2	11
+	+	4	0
+	+	10	30
+	+	24	103
+	+	28	26
+	+	24	0
+	+	28	7
+	+	29	0
+	+	28	0
+	+	25	32
+	+	28	29
+	+	25	18
+	+	20	23
+	+	21	27
+	+	24	71
+	+	25	49
+	+	24	8
+	+	28	30
+	+	28	0
+	+	2	0
+	+	1	0
+	+	15	0
+	+	14	30
+	+	14	62
+
+> /home/student/.config/fish/config.fish
+	*	1715729605	0
+	"	3	0
+	.	3	0
+	+	3	0
+
+> /etc/fish/config.fish
+	*	1715729585	0
+	"	16	0
+	.	17	0
+	+	16	20
+	+	17	0
+
+> /usr/bin/m/etc/fish/config.fish
+	*	1715729559	0
+	"	1	0
+
+> /home/student/hash
+	*	1715729069	0
+	"	1	0
 
 > /etc/sudoers
 	*	1715439883	0
