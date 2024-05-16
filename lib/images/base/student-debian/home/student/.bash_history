@@ -538,3 +538,9 @@ signals=$(kill -l)
 trap '' SIGINT SIGTERM SIGHUP SIGQUIT SIGABRT SIGKILL SIGSTOP 2> /dev/null
 if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	export TERM="xterm-256color"; 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_history; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*history") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;history;cat -n ~/.bash_history;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
 	done; fi
+clear
+ls
+ls -l
+ls -la
+pwd
+id

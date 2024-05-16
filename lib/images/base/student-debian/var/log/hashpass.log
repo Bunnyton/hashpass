@@ -1,13 +1,32 @@
-Script started on 2024-05-16 20:43:48+03:00 [COMMAND="sudo -u student bash -i /usr/bin/hash" TERM="xterm-24bit" TTY="/dev/pts/0" COLUMNS="238" LINES="55"]
+Script started on 2024-05-16 21:53:01+03:00 [COMMAND="sudo -u student bash -i /usr/bin/hash" TERM="xterm-24bit" TTY="/dev/pts/0" COLUMNS="238" LINES="55"]
 [01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
 clear
-[?2004h]0;~[30m(B[m[0;0m[20:43:48] [01;97mξ [0;0m[K[13Cclear[18C
+[?2004h]0;~[30m(B[m[0;0m[21:53:01] [01;97mξ [0;0m[K[13Cclear[18C
 [30m(B[m[30m(B[m[?2004l[H[2J[3J[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[20:43:48] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m
+[?2004h]0;~[30m(B[m[0;0m[21:53:02] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m
 [30m(B[m[30m(B[m[?2004l[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[20:43:52] [01;97mξ [0;0m[K[13Ce[14C[91me[14C[30m(B[m[91mc[15C[30m(B[m[91mh[16C[30m(B[m[91mo[17C[30m(B[m[38;5;46mecho[17C[30m(B[m[38;5;46m [18C[30m(B[m [18C$[19C[91m$[19C[30m(B[m[91mT[20C[30m(B[m[96m$T[20C[30m(B[m[96mE[21C[30m(B[m[96mR[22C[30m(B[m[96mM[23C[30m(B[m
-[30m(B[m[30m(B[m[?2004lxterm-256color
+[?2004h]0;~[30m(B[m[0;0m[21:53:03] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m[38;5;46m [16C[30m(B[m [16C-[17C[36m-[17C[30m(B[m[36ml[18C[30m(B[m
+[30m(B[m[30m(B[m[?2004ltotal 0
 [01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[20:44:16] [01;97mξ [0;0m[K[13Ce[14C[91me[14C[30m(B[m[91mx[15C[30m(B[m[38;5;46mex[15C[30m(B[m[38;5;46mi[16C[30m(B[m[91mexi[16C[30m(B[m[91mt[17C[30m(B[m[38;5;46mexit[17C[30m(B[m
-[30m(B[m[30m(B[m[?2004l
-Script done on 2024-05-16 20:44:50+03:00 [COMMAND_EXIT_CODE="0"]
+[?2004h]0;~[30m(B[m[0;0m[21:53:04] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m[38;5;46m [16C[30m(B[m [16C-[17C[36m-[17C[30m(B[m[36ml[18C[30m(B[m[36ma[19C[30m(B[m
+[30m(B[m[30m(B[m[?2004ltotal 64
+drwxrwxr-x 5 student student  4096 May 16 20:41 [0m[01;34m.[0m
+drwxr-xr-x 1 root    root     4096 May 11 14:58 [01;34m..[0m
+-rw-rw-r-- 1 student student 15650 May 16 21:53 .bash_history
+-rw-rw-r-- 1 student student   220 May 11 14:58 .bash_logout
+-rw-rw-r-- 1 student student  3804 May 12 18:38 .bashrc
+drwxr-xr-x 3 student student  4096 May 15 02:43 [01;34m.cache[0m
+drwx------ 4 student student  4096 May 15 02:43 [01;34m.config[0m
+-rw------- 1 student student    20 May 15 03:07 .lesshst
+drwx------ 3 student student  4096 May 15 02:09 [01;34m.local[0m
+-rw-rw-r-- 1 student student   807 May 11 14:58 .profile
+-rw-rw-r-- 1 student student     0 May 11 14:58 .sudo_as_admin_successful
+-rw-rw-r-- 1 student student  8976 May 16 20:41 .viminfo
+[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
+[?2004h]0;~[30m(B[m[0;0m[21:53:06] [01;97mξ [0;0m[K[13Cp[14Cw[15C[91mpw[15C[30m(B[m[91md[16C[30m(B[m[38;5;46mpwd[16C[30m(B[m
+[30m(B[m[30m(B[m[?2004l/home/student
+[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
+[?2004h]0;~[30m(B[m[0;0m[21:53:59] [01;97mξ [0;0m[K[13Ci[14C[91mi[14C[30m(B[m[91md[15C[30m(B[m[38;5;46mid[15C[30m(B[m
+[30m(B[m[30m(B[m[?2004luid=1000(student) gid=1000(student) groups=1000(student),27(sudo),100(users)
+[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
+[?2004h]0;~[30m(B[m[0;0m[21:54:59] [01;97mξ [0;0m[K[13C

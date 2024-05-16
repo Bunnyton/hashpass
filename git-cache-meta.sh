@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash
 
 #git-cache-meta -- simple file meta data caching and applying.
 #Simpler than etckeeper, metastore, setgitperms, etc.
@@ -18,6 +18,6 @@ case $@ in
         \( -printf 'chgrp %G %p\n' \) \
         \( -printf 'touch -c -d "%AY-%Am-%Ad %AH:%AM:%AS" %p\n' \) \
         \( -printf 'chmod %#m %p\n' \) ;;
-    --apply) sh -e $GIT_CACHE_META_FILE;;
+    --apply) bash $GIT_CACHE_META_FILE;;
     *) 1>&2 echo "Usage: $0 --store|--stdout|--apply"; exit 1;;
 esac
