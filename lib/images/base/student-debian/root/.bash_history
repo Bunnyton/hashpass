@@ -125,3 +125,9 @@ script -fc 'sudo -u student bash -i /usr/bin/hash' /var/log/hashpass.log; shutdo
 script -fc 'sudo -u student bash ' /var/log/hashpass.log; shutdown now
 script -fc 'sudo -u student bash ' /var/log/hashpass.log; shutdown now
 script -fc 'sudo -u student bash -i /usr/bin/hash' /var/log/hashpass.log; shutdown now
+:w
+clear
+exit
+script -fc 'sudo -u student bash -i /usr/bin/hash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash -i /usr/bin/hash' /var/log/hashpass.log; shutdown now
+script -fc 'sudo -u student bash -i /usr/bin/hash' /var/log/hashpass.log; shutdown now

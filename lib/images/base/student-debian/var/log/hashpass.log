@@ -1,181 +1,13 @@
-Script started on 2024-05-15 03:25:38+03:00 [COMMAND="sudo -u student bash -i /usr/bin/hash" TERM="xterm-256color" TTY="/dev/pts/0" COLUMNS="238" LINES="55"]
+Script started on 2024-05-16 20:43:48+03:00 [COMMAND="sudo -u student bash -i /usr/bin/hash" TERM="xterm-24bit" TTY="/dev/pts/0" COLUMNS="238" LINES="55"]
 [01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
 clear
-[?2004h]0;~[30m(B[m[0;0m[03:25:38] [01;97mξ [0;0m[K[13Cclear[18C
+[?2004h]0;~[30m(B[m[0;0m[20:43:48] [01;97mξ [0;0m[K[13Cclear[18C
 [30m(B[m[30m(B[m[?2004l[H[2J[3J[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:25:38] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m
+[?2004h]0;~[30m(B[m[0;0m[20:43:48] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m
 [30m(B[m[30m(B[m[?2004l[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:25:39] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m[38;5;46m [16C[30m(B[m [16C-[17C[36m-[17C[30m(B[m[36ml[18C[30m(B[m[36ma[19C[30m(B[m
-[30m(B[m[30m(B[m[?2004ltotal 60
-drwxrwxr-x 5 student student 4096 May 15 03:23 [0m[01;34m.[0m
-drwxr-xr-x 1 root    root    4096 May 11 14:58 [01;34m..[0m
--rw-rw-r-- 1 student student 9289 May 15 03:25 .bash_history
--rw-rw-r-- 1 student student  220 May 11 14:58 .bash_logout
--rw-rw-r-- 1 student student 3804 May 12 18:38 .bashrc
-drwxr-xr-x 3 student student 4096 May 15 02:43 [01;34m.cache[0m
-drwx------ 4 student student 4096 May 15 02:43 [01;34m.config[0m
--rw------- 1 student student   20 May 15 03:07 .lesshst
-drwx------ 3 student student 4096 May 15 02:09 [01;34m.local[0m
--rw-rw-r-- 1 student student  807 May 11 14:58 .profile
--rw-rw-r-- 1 student student    0 May 11 14:58 .sudo_as_admin_successful
--rw-rw-r-- 1 student student 9113 May 15 03:23 .viminfo
+[?2004h]0;~[30m(B[m[0;0m[20:43:52] [01;97mξ [0;0m[K[13Ce[14C[91me[14C[30m(B[m[91mc[15C[30m(B[m[91mh[16C[30m(B[m[91mo[17C[30m(B[m[38;5;46mecho[17C[30m(B[m[38;5;46m [18C[30m(B[m [18C$[19C[91m$[19C[30m(B[m[91mT[20C[30m(B[m[96m$T[20C[30m(B[m[96mE[21C[30m(B[m[96mR[22C[30m(B[m[96mM[23C[30m(B[m
+[30m(B[m[30m(B[m[?2004lxterm-256color
 [01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:25:40] [01;97mξ [0;0m[K[13Cc[14C[91mc[14C[30m(B[m[91ml[15C[30m(B[m[91me[16C[30m(B[m[91ma[17C[30m(B[m[91mr[18C[30m(B[m[38;5;46mclear[18C[30m(B[m
-[30m(B[m[30m(B[m[?2004l[H[2J[3J[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:25:43] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ml[15C[30m(B[m[38;5;46mll[15C[30m(B[m
-[30m(B[m[30m(B[m[?2004ltotal 60
-drwxrwxr-x 5 student student 4096 May 15 03:23 [0m[01;34m.[0m/
-drwxr-xr-x 1 root    root    4096 May 11 14:58 [01;34m..[0m/
--rw-rw-r-- 1 student student 9298 May 15 03:25 .bash_history
--rw-rw-r-- 1 student student  220 May 11 14:58 .bash_logout
--rw-rw-r-- 1 student student 3804 May 12 18:38 .bashrc
-drwxr-xr-x 3 student student 4096 May 15 02:43 [01;34m.cache[0m/
-drwx------ 4 student student 4096 May 15 02:43 [01;34m.config[0m/
--rw------- 1 student student   20 May 15 03:07 .lesshst
-drwx------ 3 student student 4096 May 15 02:09 [01;34m.local[0m/
--rw-rw-r-- 1 student student  807 May 11 14:58 .profile
--rw-rw-r-- 1 student student    0 May 11 14:58 .sudo_as_admin_successful
--rw-rw-r-- 1 student student 9113 May 15 03:23 .viminfo
-[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:25:44] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m
-[1m[4ml(B[ma                     [1m[4ml(B[messfile  ([38;5;143m[3mcommand link[30m(B[m)  [1m[4ml(B[mnstat     ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mook     ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mslogins      ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzgrep  ([38;5;143m[3mcommand link[30m(B[m)
-[1m[4ml(B[mast        ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[messkey        ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mocale     ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mosetup  ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[msmem         ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzless  ([38;5;143m[3mcommand link[30m(B[m)
-[1m[4ml(B[mastb  ([38;5;143m[3mcommand link[30m(B[m)  [1m[4ml(B[messpipe       ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mocalectl  ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[ms       ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[msmod    ([38;5;143m[3mcommand link[30m(B[m)  [1m[4ml(B[mzma    ([38;5;143m[3mcommand link[30m(B[m)
-[1m[4ml(B[mastlog     ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mexgrog        ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mocaledef  ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[msattr   ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[msns          ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzmainfo     ([38;5;143m[3mcommand[30m(B[m)
-[1m[4ml(B[md.so  ([38;5;143m[3mcommand link[30m(B[m)  [1m[4ml(B[mibnetcfg      ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mogger     ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[msblk    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mynx          ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzmore  ([38;5;143m[3mcommand link[30m(B[m)
-[1m[4ml(B[mdattach    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mink           ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mogin      ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mscpu    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzcat    ([38;5;143m[3mcommand link[30m(B[m)  
-[1m[4ml(B[mdconfig    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[minux32   ([38;5;143m[3mcommand link[30m(B[m)  [1m[4ml(B[moginctl   ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[msfd     ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzcmp    ([38;5;143m[3mcommand link[30m(B[m)  
-[1m[4ml(B[mdd         ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[minux64   ([38;5;143m[3mcommand link[30m(B[m)  [1m[4ml(B[mogname    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[msipc    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzdiff   ([38;5;143m[3mcommand link[30m(B[m)  
-[1m[4ml(B[mess        ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[ml                        [1m[4ml(B[mogrotate  ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[msirq    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzegrep  ([38;5;143m[3mcommand link[30m(B[m)  
-[1m[4ml(B[messecho    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mn             ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mogsave    ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mslocks  ([38;5;143m[3mcommand[30m(B[m)  [1m[4ml(B[mzfgrep  ([38;5;143m[3mcommand link[30m(B[m)  [A[A[A[A[A[A[A[A[A[A[14C[91ma[30m(B[m[J[15C[38;5;46mla[15C[30m(B[m
-[1m[4mla(B[m  [1m[4mla(B[mst  ([38;5;143m[3mShow a listing of last logged in users[30m(B[m)  [1m[4mla(B[mstb  ([38;5;143m[3mShow a listing of last logged in users[30m(B[m)  [1m[4mla(B[mstlog  ([38;5;143m[3mReports the most recent login of all users or of a given user[30m(B[m)[A[15C[J[15C
-[30m(B[m[30m(B[m[?2004l.bash_history  .bash_logout  .bashrc  [0m[01;34m.cache[0m  [01;34m.config[0m  .lesshst  [01;34m.local[0m  .profile  .sudo_as_admin_successful  .viminfo
-[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:25:48] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m[38;5;46m [16C[30m(B[m [16C[K[15C[K[14C[91ml[14C[30m(B[m[K[13Ch[14C[91mh[14C[30m(B[m[91mi[15C[30m(B[m[91ms[16C[30m(B[m[91mt[17C[30m(B[m[91mo[18C[30m(B[m[91mr[19C[30m(B[m[91my[20C[30m(B[m[38;5;46mhistory[20C[30m(B[m[38;5;46m [21C[30m(B[m [21C|[22C[32m|[22C[30m(B[m[32m [23C[30m(B[m [23Cg[24C[91mg[24C[30m(B[m[91mr[25C[30m(B[m[91me[26C[30m(B[m[91mp[27C[30m(B[m[38;5;46mgrep[27C[30m(B[m[38;5;46m [28C[30m(B[m [28Ch[29C[36mh[29C[30m(B[m[36mi[30C[30m(B[m[36ms[31C[30m(B[m[36mt[32C[30m(B[m[36mr[33C[30m(B[m[36mo[34C[30m(B[m[36my[35C[30m(B[m[36m [36C[30m(B[m [36C[K[35C[K[34C[K[33C[K[32C[36mo[33C[30m(B[m[36mr[34C[30m(B[m[36my[35C[30m(B[m
-[30m(B[m[30m(B[m[?2004l   128	[01;31m[Khistory[m[K
-   264	if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_[01;31m[Khistory[m[K; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*[01;31m[Khistory[m[K") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;[01;31m[Khistory[m[K;cat -n ~/.bash_[01;31m[Khistory[m[K;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
-   278	if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_[01;31m[Khistory[m[K; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*[01;31m[Khistory[m[K") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;[01;31m[Khistory[m[K;cat -n ~/.bash_[01;31m[Khistory[m[K;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
-   292	if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_[01;31m[Khistory[m[K; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*[01;31m[Khistory[m[K") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;[01;31m[Khistory[m[K;cat -n ~/.bash_[01;31m[Khistory[m[K;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
-   307	if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_[01;31m[Khistory[m[K; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*[01;31m[Khistory[m[K") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;[01;31m[Khistory[m[K;cat -n ~/.bash_[01;31m[Khistory[m[K;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
-   327	if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_[01;31m[Khistory[m[K; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*[01;31m[Khistory[m[K") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;[01;31m[Khistory[m[K;cat -n ~/.bash_[01;31m[Khistory[m[K;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
-   404	[01;31m[Khistory[m[K 
-   405	[01;31m[Khistory[m[K | grep [01;31m[Khistory[m[K 
-   406	[01;31m[Khistory[m[K | grep ls
-   421	if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_[01;31m[Khistory[m[K; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*[01;31m[Khistory[m[K") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;[01;31m[Khistory[m[K;cat -n ~/.bash_[01;31m[Khistory[m[K;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
-   435	[01;31m[Khistory[m[K | grep [01;31m[Khistory[m[K
-[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:25:58] [01;97mξ [0;0m[K[13C[13C[13C[13C[13C[13C[13C[13C[13C
-[8Csearch: [4m            
-[1m[97m[46m[24m(no matches)[A[A
-[8C(B[m[30m[30m(B[m[4mh           [A
-[9C[24m[A
-[9C[4mi          [A
-[10C[24m[A
-[10C[4ms         [A
-[11C[24m[A
-[11C[4mt        [A
-[12C[24m[A
-[12C[A[C[J[13C
-[8Csearch: [4m            
-[1m[97m[46m[24m(no matches)[A[A
-[8C(B[m[30m[30m(B[m[4mh           [A
-[9C[24m[A
-[9C[4mi          [A
-[10C[24m[A
-[10C[A[3C[J[13C
-[8Csearch: [4m            
-[1m[97m[46m[24m(no matches)[A[A
-[8C(B[m[30m[30m(B[m[A
-[8C[A
-[8C[A
-[8C[A
-[8C[A
-[8C[A
-[8C[A
-[8C[A
-[8C[A
-[8C
-[30m(B[m[30m(B[m[?2004l[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:26:21] [01;97mξ [0;0m[K[13C
-[30m(B[m[30m(B[m[?2004l[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:26:25] [01;97mξ [0;0m[K[13C
-[30m(B[m[30m(B[m[?2004l[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:26:25] [01;97mξ [0;0m[K[13C
-[8Csearch: [4m            
-[1m[97m[46m[24m(no matches)[A[A
-[8C(B[m[30m[30m(B[m[4mh           [A
-[9C[24m[A
-[9C[4mi          [A
-[10C[24m[A
-[10C[4ms         [A
-[11C[24m[A
-[11C[4mt        [A
-[12C[24m[A
-[12C[A
-[12C[A
-[12C[A
-[12C[A[C[J[13Cc[14C[91mc[14C[30m(B[m[91me[15C[30m(B[m[91ml[16C[30m(B[m[91ma[17C[30m(B[m[91mr[18C[30m(B[m
-[30m(B[m[30m(B[m[?2004lbash: celar: command not found
-[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:26:31] [01;97mξ [0;0m[K[13Cc[14C[91mc[14C[30m(B[m[91ml[15C[30m(B[m[91me[16C[30m(B[m[91ma[17C[30m(B[m[91mr[18C[30m(B[m[38;5;46mclear[18C[30m(B[m
-[30m(B[m[30m(B[m[?2004l[H[2J[3J[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:26:32] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m
-[30m(B[m[30m(B[m[?2004l[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:26:33] [01;97mξ [0;0m[K[13Cc[14C[91mc[14C[30m(B[m[91ma[15C[30m(B[m[91mt[16C[30m(B[m[38;5;46mcat[16C[30m(B[m[38;5;46m [17C[30m(B[m [17C/[18C[36m[4m/[18C[30m(B[m[36m[4mu[19C[30m(B[m[36m[4ms[20C[30m(B[m[36m[4mr[21C[30m(B[m[36m[4mb[22C[30m(B[m[36m/usrb[22C[30m(B[m[36m/[23C[30m(B[m[36mi[24C[30m(B[m[K[23C[K[22C[K[21C[36m[4m/usr[21C[30m(B[m[36m[4m/[22C[30m(B[m[36m[4mb[23C[30m(B[m[36m[4mi[24C[30m(B[m[36m[4mn[25C[30m(B[m[36m[4m/[26C[30m(B[m[36m[4mh[27C[30m(B[m[36m[4ma[28C[30m(B[m
-[1m[4m…sr/bin/ha(B[mrdlink  [1m[4m…sr/bin/ha(B[msh[A[28C[36m[4ms[30m(B[m[J[29C[36m[4mh[30C[30m(B[m[36m[4m [31C[30m(B[m [31C|[32C[32m|[32C[30m(B[m[32mx[33C[30m(B[m[91mx[33C[30m(B[m[91mc[34C[30m(B[m[91ml[35C[30m(B[m[K[34C[K[33C[K[32C[32m [33C[30m(B[m [33Cx[34C[91mx[34C[30m(B[m[91mc[35C[30m(B[m[91ml[36C[30m(B[m[91mi[37C[30m(B[m[24D[1m[100mcat /usr/bin/hash | xcli[37C(B[m[30m[30m(B[m[24D[38;5;46mcat[30m(B[m [36m[4m/usr/bin/hash[30m(B[m [32m|[30m(B[m [91mxcli[37C[30m(B[m[24D[1m[100mcat /usr/bin/hash | xcli[37C(B[m[30m[30m(B[m[24D[38;5;46mcat[30m(B[m [36m[4m/usr/bin/hash[30m(B[m [32m|[30m(B[m [91mxcli[37C[30m(B[m[K[36C[K[35C[K[34C[K[33C[K[32C[K[31C[K[30C
-[30m(B[m[30m(B[m[?2004l#!/bin/bash
-
-
-GREEN="\033[01;32m"
-RESET="\033[0;0m"
-BLUE="\033[01;34m"
-WHITE="\033[01;97m"
-
-cmdfile="/tmp/.hashpass_cmd"
-logfile="/tmp/.hashpass_cmd.out"
-
-signals=$(kill -l)
-
-trap '' SIGINT SIGTERM SIGHUP SIGQUIT SIGABRT SIGKILL SIGSTOP 2> /dev/null
-
-if [ ! -z $1 ] 
-then
-	/usr/bin/bash "$@"
-else
-	touch $cmdfile $logfile
-	chmod +wr $cmdfile $logfile
-	while [ 0 -eq 0 ]
-	do
-		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"
-		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET")
-
-		rm $cmdfile 2> /dev/null
-		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"
-		cmd=$(cat $cmdfile 2> /dev/null)
-
-		if [[ ! -z "$cmd" ]]
-		then
-			echo "$cmd" >> ~/.bash_history
-		fi
-
-		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]
-		then
-			exit
-		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*history") ]]
-		then
-			cmd=$(echo "$cmd" | sed "s;history;cat -n ~/.bash_history;")
-		fi
-
-		script -qc "/usr/bin/bash -ci '$cmd'" $logfile
-
-		# cat log.txt
-	done
-fi
-[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:26:55] [01;97mξ [0;0m[K[13Cl[14C[91ml[14C[30m(B[m[91ms[15C[30m(B[m[38;5;46mls[15C[30m(B[m
-[30m(B[m[30m(B[m[?2004l[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:28:42] [01;97mξ [0;0m[K[13Cc[14C[91mc[14C[30m(B[m[91ml[15C[30m(B[m[91me[16C[30m(B[m[91ma[17C[30m(B[m[91mr[18C[30m(B[m[38;5;46mclear[18C[30m(B[m
-[30m(B[m[30m(B[m[?2004l[H[2J[3J[01;32mstudent@anton-MS-7C09 [0;0min [01;34m~
-[?2004h]0;~[30m(B[m[0;0m[03:28:43] [01;97mξ [0;0m[K[13Ce[14C[91me[14C[30m(B[m[91mx[15C[30m(B[m[38;5;46mex[15C[30m(B[m[38;5;46mi[16C[30m(B[m[91mexi[16C[30m(B[m[91mt[17C[30m(B[m[38;5;46mexit[17C[30m(B[m
+[?2004h]0;~[30m(B[m[0;0m[20:44:16] [01;97mξ [0;0m[K[13Ce[14C[91me[14C[30m(B[m[91mx[15C[30m(B[m[38;5;46mex[15C[30m(B[m[38;5;46mi[16C[30m(B[m[91mexi[16C[30m(B[m[91mt[17C[30m(B[m[38;5;46mexit[17C[30m(B[m
 [30m(B[m[30m(B[m[?2004l
-Script done on 2024-05-15 03:28:44+03:00 [COMMAND_EXIT_CODE="0"]
+Script done on 2024-05-16 20:44:50+03:00 [COMMAND_EXIT_CODE="0"]

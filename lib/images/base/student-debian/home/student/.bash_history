@@ -451,3 +451,90 @@ signals=$(kill -l)
 trap '' SIGINT SIGTERM SIGHUP SIGQUIT SIGABRT SIGKILL SIGSTOP 2> /dev/null
 if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_history; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*history") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;history;cat -n ~/.bash_history;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
 	done; fi
+clear
+ls
+ls -la
+ls -la
+clear
+clear
+sudo vim /usr/bin/hash
+hash
+bash
+echo $TERM
+exit
+#!/bin/bash
+GREEN="\033[01;32m"
+RESET="\033[0;0m"
+BLUE="\033[01;34m"
+WHITE="\033[01;97m"
+cmdfile="/tmp/.hashpass_cmd"
+logfile="/tmp/.hashpass_cmd.out"
+signals=$(kill -l)
+trap '' SIGINT SIGTERM SIGHUP SIGQUIT SIGABRT SIGKILL SIGSTOP 2> /dev/null
+if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		set -x; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_history; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*history") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;history;cat -n ~/.bash_history;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
+	done; fi
+sudo vim /usr/bin/hash
+clear
+exit
+#!/bin/bash
+GREEN="\033[01;32m"
+RESET="\033[0;0m"
+BLUE="\033[01;34m"
+WHITE="\033[01;97m"
+cmdfile="/tmp/.hashpass_cmd"
+logfile="/tmp/.hashpass_cmd.out"
+signals=$(kill -l)
+trap '' SIGINT SIGTERM SIGHUP SIGQUIT SIGABRT SIGKILL SIGSTOP 2> /dev/null
+if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_history; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*history") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;history;cat -n ~/.bash_history;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
+	done; fi
+clear
+clear
+ls
+vim /usr/bin/hash
+sudo vim /usr/bin/hash
+sudo vim /usr/bin/hash
+hash
+bash
+clear
+ls
+echo $TERM
+ls
+exit
+#!/bin/bash
+GREEN="\033[01;32m"
+RESET="\033[0;0m"
+BLUE="\033[01;34m"
+WHITE="\033[01;97m"
+cmdfile="/tmp/.hashpass_cmd"
+logfile="/tmp/.hashpass_cmd.out"
+signals=$(kill -l)
+trap '' SIGINT SIGTERM SIGHUP SIGQUIT SIGABRT SIGKILL SIGSTOP 2> /dev/null
+if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	export TERM="xterm-256color"; 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_history; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*history") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;history;cat -n ~/.bash_history;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
+	done; fi
+exit
+#!/bin/bash
+GREEN="\033[01;32m"
+RESET="\033[0;0m"
+BLUE="\033[01;34m"
+WHITE="\033[01;97m"
+cmdfile="/tmp/.hashpass_cmd"
+logfile="/tmp/.hashpass_cmd.out"
+signals=$(kill -l)
+trap '' SIGINT SIGTERM SIGHUP SIGQUIT SIGABRT SIGKILL SIGSTOP 2> /dev/null
+if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		set -x; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_history; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*history") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;history;cat -n ~/.bash_history;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
+	done; fi
+clear
+ls
+echo $TERM
+exit
+#!/bin/bash
+GREEN="\033[01;32m"
+RESET="\033[0;0m"
+BLUE="\033[01;34m"
+WHITE="\033[01;97m"
+cmdfile="/tmp/.hashpass_cmd"
+logfile="/tmp/.hashpass_cmd.out"
+signals=$(kill -l)
+trap '' SIGINT SIGTERM SIGHUP SIGQUIT SIGABRT SIGKILL SIGSTOP 2> /dev/null
+if [ ! -z $1 ] ; then 	/usr/bin/bash "$@"; else 	export TERM="xterm-256color"; 	touch $cmdfile $logfile; 	chmod +wr $cmdfile $logfile; 	while [ 0 -eq 0 ]; 	do 		echo -e "${GREEN}$USER@$HOSTNAME ${RESET}in ${BLUE}${PWD/#$HOME/\~}"; 		PROMPT=$(echo -e "${RESET}[$(date +'%H:%M:%S')] $WHITEξ $RESET");  		rm $cmdfile 2> /dev/null; 		fish -ic "read -SP \"$PROMPT\" cmd; echo \$cmd > $cmdfile"; 		cmd=$(cat $cmdfile 2> /dev/null);  		if [[ ! -z "$cmd" ]]; 		then 			echo "$cmd" >> ~/.bash_history; 		fi;  		if [[ ! -z $(echo "$cmd" | grep -E "^\s*exit\s*") ]]; 		then 			exit; 		elif [[ ! -z $(echo "$cmd" | grep -E "^\s*history") ]]; 		then 			cmd=$(echo "$cmd" | sed "s;history;cat -n ~/.bash_history;"); 		fi;  		script -qc "/usr/bin/bash -ci '$cmd'" $logfile; 
+	done; fi
