@@ -12,33 +12,6 @@ from itertools import groupby
 
 import numpy as np
 
-way_to_answer='\\home\\'
-stage=1
-def check_result(result):
-    global stage
-    data_1 = get_simhash(result)
-    data_2 = get_simhash(way_to_answer+"\\"+str(stage)+str('.txt'))
-    if data_1.distance(data_2) <= 10:
-        stage += 1
-        if stage == 3:
-            print("Complete")
-            sys.exit()
-            # если результат достиг этапа, то ...
-
-class Handler(FileSystemEventHandler):
-    def on_created(self, event):
-        check_result(str(event.src_path))
-
-    def on_deleted(self, event):
-        check_result(str(event.src_path))
-
-    def on_modified(self, event):
-        check_result(str(event.src_path))
-
-    def on_moved(self, event):
-        check_result(str(event.src_path))
-
-
 def is_file(data):
     try:
         file = open(data, "r", encoding="utf-8")
@@ -58,7 +31,6 @@ def is_hash(data):
         is_text = True
     return not is_text
 
-
 def get_simhash(data):
     if is_file(data):
         data = str(open(data, "r", encoding="utf-8").read()).replace('\n','')
@@ -68,7 +40,6 @@ def get_simhash(data):
         return Simhash(value=int(data))
     else:
         return Simhash(data)
-
 
 try:
     from collections.abc import Iterable
