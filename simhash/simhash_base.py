@@ -22,7 +22,7 @@ def is_file(data):
 
 def is_hash(data):
     is_text = False
-    if len(data) == 20:
+    if len(data) >= 18:
         for i in data:
             if i not in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
                 is_text = True
@@ -33,8 +33,12 @@ def is_hash(data):
 
 def get_simhash(data):
     if is_file(data):
-        data = str(open(data, "r", encoding="utf-8").read()).replace('\n','')
-        print(data)
+        try:#файлы .swp не читаются, кодировка не подходит, из-за этого ошибки
+            with open(data, "r") as f:
+                data = str(f.read())
+                #print(data)
+        except:
+            data='ﷴ'
 
     if is_hash(data):
         return Simhash(value=int(data))
