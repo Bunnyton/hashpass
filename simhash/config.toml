@@ -1,3 +1,8 @@
-[task]
-ways = [ "/home/lev/hashpass/simhash/2", "/home/lev/hashpass/simhash",]
-hashes = [ "994258241967195291",]
+number_of_stages = 2
+
+[stage_1]
+"/home/lev/hashpass/simhash/1" = "994258241967195291"
+"/home/lev/hashpass/simhash/2" = "8000222017881409068"
+
+[stage_2]
+"/home/lev/hashpass/simhash/2" = "8000222017881409068"

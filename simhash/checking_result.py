@@ -8,12 +8,48 @@ from watchdog.observers import Observer
 stop=0
 directories=[]
 stage=1 #!#
+config=0
+check={}
+data={}
 
 with open("config.toml","r+") as f:
     config=toml.load(f)
-    answers=config['task']['hashes']
-    ways=config['task']['ways']
-    stage_final=len(answers)
+    config_1=config['stage_'+str(stage)]
+    ways=config_1.keys()
+    hashes=config_1.values()
+    for i in hashes:
+        data.update({i:''})
+    stage_final=int(config["number_of_stages"])
+
+def check_result(result):
+    global stage
+    global data
+    global ways
+    global hashes
+    global config
+    if ((result)in ways) and (stage <= stage_final):
+        data_1 = get_simhash(result)
+        for data_ in hashes:
+            data_2=get_simhash(data_)
+            if data_1.distance(data_2) <= 10:
+                data[data_]=result
+                break
+    
+    if stage == stage_final:
+        print("Done")
+        global stop
+        stop=True
+        for i in directories:
+            i.stop()
+        sys.exit() 
+    elif (list(data.values()).count(""))==0:
+        data={}
+        stage+=1
+        config=config['stage_'+str(stage)]
+        ways=config.keys()
+        hashes=config.values()
+        for i in hashes:
+            data.update({i:''})
 
 def watch_system(path):
     observer = Observer()
@@ -23,7 +59,7 @@ def watch_system(path):
     
 class Handler(FileSystemEventHandler):
     def on_created(self, event):
-        #print("cre", str(event.src_path))
+        print("cre", str(event.src_path))
         check_result(str(event.src_path))
 
     #def on_deleted(self, event):
@@ -31,17 +67,17 @@ class Handler(FileSystemEventHandler):
         #check_result(str(event.src_path))
 
     def on_modified(self, event):
-        #print("mod", str(event.src_path))
+        print("mod", str(event.src_path))
         check_result(str(event.src_path))
 
     def on_moved(self, event):
-        #print("mov", str(event.src_path))
+        print("mov", str(event.src_path))
         check_result(str(event.src_path))
 
 def start_observe():
-    with open("config.toml","r+") as f:
-        config=toml.load(f)
-    for i in config['task']['ways']: #!#
+    with open("folders.txt","r+") as f:
+        folders=f.read().split()
+    for i in folders: #!#
         directories.append(watch_system(i))
 
     try:
@@ -54,21 +90,6 @@ def start_observe():
         for i in directories:
             i.stop()
 
-def check_result(result):
-    global stage
-    if (result)==ways[stage-1] and stage <= stage_final:
-        data_1 = get_simhash(result)
-        data_2 = get_simhash(answers[stage-1])
-        if data_1.distance(data_2) <= 10:
-            stage += 1
-            if stage == stage_final+1:
-                print("Done")
-                global stop
-                stop=True
-                for i in directories:
-                    i.stop()
-                sys.exit() #не работает...
-                # если результат достиг этапа, то ...
             
             
 start_observe()

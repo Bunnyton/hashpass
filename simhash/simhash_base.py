@@ -33,12 +33,8 @@ def is_hash(data):
 
 def get_simhash(data):
     if is_file(data):
-        try:#файлы .swp не читаются, кодировка не подходит, из-за этого ошибки
-            with open(data, "r") as f:
-                data = str(f.read())
-                #print(data)
-        except:
-            data='ﷴ'
+        with open(data, "r") as f:
+            data = str(f.read())
 
     if is_hash(data):
         return Simhash(value=int(data))
