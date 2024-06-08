@@ -1,0 +1,9 @@
+[options]
+observe_dirs = [ "/home/anton/LinuxWork/study/8/nirs/", "/tmp/", "/usr/bin/", "/usr/local/bin", "/etc/",]
+
+[changes."/home/anton/LinuxWork/study/8/nirs/dvs/test/5.txt"]
+path = "/home/anton/LinuxWork/study/8/nirs/dvs/test/5.txt"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/dvs/test"
+hash = "2738820399454852002"
+state = "created"

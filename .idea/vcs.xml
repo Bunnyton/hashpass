@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/lib/images/base/student-debian/home/student/.cache/omf/https___github.com_oh-my-fish_packages-main_master" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/lib/images/base/student-debian/home/student/.local/share/omf/pkg/neovim" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/lib/images/base/student-debian/home/student/.local/share/omf/themes/default" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/lib/images/base/student-debian/home/student/.local/share/omf/themes/neolambda" vcs="Git" />
+  </component>
+</project>

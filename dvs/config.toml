@@ -1,0 +1,103 @@
+[stage0.options]
+mode = "intelligence"
+fs_analyzer = true
+fs_accuracy = 0.7
+output_analyzer = true
+output_accuracy = 0.7
+observe_dirs = [ "/home/anton/LinuxWork", "/etc/", "/usr/bin/", "/usr/local/bin/", "/tmp/",]
+
+[stage0.changes."/tmp/#1310749"]
+path = "/tmp/#1310749"
+is_dir = false
+pardir = "/tmp"
+hash = "5433645205669662086"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/dvs/server.py"]
+path = "/home/anton/LinuxWork/study/8/nirs/dvs/server.py"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/dvs"
+state = "deleted"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/dvs/dvsserver.py"]
+path = "/home/anton/LinuxWork/study/8/nirs/dvs/dvsserver.py"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/dvs"
+hash = "12538934972826489765"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/dvs"]
+path = "/home/anton/LinuxWork/study/8/nirs/dvs"
+is_dir = true
+pardir = "/home/anton/LinuxWork/study/8/nirs"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git/index.lock"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git/index.lock"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/.git"
+state = "deleted"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git"
+is_dir = true
+pardir = "/home/anton/LinuxWork/study/8/nirs"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git/objects/75/tmp_obj_VfoWKC"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git/objects/75/tmp_obj_VfoWKC"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/.git/objects/75"
+state = "deleted"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git/objects/75"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git/objects/75"
+is_dir = true
+pardir = "/home/anton/LinuxWork/study/8/nirs/.git/objects"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git/objects/75/46ebdca0740e13ac817b2fd10ac54ee691a8f4"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git/objects/75/46ebdca0740e13ac817b2fd10ac54ee691a8f4"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/.git/objects/75"
+hash = "11696823415161983968"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git/index"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git/index"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/.git"
+hash = "2414630580342428450"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/dvs/client.py"]
+path = "/home/anton/LinuxWork/study/8/nirs/dvs/client.py"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/dvs"
+state = "deleted"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/dvs/dvsclient.py"]
+path = "/home/anton/LinuxWork/study/8/nirs/dvs/dvsclient.py"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/dvs"
+hash = "12034520613285597668"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git/objects/66/tmp_obj_jKwqWS"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git/objects/66/tmp_obj_jKwqWS"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/.git/objects/66"
+state = "deleted"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git/objects/66"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git/objects/66"
+is_dir = true
+pardir = "/home/anton/LinuxWork/study/8/nirs/.git/objects"
+state = "modified"
+
+[stage0.changes."/home/anton/LinuxWork/study/8/nirs/.git/objects/66/0bef9903bb73afb0ccc443c693fddec7dd30d1"]
+path = "/home/anton/LinuxWork/study/8/nirs/.git/objects/66/0bef9903bb73afb0ccc443c693fddec7dd30d1"
+is_dir = false
+pardir = "/home/anton/LinuxWork/study/8/nirs/.git/objects/66"
+hash = "2360839947115500372"
+state = "modified"
