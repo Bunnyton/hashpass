@@ -49,7 +49,7 @@ def check_result(result):
         ways=config.keys()
         hashes=config.values()
         for i in hashes:
-            data.update({i:''})
+            data.update({i:''}) #
 
 def watch_system(path):
     observer = Observer()

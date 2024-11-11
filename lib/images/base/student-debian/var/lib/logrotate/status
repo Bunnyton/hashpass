@@ -1,7 +1,0 @@
-logrotate state -- version 2
-"/var/log/dpkg.log" 2024-5-10-0:0:0
-"/var/log/apt/term.log" 2024-5-10-0:0:0
-"/var/log/apt/history.log" 2024-5-10-0:0:0
-"/var/log/alternatives.log" 2024-5-10-0:0:0
-"/var/log/wtmp" 2024-5-10-0:0:0
-"/var/log/btmp" 2024-5-10-0:0:0

@@ -1,8 +1,0 @@
-[options]
-observe_dirs = [ "/home/anton/LinuxWork/study/8/nirs/", "/tmp/", "/usr/bin/", "/usr/local/bin", "/etc/",]
-
-[changes."/home/anton/LinuxWork/study/8/nirs/dvs/test/4.txt"]
-path = "/home/anton/LinuxWork/study/8/nirs/dvs/test/4.txt"
-is_dir = false
-pardir = "/home/anton/LinuxWork/study/8/nirs/dvs/test"
-state = "deleted"

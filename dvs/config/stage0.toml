@@ -1,9 +1,13 @@
 [options]
-observe_dirs = [ "/home/anton/LinuxWork/study/8/nirs/", "/tmp/", "/usr/bin/", "/usr/local/bin", "/etc/",]
+mode = "Interactive"
+fs_analyzer = true
+fs_accuracy = 0.7
+observe_list = [ "/home/anton/LinuxWork/study/8/nirs/dvs/tmp/file", "/usr/bin/", "/usr/local/bin", "/etc/",]
+output_analyzer = true
+output_accuracy = 0.7
 
-[changes."/home/anton/LinuxWork/study/8/nirs/dvs/test/5.txt"]
-path = "/home/anton/LinuxWork/study/8/nirs/dvs/test/5.txt"
+[changes."/home/anton/LinuxWork/study/8/nirs/dvs/tmp/file"]
+path = "/home/anton/LinuxWork/study/8/nirs/dvs/tmp/file"
 is_dir = false
-pardir = "/home/anton/LinuxWork/study/8/nirs/dvs/test"
-hash = "2738820399454852002"
-state = "created"
+pardir = "/home/anton/LinuxWork/study/8/nirs/dvs/tmp"
+state = "deleted"

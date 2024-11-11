@@ -1,9 +1,9 @@
 import os.path
 import socket
 import time
+import sys
 
-
-class DVSClient:
+class TaskCreatorClient:
     host = '127.0.0.1'
     port = 17170
     max_buff_size = 4096
@@ -23,15 +23,14 @@ class DVSClient:
         else:
             raise TimeoutError("Can't connect to server")
 
-    def send_cmd(self, cmd: str):
-        scmd = cmd.split()
-        if len(scmd) == 2 and scmd[0] == 'start':
-            if os.path.exists(scmd[1]) and os.path.isdir(scmd[1]):
-                cmd = ' '.join(['start', os.path.abspath(scmd[1])])
+    def send_cmd(self, cmd: list):
+        if len(cmd) == 2 and cmd[0] == 'start':
+            if os.path.exists(cmd[1]) and os.path.isdir(cmd[1]):
+                cmd = ['start', os.path.abspath(cmd[1])]
             else:
-                raise Exception(' '.join([scmd[1], "config dir doesn't exist"]))
+                raise Exception(' '.join([cmd[1], "config dir doesn't exist"]))
         self.connect()
-        self.sock.send(bytes(cmd, 'utf-8'))
+        self.sock.send(bytes(' '.join(cmd), 'utf-8'))
 
         response = self.sock.recv(self.max_buff_size)
         print(response.decode().replace('\0', ''))
@@ -42,7 +41,5 @@ class DVSClient:
         self.sock.close()
 
 
-dvsclient = DVSClient()
-while True:
-    cmd = input("Command To Send: ")
-    dvsclient.send_cmd(cmd)
+tcc = TaskCreatorClient()
+tcc.send_cmd(sys.argv[1:])

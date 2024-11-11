@@ -51,7 +51,7 @@ class Simhash(object):
     batch_size = 200
 
     def __init__(
-            self, value, from_file=False, f=64, reg=r'[\w\u4e00-\u9fcc]+', hashfunc=_hashfunc, log=None
+            self, value, from_hash=False, from_file=False, f=64, reg=r'[\w\u4e00-\u9fcc]+', hashfunc=_hashfunc, log=None
     ):
         """
         `f` is the dimensions of fingerprints, in bits. Must be a multiple of 8.
@@ -65,8 +65,8 @@ class Simhash(object):
         (preferred) or an unsigned integer, in at least `f // 8` bytes.
         """
         if from_file:
-            with open(value, "r") as f:
-                value = str(f.read())
+            with open(value, "r") as file:
+                value = str(file.read())
 
         if f % 8:
             raise ValueError('f must be a multiple of 8')
@@ -83,7 +83,12 @@ class Simhash(object):
         else:
             self.log = log
 
-        if isinstance(value, Simhash):
+        if from_hash:
+            if isinstance(value, str):
+                self.value = int(value)
+            elif isinstance(value, int):
+                self.value = value
+        elif isinstance(value, Simhash):
             self.value = value.value
         elif isinstance(value, basestring):
             self.build_by_text(unicode(value))

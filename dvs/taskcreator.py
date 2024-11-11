@@ -1,24 +1,25 @@
 import os
 import toml
+import glob
 
 from stage import Stage
 
 
-class DVS():
+class TaskCreator():
 
     def __init__(self, config_dir: str):
+        os.makedirs(config_dir, exist_ok=True)
+        for file_path in glob.glob(os.path.join(config_dir, '*.toml')):
+            os.remove(file_path)
+
         self.config_dir = config_dir
-        _curstage = None
-        _stagenum = 0
+        self._curstage = None
+        self._stagenum = 0
 
     def start_stage(self, mode=None, fs_analyzer=None, fs_accuracy=None, output_analyzer=None,
                     output_accuracy=None, observe_dirs=None):
         if self._curstage is None:
-            self._curstage = Stage(''.join([self.config_dir, '/stage', str(self._stagenum), '.toml']), mode=mode,
-                                   fs_analyzer=fs_analyzer,
-                                   fs_accuracy=fs_accuracy,
-                                   output_analyzer=output_analyzer, output_accuracy=output_accuracy,
-                                   observe_dirs=observe_dirs)
+            self._curstage = Stage(os.path.join(self.config_dir, 'stage' + str(self._stagenum) + '.toml'))
             self._curstage.start()
         else:
             raise Exception('Stage has already started')
@@ -38,8 +39,7 @@ class DVS():
     #          self.stop_stage()
     #      with open(''.join([self.config_dir, 'stage', str(self._stagenum), '.toml']), 'w') as cf:
     #          toml.dump(self.config, cf)
-
     def __del__(self):
-        if self._curstage is not None:
+        if self._curstage:
             self.stop_stage()
             raise Exception('Running stage has been stopped with DVS delete, most likely config has not been saved')
