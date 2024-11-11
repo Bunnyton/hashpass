@@ -1,0 +1,212 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "COMPLETE" "1" "Dec 21, 2023" "3.6" "fish-shell"
+.SH NAME
+complete \- edit command specific tab-completions
+.SH SYNOPSIS
+.nf
+\fBcomplete\fP ((\fB\-c\fP | \fB\-\-command\fP) | (\fB\-p\fP | \fB\-\-path\fP)) \fICOMMAND\fP [\fIOPTIONS\fP]
+\fBcomplete\fP (\fB\-C\fP | \fB\-\-do\-complete\fP) [\fB\-\-escape\fP] \fISTRING\fP
+.fi
+.sp
+.SH DESCRIPTION
+.sp
+\fBcomplete\fP defines, removes or lists completions for a command.
+.sp
+For an introduction to writing your own completions, see \fI\%Writing your own completions\fP in
+the fish manual.
+.sp
+The following options are available:
+.INDENT 0.0
+.TP
+\fB\-c\fP or \fB\-\-command\fP \fICOMMAND\fP
+Specifies that \fICOMMAND\fP is the name of the command. If there is no \fB\-c\fP or \fB\-p\fP, one non\-option argument will be used as the command.
+.TP
+\fB\-p\fP or \fB\-\-path\fP \fICOMMAND\fP
+Specifies that \fICOMMAND\fP is the absolute path of the command (optionally containing wildcards).
+.TP
+\fB\-e\fP or \fB\-\-erase\fP
+Deletes the specified completion.
+.TP
+\fB\-s\fP or \fB\-\-short\-option\fP \fISHORT_OPTION\fP
+Adds a short option to the completions list.
+.TP
+\fB\-l\fP or \fB\-\-long\-option\fP \fILONG_OPTION\fP
+Adds a GNU\-style long option to the completions list.
+.TP
+\fB\-o\fP or \fB\-\-old\-option\fP \fIOPTION\fP
+Adds an old\-style short or long option (see below for details).
+.TP
+\fB\-a\fP or \fB\-\-arguments\fP \fIARGUMENTS\fP
+Adds the specified option arguments to the completions list.
+.TP
+\fB\-k\fP or \fB\-\-keep\-order\fP
+Keeps the order of \fIARGUMENTS\fP instead of sorting alphabetically. Multiple \fBcomplete\fP calls with \fB\-k\fP result in arguments of the later ones displayed first.
+.TP
+\fB\-f\fP or \fB\-\-no\-files\fP
+This completion may not be followed by a filename.
+.TP
+\fB\-F\fP or \fB\-\-force\-files\fP
+This completion may be followed by a filename, even if another applicable \fBcomplete\fP specified \fB\-\-no\-files\fP\&.
+.TP
+\fB\-r\fP or \fB\-\-require\-parameter\fP
+This completion must have an option argument, i.e. may not be followed by another option.
+.TP
+\fB\-x\fP or \fB\-\-exclusive\fP
+Short for \fB\-r\fP and \fB\-f\fP\&.
+.TP
+\fB\-w\fP or \fB\-\-wraps\fP \fIWRAPPED_COMMAND\fP
+Causes the specified command to inherit completions from \fIWRAPPED_COMMAND\fP (see below for details).
+.TP
+\fB\-n\fP or \fB\-\-condition\fP \fICONDITION\fP
+This completion should only be used if the \fICONDITION\fP (a shell command) returns 0. This makes it possible to specify completions that should only be used in some cases. If multiple conditions are specified, fish will try them in the order they are specified until one fails or all succeeded.
+.TP
+\fB\-C\fP or \fB\-\-do\-complete\fP \fISTRING\fP
+Makes \fBcomplete\fP try to find all possible completions for the specified string. If there is no \fISTRING\fP, the current commandline is used instead.
+.TP
+\fB\-\-escape\fP
+When used with \fB\-C\fP, escape special characters in completions.
+.TP
+\fB\-h\fP or \fB\-\-help\fP
+Displays help about using this command.
+.UNINDENT
+.sp
+Command specific tab\-completions in \fBfish\fP are based on the notion of options and arguments. An option is a parameter which begins with a hyphen, such as \fB\-h\fP, \fB\-help\fP or \fB\-\-help\fP\&. Arguments are parameters that do not begin with a hyphen. Fish recognizes three styles of options, the same styles as the GNU getopt library. These styles are:
+.INDENT 0.0
+.IP \(bu 2
+Short options, like \fB\-a\fP\&. Short options are a single character long, are preceded by a single hyphen and can be grouped together (like \fB\-la\fP, which is equivalent to \fB\-l \-a\fP). Option arguments may be specified by appending the option with the value (\fB\-w32\fP), or, if \fB\-\-require\-parameter\fP is given, in the following parameter (\fB\-w 32\fP).
+.IP \(bu 2
+Old\-style options, long like \fB\-Wall\fP or \fB\-name\fP or even short like \fB\-a\fP\&. Old\-style options can be more than one character long, are preceded by a single hyphen and may not be grouped together. Option arguments are specified by default following a space (\fB\-foo null\fP) or after \fB=\fP (\fB\-foo=null\fP).
+.IP \(bu 2
+GNU\-style long options, like \fB\-\-colors\fP\&. GNU\-style long options can be more than one character long, are preceded by two hyphens, and can\(aqt be grouped together. Option arguments may be specified after a \fB=\fP (\fB\-\-quoting\-style=shell\fP), or, if \fB\-\-require\-parameter\fP is given, in the following parameter (\fB\-\-quoting\-style shell\fP).
+.UNINDENT
+.sp
+Multiple commands and paths can be given in one call to define the same completions for multiple commands.
+.sp
+Multiple command switches and wrapped commands can also be given to define multiple completions in one call.
+.sp
+Invoking \fBcomplete\fP multiple times for the same command adds the new definitions on top of any existing completions defined for the command.
+.sp
+When \fB\-a\fP or \fB\-\-arguments\fP is specified in conjunction with long, short, or old\-style options, the specified arguments are only completed as arguments for any of the specified options. If \fB\-a\fP or \fB\-\-arguments\fP is specified without any long, short, or old\-style options, the specified arguments are used when completing non\-option arguments to the command (except when completing an option argument that was specified with \fB\-r\fP or \fB\-\-require\-parameter\fP).
+.sp
+Command substitutions found in \fBARGUMENTS\fP should return a newline\-separated list of arguments, and each argument may optionally have a tab character followed by the argument description. Description given this way override a description given with \fB\-d\fP or \fB\-\-description\fP\&.
+.sp
+Descriptions given with \fB\-\-description\fP are also used to group options given with \fB\-s\fP, \fB\-o\fP or \fB\-l\fP\&. Options with the same (non\-empty) description will be listed as one candidate, and one of them will be picked. If the description is empty or no description was given this is skipped.
+.sp
+The \fB\-w\fP or \fB\-\-wraps\fP options causes the specified command to inherit completions from another command, \(dqwrapping\(dq the other command. The wrapping command can also have additional completions. A command can wrap multiple commands, and wrapping is transitive: if A wraps B, and B wraps C, then A automatically inherits all of C\(aqs completions. Wrapping can be removed using the \fB\-e\fP or \fB\-\-erase\fP options. Wrapping only works for completions specified with \fB\-c\fP or \fB\-\-command\fP and are ignored when specifying completions with \fB\-p\fP or \fB\-\-path\fP\&.
+.sp
+When erasing completions, it is possible to either erase all completions for a specific command by specifying \fBcomplete \-c COMMAND \-e\fP, or by specifying a specific completion option to delete.
+.sp
+When \fBcomplete\fP is called without anything that would define or erase completions (options, arguments, wrapping, ...), it shows matching completions instead. So \fBcomplete\fP without any arguments shows all loaded completions, \fBcomplete \-c foo\fP shows all loaded completions for \fBfoo\fP\&. Since completions are \fI\%autoloaded\fP, you will have to trigger them first.
+.SH EXAMPLES
+.sp
+The short\-style option \fB\-o\fP for the \fBgcc\fP command needs a file argument:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c gcc \-s o \-r
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The short\-style option \fB\-d\fP for the \fBgrep\fP command requires one of \fBread\fP, \fBskip\fP or \fBrecurse\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c grep \-s d \-x \-a \(dqread skip recurse\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The \fBsu\fP command takes any username as an argument. Usernames are given as the first colon\-separated field in the file /etc/passwd. This can be specified as:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-x \-c su \-d \(dqUsername\(dq \-a \(dq(cat /etc/passwd | cut \-d : \-f 1)\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The \fBrpm\fP command has several different modes. If the \fB\-e\fP or \fB\-\-erase\fP flag has been specified, \fBrpm\fP should delete one or more packages, in which case several switches related to deleting packages are valid, like the \fBnodeps\fP switch.
+.sp
+This can be written as:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c rpm \-n \(dq__fish_contains_opt \-s e erase\(dq \-l nodeps \-d \(dqDon\(aqt check dependencies\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+where \fB__fish_contains_opt\fP is a function that checks the command line buffer for the presence of a specified set of options.
+.sp
+To implement an alias, use the \fB\-w\fP or \fB\-\-wraps\fP option:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c hub \-w git
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Now hub inherits all of the completions from git. Note this can also be specified in a function declaration (\fBfunction thing \-w otherthing\fP).
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c git
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Shows all completions for \fBgit\fP\&.
+.sp
+Any command \fBfoo\fP that doesn\(aqt support grouping multiple short options in one string (not supporting \fB\-xf\fP as short for \fB\-x \-f\fP) or a short option and its value in one string (not supporting \fB\-d9\fP instead of \fB\-d 9\fP) should be specified as a single\-character old\-style option instead of as a short\-style option; for example, \fBcomplete \-c foo \-o s; complete \-c foo \-o v\fP would never suggest \fBfoo \-ov\fP but rather \fBfoo \-o \-v\fP\&.
+.SH COPYRIGHT
+2023, fish-shell developers
+.\" Generated by docutils manpage writer.
+.

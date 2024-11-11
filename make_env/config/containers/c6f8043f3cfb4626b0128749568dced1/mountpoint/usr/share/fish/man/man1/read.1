@@ -1,0 +1,198 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "READ" "1" "Dec 21, 2023" "3.6" "fish-shell"
+.SH NAME
+read \- read line of input into variables
+.SH SYNOPSIS
+.nf
+\fBread\fP [\fIOPTIONS\fP] [\fIVARIABLE\fP \&...]
+.fi
+.sp
+.SH DESCRIPTION
+.sp
+\fBread\fP reads from standard input and either writes the result back to standard output (for use in command substitution), or stores the result in one or more shell variables. By default, \fBread\fP reads a single line and splits it into variables on spaces or tabs. Alternatively, a null character or a maximum number of characters can be used to terminate the input, and other delimiters can be given. Unlike other shells, there is no default variable (such as \fBREPLY\fP) for storing the result \- instead, it is printed on standard output.
+.sp
+The following options are available:
+.INDENT 0.0
+.TP
+\fB\-c\fP \fICMD\fP or \fB\-\-command\fP \fICMD\fP
+Sets the initial string in the interactive mode command buffer to \fICMD\fP\&.
+.TP
+\fB\-d\fP or \fB\-\-delimiter\fP \fIDELIMITER\fP
+Splits on \fIDELIMITER\fP\&. \fIDELIMITER\fP will be used as an entire string to split on, not a set of characters.
+.TP
+\fB\-g\fP or \fB\-\-global\fP
+Makes the variables global.
+.TP
+\fB\-s\fP or \fB\-\-silent\fP
+Masks characters written to the terminal, replacing them with asterisks. This is useful for reading things like passwords or other sensitive information.
+.TP
+\fB\-f\fP or \fB\-\-function\fP
+Scopes the variable to the currently executing function. It is erased when the function ends.
+.TP
+\fB\-l\fP or \fB\-\-local\fP
+Scopes the variable to the currently executing block. It is erased when the block ends. Outside of a block, this is the same as \fB\-\-function\fP\&.
+.TP
+\fB\-n\fP or \fB\-\-nchars\fP \fINCHARS\fP
+Makes \fBread\fP return after reading \fINCHARS\fP characters or the end of the line, whichever comes first.
+.TP
+\fB\-p\fP or \fB\-\-prompt\fP \fIPROMPT_CMD\fP
+Uses the output of the shell command \fIPROMPT_CMD\fP as the prompt for the interactive mode. The default prompt command is \fBset_color green; echo read; set_color normal; echo \(dq> \(dq\fP
+.TP
+\fB\-P\fP or \fB\-\-prompt\-str\fP \fIPROMPT_STR\fP
+Uses the \fIPROMPT_STR\fP as the prompt for the interactive mode. It is equivalent to \fBecho $PROMPT_STR\fP and is provided solely to avoid the need to frame the prompt as a command. All special characters in the string are automatically escaped before being passed to the \fI\%echo\fP command.
+.TP
+\fB\-R\fP or \fB\-\-right\-prompt\fP \fIRIGHT_PROMPT_CMD\fP
+Uses the output of the shell command \fIRIGHT_PROMPT_CMD\fP as the right prompt for the interactive mode. There is no default right prompt command.
+.TP
+\fB\-S\fP or \fB\-\-shell\fP
+Enables syntax highlighting, tab completions and command termination suitable for entering shellscript code in the interactive mode. NOTE: Prior to fish 3.0, the short opt for \fB\-\-shell\fP was \fB\-s\fP, but it has been changed for compatibility with bash\(aqs \fB\-s\fP short opt for \fB\-\-silent\fP\&.
+.TP
+\fB\-t\fP \-or \fB\-\-tokenize\fP
+Causes read to split the input into variables by the shell\(aqs tokenization rules. This means it will honor quotes and escaping. This option is of course incompatible with other options to control splitting like \fB\-\-delimiter\fP and does not honor \fI\%IFS\fP (like fish\(aqs tokenizer). It saves the tokens in the manner they\(aqd be passed to commands on the commandline, so e.g. \fBa\e b\fP is stored as \fBa b\fP\&. Note that currently it leaves command substitutions intact along with the parentheses.
+.TP
+\fB\-u\fP or \fB\-\-unexport\fP
+Prevents the variables from being exported to child processes (default behaviour).
+.TP
+\fB\-U\fP or \fB\-\-universal\fP
+Causes the specified shell variable to be made universal.
+.TP
+\fB\-x\fP or \fB\-\-export\fP
+Exports the variables to child processes.
+.TP
+\fB\-a\fP or \fB\-\-list\fP
+Stores the result as a list in a single variable. This option is also available as \fB\-\-array\fP for backwards compatibility.
+.TP
+\fB\-z\fP or \fB\-\-null\fP
+Marks the end of the line with the NUL character, instead of newline. This also disables interactive mode.
+.TP
+\fB\-L\fP or \fB\-\-line\fP
+Reads each line into successive variables, and stops after each variable has been filled. This cannot be combined with the \fB\-\-delimiter\fP option.
+.UNINDENT
+.sp
+Without the \fB\-\-line\fP option, \fBread\fP reads a single line of input from standard input, breaks it into tokens, and then assigns one token to each variable specified in \fIVARIABLES\fP\&. If there are more tokens than variables, the complete remainder is assigned to the last variable.
+.sp
+If no option to determine how to split like \fB\-\-delimiter\fP, \fB\-\-line\fP or \fB\-\-tokenize\fP is given, the variable \fBIFS\fP is used as a list of characters to split on. Relying on the use of \fBIFS\fP is deprecated and this behaviour will be removed in future versions. The default value of \fBIFS\fP contains space, tab and newline characters. As a special case, if \fBIFS\fP is set to the empty string, each character of the input is considered a separate token.
+.sp
+With the \fB\-\-line\fP option, \fBread\fP reads a line of input from standard input into each provided variable, stopping when each variable has been filled. The line is not tokenized.
+.sp
+If no variable names are provided, \fBread\fP enters a special case that simply provides redirection from standard input to standard output, useful for command substitution. For instance, the fish shell command below can be used to read data that should be provided via a command line argument from the console instead of hardcoding it in the command itself, allowing the command to both be reused as\-is in various contexts with different input values and preventing possibly sensitive text from being included in the shell history:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+mysql \-uuser \-p(read)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+When running in this mode, \fBread\fP does not split the input in any way and text is redirected to standard output without any further processing or manipulation.
+.sp
+If \fB\-a\fP or \fB\-\-array\fP is provided, only one variable name is allowed and the tokens are stored as a list in this variable.
+.sp
+See the documentation for \fBset\fP for more details on the scoping rules for variables.
+.sp
+When \fBread\fP reaches the end\-of\-file (EOF) instead of the terminator, the exit status is set to 1.
+Otherwise, it is set to 0.
+.sp
+In order to protect the shell from consuming too many system resources, \fBread\fP will only consume a
+maximum of 100 MiB (104857600 bytes); if the terminator is not reached before this limit then \fIVARIABLE\fP
+is set to empty and the exit status is set to 122. This limit can be altered with the
+\fI\%fish_read_limit\fP variable. If set to 0 (zero), the limit is removed.
+.SH EXAMPLE
+.sp
+\fBread\fP has a few separate uses.
+.sp
+The following code stores the value \(aqhello\(aq in the shell variable \fBfoo\fP\&.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo hello|read foo
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+While this is a neat way to handle command output line\-by\-line:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+printf \(aq%s\en\(aq line1 line2 line3 line4 | while read \-l foo
+                  echo \(dqThis is another line: $foo\(dq
+              end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Delimiters given via \(dq\-d\(dq are taken as one string:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo a==b==c | read \-d == \-l a b c
+echo $a # a
+echo $b # b
+echo $c # c
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fB\-\-tokenize\fP honors quotes and escaping like the shell\(aqs argument passing:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo \(aqa\e b\(aq | read \-t first second
+echo $first # outputs \(dqa b\(dq, $second is empty
+
+echo \(aqa\(dqfoo bar\(dqb (command echo wurst)*\(dq \(dq{a,b}\(aq | read \-lt \-l a b c
+echo $a # outputs \(aqafoo bar\(aq (without the quotes)
+echo $b # outputs \(aq(command echo wurst)* {a,b}\(aq (without the quotes)
+echo $c # nothing
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For an example on interactive use, see \fI\%Querying for user input\fP\&.
+.SH COPYRIGHT
+2023, fish-shell developers
+.\" Generated by docutils manpage writer.
+.

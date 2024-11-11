@@ -1,0 +1,5 @@
+# These directories are intentionally empty, until we start shipping Debian-specific files in them.
+fish-common: package-contains-empty-directory usr/share/fish/vendor_completions.d/
+fish-common: package-contains-empty-directory usr/share/fish/vendor_functions.d/
+
+fish-common: package-contains-documentation-outside-usr-share-doc

@@ -1,0 +1,13 @@
+# While this isn't a false positive, "XWINDOWS" can be the value or
+# name of an environment variable and we don't want to change Lynx's
+# user interface to become incompatible with upstream respectively
+# previous versions in Debian, so we ignore this specific case of a
+# misspelled project name.
+
+lynx: spelling-error-in-binary XWINDOWS X [usr/bin/lynx]
+
+# false positive. The _Debian_ changelog is not a symlink, just the
+# upstream one. #973759
+# The directory usr/share/doc/lynx cannot be made a symlink since 
+# -common is arch all and lynx is arch any.
+lynx: debian-changelog-file-is-a-symlink [usr/share/doc/lynx/changelog.gz]

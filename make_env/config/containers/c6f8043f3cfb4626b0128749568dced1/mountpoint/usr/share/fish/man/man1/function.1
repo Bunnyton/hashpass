@@ -1,0 +1,150 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "FUNCTION" "1" "Dec 21, 2023" "3.6" "fish-shell"
+.SH NAME
+function \- create a function
+.SH SYNOPSIS
+.nf
+\fBfunction\fP \fINAME\fP [\fIOPTIONS\fP]\fB;\fP \fIBODY\fP\fB;\fP \fBend\fP
+.fi
+.sp
+.SH DESCRIPTION
+.sp
+\fBfunction\fP creates a new function \fINAME\fP with the body \fIBODY\fP\&.
+.sp
+A function is a list of commands that will be executed when the name of the function is given as a command.
+.sp
+The following options are available:
+.INDENT 0.0
+.TP
+\fB\-a\fP \fINAMES\fP or \fB\-\-argument\-names\fP \fINAMES\fP
+Assigns the value of successive command\-line arguments to the names given in \fINAMES\fP\&. These are the same arguments given in \fI\%argv\fP, and are still available there. See also \fI\%Argument Handling\fP\&.
+.TP
+\fB\-d\fP \fIDESCRIPTION\fP or \fB\-\-description\fP \fIDESCRIPTION\fP
+A description of what the function does, suitable as a completion description.
+.TP
+\fB\-w\fP \fIWRAPPED_COMMAND\fP or \fB\-\-wraps\fP \fIWRAPPED_COMMAND\fP
+Inherit completions from the given \fIWRAPPED_COMMAND\fP\&. See the documentation for \fI\%complete\fP for more information.
+.TP
+\fB\-e\fP \fIEVENT_NAME\fP or \fB\-\-on\-event\fP \fIEVENT_NAME\fP
+Run this function when the specified named event is emitted. Fish internally generates named events, for example,when showing the prompt. Custom events can be emitted using the \fI\%emit\fP command.
+.TP
+\fB\-v\fP \fIVARIABLE_NAME\fP or \fB\-\-on\-variable\fP \fIVARIABLE_NAME\fP
+Run this function when the variable \fIVARIABLE_NAME\fP changes value. Note that \fBfish\fP makes no guarantees on any particular timing or even that the function will be run for every single \fBset\fP\&. Rather it will be run when the variable has been set at least once, possibly skipping some values or being run when the variable has been set to the same value (except for universal variables set in other shells \- only changes in the value will be picked up for those).
+.TP
+\fB\-j\fP \fIPID\fP or \fB\-\-on\-job\-exit\fP \fIPID\fP
+Run this function when the job containing a child process with the given process identifier \fIPID\fP exits. Instead of a PID, the string \(aqcaller\(aq can be specified. This is only allowed when in a command substitution, and will result in the handler being triggered by the exit of the job which created this command substitution.
+.TP
+\fB\-p\fP \fIPID\fP or \fB\-\-on\-process\-exit\fP \fIPID\fP
+Run this function when the fish child process with process ID PID exits. Instead of a PID, for backward compatibility, \(dq\fB%self\fP\(dq can be specified as an alias for \fB$fish_pid\fP, and the function will be run when the current fish instance exits.
+.TP
+\fB\-s\fP \fISIGSPEC\fP or \fB\-\-on\-signal\fP \fISIGSPEC\fP
+Run this function when the signal \fBSIGSPEC\fP is delivered. \fBSIGSPEC\fP can be a signal number, or the signal name, such as \fBSIGHUP\fP (or just \fBHUP\fP). Note that the signal must have been delivered to \fBfish\fP; for example, \fBCtrl\-C\fP sends \fBSIGINT\fP to the foreground process group, which will not be \fBfish\fP if you are running another command at the time. Observing a signal will prevent fish from exiting in response to that signal.
+.TP
+\fB\-S\fP or \fB\-\-no\-scope\-shadowing\fP
+Allows the function to access the variables of calling functions. Normally, any variables inside the function that have the same name as variables from the calling function are \(dqshadowed\(dq, and their contents are independent of the calling function.
+.sp
+It\(aqs important to note that this does not capture referenced variables or the scope at the time of function declaration! At this time, fish does not have any concept of closures, and variable lifetimes are never extended. In other words, by using \fB\-\-no\-scope\-shadowing\fP the scope of the function each time it is run is shared with the scope it was \fIcalled\fP from rather than the scope it was \fIdefined\fP in.
+.TP
+\fB\-V\fP or \fB\-\-inherit\-variable NAME\fP
+Snapshots the value of the variable \fBNAME\fP and defines a local variable with that same name and value when the function is defined. This is similar to a closure in other languages like Python but a bit different. Note the word \(dqsnapshot\(dq in the first sentence. If you change the value of the variable after defining the function, even if you do so in the same scope (typically another function) the new value will not be used by the function you just created using this option. See the \fBfunction notify\fP example below for how this might be used.
+.UNINDENT
+.sp
+The event handler switches (\fBon\-event\fP, \fBon\-variable\fP, \fBon\-job\-exit\fP, \fBon\-process\-exit\fP and \fBon\-signal\fP) cause a function to run automatically at specific events. New named events for \fB\-\-on\-event\fP can be fired using the \fI\%emit\fP builtin. Fish already generates a few events, see \fI\%Event handlers\fP for more.
+.sp
+Functions may not be named the same as a reserved keyword. These are elements of fish syntax or builtin commands which are essential for the operations of the shell. Current reserved words are \fB[\fP, \fB_\fP, \fBand\fP, \fBargparse\fP, \fBbegin\fP, \fBbreak\fP, \fBbuiltin\fP, \fBcase\fP, \fBcommand\fP, \fBcontinue\fP, \fBelse\fP, \fBend\fP, \fBeval\fP, \fBexec\fP, \fBfor\fP, \fBfunction\fP, \fBif\fP, \fBnot\fP, \fBor\fP, \fBread\fP, \fBreturn\fP, \fBset\fP, \fBstatus\fP, \fBstring\fP, \fBswitch\fP, \fBtest\fP, \fBtime\fP, and \fBwhile\fP\&.
+.SH EXAMPLE
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function ll
+    ls \-l $argv
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+will run the \fBls\fP command, using the \fB\-l\fP option, while passing on any additional files and switches to \fBls\fP\&.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function mkdir \-d \(dqCreate a directory and set CWD\(dq
+    command mkdir $argv
+    if test $status = 0
+        switch $argv[(count $argv)]
+            case \(aq\-*\(aq
+
+            case \(aq*\(aq
+                cd $argv[(count $argv)]
+                return
+        end
+    end
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will run the \fBmkdir\fP command, and if it is successful, change the current working directory to the one just created.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function notify
+    set \-l job (jobs \-l \-g)
+    or begin; echo \(dqThere are no jobs\(dq >&2; return 1; end
+
+    function _notify_job_$job \-\-on\-job\-exit $job \-\-inherit\-variable job
+        echo \-n \ea # beep
+        functions \-e _notify_job_$job
+    end
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will beep when the most recent job completes.
+.SH NOTES
+.sp
+Events are only received from the current fish process as there is no way to send events from one fish process to another.
+.SH SEE MORE
+.sp
+For more explanation of how functions fit into fish, see \fI\%Functions\fP\&.
+.SH COPYRIGHT
+2023, fish-shell developers
+.\" Generated by docutils manpage writer.
+.

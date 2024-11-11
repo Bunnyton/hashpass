@@ -1,0 +1,133 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "STATUS" "1" "Dec 21, 2023" "3.6" "fish-shell"
+.SH NAME
+status \- query fish runtime information
+.SH SYNOPSIS
+.nf
+\fBstatus\fP
+\fBstatus\fP \fBis\-login\fP
+\fBstatus\fP \fBis\-interactive\fP
+\fBstatus\fP \fBis\-block\fP
+\fBstatus\fP \fBis\-breakpoint\fP
+\fBstatus\fP \fBis\-command\-substitution\fP
+\fBstatus\fP \fBis\-no\-job\-control\fP
+\fBstatus\fP \fBis\-full\-job\-control\fP
+\fBstatus\fP \fBis\-interactive\-job\-control\fP
+\fBstatus\fP \fBcurrent\-command\fP
+\fBstatus\fP \fBcurrent\-commandline\fP
+\fBstatus\fP \fBfilename\fP
+\fBstatus\fP \fBbasename\fP
+\fBstatus\fP \fBdirname\fP
+\fBstatus\fP \fBfish\-path\fP
+\fBstatus\fP \fBfunction\fP
+\fBstatus\fP \fBline\-number\fP
+\fBstatus\fP \fBstack\-trace\fP
+\fBstatus\fP \fBjob\-control\fP \fICONTROL_TYPE\fP
+\fBstatus\fP \fBfeatures\fP
+\fBstatus\fP \fBtest\-feature\fP \fIFEATURE\fP
+.fi
+.sp
+.SH DESCRIPTION
+.sp
+With no arguments, \fBstatus\fP displays a summary of the current login and job control status of the shell.
+.sp
+The following operations (subcommands) are available:
+.INDENT 0.0
+.TP
+\fBis\-command\-substitution\fP, \fB\-c\fP or \fB\-\-is\-command\-substitution\fP
+Returns 0 if fish is currently executing a command substitution.
+.TP
+\fBis\-block\fP, \fB\-b\fP or \fB\-\-is\-block\fP
+Returns 0 if fish is currently executing a block of code.
+.TP
+\fBis\-breakpoint\fP
+Returns 0 if fish is currently showing a prompt in the context of a \fI\%breakpoint\fP command. See also the \fI\%fish_breakpoint_prompt\fP function.
+.TP
+\fBis\-interactive\fP, \fB\-i\fP or \fB\-\-is\-interactive\fP
+Returns 0 if fish is interactive \- that is, connected to a keyboard.
+.TP
+\fBis\-login\fP, \fB\-l\fP or \fB\-\-is\-login\fP
+Returns 0 if fish is a login shell \- that is, if fish should perform login tasks such as setting up \fI\%PATH\fP\&.
+.TP
+\fBis\-full\-job\-control\fP or \fB\-\-is\-full\-job\-control\fP
+Returns 0 if full job control is enabled.
+.TP
+\fBis\-interactive\-job\-control\fP or \fB\-\-is\-interactive\-job\-control\fP
+Returns 0 if interactive job control is enabled.
+.TP
+\fBis\-no\-job\-control\fP or \fB\-\-is\-no\-job\-control\fP
+Returns 0 if no job control is enabled.
+.TP
+\fBcurrent\-command\fP
+Prints the name of the currently\-running function or command, like the deprecated \fI\%_\fP variable.
+.TP
+\fBcurrent\-commandline\fP
+Prints the entirety of the currently\-running commandline, inclusive of all jobs and operators.
+.TP
+\fBfilename\fP, \fBcurrent\-filename\fP, \fB\-f\fP or \fB\-\-current\-filename\fP
+Prints the filename of the currently\-running script. If the current script was called via a symlink, this will return the symlink. If the current script was received by piping into \fI\%source\fP, then this will return \fB\-\fP\&.
+.TP
+\fBbasename\fP
+Prints just the filename of the running script, without any path components before.
+.TP
+\fBdirname\fP
+Prints just the path to the running script, without the actual filename itself. This can be relative to \fI\%PWD\fP (including just \(dq.\(dq), depending on how the script was called. This is the same as passing the filename to \fBdirname(3)\fP\&. It\(aqs useful if you want to use other files in the current script\(aqs directory or similar.
+.TP
+\fBfish\-path\fP
+Prints the absolute path to the currently executing instance of fish. This is a best\-effort attempt and the exact output is down to what the platform gives fish. In some cases you might only get \(dqfish\(dq.
+.TP
+\fBfunction\fP or \fBcurrent\-function\fP
+Prints the name of the currently called function if able, when missing displays \(dqNot a function\(dq (or equivalent translated string).
+.TP
+\fBline\-number\fP, \fBcurrent\-line\-number\fP, \fB\-n\fP or \fB\-\-current\-line\-number\fP
+Prints the line number of the currently running script.
+.TP
+\fBstack\-trace\fP, \fBprint\-stack\-trace\fP, \fB\-t\fP or \fB\-\-print\-stack\-trace\fP
+Prints a stack trace of all function calls on the call stack.
+.TP
+\fBjob\-control\fP, \fB\-j\fP or \fB\-\-job\-control\fP \fICONTROL_TYPE\fP
+Sets the job control type to \fICONTROL_TYPE\fP, which can be \fBnone\fP, \fBfull\fP, or \fBinteractive\fP\&.
+.TP
+\fBfeatures\fP
+Lists all available feature flags.
+.TP
+\fBtest\-feature\fP \fIFEATURE\fP
+Returns 0 when FEATURE is enabled, 1 if it is disabled, and 2 if it is not recognized.
+.UNINDENT
+.SH NOTES
+.sp
+For backwards compatibility most subcommands can also be specified as a long or short option. For example, rather than \fBstatus is\-login\fP you can type \fBstatus \-\-is\-login\fP\&. The flag forms are deprecated and may be removed in a future release (but not before fish 4.0).
+.sp
+You can only specify one subcommand per invocation even if you use the flag form of the subcommand.
+.SH COPYRIGHT
+2023, fish-shell developers
+.\" Generated by docutils manpage writer.
+.

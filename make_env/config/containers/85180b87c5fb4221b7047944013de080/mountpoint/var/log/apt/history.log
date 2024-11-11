@@ -1,0 +1,17 @@
+
+Start-Date: 2024-11-05  00:54:43
+Commandline: apt install python3
+Install: python3.11:amd64 (3.11.2-6+deb12u2, automatic), python3-minimal:amd64 (3.11.2-1+b1, automatic), libexpat1:amd64 (2.5.0-1, automatic), python3:amd64 (3.11.2-1+b1), libpython3.11-minimal:amd64 (3.11.2-6+deb12u2, automatic), media-types:amd64 (10.0.0, automatic), libnsl2:amd64 (1.3.0-2, automatic), libpython3.11-stdlib:amd64 (3.11.2-6+deb12u2, automatic), libsqlite3-0:amd64 (3.40.1-2, automatic), ca-certificates:amd64 (20230311, automatic), libpython3-stdlib:amd64 (3.11.2-1+b1, automatic), python3.11-minimal:amd64 (3.11.2-6+deb12u2, automatic), openssl:amd64 (3.0.14-1~deb12u1, automatic)
+Upgrade: libssl3:amd64 (3.0.11-1~deb12u2, 3.0.14-1~deb12u1)
+End-Date: 2024-11-05  00:55:49
+
+Start-Date: 2024-11-05  01:15:32
+Commandline: apt install vim
+Install: vim:amd64 (2:9.0.1378-2), libgpm2:amd64 (1.20.7-10+b1, automatic), libsodium23:amd64 (1.0.18-1, automatic), vim-runtime:amd64 (2:9.0.1378-2, automatic)
+End-Date: 2024-11-05  01:16:30
+
+Start-Date: 2024-11-05  01:58:31
+Commandline: apt install fish
+Install: libmagic-mgc:amd64 (1:5.44-3, automatic), libmagic1:amd64 (1:5.44-3, automatic), libxau6:amd64 (1:1.0.9-1, automatic), file:amd64 (1:5.44-3, automatic), bzip2:amd64 (1.0.8-5+b1, automatic), fish:amd64 (3.6.0-3.1+deb12u1), libpipeline1:amd64 (1.5.7-1, automatic), libxcb1:amd64 (1.15-1, automatic), xz-utils:amd64 (5.4.1-0.2, automatic), libx11-data:amd64 (2:1.8.4-2+deb12u2, automatic), libuchardet0:amd64 (0.0.7-1, automatic), lynx:amd64 (2.9.0dev.12-1, automatic), man-db:amd64 (2.11.2-2, automatic), mailcap:amd64 (3.70+nmu1, automatic), xsel:amd64 (1.2.0+git9bfc13d.20180109-4, automatic), lynx-common:amd64 (2.9.0dev.12-1, automatic), libpcre2-32-0:amd64 (10.42-1, automatic), fish-common:amd64 (3.6.0-3.1+deb12u1, automatic), libx11-6:amd64 (2:1.8.4-2+deb12u2, automatic), groff-base:amd64 (1.22.4-10, automatic), bsdextrautils:amd64 (2.38.1-5+deb12u1, automatic), libxdmcp6:amd64 (1:1.1.2-3, automatic)
+Upgrade: libsmartcols1:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), libmount1:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), util-linux:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), util-linux-extra:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), fdisk:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), libfdisk1:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), libuuid1:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), mount:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), libblkid1:amd64 (2.38.1-5+b1, 2.38.1-5+deb12u1), bsdutils:amd64 (1:2.38.1-5+b1, 1:2.38.1-5+deb12u1)
+End-Date: 2024-11-05  02:02:13
