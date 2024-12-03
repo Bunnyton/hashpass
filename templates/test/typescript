@@ -1,0 +1,6 @@
+Script started on 2024-11-25 02:29:31+03:00 [TERM="xterm-256color" TTY="/dev/pts/7" COLUMNS="-1" LINES="-1"]
+[0m[01;34mbuild[0m      file.txt   stage.py           [01;32mtaskcheckerserver[0m       taskchecker.service  taskclient.spec       [01;32mtaskcreatorserver[0m       taskcreator.service  typescript
+client.py  server.py  [01;36msyshelp.py[0m         taskcheckerserver.py    [01;32mtaskclient[0m           [01;32mtaskcreatorclient[0m     taskcreatorserver.py    task.py              [01;34munknown[0m
+[01;34mdist[0m       [01;34msimhash[0m    [01;32mtaskcheckerclient[0m  taskcheckerserver.spec  taskclient.py        taskcreatorclient.py  taskcreatorserver.spec  task_settings.toml
+
+Script done on 2024-11-25 02:29:31+03:00 [COMMAND_EXIT_CODE="0"]

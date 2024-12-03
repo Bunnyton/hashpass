@@ -1,6 +1,0 @@
-[image]
-name = "debian"
-author = "debian"
-version = "debootstrap"
-id = "f7f33e11ff654a8993229d181e2d40af"
-layers = []

@@ -1,3 +1,0 @@
-watchdog
-numpy
-toml
