@@ -10,6 +10,7 @@ class Task():
     class Config():
         config_filename = "task_settings.toml"
         stage_config_filename = "stage_settings.toml"
+        hooks_dirname = "bin/hooks"
 
 
     def __init__(self, config_dir: str):
@@ -20,6 +21,7 @@ class Task():
 
         self.config_dir = config_dir
         self.config_file = os.path.join(config_dir, Task.Config.config_filename)
+        self.hooks_dir = os.path.join(config_dir, Task.Config.hooks_dirname)
         self.stage_config_file = os.path.join(config_dir, Task.Config.stage_config_filename)
         self._curstage = None
         self._stagenum = 0
@@ -38,7 +40,7 @@ class Task():
                 raise Exception("Config file for task not founded")
 
                 
-            self._curstage = Stage(os.path.join(self.config_dir, 'stage' + str(self._stagenum) + '.toml'), scf)
+            self._curstage = Stage(os.path.join(self.config_dir, 'stage' + str(self._stagenum) + '.toml'), scf, self._stagenum)
             remove(self.stage_config_file)
 
             self._curstage.start()

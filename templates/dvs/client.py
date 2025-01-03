@@ -37,15 +37,16 @@ class Client():
         self.connect()
         response = list()
         try:
-            self.sock.send(bytes(cmd, 'utf-8'))
+            self.sock.send(bytes(cmd + '\0', 'utf-8'))
 
             while True:
                 res = self.sock.recv(self.max_buff_size)
                 if res:
-                    if output:
-                        print(res.decode())
+                    for cmd in res.decode().strip('\0').split('\0'):
+                        if output:
+                            print(cmd)
 
-                    response.append(res)
+                        response.append(cmd)
 
                 else:
                     break

@@ -5,8 +5,11 @@ import os
 import glob
 import toml
 
+import hooks
+import json
 from task import Task
 from server import Server
+from syshelp import copy
 
 
 class TaskCreatorServer(Server):
@@ -17,6 +20,7 @@ class TaskCreatorServer(Server):
 
         self.system_config_dir = "/.hash/.task"
         self.user_config_dir = "/.hash/config"
+        self.hooks_dir = "/.hash/bin/hooks"
         os.makedirs(self.system_config_dir, exist_ok=True)
 
 
@@ -93,6 +97,7 @@ class TaskCreatorServer(Server):
             with open(config_file, "w+") as cf:
                 toml.dump(config, cf)
 
+            copy(self.hooks_dir, os.path.join(self.system_config_dir, config["name"] + "_hooks"))
             self.reply_with_logging(' '.join(['Task saved successfully as', config_file]), clientsocket)
 
 
@@ -116,6 +121,28 @@ class TaskCreatorServer(Server):
             raise Exception("Task must be started for setting them")
 
 
+    def _cmd_hooks(self, cmd: list, clientsocket: socket.socket):
+        if len(cmd) != 1:
+            raise Exception("Args num incorrect")
+
+        if self.task:
+            self.reply_with_logging(' '.join(['Add hooks to dir', self.task.hooks_dir]), clientsocket)
+
+        else:
+            raise Exception("Task must be started for setting them")
+
+
+    def _cmd_cmd(self, cmd: list, clientsocket: socket.socket):
+        if self.task:
+            if len(cmd) == 1:
+                raise Exception("Args num incorrect")
+
+            if self.task._curstage:
+                self.task._curstage._cmd = ' '.join(cmd[1::])
+
+            cmds = hooks.engine.cmd_hook(' '.join(cmd[1::]), self.task._stagenum)
+            self.reply(json.dumps(cmds), clientsocket)
+
 
     def _handle_cmd(self, cmd: list, clientsocket: socket.socket):
         if cmd[0] == "start":
@@ -127,11 +154,17 @@ class TaskCreatorServer(Server):
         elif cmd[0] == "settings":
             self._cmd_settings(cmd, clientsocket)
 
+        elif cmd[0] == "hooks":
+            self._cmd_hooks(cmd, clientsocket)
+
         elif cmd[0] == "save": 
             self._cmd_save(cmd, clientsocket)
 
         elif cmd[0] == "stage":
             self._cmd_stage(cmd, clientsocket)
+
+        elif cmd[0] == "cmd":
+            self._cmd_cmd(cmd, clientsocket)
 
         else:
             raise Exception("Invalid command")

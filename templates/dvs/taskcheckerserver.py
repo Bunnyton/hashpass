@@ -11,12 +11,14 @@ from server import Server
 
 from syshelp import readfile
 
-from hook import cmd_hook
+from hooks.engine import cmd_hook, filter_hook
+import json
 
 class TaskCheckerServer(Server):
     def __init__(self, config_file="/.hash/.task/config.toml"):
         super().__init__()
 
+        self._cmd = None
         self.curstage_num = 0
         self.is_completed = False
         self._cmd_output_file = "/.hash/.hash.cmd.out"
@@ -38,6 +40,11 @@ class TaskCheckerServer(Server):
             self.reply_with_logging(str(change), self.clientsocket)
             self.reply_with_logging(str(path), self.clientsocket)
             data = readfile(self._cmd_output_file, stage_config["options"]["ignore_date"])
+
+            if self._cmd is None:
+                raise Exception("Can't use filter hook without cmd")
+            data = filter_hook(data, self._cmd, self.curstage_num)
+
             self.reply_with_logging(data, self.clientsocket)
             self.reply_with_logging(str(Simhash(data).value), self.clientsocket)
             if Simhash(data).distance(Simhash(change['hash'], from_hash=True)) < 1 - stage_config['options']['output_accuracy']:
@@ -80,8 +87,6 @@ class TaskCheckerServer(Server):
         return None
 
 
-    def cmd(self, cmd):
-        res = cmd_hook(' '.join(cmd[1::]), self.curstage_num)
 
 
     def _handle_cmd(self, cmd: list, clientsocket: socket.socket):
@@ -92,9 +97,10 @@ class TaskCheckerServer(Server):
                 self.reply(res, clientsocket)
 
         if len(cmd) > 1 and cmd[0] == 'cmd':
-            res = self.cmd(cmd)
-            if res is not None: 
-                self.reply('\n\n'.join(res), clientsocket)
+            self._cmd = ' '.join(cmd[1::])
+            cmds = cmd_hook(' '.join(cmd[1::]), self.curstage_num)
+            self.reply(json.dumps(cmds), clientsocket)
+
 
 
 

@@ -1,6 +1,7 @@
 import sys
 from client import Client
 from syshelp import read
+import json
 
 
 class Config():
@@ -36,7 +37,14 @@ def handle_cmd(cmd: list):
             task_client.send_cmd(' '.join(cmd[0::]))
 
         elif cmd[0] == "cmd":
-            return task_client.send_cmd(' '.join(cmd[0::]), output=False).split("\n\n")
+            res = task_client.send_cmd(' '.join(cmd[0::]), output=False)
+            print(res)
+            for msg in res:
+                try:
+                    cmds = json.loads(msg)
+                    return cmds
+                except:
+                    pass
 
         elif cmd[0] == "exit":
             if len(cmd) == 1:

@@ -4,7 +4,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/taskcreatorserver
+ExecStart=/usr/bin/python3 /.hash/bin/taskcreatorserver.py
 Restart=always
 User=root
 Group=root

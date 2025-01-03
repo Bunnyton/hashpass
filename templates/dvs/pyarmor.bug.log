@@ -1,0 +1,40 @@
+[BUG]: invalid syntax (<frozen bin.hooks.engine>, line 39)
+
+## Command Line
+/usr/local/bin/pyarmor gen -r /home/anton/LinuxWork/study/8/make_env/config/containers/ca93ecc6816d4f82bed907924c5fc5f2/mountpoint/.hash/bin -O /home/anton/LinuxWork/study/8/make_env/config/containers/ca93ecc6816d4f82bed907924c5fc5f2/mountpoint/tmp/dist
+
+## Environments
+Python 3.10.12
+Pyarmor 9.0.6 (trial), 000000, non-profits
+Platform linux.x86_64
+Native linux.x86_64
+Home /root/.pyarmor
+
+## Traceback
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/dist-packages/pyarmor/cli/__main__.py", line 784, in main
+    main_entry(sys.argv[1:])
+  File "/usr/local/lib/python3.10/dist-packages/pyarmor/cli/__main__.py", line 777, in main_entry
+    return args.func(ctx, args)
+  File "/usr/local/lib/python3.10/dist-packages/pyarmor/cli/__main__.py", line 245, in cmd_gen
+    builder.process(options)
+  File "/usr/local/lib/python3.10/dist-packages/pyarmor/cli/generate.py", line 188, in process
+    self._obfuscate_scripts()
+  File "/usr/local/lib/python3.10/dist-packages/pyarmor/cli/generate.py", line 144, in _obfuscate_scripts
+    code = Pytransform3.generate_obfuscated_script(self.ctx, r)
+  File "/usr/local/lib/python3.10/dist-packages/pyarmor/cli/core/__init__.py", line 95, in generate_obfuscated_script
+    return m.generate_obfuscated_script(ctx, res)
+  File "<maker>", line 716, in generate_obfuscated_script
+  File "/usr/local/lib/python3.10/dist-packages/pyarmor/cli/__init__.py", line 16, in process
+    return meth(self, res, *args, **kwargs)
+  File "<maker>", line 515, in process
+  File "/usr/local/lib/python3.10/dist-packages/pyarmor/cli/resource.py", line 144, in reparse
+    self.mtree = ast.parse(''.join(lines), self.frozenname, 'exec')
+  File "/usr/lib/python3.10/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+  File "<frozen bin.hooks.engine>", line 39
+    r = ch["handler"](cmd, stage):
+                                 ^
+SyntaxError: invalid syntax
+
+

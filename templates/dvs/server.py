@@ -44,7 +44,7 @@ class Server(ABC):
 
 
     def reply(self, msg: str, clientsocket: socket.socket):
-        clientsocket.send(bytes(msg, 'utf-8'))
+        clientsocket.send(bytes(msg + '\0', 'utf-8'))
 
 
     def reply_with_logging(self, msg: str, clientsocket: socket.socket, level=logging.INFO):
@@ -58,7 +58,7 @@ class Server(ABC):
         while True:
             buf = clientsocket.recv(self.max_buff_size)
             if buf:
-                cmd = buf.decode().split()
+                cmd = buf.decode().strip('\0').split()
                 return cmd
 
 
@@ -85,4 +85,3 @@ class Server(ABC):
 
             finally:
                 clientsocket.close()
-

@@ -36,13 +36,14 @@ def remove(path, missing_ok=True):
 
     if os.path.isfile(path):
         os.remove(path)
+        
     else:
         shutil.rmtree(path)
 
 
 def move(src, dest, progress_bar=False):
     copy(src, dest, progress_bar)
-    os.remove(src)
+    remove(src)
         
 
 def read(s: str, default=None) -> str:
@@ -66,7 +67,7 @@ def readfile(path: str, clean_date=False):
             data = str(f.read())
 
             if clean_date:
-                regex = r'\b\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Янв|Фев|Мар|Апр|Май|Июн|Июл|Авг|Сен|Окт|Ноя|Дек)\s+\d{1,2}\s+(\d{4}|\d{2}:\d{2})\b'
+                regex = r'\b\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Янв|Фев|Мар|Апр|Май|Июн|Июл|Авг|Сен|Окт|Ноя|Дек)\s+\d{1,2}\s+(\d{4}|\d{2}:\d{2}|\d{2}:\d{2}:\d{2})\b'
                 data = re.sub(regex, '', data, flags=re.IGNORECASE)
 
             print(data, end="\n\n")

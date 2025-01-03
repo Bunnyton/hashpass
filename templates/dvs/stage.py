@@ -8,14 +8,14 @@ import os
 import toml
 
 from syshelp import readfile
+import hooks
 
 
 class Stage():
     class Config():
         cmd_output_file = "/.hash/.hash.cmd.out"
 
-    def __init__(self, result_file: str, config_file: str):
-
+    def __init__(self, result_file: str, config_file: str, _num: int):
         if os.path.isfile(config_file):
             with open(config_file, 'r') as sf:
                 self.config = toml.load(sf)
@@ -23,17 +23,20 @@ class Stage():
         else:
             raise Exception(' '.join(["Can't read stage config file", config_file]))
 
+        self._cmd = None #FIXME upgrade cmd handlers
+        self._num = _num
         self._observe_processes = list()
         self._observe_list = dict()
         self._observe_list['files'] = dict()
         self._observe_list['dirs'] = list()
+
         for ob in self.config["observe_list"]:
             if not os.path.exists(ob) or os.path.isfile(ob):
                 pardir = os.path.dirname(ob)
                 while not os.path.exists(pardir):
                     pardir = os.path.dirname(pardir)
 
-                self._observe_list['files'][pardir] = ob
+                self._observe_list['files'][pardir] = ob #FIXME
 
             else:
                 self._observe_list['dirs'].append(ob)
@@ -70,6 +73,10 @@ class Stage():
 
                 
                 data = readfile(path, self.config["options"]["ignore_date"])
+                if self._cmd is not None:
+                    raise Exception("Cmd is None, can't use filter function")
+                data = hooks.engine.filter_hook(data, self._cmd, self._num)
+
                 if path in self.config['changes'].keys():
                     if state == 'created':
                         if self.config['changes'][path]['state'] == 'deleted':
