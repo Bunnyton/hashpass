@@ -85,7 +85,7 @@ def main():
         if task_number == 0 or tasks.get(str(task_number)) and \
             key(masterkey + config['username'] + str(task_number)) == tasks[str(task_number)]:
                 # Запуск задания
-            subprocess.run(['/'.join([HASHPASS_DIR, "make_env.py"]), "start", str(task_number) +":1.0"])
+            subprocess.run(['/'.join([HASHPASS_DIR, "make_env.py"]), "start", str(task_number) +":latest"])
 
         else:
             while True:
