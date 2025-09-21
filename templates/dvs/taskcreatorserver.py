@@ -80,7 +80,7 @@ class TaskCreatorServer(Server):
             raise Exception("Invalid command")
 
 
-    def _load_to_system_config(self, cmd: list, clientsocket: socket.socket):
+    def _load_to_system_config(self, clientsocket: socket.socket):
         config = dict()
         stage_counter = 0
         for stage_config in glob.glob(os.path.join(self.user_config_dir, "stage[0-9]*.toml")):
@@ -89,25 +89,20 @@ class TaskCreatorServer(Server):
                 stage_counter += 1
 
             config["stage_amount"] = stage_counter
-            config["name"] = cmd[1]
-            config["author"] = cmd[2]
-            config["version"] = cmd[3]
 
-            config_file = os.path.join(self.system_config_dir, config["name"] + ".toml")
+            config_file = os.path.join(self.system_config_dir, "config.toml")
             with open(config_file, "w+") as cf:
                 toml.dump(config, cf)
 
-            copy(self.hooks_dir, os.path.join(self.system_config_dir, config["name"] + "_hooks"))
             self.reply_with_logging(' '.join(['Task saved successfully as', config_file]), clientsocket)
 
 
     def _cmd_save(self, cmd: list, clientsocket: socket.socket):
-        # structure of cmd : [save, name, author, version]
-        if len(cmd) != 4:
+        if len(cmd) != 1:
             raise Exception("Args num incorrect")
 
         self._stop(clientsocket)
-        self._load_to_system_config(cmd, clientsocket)
+        self._load_to_system_config(clientsocket)
 
 
     def _cmd_settings(self, cmd: list, clientsocket: socket.socket):

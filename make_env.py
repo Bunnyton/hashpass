@@ -208,9 +208,7 @@ class Image():
 
     def load_task_hooks(self, path: str):
         if self.type == Image.Type.task:
-            _ = toml.load(path) # test toml via load
             copy(path, os.path.join(self.config_dir, Image.Config.hash_task_hooks_dirname))
-
 
         else:
             raise Exception(' '.join(["Image id =", self.id, "is not task image"]))
@@ -237,7 +235,8 @@ class Container():
         restarting = "Container restarting"
         stopped = "Container with task has been stopped"
         deleted = "Container with task has been deleted or doesn't exist"
-        image_creating_from_container = "Container fs changes will be saved as new image"
+        image_updating = "Container fs changes will be saved to self image and restart"
+        image_saving = "Container fs changes will be saved to self image and exit"
 
 
         def get_from(status_item):
@@ -267,8 +266,11 @@ class Container():
             elif status_text == "deleted":
                 return Container.Status.deleted
 
-            elif status_text == "image creating":
-                return Container.Status.image_creating_from_container
+            elif status_text == "image updating":
+                return Container.Status.image_updating
+
+            elif status_text == "image saving":
+                return Container.Status.image_saving
 
             else:
                 raise Exception("Can't read a some status from text or file")
@@ -350,9 +352,11 @@ class Container():
         copy(os.path.join(Container.Config.templates_dir, "dvs", "task.sh"), os.path.join(self.mountpoint, "usr", "bin", "task"))
         os.chmod(os.path.join(self.mountpoint, "usr", "bin", "task"), 0o555)
 
+        copy(self._hash_bindir, os.path.join(self.mountpoint, "tmp/"))
         copy(os.path.join(Container.Config.templates_dir, "dvs"), self._hash_bindir)
+        move(os.path.join(self.mountpoint, "tmp/bin"), self._hash_bindir)
+
         # subprocess.run(["pyarmor", "gen", "-r", self._hash_bindir, "-O", os.path.join(self.mountpoint, "tmp/dist")], check=True)
-        # move(os.path.join(self.mountpoint, "tmp/dist"), self._hash_bindir)
         
 
         if mode == Container.Mode.task_create:
@@ -456,7 +460,7 @@ class Container():
         remove(self._hash_tmpfile)
         remove(self._statusfile)
 
-        remove(self._hash_bindir) #FIXME maybe need delete all without hooks for save container session
+        remove(self._hash_bindir)
         remove(os.path.join(self.mountpoint, "usr", "bin", "hash"))
         remove(os.path.join(self.mountpoint, "usr", "bin", "task"))
         remove(os.path.join(self.mountpoint, "usr", "bin", "stage"))
@@ -512,11 +516,6 @@ class Container():
                                       , "upperdir=" + self._upperdir , "workdir=" + self._workdir]),
                                 self.mountpoint], check=True)
 
-        print([ "mount", "overlay", "-t", "overlay", 
-                                  "-o", ','.join(["lowerdir=" + self._lowerdir
-                                      , "upperdir=" + self._upperdir , "workdir=" + self._workdir]),
-                                self.mountpoint])
-
 
     def _umount(self):
         subprocess.run([ "umount", self.mountpoint], check=True)
@@ -561,22 +560,28 @@ class Container():
                 time.sleep(5)
                 self.status = self.get_status()
 
-            if self.status == Container.Status.stopping or self.status == Container.Status.restarting \
-                                            or self.status == Container.Status.image_creating_from_container:
+            if self.status == Container.Status.stopped or self.status == Container.Status.deleted:
+                return
+
+            elif self.status == Container.Status.created or self.status == Container.Status.started:
+                continue
+
+            else:
                 self.stop()
                 return #FIXME add restarted and another status
 
-            elif self.status == Container.Status.stopped or self.status == Container.Status.deleted:
-
-                return
 
 
     def start(self, mode=Mode.task_complete):
         if self.id:
             self.mode = mode
+            image_is_empty = True
+
             if mode == Container.Mode.task_complete:
                 if self.image.type != Image.Type.task:
                     raise Exception(' '.join(["Image with id =", self.image.id, "is not task image"]))
+
+                image_is_empty = False
 
             while True:
                 try:
@@ -595,12 +600,14 @@ class Container():
 
                 finally:
                     if mode == Container.Mode.task_create:
-                        config_file = os.path.join([self._hash_task_config_dir, "config.toml"])
+                        config_file = os.path.join(self._hash_task_config_dir, "config.toml")
                         if os.path.isfile(config_file):
                             self.image.type = Image.Type.task
                             self.image.load_task_config(config_file)
                             self.image.load_task_hooks(self._hash_task_hooks_dir)
                             self.image.save()
+
+                            image_is_empty = False
 
 
                     self.stop() 
@@ -611,18 +618,19 @@ class Container():
                 if self.status == Container.Status.restarting:
                     continue
 
-                elif self.status == Container.Status.image_creating_from_container:
-                        image = Image()
-                        image.create(self.image.id)
-                        image.import_from_fs(self._upperdir)
-                        image.save()
+                elif self.status == Container.Status.image_updating:
+                    self.image.import_from_fs(self._upperdir)
+                    image_is_empty = False
+                    continue
 
-                        self.image = image
-                        self.save(exists_ok=True)
+                elif self.status == Container.Status.image_saving:
+                    self.image.import_from_fs(self._upperdir)
+                    image_is_empty = False
 
-                        time.sleep(1)
 
-                        continue
+                if image_is_empty:
+                    self.image.delete()
+                    print("Empty image has been deleted")
 
                 break
 

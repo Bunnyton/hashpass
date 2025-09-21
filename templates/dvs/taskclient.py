@@ -25,10 +25,7 @@ def handle_cmd(cmd: list):
 
         elif cmd[0] == "save":
             if len(cmd) == 1:
-                name = read("Enter name of task: ")
-                author = read("Enter author of task: ")                     
-                version = read("Enter version of task: ", default="latest")
-                taskclient.send_cmd(' '.join(["save", name, author, version]))
+                taskclient.send_cmd("save")
 
             else:
                 raise Exception("Args num incorrect" )
@@ -64,9 +61,13 @@ def handle_cmd(cmd: list):
                 raise Exception("Args num incorrect" )
 
         elif cmd[0] == "image":
-            if len(cmd) == 2 and cmd[1] == "create":
+            if len(cmd) == 2 and cmd[1] == "save":
                 with open(config.statusfile, 'w') as sf:
-                    sf.write("image creating")
+                    sf.write("image saving")
+
+            elif len(cmd) == 2 and cmd[1] == "update":
+                with open(config.statusfile, 'w') as sf:
+                    sf.write("image updating")
 
             else:
                 raise Exception("Args num incorrect" )
