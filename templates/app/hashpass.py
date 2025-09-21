@@ -7,8 +7,9 @@ from key import key
 
 masterkey = '10383f373f292407117439070130373440255468657365206172652074776f2065787472656d6573206f66207468652073616d6520657373656e63652e'
 
-CONFIG_DIR = "/opt/.hashpass/config"
-CONFIG_PATH = '/'.join([CONFIG_DIR, "config.toml"])
+HASHPASS_DIR = "/opt/.hashpass"
+CONFIG_DIR = os.path.join(HASHPASS_DIR, "config")
+CONFIG_PATH = '/'.join([CONFIG_DIR, "userconfig.toml"])
 
 # === Работа с конфигом ===
 def load_config(path: str) -> dict:
@@ -82,9 +83,9 @@ def main():
 
     while True:
         if task_number == 0 or tasks.get(str(task_number)) and \
-            key(masterkey + config['username'] + str(task_number)) == tasks[task_number]:
+            key(masterkey + config['username'] + str(task_number)) == tasks[str(task_number)]:
                 # Запуск задания
-            subprocess.run(['/'.join([CONFIG_DIR, "make_env.py"]), "start", str(task_number) +":latest"])
+            subprocess.run(['/'.join([HASHPASS_DIR, "make_env.py"]), "start", str(task_number) +":1.0"])
 
         else:
             while True:
@@ -101,7 +102,7 @@ def main():
 
 
         while True:
-            user_key = input("Введите ключ от следующего задания (Ctrl+C = выход): ").strip()
+            user_key = input("Введите ключ, чтобы перейти к следующему заданию (Ctrl+C = выход): ").strip()
 
             if user_key == key(masterkey + config['username'] + str(task_number + 1)):
                 tasks[str(task_number + 1)] = user_key
@@ -112,10 +113,9 @@ def main():
                 # не сохраняем, предлагаем попробовать снова на том же задании
                 continue
 
-        cont = input("Желаете продолжить? (Enter = да, Ctrl+C = выход): ").strip()
-        if cont == "":
-            task_number += 1
-            continue
+
+        cont = input("Желаете продолжить? (Enter = да, Ctrl+C = выход): ")
+        task_number += 1
 
 if __name__ == "__main__":
     try:

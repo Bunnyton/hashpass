@@ -1,2 +1,4 @@
 config/images/*
 config/containers/*
+config/userconfig.toml
+config/images.tar.gz

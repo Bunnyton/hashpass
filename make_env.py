@@ -20,7 +20,7 @@ from syshelp import copy,remove,move,read
 
 
 masterkey = '10383f373f292407117439070130373440255468657365206172652074776f2065787472656d6573206f66207468652073616d6520657373656e63652e'
-task_num = '0'
+username = toml.load("/opt/.hashpass/config/userconfig.toml")["username"]
 
 
 class Image():
@@ -381,8 +381,8 @@ class Container():
                 remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service"))
                 os.symlink(os.path.join("/", "etc", "systemd", "system", "taskchecker.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service"))
 
-            username = toml.load("/opt/.hashpass/config/config.toml")["username"]
-            k = key(masterkey + username + task_num)
+            task_num = self.image.name
+            k = key(masterkey + username + str(int(task_num) + 1))
 
             
 
