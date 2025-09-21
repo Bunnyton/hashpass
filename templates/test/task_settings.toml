@@ -1,0 +1,11 @@
+observe_list = ["/home/", "/root", "/usr/bin/", "/usr/local/bin/", "/etc/"]
+exclude_list = ["bash_history", "*.swp"]
+
+[options]
+mode = "Interactive"
+fs_analyzer = true
+fs_accuracy = 0.7
+output_analyzer = true
+output_accuracy = 0.7
+ignore_date = true
+ignore_exclude_list = true

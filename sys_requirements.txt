@@ -1,0 +1,7 @@
+expect
+debootstrap
+systemd-container
+rsync
+python3
+python3-tqdm
+python3-tabulate

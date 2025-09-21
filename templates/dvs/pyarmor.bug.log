@@ -1,0 +1,47 @@
+[BUG]: invalid syntax (<frozen bin.shell>, line 200)
+
+## Command Line
+/home/debi/LinuxWork/hashpass2/env/bin/pyarmor gen -r /home/debi/LinuxWork/hashpass2/config/containers/cbaf6f7ec4f44e88ab3fbf0bc9a06f9e/mountpoint/.hash/bin -O /home/debi/LinuxWork/hashpass2/config/containers/cbaf6f7ec4f44e88ab3fbf0bc9a06f9e/mountpoint/tmp/dist
+
+## Environments
+Python 3.13.5
+Pyarmor 9.1.9 (trial), 000000, non-profits
+Platform linux.x86_64
+Native linux.x86_64
+Home /root/.pyarmor
+
+## Traceback
+Traceback (most recent call last):
+  File "/home/debi/LinuxWork/hashpass2/env/lib/python3.13/site-packages/pyarmor/cli/__main__.py", line 793, in main
+    main_entry(sys.argv[1:])
+    ~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/home/debi/LinuxWork/hashpass2/env/lib/python3.13/site-packages/pyarmor/cli/__main__.py", line 786, in main_entry
+    return args.func(ctx, args)
+           ~~~~~~~~~^^^^^^^^^^^
+  File "/home/debi/LinuxWork/hashpass2/env/lib/python3.13/site-packages/pyarmor/cli/__main__.py", line 248, in cmd_gen
+    builder.process(options)
+    ~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/home/debi/LinuxWork/hashpass2/env/lib/python3.13/site-packages/pyarmor/cli/generate.py", line 188, in process
+    self._obfuscate_scripts()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/debi/LinuxWork/hashpass2/env/lib/python3.13/site-packages/pyarmor/cli/generate.py", line 144, in _obfuscate_scripts
+    code = Pytransform3.generate_obfuscated_script(self.ctx, r)
+  File "/home/debi/LinuxWork/hashpass2/env/lib/python3.13/site-packages/pyarmor/cli/core/__init__.py", line 95, in generate_obfuscated_script
+    return m.generate_obfuscated_script(ctx, res)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<maker>", line 718, in generate_obfuscated_script
+  File "/home/debi/LinuxWork/hashpass2/env/lib/python3.13/site-packages/pyarmor/cli/__init__.py", line 16, in process
+    return meth(self, res, *args, **kwargs)
+  File "<maker>", line 515, in process
+  File "/home/debi/LinuxWork/hashpass2/env/lib/python3.13/site-packages/pyarmor/cli/resource.py", line 144, in reparse
+    self.mtree = ast.parse(''.join(lines), self.frozenname, 'exec')
+                 ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "<frozen bin.shell>", line 200
+    if 
+       ^
+SyntaxError: invalid syntax
+
+
