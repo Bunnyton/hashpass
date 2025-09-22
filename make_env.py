@@ -8,6 +8,10 @@ import toml
 import glob
 import time
 import shutil
+import requests
+import tarfile
+import json
+
 from key import key
 
 
@@ -19,6 +23,7 @@ from tabulate import tabulate
 from syshelp import copy,remove,move,read
 
 
+SERVER_URL = "http://185.212.148.108:8000"
 masterkey = '10383f373f292407117439070130373440255468657365206172652074776f2065787472656d6573206f66207468652073616d6520657373656e63652e'
 username = toml.load("/opt/.hashpass/config/userconfig.toml")["username"]
 
@@ -50,16 +55,15 @@ class Image():
         image: list
         if param is not None:
             if '/' in param: # FIXME this functional must be released in make_env
-                image = Image.get(fullname=param)
+                image = Image.get(param)
                 if not image:
                     raise Exception(' '.join(["Can't find image", param]))
 
             else:
-                image = Image.get(id=param)
+                image = Image.get(param)
                 if not image:
                     raise Exception(' '.join(["Can't find image with id =", param]))
 
-            print(image)
             self.id = image['image']['id']
             self.name = image['image']['name']
             self.author = image['image']['author']
@@ -91,40 +95,32 @@ class Image():
         else:
             parent_image: list
             if '/' in param: # FIXME add id verification
-                parent_image = Image.get(fullname=param)
+                parent_image = Image.get(param)
 
             else:
-                parent_image = Image.get(id=param)
+                parent_image = Image.get(param)
 
             if parent_image:
-                parent_image = parent_image[0]
+                parent_image = parent_image
 
                 self.type = Image.Type.simple
-
                 self.layers = parent_image['image']['layers']
                 self.layers.append(parent_image['image']['id'])
 
             else:
                 raise Exception("Can't find some image")
 
-        if name is not None or author is not None or version is not None:
-            if None in [name, author, version]:
-                raise Exception("Image parameters are incorrect")
+        
+        self.name = read("Enter name of image: ")
+        self.author = read("Enter author of image: ")
+        self.version = read("Enter version of image: ", default="latest")
 
-            self.name = name
-            self.author = author
-            self.version = version
-
-        else:
-            self.name = read("Enter name of image: ")
-            self.author = read("Enter author of image: ")
-            self.version = read("Enter version of image: ", default="latest")
+        fullname = Image._to_fullname(self.author, self.name, self.version)
+        if Image.get(fullname):
+            raise Exception(f"Image {fullname} already exist")
 
         self.id = str(uuid.uuid4()).replace("-", "")
-
-
         self.config_dir = os.path.join(Image.Config.config_dir, self.id)
-
         self.save()
 
         return self.id
@@ -135,13 +131,15 @@ class Image():
             remove(self.config_dir)
 
 
-    def save(self, is_base_image=False):
+    def info(self) -> dict:
         data = dict()
-        if os.path.exists(Image.Config.config_filename):
-            data = toml.load(Image.Config.config_filename)
+        config_file = os.path.join(self.config_dir, Image.Config.config_filename)
+        if os.path.isfile(config_file):
+            data = toml.load(config_file)
 
         else:
             data["image"] = dict()
+
 
         data["image"]["name"] = self.name
         data["image"]["author"] = self.author
@@ -150,6 +148,11 @@ class Image():
         data["image"]["type"] = self.type
         data["image"]["layers"] = self.layers
 
+        return data
+
+
+    def save(self, is_base_image=False):
+        data = self.info()
         with open(Image.Config.config_filename, "w") as f:
             toml.dump(data, f)
 
@@ -173,19 +176,38 @@ class Image():
             return [author, name, version]
 
         except Exception():
-            raise Exception("Image name uncorrect")
+            raise Exception("Image name incorrect")
 
 
-    def _to_fullname(data: dict) -> str:
-        if data.get("image") and data["image"].get("name") \
-            and data["image"].get("author") and data["image"].get("version"):
-            return data["image"]["author"] + '/' + data["image"]["name"] + ':' + data["image"]["version"]
+    def _to_fullname(*args) -> str:
+        if len(args) == 1 and type(args[0]) == dict:
+            data = args[0]
+            if data.get("image") and data["image"].get("name") \
+                and data["image"].get("author") and data["image"].get("version"):
+                return data["image"]["author"] + '/' + data["image"]["name"] + ':' + data["image"]["version"]
 
-        raise Exception("Image uncorrect")
+
+        elif len(args) == 1 and type(args[0]) == str:
+            if ':' in args[0]:
+                return args[0]
+                
+            else:
+                return args[0] + ':latest'
+
+        elif len(args) == 3:
+            return args[0] + '/' + args[1] + ':' + args[2]
+
+        elif len(args) == 2:
+            return args[0] + '/' + args[1] + ':' + 'latest'
 
 
-    def get(id=None, fullname=None):
-        if id is None:
+
+        raise Exception("Image incorrect")
+
+
+    def get(param):
+        if '/' in param:
+            fullname = param
             author, name, version = Image._parse_fullname(fullname)
             for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
                 temp = toml.load(file)
@@ -193,11 +215,12 @@ class Image():
                     return temp
 
         else:
-                for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-                    temp = toml.load(file)
+            id = param
+            for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
+                temp = toml.load(file)
 
-                    if temp['image']['id'] == id:
-                        return temp
+                if temp['image']['id'] == id:
+                    return temp
 
         return None
 
@@ -210,7 +233,7 @@ class Image():
             temp = toml.load(file)
             parent_image = None
             if temp["image"]["layers"]:
-                parent_image = Image._to_fullname(Image.get(id=temp["image"]["layers"][-1]))
+                parent_image = Image._to_fullname(Image.get(temp["image"]["layers"][-1]))
             table.append([temp["image"]["id"]
                           , temp["image"]["author"] + '/' + temp["image"]["name"] + ':' + temp["image"]["version"]
                           , temp["image"]["type"], parent_image
@@ -605,6 +628,9 @@ class Container():
 
                 image_is_empty = False
 
+            elif mode == Container.Mode.image_edit:
+                image_is_empty = False
+
             while True:
                 try:
                     self._mount(mode)
@@ -661,6 +687,123 @@ class Container():
 
                 
 
+def push(param: str):
+    """Отправка архива и манифеста на сервер"""
+
+    image = Image(param)
+
+    manifest = image.info()
+
+    archive_path = os.path.join(image.config_dir, image.id + '.tar.gz')
+    with tarfile.open(archive_path, "w:gz", format=tarfile.PAX_FORMAT) as tar:
+        for item in os.listdir(image.config_dir):
+            item_path = os.path.join(image.config_dir, item)
+            tar.add(item_path, arcname=item, recursive=True)
+
+    with open(archive_path, "rb") as f:
+        files = {
+            'image': f,
+        }
+        data = {
+            'manifest': json.dumps(manifest)
+        }
+
+        response = requests.post(f"{SERVER_URL}/push", files=files, data=data, stream=True)
+
+    print(response.text)
+
+    remove(archive_path)
+
+
+def pull(name: str):
+    """Скачивание манифеста + архива по author/name:version"""
+
+    fullname = Image._to_fullname(name)
+    if Image.get(fullname):
+        print("Image already exist")
+        return
+
+    print(f"Pulling image: {fullname}")
+
+    data = {
+        'fullname': fullname
+    }
+
+    response = requests.post(f"{SERVER_URL}/pull", data=data)
+
+    if response.status_code != 200:
+        print(f"❌ Can't get manifest: {response.text}")
+        return
+
+    manifest = response.json()
+    image_id = manifest['image']['id']
+
+
+    # Скачиваем архив
+    archive_response = requests.get(f"{SERVER_URL}/download/{image_id}", stream=True)
+    if archive_response.status_code != 200:
+        print(f"❌ Can't download image: {archive_response.text}")
+        return
+
+    config_dir = os.path.join(Image.Config.config_dir, image_id)
+    os.makedirs(config_dir, exist_ok=True)
+    archive_path = os.path.join(config_dir, f"{image_id}.tar.gz")
+
+    with open(archive_path, "wb") as f:
+        f.write(archive_response.content)
+
+    with tarfile.open(archive_path, "r:gz", format=tarfile.PAX_FORMAT) as tar:
+        tar.extractall(path=config_dir)
+
+    print(f"✅ Pull successfull")
+
+
+
+def get_remote_images():
+    """Получение списка всех образов"""
+    response = requests.get(f"{SERVER_URL}/images")
+    if response.status_code != 200:
+        print(f"❌ Ошибка: {response.text}")
+        return
+
+    images = response.json()
+    print("📦 Список образов:")
+    for img in images:
+        id = img['image']['id']
+        fullname = f"{img['image']['author']}/{img['image']['name']}:{img['image']['version']}"
+        print(f"- {id} → {fullname} ({img['image']['type']})")
+ 
+ 
+# def print_help():
+#     print("Usage:")
+#     print("  python client.py push <image_id> <path_to_tar.gz> <path_to_manifest.json>")
+#     print("  python client.py pull <author/name:version> [output_dir]")
+#     print("  python client.py list")
+# 
+# 
+# if __name__ == "__main__":
+#     if len(sys.argv) < 2:
+#         print_help()
+#         sys.exit(1)
+# 
+#     command = sys.argv[1]
+# 
+#     if command == "push" and len(sys.argv) == 5:
+#         _, _, image_id, tar_path, manifest_path = sys.argv
+#         push(image_id, tar_path, manifest_path)
+# 
+#     elif command == "pull" and len(sys.argv) >= 3:
+#         image_fullname = sys.argv[2]
+#         output_dir = sys.argv[3] if len(sys.argv) == 4 else "downloads"
+#         pull(image_fullname, output_dir)
+# 
+#     elif command == "list":
+#         list_images()
+# 
+#     else:
+#         print_help()
+
+
 
 
 def main():
@@ -675,6 +818,10 @@ def main():
                 image.create()
                 image.import_from_fs(os.getcwd())
                 print(image.id)
+
+            elif sys.argv[1] == "pull":
+                get_remote_images()
+
             else:
                 raise Exception("Incorrect command")
 
@@ -711,6 +858,12 @@ def main():
                     image.create(sys.argv[2])
                     container = Container(image)
                     container.start(mode=Container.Mode.task_create)
+
+                elif sys.argv[1] == "pull":
+                    pull(sys.argv[2])
+
+                elif sys.argv[1] == "push":
+                    push(sys.argv[2])
 
                 else:
                     raise Exception("Unknown argument")
