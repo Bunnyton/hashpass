@@ -49,8 +49,8 @@ class Image():
         
         image: list
         if param is not None:
-            if ':' in param: # FIXME this functional must be released in make_env
-                image = Image.get(name=param.split(':')[0], version=param.split(':')[1])
+            if '/' in param: # FIXME this functional must be released in make_env
+                image = Image.get(fullname=param)
                 if not image:
                     raise Exception(' '.join(["Can't find image", param]))
 
@@ -59,8 +59,7 @@ class Image():
                 if not image:
                     raise Exception(' '.join(["Can't find image with id =", param]))
 
-            image = image[0]
-
+            print(image)
             self.id = image['image']['id']
             self.name = image['image']['name']
             self.author = image['image']['author']
@@ -84,15 +83,15 @@ class Image():
             raise Exception("Import path doesn't exist or isn't dir")
 
     
-    def create(self, param=None, name=None, author=None, version=None): #FIXME create must create new image and return them
+    def create(self, param=None): #FIXME create must create new image and return them
         if param is None:
             # FIXME update tree with exists image
             self.type = Image.Type.base
 
         else:
             parent_image: list
-            if ':' in param: # FIXME add id verification
-                parent_image = Image.get(name=param.split(':')[0], version=param.split(':')[1])
+            if '/' in param: # FIXME add id verification
+                parent_image = Image.get(fullname=param)
 
             else:
                 parent_image = Image.get(id=param)
@@ -161,38 +160,61 @@ class Image():
             move(Image.Config.config_filename, self.config_dir + '/')
 
 
-    def get(id=None, name=None, version=None):
-        data = list()
-        if id is None:
-            if name is None:
-                for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-                    data.append(toml.load(file))
+    def _parse_fullname(fullname: str) -> list: # return [author, name, version]
+        try:
+            author, name = fullname.split('/')
 
-            elif version is not None:
-                for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-                    temp = toml.load(file)
-
-                    if temp['image']['name'] == name and temp['image']['version'] == version:
-                        return [temp]
+            if ':' in name:
+                name, version = name.split(':')
 
             else:
-                raise Exception("Version can't be empty")
+                version = 'latest'
+
+            return [author, name, version]
+
+        except Exception():
+            raise Exception("Image name uncorrect")
+
+
+    def _to_fullname(data: dict) -> str:
+        if data.get("image") and data["image"].get("name") \
+            and data["image"].get("author") and data["image"].get("version"):
+            return data["image"]["author"] + '/' + data["image"]["name"] + ':' + data["image"]["version"]
+
+        raise Exception("Image uncorrect")
+
+
+    def get(id=None, fullname=None):
+        if id is None:
+            author, name, version = Image._parse_fullname(fullname)
+            for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
+                temp = toml.load(file)
+                if temp['image']['name'] == name and temp['image']['version'] == version and temp['image']['author'] == author:
+                    return temp
 
         else:
                 for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
                     temp = toml.load(file)
 
                     if temp['image']['id'] == id:
-                        return [temp]
+                        return temp
 
-        return data
+        return None
+
 
 
     def list():
-        table = [["ID", "NAME", "VERSION", "TYPE"]]
+        table = [["ID", "NAME", "TYPE", "PARENT IMAGE"]]
 
-        for data in Image.get():
-            table.append([data["image"]["id"], data["image"]["name"], data["image"]["version"], data["image"]["type"]])
+        for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
+            temp = toml.load(file)
+            parent_image = None
+            if temp["image"]["layers"]:
+                parent_image = Image._to_fullname(Image.get(id=temp["image"]["layers"][-1]))
+            table.append([temp["image"]["id"]
+                          , temp["image"]["author"] + '/' + temp["image"]["name"] + ':' + temp["image"]["version"]
+                          , temp["image"]["type"], parent_image
+                          ])
 
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
@@ -677,9 +699,10 @@ def main():
                     image.edit()
 
                 elif sys.argv[1] == "start":
-                    task_num = sys.argv[2].split(':')[0]
-
                     image = Image(sys.argv[2])
+
+                    task_num = image.name
+
                     container = Container(image)
                     container.start(mode=Container.Mode.task_complete)
 
