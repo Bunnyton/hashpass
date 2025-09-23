@@ -252,11 +252,7 @@ class Image():
 
 
     def load_task_hooks(self, path: str):
-        if self.type == Image.Type.task:
-            copy(path, os.path.join(self.config_dir, Image.Config.hash_task_hooks_dirname))
-
-        else:
-            raise Exception(' '.join(["Image id =", self.id, "is not task image"]))
+        copy(path, os.path.join(self.config_dir, Image.Config.hash_task_hooks_dirname))
 
 
 
@@ -397,9 +393,9 @@ class Container():
         copy(os.path.join(Container.Config.templates_dir, "dvs", "task.sh"), os.path.join(self.mountpoint, "usr", "bin", "task"))
         os.chmod(os.path.join(self.mountpoint, "usr", "bin", "task"), 0o555)
 
-        copy(self._hash_bindir, os.path.join(self.mountpoint, "tmp/"))
-        copy(os.path.join(Container.Config.templates_dir, "dvs"), self._hash_bindir)
-        move(os.path.join(self.mountpoint, "tmp/bin"), self._hash_bindir)
+        # copy(self._hash_bindir, os.path.join(self.mountpoint, "tmp/"))
+        copy(os.path.join(Container.Config.templates_dir, "dvs"), self._hash_bindir, with_replace=False)
+        # move(os.path.join(self.mountpoint, "tmp/bin"), self._hash_bindir)
 
         # subprocess.run(["pyarmor", "gen", "-r", self._hash_bindir, "-O", os.path.join(self.mountpoint, "tmp/dist")], check=True)
         
@@ -659,6 +655,10 @@ class Container():
 
 
                     self.stop() 
+
+                    if self.status == Container.Status.image_saving or self.status == Container.Status.image_updating:
+                        self.image.load_task_hooks(self._hash_task_hooks_dir)
+
                     self._deconfigure()
 
                     self._umount()

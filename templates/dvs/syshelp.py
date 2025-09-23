@@ -3,7 +3,7 @@ import shutil
 import os
 import re
 
-def copy(src, dest, progress_bar=False):
+def copy(src, dest, progress_bar=False, with_replace=True):
     try:
         if os.path.isdir(src) and not dest.endswith('/'):
             src = str(src + '/').replace('//', '/')
@@ -16,11 +16,16 @@ def copy(src, dest, progress_bar=False):
         else:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
 
-        if progress_bar:
-            subprocess.run(["rsync", "-a", "-l", "--info=progress2", src, dest])
+        args = list()
 
-        else:
-            subprocess.run(["rsync", "-a", "-l", src, dest])
+        if progress_bar:
+            args.append("--info=progress2")
+
+        if not with_replace:
+            args.append("--ignore-existing")
+
+        subprocess.run(["rsync", "-a", "-l", *args, src, dest])
+
 
     except Exception:
         if not os.path.isfile(src):
