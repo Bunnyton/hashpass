@@ -44,6 +44,8 @@ class Stage():
             else:
                 self._observe_list['dirs'].append(ob)
 
+        print(self._observe_list)
+
         if self.config["options"]["output_analyzer"]:
             self._observe_list['files'][os.path.dirname(Stage.Config.cmd_output_file)] = Stage.Config.cmd_output_file
 
@@ -76,7 +78,8 @@ class Stage():
 
                 
                 data = readfile(path)
-                data = hooks.engine.filter_hook(self._cmd, data, self._num)
+                if data:
+                    data = hooks.engine.filter_hook(self._cmd, data, self._num)
 
 
                 if path in self.config['changes'].keys():

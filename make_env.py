@@ -346,6 +346,8 @@ class Container():
 
         self.save()
 
+        self.status = Container.Status.created
+
 
     def __del__(self):
         remove(self.config_dir)
@@ -423,7 +425,8 @@ class Container():
                 os.symlink(os.path.join("/", "etc", "systemd", "system", "taskchecker.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service"))
 
             task_num = self.image.name
-            k = key(masterkey + username + str(int(task_num) + 1))
+            # k = key(masterkey + username + str(int(task_num) + 1))
+            k = key(masterkey + username + task_num)
 
             
 
