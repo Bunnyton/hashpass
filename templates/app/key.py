@@ -1,6 +1,11 @@
 import hashlib
 
-def key(phrase: str) -> str:
+def key(*args) -> str:
+
+    phrase = ""
+    for arg in args:
+        phrase += str(arg)
+
     # SHA-256 -> 32 байта
     digest = hashlib.sha256(phrase.encode("utf-8")).digest()
 
