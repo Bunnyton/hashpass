@@ -756,7 +756,7 @@ def pull(name: str):
         f.write(archive_response.content)
 
     with tarfile.open(archive_path, "r:gz", format=tarfile.PAX_FORMAT) as tar:
-        tar.extractall(path=config_dir)
+        tar.extractall(path=config_dir, filter="fully_trusted")
 
     print(f"✅ Pull successfull")
 
