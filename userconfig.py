@@ -46,7 +46,7 @@ class UserConfig():
             for k in self.tasks.keys():
                 nums.append(int(k))
 
-            return max(nums) if nums else 1
+            return max(nums) if nums else 0
 
         except Exception:
             e = "Task number must be int or str(int)"

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     app_dir: str = "/opt/.hashpass"
     sys_app_path: str = os.path.join(app_dir, "make_env.py")
     config_dir: str = os.path.join(app_dir, "config")
-    templates_dir: str = os.path.join("templates")
+    templates_dir: str = os.path.join(app_dir, "templates")
     userconfig_path: str = os.path.join(config_dir, "userconfig.toml")
 
     image_config_dir: str = os.path.join(config_dir, 'images')
