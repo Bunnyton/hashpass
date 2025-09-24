@@ -77,8 +77,9 @@ class Stage():
                             return # another file ignore from observe dir of observe file 
 
                 
-                data = readfile(path)
-                if data:
+                data: str = None
+                if os.path.exists(path):
+                    data = readfile(path)
                     data = hooks.engine.filter_hook(self._cmd, data, self._num)
 
 
