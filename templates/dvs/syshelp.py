@@ -5,6 +5,7 @@ import re
 
 def copy(src, dest, progress_bar=False, with_replace=True):
     try:
+        print(f"copy {src} -> {dest}")
         if os.path.isdir(src) and not dest.endswith('/'):
             src = str(src + '/').replace('//', '/')
             dest = str(dest + '/').replace('//', '/')
