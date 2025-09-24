@@ -340,9 +340,7 @@ class Container():
         self._task_bindir = os.path.join(self._task_config_dir, settings.task_bin_dirname)
         self._task_signal_string = settings.task_signal_string
         self._task_statusfile = os.path.join(self._task_config_dir, settings.task_task_statusfilename)
-
-        self._task_config_dir = os.path.join(self._task_config_dir, ".task")
-        self._task_hooks_dir = os.path.join(self._task_config_dir, "bin", "hooks")
+        self._task_hooks_dir = os.path.join(self._task_config_dir, settings._task_hooks_dirname)
 
         self.save()
 
