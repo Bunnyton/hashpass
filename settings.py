@@ -5,8 +5,8 @@ import os
 
 class Settings(BaseSettings):
     masterkey: str = Field(
-        default='10383f373f292407117439070130373440255468657365206172652',
-        validation_alias=None
+        default = '10383f373f292407117439070130373440255468657365206172652',
+        validation_alias = None
     )
 
     server_url: str = "http://185.212.148.108:8000"
@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     task_bin_dirname: str = "bin"
     task_signal_string: str = "hash"
     task_status_filename: str =".hash.status"
+
+    tasks: dict = Field(
+        # fullname: author/name:version
+        default = { 
+            '0': "bunnyton/hello:latest", 
+            '1': "bunnyton/simple_ls:latest"
+        },
+        validation_alias = None
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

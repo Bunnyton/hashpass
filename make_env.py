@@ -16,7 +16,7 @@ from threading import Thread
 from tabulate import tabulate
 
 from syshelp import copy,remove,move,read
-from key import key
+from key import calc_key
 from settings import Settings
 from userconfig import UserConfig
 
@@ -55,7 +55,7 @@ class Image():
             if '/' in param: # FIXME this functional must be released in make_env
                 image = Image.get(param)
                 if not image:
-                    raise Exception(' '.join(["Can't find image", param]))
+                    raise Exception(' '.join(["Can't find image", param, "locally"]))
 
             else:
                 image = Image.get(param)
@@ -106,7 +106,7 @@ class Image():
                 self.layers.append(parent_image['image']['id'])
 
             else:
-                raise Exception("Can't find some image")
+                raise Exception(f"Can't find image {param}")
 
         
         self.name = read("Enter name of image: ")
@@ -233,9 +233,8 @@ class Image():
             if temp["image"]["layers"]:
                 parent_image = Image._to_fullname(Image.get(temp["image"]["layers"][-1]))
             table.append([temp["image"]["id"]
-                          , temp["image"]["author"] + '/' + temp["image"]["name"] + ':' + temp["image"]["version"]
-                          , temp["image"]["type"], parent_image
-                          ])
+                          , Image._to_fullname(temp["image"]["author"], temp["image"]["name"], temp["image"]["version"])
+                          , temp["image"]["type"], parent_image])
 
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
@@ -421,8 +420,9 @@ class Container():
                 remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service"))
                 os.symlink(os.path.join("/", "etc", "systemd", "system", "taskchecker.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service"))
 
-            # k = key(settings.masterkey, userconfig.username, userconfig.task_num)
-            k = key(settings.masterkey, userconfig.username, '/'.join([self.image.author, self.image.name]))
+            k = calc_key(settings.masterkey, userconfig.username, Image._to_fullname(self.image.author, 
+                                                                                self.image.name, 
+                                                                                self.image.version))
 
             for d in ['etc', 'home', 'root', '.hash/bin']:
                 try:
@@ -713,11 +713,9 @@ def push(server_url: str, param: str):
 
 def pull(server_url: str, name: str):
     """Скачивание манифеста + архива по author/name:version"""
-
     fullname = Image._to_fullname(name)
     if Image.get(fullname):
-        print("Image already exist")
-        return
+        raise Exception("Image already exist")
 
     print(f"Pulling image: {fullname}")
 
@@ -728,8 +726,7 @@ def pull(server_url: str, name: str):
     response = requests.post(f"{server_url}/pull", data=data)
 
     if response.status_code != 200:
-        print(f"❌ Can't get manifest: {response.text}")
-        return
+        raise Exception(f"❌ Image not found")
 
     manifest = response.json()
     image_id = manifest['image']['id']
@@ -738,8 +735,7 @@ def pull(server_url: str, name: str):
     # Скачиваем архив
     archive_response = requests.get(f"{server_url}/download/{image_id}", stream=True)
     if archive_response.status_code != 200:
-        print(f"❌ Can't download image: {archive_response.text}")
-        return
+        raise Exception(f"❌ Download image error: {archive_response.text}")
 
     config_dir = os.path.join(Image.Config.config_dir, image_id)
     os.makedirs(config_dir, exist_ok=True)
@@ -757,48 +753,25 @@ def pull(server_url: str, name: str):
 
 def get_remote_images(server_url: str):
     """Получение списка всех образов"""
-    response = requests.get(f"{server}/images")
+    response = requests.get(f"{server_url}/images")
     if response.status_code != 200:
-        print(f"❌ Ошибка: {response.text}")
-        return
+        raise Exception(f"❌ Ошибка: {response.text}")
 
     images = response.json()
-    print("📦 Список образов:")
-    for img in images:
-        id = img['image']['id']
-        fullname = f"{img['image']['author']}/{img['image']['name']}:{img['image']['version']}"
-        print(f"- {id} → {fullname} ({img['image']['type']})")
- 
- 
-# def print_help():
-#     print("Usage:")
-#     print("  python client.py push <image_id> <path_to_tar.gz> <path_to_manifest.json>")
-#     print("  python client.py pull <author/name:version> [output_dir]")
-#     print("  python client.py list")
-# 
-# 
-# if __name__ == "__main__":
-#     if len(sys.argv) < 2:
-#         print_help()
-#         sys.exit(1)
-# 
-#     command = sys.argv[1]
-# 
-#     if command == "push" and len(sys.argv) == 5:
-#         _, _, image_id, tar_path, manifest_path = sys.argv
-#         push(image_id, tar_path, manifest_path)
-# 
-#     elif command == "pull" and len(sys.argv) >= 3:
-#         image_fullname = sys.argv[2]
-#         output_dir = sys.argv[3] if len(sys.argv) == 4 else "downloads"
-#         pull(image_fullname, output_dir)
-# 
-#     elif command == "list":
-#         list_images()
-# 
-#     else:
-#         print_help()
 
+    print("Список образов в registry:")
+    table = [["ID", "NAME", "TYPE", "PARENT IMAGE ID"]]
+    for img in images:
+        parent_image_id = None
+        if img["image"]["layers"]:
+            parent_image_id = img["image"]["layers"][-1]
+
+        table.append([img["image"]["id"]
+                      , Image._to_fullname(img["image"]["author"], img["image"]["name"], img["image"]["version"])
+                      , img["image"]["type"], parent_image_id])
+
+    print(tabulate(table, headers="firstrow", tablefmt="grid"))
+ 
 
 
 
@@ -832,6 +805,23 @@ def main():
                 except Exception as e:
                     print(e)
 
+        elif sys.argv[1] == "rename":
+            if len(sys.argv) != 4:
+                raise Exception("Incorrect args")
+
+            try:
+                _ = Image(sys.argv[3])
+
+            except Exception:
+                image = Image(sys.argv[2])
+                image.author, image.name, image.version = Image._parse_fullname(sys.argv[3])
+                image.save()
+                print(f"Rename {sys.argv[2]} to {sys.argv[3]} successfull")
+
+            else:
+                raise Exception(f"Image {sys.argv[3]} already exist")
+
+
         elif len(sys.argv) == 3:
                 if sys.argv[1] == "new":
                     image = Image()
@@ -843,15 +833,27 @@ def main():
                     image.edit()
 
                 elif sys.argv[1] == "start":
-                    image = Image(sys.argv[2])
+                    try:
+                        image = Image(sys.argv[2])
 
-
+                    except Exception as e:
+                        print(e)
+                        pull(server_url, sys.argv[2])
+                        image = Image(sys.argv[2])
+                        
                     container = Container(image)
                     container.start(mode=Container.Mode.task_complete)
 
                 elif sys.argv[1] == "create":
                     image = Image()
-                    image.create(sys.argv[2])
+                    try:
+                        image.create(sys.argv[2])
+
+                    except Exception as e:
+                        print(e)
+                        pull(server_url, sys.argv[2])
+                        image.create(sys.arg[2])
+
                     container = Container(image)
                     container.start(mode=Container.Mode.task_create)
 
@@ -861,13 +863,11 @@ def main():
                 elif sys.argv[1] == "push":
                     push(server_url, sys.argv[2])
 
-                else:
-                    raise Exception("Unknown argument")
 
         else:
             raise Exception("Incorrect command")
+
     except Exception as e:
-        raise
         print(e)
 
 

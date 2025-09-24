@@ -1,6 +1,6 @@
 import hashlib
 
-def key(*args) -> str:
+def calc_key(*args) -> str:
 
     phrase = ""
     for arg in args:

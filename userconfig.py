@@ -10,7 +10,7 @@ class UserConfig():
     _config: dict
 
     username: str
-    tasks: dict
+    task_progress: dict
 
     def __init__(self):
         path = settings.userconfig_path
@@ -19,14 +19,14 @@ class UserConfig():
             if not os.path.isfile(path):
                 dirpath = os.path.dirname(os.path.abspath(path))
                 os.makedirs(dirpath, exist_ok=True)
-                self._config = {"username": "", "tasks": {}}
+                self._config = {"username": "", "task_progress": {}}
             else:
                 self._config = toml.load(path)
 
             self._config.setdefault("username", "")
-            self._config.setdefault("tasks", {})
+            self._config.setdefault("task_progress", {})
             self.username = self._config["username"]
-            self.tasks = self._config["tasks"]
+            self.task_progress = self._config["task_progress"]
 
 
         except Exception as e:
@@ -34,16 +34,25 @@ class UserConfig():
 
 
     def get_key(self, task_number: int) -> str:
-        if self.tasks.get(task_number):
-            return self.tasks[task_number]
+        if self.task_progress.get(str(task_number)):
+            return self.task_progress[str(task_number)]
 
         return ""
+
+
+    def get_task_name(self, task_num: int):
+        if settings.tasks.get(str(task_num)):
+            return settings.tasks[str(task_num)]
+
+        else:
+            raise Exception(f"Task with number {task_num} doesn't exist")
+
 
 
     def get_last_task_num(self):
         try:
             nums = []
-            for k in self.tasks.keys():
+            for k in self.task_progress.keys():
                 nums.append(int(k))
 
             return max(nums) if nums else 0
@@ -53,21 +62,27 @@ class UserConfig():
             raise Exception(': '.join([f"User config file {path} - damaged, please fix it", e])) 
 
 
+
+
     def save(self, **kwargs):
         try:
-            try:
-                if kwargs.get("username"):
-                    self._config["username"] = str(kwargs["username"])
-                    self.username = self._config["username"]
-            except:
-                raise Exception("Username must be string")
+            if "username" in kwargs:
+                try:
+                        self.username = str(kwargs["username"])
+
+                except:
+                    raise Exception("Username must be string")
 
 
-            try:
-                if kwargs.get("key") and kwargs.get("task_num"):
-                    self.tasks[int(kwargs["task_num"])] = str(kwargs["key"])
-            except:
-                raise Exception("Format error: must be save(key: str, task_num: int)")
+            if "task_num" in kwargs and "key" in kwargs:
+                try:
+                    self.task_progress[str(int(kwargs["task_num"]))] = str(kwargs["key"])
+
+                except:
+                    raise Exception("Format error: must be save(key: str, task_num: int)")
+
+            self._config["username"] = self.username
+            self._config["task_progress"] = self.task_progress
 
             with open(settings.userconfig_path, 'w') as ucf:
                 toml.dump(self._config, ucf)
