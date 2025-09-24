@@ -12,16 +12,16 @@ import requests
 import tarfile
 import json
 
-from key import key
-
-
-# from multiprocessing import Process
 from threading import Thread
-
 from tabulate import tabulate
 
 from syshelp import copy,remove,move,read
+from key import key
+from settings import Settings
 
+
+settings = Settings()
+usersettings = UserSettings()
 
 SERVER_URL = "http://185.212.148.108:8000"
 masterkey = '10383f373f292407117439070130373440255468657365206172652074776f2065787472656d6573206f66207468652073616d6520657373656e63652e'
@@ -30,11 +30,11 @@ username = toml.load("/opt/.hashpass/config/userconfig.toml")["username"]
 
 class Image():
     class Config():
-        config_dir = "/opt/.hashpass/config/images"
-        config_filename = "manifest.toml"
-        hash_task_config_dirname = ".hash/.task"
-        hash_task_config_filename = "config.toml"
-        hash_task_hooks_dirname =".hash/bin/hooks"
+        config_dir = settings.image_config_dir
+        config_filename = settings.image_config_filename
+        task_config_dirname = settings.image_task_config_dirname
+        task_config_filename = settings.task_config_filename
+        task_hooks_dirname = settings.task_hooks_dirname
 
     class Type():
         simple = "simple"
@@ -245,14 +245,14 @@ class Image():
     def load_task_config(self, path: str):
         if self.type == Image.Type.task:
             _ = toml.load(path) # test toml via load
-            copy(path, os.path.join(self.config_dir, Image.Config.hash_task_config_dirname, Image.Config.hash_task_config_filename))
+            copy(path, os.path.join(self.config_dir, Image.Config.task_config_dirname, Image.Config.task_config_filename))
 
         else:
             raise Exception(' '.join(["Image id =", self.id, "is not task image"]))
 
 
     def load_task_hooks(self, path: str):
-        copy(path, os.path.join(self.config_dir, Image.Config.hash_task_hooks_dirname))
+        copy(path, os.path.join(self.config_dir, Image.Config.task_hooks_dirname))
 
 
 
@@ -331,18 +331,18 @@ class Container():
         self._workdir = None
         self._lowerdirs = list()
 
-        self._hash_config_dir = os.path.join(self.mountpoint, ".hash")
-        self._hash_logfile = os.path.join(self._hash_config_dir, ".hash.log")
-        self._hash_cmdfile = os.path.join(self._hash_config_dir, ".hash.cmd")
-        self._hash_cmdoutfile = os.path.join(self._hash_config_dir, ".hash.cmd.out")
-        self._hash_tmpfile = os.path.join(self._hash_config_dir, ".hash.tmp")
-        self._hash_pwdfile = os.path.join(self._hash_config_dir, ".hash.pwd")
-        self._hash_bindir = os.path.join(self._hash_config_dir, "bin")
-        self._hash_signal_string = "hash"
-        self._statusfile = os.path.join(self._hash_config_dir, ".hash.status")
-        self._hash_task_config_dir = os.path.join(self._hash_config_dir, ".task")
-        self._hash_task_config_filename = "config.toml"
-        self._hash_task_hooks_dir = os.path.join(self._hash_config_dir, "bin", "hooks")
+        self._task_config_dir = os.path.join(self.mountpoint, settings.task_config_dirname)
+        self._task_logfile = os.path.join(self._task_config_dir, settings.task_log_filename)
+        self._task_cmdfile = os.path.join(self._task_config_dir, settings.task_cmd_filename)
+        self._task_cmdoutfile = os.path.join(self._task_config_dir, settings.task_cmdout_filename)
+        self._task_tmpfile = os.path.join(self._task_config_dir, settings.task_tmp_filename)
+        self._task_pwdfile = os.path.join(self._task_config_dir, settings.task_pwd_filename)
+        self._task_bindir = os.path.join(self._task_config_dir, settings.task_bin_dirname)
+        self._task_signal_string = settings.task_signal_string
+        self._task_statusfile = os.path.join(self._task_config_dir, settings.task_task_statusfilename)
+
+        self._task_config_dir = os.path.join(self._task_config_dir, ".task")
+        self._task_hooks_dir = os.path.join(self._task_config_dir, "bin", "hooks")
 
         self.save()
 
@@ -370,39 +370,39 @@ class Container():
 
 
     def _configure(self, mode: Mode):
-        os.makedirs(self._hash_config_dir, exist_ok=True)
-        with open(self._hash_logfile, "a") as f:
+        os.makedirs(self._task_config_dir, exist_ok=True)
+        with open(self._task_logfile, "a") as f:
             pass # make file 
-        with open(self._hash_cmdfile, "a") as f:
+        with open(self._task_cmdfile, "a") as f:
             pass # make file 
-        with open(self._hash_cmdoutfile, "a") as f:
+        with open(self._task_cmdoutfile, "a") as f:
             pass # make file 
-        with open(self._hash_tmpfile, "a") as f:
+        with open(self._task_tmpfile, "a") as f:
             pass # make file 
-        with open(self._hash_pwdfile, "a") as f:
+        with open(self._task_pwdfile, "a") as f:
             pass # make file 
-        with open(self._statusfile, "w") as f:
+        with open(self._task_statusfile, "w") as f:
             f.write("created\n")
 
-        os.chmod(self._hash_config_dir, 0o777)
-        os.chmod(self._hash_logfile, 0o666)
-        os.chmod(self._hash_cmdfile, 0o666)
-        os.chmod(self._hash_cmdoutfile, 0o666)
-        os.chmod(self._hash_tmpfile, 0o666)
-        os.chmod(self._hash_pwdfile, 0o666)
-        os.chmod(self._statusfile, 0o666)
+        os.chmod(self._task_config_dir, 0o777)
+        os.chmod(self._task_logfile, 0o666)
+        os.chmod(self._task_cmdfile, 0o666)
+        os.chmod(self._task_cmdoutfile, 0o666)
+        os.chmod(self._task_tmpfile, 0o666)
+        os.chmod(self._task_pwdfile, 0o666)
+        os.chmod(self._task_statusfile, 0o666)
 
         copy(os.path.join(Container.Config.templates_dir, "dvs", "task.sh"), os.path.join(self.mountpoint, "usr", "bin", "task"))
         os.chmod(os.path.join(self.mountpoint, "usr", "bin", "task"), 0o555)
 
-        # copy(self._hash_bindir, os.path.join(self.mountpoint, "tmp/"))
-        copy(os.path.join(Container.Config.templates_dir, "dvs"), self._hash_bindir, with_replace=False)
-        # move(os.path.join(self.mountpoint, "tmp/bin"), self._hash_bindir)
+        # copy(self._task_bindir, os.path.join(self.mountpoint, "tmp/"))
+        copy(os.path.join(Container.Config.templates_dir, "dvs"), self._task_bindir, with_replace=False)
+        # move(os.path.join(self.mountpoint, "tmp/bin"), self._task_bindir)
 
-        # subprocess.run(["pyarmor", "gen", "-r", self._hash_bindir, "-O", os.path.join(self.mountpoint, "tmp/dist")], check=True)
+        # subprocess.run(["pyarmor", "gen", "-r", self._task_bindir, "-O", os.path.join(self.mountpoint, "tmp/dist")], check=True)
         
 
-        if mode == Container.Mode.task_create:
+        if mode == Container.Mode.task_create or mode == Container.Mode.image_edit:
             copy(os.path.join(Container.Config.templates_dir, "dvs", "image.sh"), os.path.join(self.mountpoint, "usr", "bin", "image"))
             os.chmod(os.path.join(self.mountpoint, "usr", "bin", "image"), 0o555)
 
@@ -414,7 +414,7 @@ class Container():
                 remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service"))
                 os.symlink(os.path.join("/", "etc", "systemd", "system", "taskcreator.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service")) # magic
 
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "task_settings.toml"), os.path.join(self._hash_config_dir, "config", "task_settings.toml"))
+            copy(os.path.join(Container.Config.templates_dir, "dvs", "task_settings.toml"), os.path.join(self._task_config_dir, "config", "task_settings.toml"))
 
 
         elif mode == Container.Mode.task_complete:
@@ -448,63 +448,62 @@ class Container():
                     continue
 
 
-        if mode != Container.Mode.image_edit:
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "hash.sh")
-                  , os.path.join(self.mountpoint, "usr", "bin", "hash"))
-            os.chmod(os.path.join(self.mountpoint, "usr", "bin", "hash"), 0o555)
-            if mode == Container.Mode.task_create:
-                copy(os.path.join(Container.Config.templates_dir, "dvs", "stage.sh")
-                      , os.path.join(self.mountpoint, "usr", "bin", "stage"))
-                os.chmod(os.path.join(self.mountpoint, "usr", "bin", "stage"), 0o555)
+        copy(os.path.join(Container.Config.templates_dir, "dvs", "hash.sh")
+                      , os.path.join(self.mountpoint, "usr", "bin", "hash"))
+        os.chmod(os.path.join(self.mountpoint, "usr", "bin", "hash"), 0o555)
+        if mode == Container.Mode.task_create:
+            copy(os.path.join(Container.Config.templates_dir, "dvs", "stage.sh")
+                  , os.path.join(self.mountpoint, "usr", "bin", "stage"))
+            os.chmod(os.path.join(self.mountpoint, "usr", "bin", "stage"), 0o555)
 
 
-            with open(os.path.join(self.mountpoint, "etc", "bash.bashrc"), "a+") as f:
-                f.seek(0)
-                for line in reversed(f.readlines()):
-                    if line.strip() != "/usr/bin/hash":
-                        continue
-                    break
+        with open(os.path.join(self.mountpoint, "etc", "bash.bashrc"), "a+") as f:
+            f.seek(0)
+            for line in reversed(f.readlines()):
+                if line.strip() != "/usr/bin/hash":
+                    continue
+                break
 
-                else:
-                    conf_lines = list()
+            else:
+                conf_lines = list()
 
-                    conf_lines.append("alias bash=\"/usr/bin/hash\"")
-                    # conf_lines.append("alias alert='notify-send --urgency=low -i \"$([ $? = 0 ] && echo terminal || echo error)\" \"$(history|tail -n1|sed -e '\\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\\'')\"'")
-                    conf_lines.append("alias egrep=\"egrep --color=auto\"")
-                    conf_lines.append("alias fgrep=\"fgrep --color=auto\"")
-                    conf_lines.append("alias grep=\"grep --color=auto\"")
-                    conf_lines.append("alias l=\"ls -CF\"")
-                    conf_lines.append("alias la=\"ls -A\"")
-                    conf_lines.append("alias ll=\"ls -alF\"")
-                    conf_lines.append("alias ls=\"ls --color=auto\"")
+                conf_lines.append("alias bash=\"/usr/bin/hash\"")
+                # conf_lines.append("alias alert='notify-send --urgency=low -i \"$([ $? = 0 ] && echo terminal || echo error)\" \"$(history|tail -n1|sed -e '\\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\\'')\"'")
+                conf_lines.append("alias egrep=\"egrep --color=auto\"")
+                conf_lines.append("alias fgrep=\"fgrep --color=auto\"")
+                conf_lines.append("alias grep=\"grep --color=auto\"")
+                conf_lines.append("alias l=\"ls -CF\"")
+                conf_lines.append("alias la=\"ls -A\"")
+                conf_lines.append("alias ll=\"ls -alF\"")
+                conf_lines.append("alias ls=\"ls --color=auto\"")
 
-                    conf_lines.append("echo \"started\" > /.hash/.hash.status")
+                conf_lines.append("echo \"started\" > /.hash/.hash.status")
 
-                    conf_lines.append("if [[ -z \"$(grep 'set fish_greeting' ~/.config/fish/config.fish 2> /dev/null)\" ]]; then")
-                    conf_lines.append("\techo \"set fish_greeting\" >> ~/.config/fish/config.fish")
-                    conf_lines.append("fi")
+                conf_lines.append("if [[ -z \"$(grep 'set fish_greeting' ~/.config/fish/config.fish 2> /dev/null)\" ]]; then")
+                conf_lines.append("\techo \"set fish_greeting\" >> ~/.config/fish/config.fish")
+                conf_lines.append("fi")
 
-                    conf_lines.append("while [[ ! -f ~/.hash && -z \"$(grep stop /.hash/.hash.status 2> /dev/null)\" ]]; do")
+                conf_lines.append("while [[ ! -f ~/.hash && -z \"$(grep stop /.hash/.hash.status 2> /dev/null)\" ]]; do")
 
 
-                    conf_lines.append("\ttouch ~/.hash")
-                    conf_lines.append("\tbash")
-                    conf_lines.append("\trm ~/.hash 2> /dev/null")
+                conf_lines.append("\ttouch ~/.hash")
+                conf_lines.append("\tbash")
+                conf_lines.append("\trm ~/.hash 2> /dev/null")
 
-                    conf_lines.append("done")
+                conf_lines.append("done")
 
-                    for line in conf_lines:
-                        f.write(line + " # " + self._hash_signal_string + "\n")
+                for line in conf_lines:
+                    f.write(line + " # " + self._task_signal_string + "\n")
 
 
     def _deconfigure(self):
-        remove(self._hash_cmdfile)
-        remove(self._hash_logfile)
-        remove(self._hash_cmdoutfile)
-        remove(self._hash_tmpfile)
-        remove(self._statusfile)
+        remove(self._task_cmdfile)
+        remove(self._task_logfile)
+        remove(self._task_cmdoutfile)
+        remove(self._task_tmpfile)
+        remove(self._task_statusfile)
 
-        remove(self._hash_bindir)
+        remove(self._task_bindir)
         remove(os.path.join(self.mountpoint, "usr", "bin", "hash"))
         remove(os.path.join(self.mountpoint, "usr", "bin", "task"))
         remove(os.path.join(self.mountpoint, "usr", "bin", "stage"))
@@ -519,7 +518,7 @@ class Container():
         with open(os.path.join(self.mountpoint, "etc", "bash.bashrc"), "r") as f:
             f.seek(0)
             lines = f.readlines()
-            deconf_lines = [line for line in lines if self._hash_signal_string not in line]
+            deconf_lines = [line for line in lines if self._task_signal_string not in line]
 
         with open(os.path.join(self.mountpoint, "etc", "bash.bashrc"), 'w') as f:
             f.writelines(deconf_lines)
@@ -573,8 +572,8 @@ class Container():
 
 
     def get_status(self):
-        if os.path.exists(self._statusfile):
-            return Container.Status.get_from(self._statusfile)
+        if os.path.exists(self._task_statusfile):
+            return Container.Status.get_from(self._task_statusfile)
 
         else:
             sys_status = subprocess.run(["machinectl", "status", self.id] 
@@ -647,11 +646,11 @@ class Container():
 
                 finally:
                     if mode == Container.Mode.task_create:
-                        config_file = os.path.join(self._hash_task_config_dir, "config.toml")
+                        config_file = os.path.join(self._task_config_dir, "config.toml")
                         if os.path.isfile(config_file):
                             self.image.type = Image.Type.task
                             self.image.load_task_config(config_file)
-                            self.image.load_task_hooks(self._hash_task_hooks_dir)
+                            self.image.load_task_hooks(self._task_hooks_dir)
                             self.image.save()
 
                             image_is_empty = False
@@ -660,7 +659,7 @@ class Container():
                     self.stop() 
 
                     if self.status == Container.Status.image_saving or self.status == Container.Status.image_updating:
-                        self.image.load_task_hooks(self._hash_task_hooks_dir)
+                        self.image.load_task_hooks(self._task_hooks_dir)
 
                     self._deconfigure()
 
