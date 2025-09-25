@@ -53,15 +53,9 @@ class Image():
         
         image: list
         if param is not None:
-            if '/' in param: # FIXME this functional must be released in make_env
-                image = Image.get(param)
-                if not image:
-                    raise Exception(' '.join(["Can't find image", param, "locally"]))
-
-            else:
-                image = Image.get(param)
-                if not image:
-                    raise Exception(' '.join(["Can't find image with id =", param]))
+            image = Image.get(param)
+            if not image:
+                raise Exception(' '.join(["Can't find image", param, "locally"]))
 
             self.id = image['image']['id']
             self.name = image['image']['name']
@@ -93,16 +87,8 @@ class Image():
             self.type = Image.Type.base
 
         else:
-            parent_image: list
-            if '/' in param: # FIXME add id verification
-                parent_image_fullname = Image.get(param)
-
-            else:
-                parent_image = Image.get(param)
-
+            parent_image = Image.get(param)
             if parent_image:
-                parent_image = parent_image
-
                 self.type = Image.Type.simple
                 self.layers = parent_image['image']['layers']
                 self.layers.append(parent_image['image']['id'])
@@ -115,9 +101,9 @@ class Image():
         self.author = read("Enter author of image: ")
         self.version = read("Enter version of image: ", default="latest")
 
-        fullname = Image._to_fullname(self.author, self.name, self.version)
-        if Image.get(fullname):
-            raise Exception(f"{fullname} already exist")
+        self.fullname = Image._to_fullname(self.author, self.name, self.version)
+        if Image.get(self.fullname):
+            raise Exception(f"{self.fullname} already exist")
 
         self.id = str(uuid.uuid4()).replace("-", "")
         self.config_dir = os.path.join(Image.Config.config_dir, self.id)
@@ -702,8 +688,8 @@ class Container():
 
 
                 if image_is_empty:
+                    print("Deleting empty image")
                     self.image.delete()
-                    print("Empty image has been deleted")
 
                 break
 
@@ -921,13 +907,7 @@ def main():
 
                 elif sys.argv[1] == "create":
                     image = Image()
-                    try:
-                        image.create(sys.argv[2])
-
-                    except Exception as e:
-                        print(e)
-                        pull(server_url, sys.argv[2])
-                        image.create(sys.arg[2])
+                    image.create(sys.argv[2])
 
                     container = Container(image)
                     container.start(mode=Container.Mode.task_create)
