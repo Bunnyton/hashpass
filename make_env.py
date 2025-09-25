@@ -704,6 +704,8 @@ def get_info(server_url: str, param: str):
 
 
 def download_image(server_url: str, image_id: str):
+    print(f"Pulling image: {image_id}")
+
     archive_response = requests.get(f"{server_url}/download/{image_id}", stream=True)
     if archive_response.status_code != 200:
         raise Exception(f"❌ Download image error: {archive_response.text}")
@@ -717,28 +719,24 @@ def download_image(server_url: str, image_id: str):
 
     with tarfile.open(archive_path, "r:gz", format=tarfile.PAX_FORMAT) as tar:
         tar.extractall(path=config_dir, filter="fully_trusted")
+
+    print(f"✅ Pull {image_id} successfull")
                 
 
-def push(server_url: str, param: str):
+def upload(server_url: str, image_id: str):
     try:
-        get_info(server_url, param)
+        get_info(server_url, image_id)
     except:
         pass
     else:
-        raise Exception(f"Image {param} already exist on registry")
+        return
 
-    image = Image(param)
-
-    for image_layer_id in image.layers:
-        try:
-            push(server_url, image_layer_id)
-        except Exception:
-            pass
+    image = Image(image_id)
+    print(f"Pushing image: {image.fullname}")
 
     manifest = image.info()
-
-    print(f"Pushing image: {image.fullname}")
     archive_path = os.path.join(image.config_dir, image.id + '.tar.gz')
+
     with tarfile.open(archive_path, "w:gz", format=tarfile.PAX_FORMAT) as tar:
         for item in os.listdir(image.config_dir):
             item_path = os.path.join(image.config_dir, item)
@@ -757,6 +755,30 @@ def push(server_url: str, param: str):
     print(f"✅ Push {image.fullname} successfull")
 
 
+def push(server_url: str, param: str):
+    try:
+        get_info(server_url, param)
+    except:
+        pass
+    else:
+        raise Exception(f"Image {param} already exist on registry")
+
+    image = Image(param)
+
+    thrs = list()
+    for image_layer_id in image.layers:
+        thr = Thread(target=upload, args=(server_url, image_layer_id))
+        thr.start()
+        thrs.append(thr)
+
+    thr = Thread(target=upload, args=(server_url, image.id))
+    thr.start()
+    thrs.append(thr)
+
+    for thr in thrs:
+        thr.join()
+
+
 def pull(server_url: str, param = None):
     if not param:
         raise Exception(f"Image with name {param} can't be exist")
@@ -766,18 +788,18 @@ def pull(server_url: str, param = None):
 
     manifest = get_info(server_url, param)
 
+    thrs = list()
     for layer_image_id in manifest["image"]["layers"]:
-        try:
-            pull(server_url, layer_image_id)
+        thr = Thread(target=download_image, args=(server_url, layer_image_id))
+        thr.start()
+        thrs.append(thr)
 
-        except:
-            pass
+    thr = Thread(target=download_image, args=(server_url, manifest["image"]["id"]))
+    thr.start()
+    thrs.append(thr)
 
-    image_id = manifest['image']['id']
-
-    print(f"Pulling image: {param}")
-    download_image(server_url, image_id)
-    print(f"✅ Pull {param} successfull")
+    for thr in thrs:
+        thr.join()
 
 
 
