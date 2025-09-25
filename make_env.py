@@ -117,7 +117,7 @@ class Image():
 
         fullname = Image._to_fullname(self.author, self.name, self.version)
         if Image.get(fullname):
-            raise Exception(f"Image {fullname} already exist")
+            raise Exception(f"{fullname} already exist")
 
         self.id = str(uuid.uuid4()).replace("-", "")
         self.config_dir = os.path.join(Image.Config.config_dir, self.id)
@@ -127,8 +127,16 @@ class Image():
 
 
     def delete(self):
+        print(f"Deleting {self.fullname}")
+
+        for image in Image.list():
+            if self.id in image.layers:
+                image.delete()
+
         if os.path.exists(self.config_dir):
             remove(self.config_dir)
+
+        print(f"✅ Delete {self.fullname} successfull")
 
 
     def info(self) -> dict:
@@ -233,8 +241,17 @@ class Image():
         return None
 
 
+    def list() -> list: # return [manifest, manifest, ...]
+        images = list()
+        for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
+            manifest = toml.load(file)
+            if manifest:
+                images.append(Image(manifest['image']['id']))
 
-    def list():
+        return images
+
+
+    def print_list():
         table = [["ID", "NAME", "TYPE", "PARENT IMAGE"]]
 
         for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
@@ -698,12 +715,15 @@ def get_info(server_url: str, param: str):
     data = {'param': param}
     response = requests.post(f"{server_url}/info", data=data)
     if response.status_code != 200:
-        raise Exception(f"❌ Image {param} not found on registry")
+        raise Exception(f"❌ {param} not found on registry")
 
     return response.json()
 
 
-def download_image(server_url: str, image_id: str):
+def download(server_url: str, image_id: str):
+    if Image.get(image_id):
+        return
+
     print(f"Pulling image: {image_id}")
 
     archive_response = requests.get(f"{server_url}/download/{image_id}", stream=True)
@@ -761,7 +781,7 @@ def push(server_url: str, param: str):
     except:
         pass
     else:
-        raise Exception(f"Image {param} already exist on registry")
+        raise Exception(f"{param} already exist on registry")
 
     image = Image(param)
 
@@ -784,17 +804,17 @@ def pull(server_url: str, param = None):
         raise Exception(f"Image with name {param} can't be exist")
 
     if Image.get(param):
-        raise Exception(f"Image {param} already pulled")
+        raise Exception(f"{param} already pulled")
 
     manifest = get_info(server_url, param)
 
     thrs = list()
     for layer_image_id in manifest["image"]["layers"]:
-        thr = Thread(target=download_image, args=(server_url, layer_image_id))
+        thr = Thread(target=download, args=(server_url, layer_image_id))
         thr.start()
         thrs.append(thr)
 
-    thr = Thread(target=download_image, args=(server_url, manifest["image"]["id"]))
+    thr = Thread(target=download, args=(server_url, manifest["image"]["id"]))
     thr.start()
     thrs.append(thr)
 
@@ -831,7 +851,7 @@ def main():
     try:
         server_url = settings.server_url
         if len(sys.argv) == 1:
-            Image.list()
+            Image.print_list()
 
         elif len(sys.argv) == 2:
             image: Image
@@ -848,11 +868,14 @@ def main():
                 raise Exception("Incorrect command")
 
         elif sys.argv[1] == "delete" or sys.argv[1] == "del" or sys.argv[1] == "remove" or sys.argv[1] == "rm":
+            ans = input("This command delete all dependecies image, you are sure? [y] ")
+            if 'y' != ans.strip().lower():
+                return
+
             for image_id in sys.argv[2::]:
                 try:
                     image = Image(image_id)
                     image.delete()
-                    print(' '.join(["Image", image_id, "has been deleted successfully"]))
 
                 except Exception as e:
                     print(e)
@@ -920,7 +943,6 @@ def main():
             raise Exception("Incorrect command")
 
     except Exception as e:
-        raise
         print(e)
 
 
