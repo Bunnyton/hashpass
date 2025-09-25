@@ -46,6 +46,7 @@ class Image():
         self.id : str
         self.name : str
         self.author : str
+        self.fullname: str
         self.version : str
         self.layers = list()
         self.type: str
@@ -66,6 +67,7 @@ class Image():
             self.name = image['image']['name']
             self.author = image['image']['author']
             self.version = image['image']['version']
+            self.fullname = Image._to_fullname(self.author, self.name, self.version)
             self.layers = image['image']['layers']
             self.type = image['image']['type']
 
@@ -93,7 +95,7 @@ class Image():
         else:
             parent_image: list
             if '/' in param: # FIXME add id verification
-                parent_image = Image.get(param)
+                parent_image_fullname = Image.get(param)
 
             else:
                 parent_image = Image.get(param)
@@ -203,22 +205,30 @@ class Image():
         raise Exception("Image incorrect")
 
 
-    def get(param):
-        if '/' in param:
-            fullname = param
-            author, name, version = Image._parse_fullname(fullname)
-            for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-                temp = toml.load(file)
-                if temp['image']['name'] == name and temp['image']['version'] == version and temp['image']['author'] == author:
-                    return temp
+    def get(param) -> dict: # return fullname
+        if isinstance(param, str):
+            if '/' in param:
+                author, name, version = Image._parse_fullname(param)
+                for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
+                    temp = toml.load(file)
+                    if temp['image']['name'] == name and temp['image']['version'] == version and temp['image']['author'] == author:
+                        return temp
 
-        else:
-            id = param
-            for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-                temp = toml.load(file)
+            else:
+                id = param
+                for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
+                    temp = toml.load(file)
 
-                if temp['image']['id'] == id:
-                    return temp
+                    if temp['image']['id'] == id:
+                        return temp
+
+        return None
+
+
+    def get_fullname(param) -> str: # return fullname
+        manifest = Image.get(param)
+        if manifest:
+            return Image._to_fullname(manifest['image']['author'], manifest['image']['name'], manifest['image']['name'])
 
         return None
 
@@ -229,12 +239,14 @@ class Image():
 
         for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
             temp = toml.load(file)
-            parent_image = None
+
+            parent_image_fullname = None
             if temp["image"]["layers"]:
-                parent_image = Image._to_fullname(Image.get(temp["image"]["layers"][-1]))
+                parent_image_fullname = Image.get_fullname(temp["image"]["layers"][-1])
+
             table.append([temp["image"]["id"]
                           , Image._to_fullname(temp["image"]["author"], temp["image"]["name"], temp["image"]["version"])
-                          , temp["image"]["type"], parent_image])
+                          , temp["image"]["type"], parent_image_fullname])
 
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
@@ -681,58 +693,17 @@ class Container():
         else:
             raise Exception("Container doesn't exist")
 
-                
 
-def push(server_url: str, param: str):
-    """Отправка архива и манифеста на сервер"""
-
-    image = Image(param)
-
-    manifest = image.info()
-
-    archive_path = os.path.join(image.config_dir, image.id + '.tar.gz')
-    with tarfile.open(archive_path, "w:gz", format=tarfile.PAX_FORMAT) as tar:
-        for item in os.listdir(image.config_dir):
-            item_path = os.path.join(image.config_dir, item)
-            tar.add(item_path, arcname=item, recursive=True)
-
-    with open(archive_path, "rb") as f:
-        files = {
-            'image': f,
-        }
-        data = {
-            'manifest': json.dumps(manifest)
-        }
-
-        response = requests.post(f"{server_url}/push", files=files, data=data, stream=True)
-
-    print(response.text)
-
-    remove(archive_path)
-
-
-def pull(server_url: str, name: str):
-    """Скачивание манифеста + архива по author/name:version"""
-    fullname = Image._to_fullname(name)
-    if Image.get(fullname):
-        raise Exception("Image already exist")
-
-    print(f"Pulling image: {fullname}")
-
-    data = {
-        'fullname': fullname
-    }
-
-    response = requests.post(f"{server_url}/pull", data=data)
-
+def get_info(server_url: str, param: str):
+    data = {'param': param}
+    response = requests.post(f"{server_url}/info", data=data)
     if response.status_code != 200:
-        raise Exception(f"❌ Image not found")
+        raise Exception(f"❌ Image {param} not found on registry")
 
-    manifest = response.json()
-    image_id = manifest['image']['id']
+    return response.json()
 
 
-    # Скачиваем архив
+def download_image(server_url: str, image_id: str):
     archive_response = requests.get(f"{server_url}/download/{image_id}", stream=True)
     if archive_response.status_code != 200:
         raise Exception(f"❌ Download image error: {archive_response.text}")
@@ -746,8 +717,67 @@ def pull(server_url: str, name: str):
 
     with tarfile.open(archive_path, "r:gz", format=tarfile.PAX_FORMAT) as tar:
         tar.extractall(path=config_dir, filter="fully_trusted")
+                
 
-    print(f"✅ Pull successfull")
+def push(server_url: str, param: str):
+    try:
+        get_info(server_url, param)
+    except:
+        pass
+    else:
+        raise Exception(f"Image {param} already exist on registry")
+
+    image = Image(param)
+
+    for image_layer_id in image.layers:
+        try:
+            push(server_url, image_layer_id)
+        except Exception:
+            pass
+
+    manifest = image.info()
+
+    print(f"Pushing image: {image.fullname}")
+    archive_path = os.path.join(image.config_dir, image.id + '.tar.gz')
+    with tarfile.open(archive_path, "w:gz", format=tarfile.PAX_FORMAT) as tar:
+        for item in os.listdir(image.config_dir):
+            item_path = os.path.join(image.config_dir, item)
+            tar.add(item_path, arcname=item, recursive=True)
+
+    with open(archive_path, "rb") as f:
+        files = {
+            'image': f,
+        }
+        data = {
+            'manifest': json.dumps(manifest)
+        }
+        response = requests.post(f"{server_url}/push", files=files, data=data, stream=True)
+
+    remove(archive_path)
+    print(f"✅ Push {image.fullname} successfull")
+
+
+def pull(server_url: str, param = None):
+    if not param:
+        raise Exception(f"Image with name {param} can't be exist")
+
+    if Image.get(param):
+        raise Exception(f"Image {param} already pulled")
+
+    manifest = get_info(server_url, param)
+
+    for layer_image_id in manifest["image"]["layers"]:
+        try:
+            pull(server_url, layer_image_id)
+
+        except:
+            pass
+
+    image_id = manifest['image']['id']
+
+    print(f"Pulling image: {param}")
+    download_image(server_url, image_id)
+    print(f"✅ Pull {param} successfull")
 
 
 
@@ -868,6 +898,7 @@ def main():
             raise Exception("Incorrect command")
 
     except Exception as e:
+        raise
         print(e)
 
 

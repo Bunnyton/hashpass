@@ -39,17 +39,27 @@ class UserConfig():
 
         return ""
 
-
-    def get_task_name(self, task_num: int):
-        if settings.tasks.get(str(task_num)):
+            
+    def get_task_name(self, task_num: int = None, all : bool = False) -> list:
+        if task_num and settings.tasks.get(str(task_num)):
             return settings.tasks[str(task_num)]
+
+        elif all:
+            return settings.tasks.values()
 
         else:
             raise Exception(f"Task with number {task_num} doesn't exist")
 
 
+    def get_tasks(self, task_num: int) -> list:
+        if settings.tasks:
+            return settings.tasks.values()
 
-    def get_last_task_num(self):
+        else:
+            return []
+
+
+    def get_last_task_num(self) -> int:
         try:
             nums = []
             for k in self.task_progress.keys():
@@ -64,7 +74,7 @@ class UserConfig():
 
 
 
-    def save(self, **kwargs):
+    def save(self, **kwargs) -> None:
         try:
             if "username" in kwargs:
                 try:

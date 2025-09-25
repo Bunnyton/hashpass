@@ -2,6 +2,9 @@ config/images/*
 config/containers/*
 config/userconfig.toml
 config/images.tar.gz
+
+templates/server/storage/*
+
 __pycache__/*
 __pycache__
 *.pyc
@@ -10,3 +13,5 @@ __pycache__
 *.pyc
 *.pyo
 *.pyd
+
+*.tar.gz

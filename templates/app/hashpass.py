@@ -2,9 +2,11 @@ import os
 import sys
 import toml
 import subprocess
+import time
+
+from threading import Thread
 
 from key import calc_key
-
 from settings import Settings
 from userconfig import UserConfig
 
@@ -32,15 +34,26 @@ def check_key(userconfig: UserConfig, task_num: int, key: str=None):
         return true_key == userconfig.get_key(task_num)
 
 
+def exec_cmd(*args):
+    subprocess.run(args)
+
 
 def main():
     userconfig = UserConfig()
-
     if not userconfig.username:
         userconfig.save(username=ensure_username())
 
     print(f"Добро пожаловать, {userconfig.username}!\n")
 
+
+    for task_name in userconfig.get_task_name(all=True):
+        pull_cmd = ['/'.join([settings.sys_app_path]), "pull", task_name]
+        exec_cmd(pull_cmd))
+
+
+    for thr in thrs:
+        thr.join()
+        
     # --- Режим проверки ---
     if "--check" in sys.argv:
         print("Проверка введённых ключей:\n")
@@ -77,7 +90,8 @@ def main():
     while True:
         if task_num == 0 or check_key(userconfig, task_num=task_num - 1):
             # Запуск задания
-            subprocess.run(['/'.join([settings.sys_app_path]), "start", userconfig.get_task_name(task_num)])
+            cmd = ['/'.join([settings.sys_app_path]), "start", userconfig.get_task_name(task_num)]
+            exec_cmd(cmd)
 
             while True:
                 user_key = input("Введите ключ, чтобы перейти к следующему заданию (Ctrl+C = выход): ").strip()
@@ -110,6 +124,10 @@ def main():
 
 
 if __name__ == "__main__":
+    if os.geteuid() != 0:
+        print("Эта программа должна быть запущена с правами суперпользователя. Используйте 'sudo'.")
+        sys.exit(1)  # Завершение программы с кодом 1 (ошибка)
+
     try:
         main()
     except KeyboardInterrupt:
