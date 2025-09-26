@@ -659,7 +659,6 @@ class Container():
                         if os.path.isfile(config_file):
                             self.image.type = Image.Type.task
                             self.image.load_task_config(config_file)
-                            self.image.load_task_hooks(self._task_hooks_dir)
                             self.image.save()
 
                             image_is_empty = False
@@ -876,6 +875,7 @@ def main():
             except Exception:
                 image = Image(sys.argv[2])
                 image.author, image.name, image.version = Image._parse_fullname(sys.argv[3])
+                image.id = str(uuid.uuid4()).replace("-", "")
                 image.save()
                 print(f"Rename {sys.argv[2]} to {sys.argv[3]} successfull")
 

@@ -218,6 +218,7 @@ def main():
 
                 if search_start_with_cmd(cmd, ["action"]):
                     taskclient.handle_cmd(cmd[0]) 
+                    subprocess.run(["script", "-qc", ' '.join(["/usr/bin/bash -ic", "'", ' '.join(cmd[0][1::]), "'"]), config.tmpfile]) # the last command change file
                     continue
 
 

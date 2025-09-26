@@ -63,9 +63,6 @@ class Task():
         else:
             raise Exception("Stage has not been started")
 
-        for stage in self.stages:
-            print(stage.config)
-
 
     def dump_settings(self, dest):
         copy(self.config_file, dest)
@@ -76,6 +73,5 @@ class Task():
             self.stop_stage()
 
         for stage in self.stages:
-            print(stage.config)
             stage.save()
 

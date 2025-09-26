@@ -140,8 +140,7 @@ class TaskCreatorServer(Server):
                 "cmd": [],
                 "after": cmd[1::]
             }
-
-            self.reply(json.dumps(cmds), clientsocket)
+            # self.reply(json.dumps(cmds), clientsocket)
 
 
     def _cmd_cmd(self, cmd: list, clientsocket: socket.socket):
