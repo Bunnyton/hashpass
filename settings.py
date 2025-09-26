@@ -43,7 +43,7 @@ class Settings(BaseSettings):
         # fullname: author/name:version
         default = { 
             '0': "bunnyton/hello:latest", 
-            '1': "bunnyton/simple_ls:latest"
+            '1': "bunnyton/simple_ls:latest",
         },
         validation_alias = None
     )

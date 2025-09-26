@@ -715,7 +715,7 @@ def get_info(server_url: str, param: str):
     data = {'param': param}
     response = requests.post(f"{server_url}/info", data=data)
     if response.status_code != 200:
-        raise Exception(f"❌ {param} not found on registry")
+        raise Exception(f"{param} not found on registry")
 
     return response.json()
 
@@ -728,7 +728,7 @@ def download(server_url: str, image_id: str):
 
     archive_response = requests.get(f"{server_url}/download/{image_id}", stream=True)
     if archive_response.status_code != 200:
-        raise Exception(f"❌ Download image error: {archive_response.text}")
+        raise Exception(f"Download image error: {archive_response.text}")
 
     config_dir = os.path.join(Image.Config.config_dir, image_id)
     os.makedirs(config_dir, exist_ok=True)
@@ -827,7 +827,7 @@ def get_remote_images(server_url: str):
     """Получение списка всех образов"""
     response = requests.get(f"{server_url}/images")
     if response.status_code != 200:
-        raise Exception(f"❌ Ошибка: {response.text}")
+        raise Exception(f"Ошибка: {response.text}")
 
     images = response.json()
 

@@ -34,8 +34,8 @@ def check_key(userconfig: UserConfig, task_num: int, key: str=None):
         return true_key == userconfig.get_key(task_num)
 
 
-def exec_cmd(*args):
-    subprocess.run(args)
+def exec_cmd(cmd: list):
+    subprocess.run(cmd)
 
 
 def main():
@@ -48,11 +48,8 @@ def main():
 
     for task_name in userconfig.get_task_name(all=True):
         pull_cmd = ['/'.join([settings.sys_app_path]), "pull", task_name]
-        exec_cmd(pull_cmd))
+        exec_cmd(pull_cmd)
 
-
-    for thr in thrs:
-        thr.join()
         
     # --- Режим проверки ---
     if "--check" in sys.argv:
@@ -65,7 +62,7 @@ def main():
                 status = "✅ верно" 
 
             else:
-                status = f"❌ неверно)"
+                status = f"❌ неверно"
 
             print(f"Задание {num}: {userconfig.get_key(num)} -> {status}")
         return
