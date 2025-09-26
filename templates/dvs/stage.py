@@ -215,6 +215,8 @@ class Stage():
         with open(self.result_file, 'w') as cf:
             toml.dump(self.config, cf)
 
+        os.chmod(self.result_file, 0o666)
+
 
     def __del__(self):
         self.stop()

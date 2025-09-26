@@ -92,10 +92,12 @@ class TaskCreatorServer(Server):
             config["stage_amount"] = stage_counter
 
             config_file = os.path.join(self.system_config_dir, "config.toml")
-            with open(config_file, "w+") as cf:
-                toml.dump(config, cf)
 
-            self.reply_with_logging(' '.join(['Task saved successfully as', config_file]), clientsocket)
+            with open(config_file, "w") as cf:
+                toml.dump(config, cf)
+            os.chmod(config_file, 0o666)
+
+        self.reply_with_logging(' '.join(['Task saved successfully as', config_file]), clientsocket)
 
 
     def _cmd_save(self, cmd: list, clientsocket: socket.socket):

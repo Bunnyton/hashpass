@@ -274,6 +274,7 @@ class Container():
         config_dir = settings.container_config_dir
         templates_dir = settings.templates_dir
         config_filename = settings.container_config_filename
+        task_config_filename = settings.task_config_filename
 
 
     class Mode():
@@ -395,7 +396,7 @@ class Container():
         with open(self._task_statusfile, "w") as f:
             f.write("created\n")
 
-        os.chmod(self._task_workdir, 0o777)
+        os.chmod(self._task_workdir, 0o755)
         os.chmod(self._task_logfile, 0o666)
         os.chmod(self._task_cmdfile, 0o666)
         os.chmod(self._task_cmdoutfile, 0o666)
@@ -426,6 +427,10 @@ class Container():
                 os.symlink(os.path.join("/", "etc", "systemd", "system", "taskcreator.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service")) # magic
 
             copy(os.path.join(Container.Config.templates_dir, "dvs", "task_settings.toml"), os.path.join(self._task_workdir, "config", "task_settings.toml"))
+            os.chmod(os.path.join(self._task_workdir, "config", "task_settings.toml"), 0o666)
+            os.chmod(os.path.join(self._task_workdir, "config"), 0o777)
+
+            os.chmod(os.path.join(self.mountpoint, settings.task_config_dirname), 0o777)
 
 
         elif mode == Container.Mode.task_complete:
@@ -523,6 +528,12 @@ class Container():
         remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "taskcreator.service"))
         remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "taskchecker.service"))
 
+        try:
+            os.chmod(self._task_config_dir, 0o700)
+            os.chmod(os.path.join(self._task_config_dir, Container.Config.task_config_filename), 0o700)
+        except:
+            pass
+
         deconf_lines: list
         with open(os.path.join(self.mountpoint, "etc", "bash.bashrc"), "r") as f:
             f.seek(0)
@@ -544,7 +555,7 @@ class Container():
             os.makedirs(dir, exist_ok=True)
 
         self._lowerdirs = list()
-        for layer in self.image.layers[::-1]:
+        for layer in self.image.layers:
             self._lowerdirs.append(os.path.join(Image.Config.config_dir, layer))
 
         if mode == Container.Mode.image_edit: 
@@ -561,7 +572,8 @@ class Container():
             os.makedirs(self._lowerdir, exist_ok=True)
 
         else:
-            self._lowerdir = ':'.join(self._lowerdirs)
+            self._lowerdir = ':'.join(self._lowerdirs[::-1])
+
 
         subprocess.run([ "mount", "overlay", "-t", "overlay", 
                                   "-o", ','.join(["lowerdir=" + self._lowerdir
@@ -655,7 +667,7 @@ class Container():
 
                 finally:
                     if mode == Container.Mode.task_create:
-                        config_file = os.path.join(self._task_config_dir, "config.toml")
+                        config_file = os.path.join(self._task_config_dir, Container.Config.task_config_filename)
                         if os.path.isfile(config_file):
                             self.image.type = Image.Type.task
                             self.image.load_task_config(config_file)
@@ -687,8 +699,11 @@ class Container():
 
 
                 if image_is_empty:
-                    print("Deleting empty image")
+                    print("❌ Deleting empty image")
                     self.image.delete()
+
+                elif mode != Container.Mode.task_complete:
+                    print(f"✅ Create {self.image.fullname} successfull")
 
                 break
 
@@ -863,24 +878,29 @@ def main():
                     image.delete()
 
                 except Exception as e:
-                    print(e)
+                    print(' '.join(['❌' , str(e)]))
 
-        elif sys.argv[1] == "rename":
-            if len(sys.argv) != 4:
-                raise Exception("Incorrect args")
+        # elif sys.argv[1] == "rename": change to tag
+        #     if len(sys.argv) != 4:
+        #         raise Exception("Incorrect args")
 
-            try:
-                _ = Image(sys.argv[3])
+        #     try:
+        #         _ = Image(sys.argv[3])
 
-            except Exception:
-                image = Image(sys.argv[2])
-                image.author, image.name, image.version = Image._parse_fullname(sys.argv[3])
-                image.id = str(uuid.uuid4()).replace("-", "")
-                image.save()
-                print(f"Rename {sys.argv[2]} to {sys.argv[3]} successfull")
+        #     except Exception:
+        #         image = Image(sys.argv[2])
 
-            else:
-                raise Exception(f"Image {sys.argv[3]} already exist")
+        #         new_image_id = str(uuid.uuid4()).replace("-", "")
+        #         move(os.path.join(Image.Config.config_dir, image.id), os.path.join(Image.Config.config_dir, new_image_id))
+
+        #         image.author, image.name, image.version = Image._parse_fullname(sys.argv[3])
+        #         image.id = new_image_id
+        #         image.save()
+
+        #         print(f"Rename {sys.argv[2]} to {sys.argv[3]} successfull")
+
+        #     else:
+        #         raise Exception(f"Image {sys.argv[3]} already exist")
 
 
         elif len(sys.argv) == 3:
@@ -898,7 +918,6 @@ def main():
                         image = Image(sys.argv[2])
 
                     except Exception as e:
-                        print(e)
                         pull(server_url, sys.argv[2])
                         image = Image(sys.argv[2])
                         
@@ -923,7 +942,7 @@ def main():
             raise Exception("Incorrect command")
 
     except Exception as e:
-        print(e)
+        print(' '.join(['❌' , str(e)]))
 
 
 if __name__ == "__main__":
