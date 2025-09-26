@@ -34,7 +34,7 @@ def handle_cmd(cmd: list):
             taskclient.send_cmd(' '.join(cmd))
 
         elif cmd[0] == "check" or cmd[0] == "cmd":
-            res = taskclient.send_cmd(' '.join(cmd), output=False)
+            res = taskclient.send_cmd(' '.join(cmd), output=True)
             if res:
                 for msg in res:
                     try:

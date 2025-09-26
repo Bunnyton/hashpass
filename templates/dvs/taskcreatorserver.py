@@ -41,6 +41,7 @@ class TaskCreatorServer(Server):
             del self.task
             self.task = None
 
+
     def _cmd_stop(self, cmd: list, clientsocket: socket.socket):
         if len(cmd) != 1:
             raise Exception("Args num incorrect")

@@ -71,6 +71,7 @@ class TaskCheckerServer(Server):
     def check_stage(self) -> list | None:
         if self.curstage_num < self.config['stage_amount']:
             stage_config = self.config[''.join(['stage', str(self.curstage_num)])]
+            self.reply_with_logging(stage_config, self.clientsocket)
             for change in stage_config['changes']:
                 if not self.check_change(change):
                     return None

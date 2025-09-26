@@ -20,9 +20,11 @@ class Stage():
         if os.path.isfile(config_file):
             with open(config_file, 'r') as sf:
                 self.config = toml.load(sf)
+
             self.config["changes"] = dict()
             if not self.config.get("actions"):
                 self.config["actions"] = list()
+
         else:
             raise Exception(' '.join(["Can't read stage config file", config_file]))
 
@@ -77,9 +79,8 @@ class Stage():
                             return # another file ignore from observe dir of observe file 
 
                 
-                data: str = None
-                if os.path.exists(path):
-                    data = readfile(path)
+                data = readfile(path)
+                if data:
                     data = hooks.engine.filter_hook(self._cmd, data, self._num)
 
 
@@ -106,11 +107,9 @@ class Stage():
                                                             'pardir': os.path.dirname(path),
                                                             'hash': str(Simhash(data).value),
                                                             'state': 'modified'}
-                            raise Exception(' '.join(['New state of file', path, 'is', state, 'but prev state is deleted',
-                                                      self.config['changes'][path]['state']]))
 
                         elif self.config['changes'][path]['state'] == 'deleted':
-                            raise Exception(' '.join(['New state of file', path, 'is', state, 'but prev state is deleted',
+                            raise Exception(' '.join(['New state of file', path, 'is', state, 'but prev state is',
                                                       self.config['changes'][path]['state']]))
 
                     elif state == 'deleted':
@@ -188,20 +187,25 @@ class Stage():
 
         return observer
 
+
     def start(self):
         for dir in self._observe_list['dirs']:
             self._observe_processes.append(self._observe_dir(dir, recursive=True))
 
-        for dir in self._observe_list['files'].keys():
-            self._observe_processes.append(self._observe_dir(dir, recursive=False))
+        for file in self._observe_list['files'].keys():
+            self._observe_processes.append(self._observe_dir(file, recursive=False))
 
 
     def stop(self):
         for proc in self._observe_processes:
             if proc:
                 proc.stop()
-            self._observe_processes.remove(proc)
-            # proc.join()
+
+        for proc in self._observe_processes:
+            proc.join()
+
+        self._observe_processes = list()
+
 
     def save(self):
         if Stage.Config.cmd_output_file in self.config['changes'].keys():
@@ -210,6 +214,7 @@ class Stage():
 
         with open(self.result_file, 'w') as cf:
             toml.dump(self.config, cf)
+
 
     def __del__(self):
         self.stop()

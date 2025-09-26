@@ -22,7 +22,7 @@ class Task():
         self.config_dir = config_dir
         self.config_file = os.path.join(config_dir, Task.Config.config_filename)
         self.hooks_dir = os.path.join(config_dir, Task.Config.hooks_dirname)
-        self.stage_config_file = os.path.join(config_dir, Task.Config.stage_config_filename)
+        self.stage_config_file = os.path.join(config_dir, Task.Config.stage_config_filename) # FIXME names
         self._curstage = None
         self._prevstage = None
         self._stagenum = 0
@@ -63,6 +63,9 @@ class Task():
         else:
             raise Exception("Stage has not been started")
 
+        for stage in self.stages:
+            print(stage.config)
+
 
     def dump_settings(self, dest):
         copy(self.config_file, dest)
@@ -73,5 +76,6 @@ class Task():
             self.stop_stage()
 
         for stage in self.stages:
+            print(stage.config)
             stage.save()
 
