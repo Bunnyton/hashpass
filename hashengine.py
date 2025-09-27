@@ -70,7 +70,7 @@ class Image():
 
     def edit(self):
         container = Container(self)
-        container.start(mode=Container.Mode.image_edit)
+        container.start(mode=Container.Mode.edit)
 
 
     def import_from_fs(self, path: str): 
@@ -278,7 +278,7 @@ class Container():
 
 
     class Mode():
-        image_edit = "Editing image environment for tasks"
+        edit = "Editing image environment for tasks"
         task_complete = "Completing a task"
         task_create = "Creating a task"
 
@@ -414,7 +414,7 @@ class Container():
         # subprocess.run(["pyarmor", "gen", "-r", self._task_bindir, "-O", os.path.join(self.mountpoint, "tmp/dist")], check=True)
         
 
-        if mode == Container.Mode.task_create or mode == Container.Mode.image_edit:
+        if mode == Container.Mode.task_create or mode == Container.Mode.edit:
             copy(os.path.join(Container.Config.templates_dir, "dvs", "image.sh"), os.path.join(self.mountpoint, "usr", "bin", "image"))
             os.chmod(os.path.join(self.mountpoint, "usr", "bin", "image"), 0o555)
 
@@ -643,7 +643,7 @@ class Container():
 
                 image_is_empty = False
 
-            elif mode == Container.Mode.image_edit:
+            elif mode == Container.Mode.edit:
                 image_is_empty = False
 
             while True:
@@ -699,7 +699,7 @@ class Container():
                     self.image.delete()
 
                 elif mode != Container.Mode.task_complete:
-                    if mode == Container.Mode.image_edit:
+                    if mode == Container.Mode.edit:
                         print(f"✅ Edit {self.image.fullname} successfull")
 
                     else:

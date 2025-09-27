@@ -15,3 +15,5 @@ __pycache__
 *.pyd
 
 *.tar.gz
+docs/.obsidian/*
+docs/.trash/*

@@ -34,7 +34,7 @@ class UserConfig():
 
 
     def get_key(self, task_number: int) -> str:
-        if self.task_progress.get(str(task_number)):
+        if str(task_number) in self.task_progress:
             return self.task_progress[str(task_number)]
 
         return ""

@@ -1,7 +1,6 @@
-watchdog
-numpy
 toml
 tqdm
 tabulate
 pyarmor
 pydantic-settings
+requests
