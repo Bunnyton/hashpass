@@ -558,14 +558,10 @@ class Container():
         for layer in self.image.layers:
             self._lowerdirs.append(os.path.join(Image.Config.config_dir, layer))
 
-        if mode == Container.Mode.image_edit: 
-            self._upperdir = self.image.config_dir
-
-        else:
-            self._lowerdirs.append(self.image.config_dir)
-            self._upperdir = os.path.join(self.config_dir, "emptyupper")
-            remove(self._upperdir)
-            os.makedirs(self._upperdir, exist_ok=True)
+        self._lowerdirs.append(self.image.config_dir)
+        self._upperdir = os.path.join(self.config_dir, "emptyupper")
+        remove(self._upperdir)
+        os.makedirs(self._upperdir, exist_ok=True)
 
         if not self._lowerdirs:
             self._lowerdir = os.path.join(self.config_dir, "emptylower")
