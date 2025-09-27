@@ -97,9 +97,9 @@ class Image():
                 raise Exception(f"Can't find image {param}")
 
         
-        self.name = read("Enter name of image: ")
-        self.author = read("Enter author of image: ")
-        self.version = read("Enter version of image: ", default="latest")
+        self.name = read("Enter name of image: ").strip()
+        self.author = read("Enter author of image: ").strip()
+        self.version = read("Enter version of image: ", default="latest").strip()
 
         self.fullname = Image._to_fullname(self.author, self.name, self.version)
         if Image.get(self.fullname):
