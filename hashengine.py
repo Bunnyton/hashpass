@@ -465,7 +465,8 @@ class Container():
         copy(os.path.join(Container.Config.templates_dir, "dvs", "hash.sh")
                       , os.path.join(self.mountpoint, "usr", "bin", "hash"))
         os.chmod(os.path.join(self.mountpoint, "usr", "bin", "hash"), 0o555)
-        if mode == Container.Mode.task_create:
+
+        if mode == Container.Mode.task_create or mode == Container.Mode.edit:
             copy(os.path.join(Container.Config.templates_dir, "dvs", "stage.sh")
                   , os.path.join(self.mountpoint, "usr", "bin", "stage"))
             os.chmod(os.path.join(self.mountpoint, "usr", "bin", "stage"), 0o555)
@@ -662,7 +663,7 @@ class Container():
                     raise
 
                 finally:
-                    if mode == Container.Mode.task_create:
+                    if mode == Container.Mode.task_create or mode == Container.Mode.edit:
                         config_file = os.path.join(self._task_config_dir, Container.Config.task_config_filename)
                         if os.path.isfile(config_file):
                             self.image.type = Image.Type.task
