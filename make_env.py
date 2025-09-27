@@ -703,7 +703,11 @@ class Container():
                     self.image.delete()
 
                 elif mode != Container.Mode.task_complete:
-                    print(f"✅ Create {self.image.fullname} successfull")
+                    if mode == Container.Mode.image_edit:
+                        print(f"✅ Edit {self.image.fullname} successfull")
+
+                    else:
+                        print(f"✅ Create {self.image.fullname} successfull")
 
                 break
 
