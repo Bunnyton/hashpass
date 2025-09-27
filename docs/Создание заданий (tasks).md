@@ -81,7 +81,7 @@ task save
 Далее достаточно будет просто выйти из системы, задание добавится автоматически
 
 
-[![Watch the video](../photo/hashpass.png)](https://rutube.ru/video/private/a117c55014b4d919209ac81b9cbe2ef4/?p=V6h2jMYUdTlh2F3VlEN3WQ)
+[![Watch the video](photo/hashpass.png)](https://rutube.ru/video/private/a117c55014b4d919209ac81b9cbe2ef4/?p=V6h2jMYUdTlh2F3VlEN3WQ)
 
 
 #### Редактирование 

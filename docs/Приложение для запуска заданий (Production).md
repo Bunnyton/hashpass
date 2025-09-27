@@ -18,7 +18,7 @@ student:student
 Для того чтобы добавить новое задание - достаточно в settings.py прописать номер задания и соответствующий ему образ (и все).
 
 
-[![Watch the video](../photo/hashpass.png)](https://rutube.ru/video/private/912253505f21eac1dc4faaa60f004951/?p=KbuMQ-nRAqtgYDwNrUU65w)
+[![Watch the video](photo/hashpass.png)](https://rutube.ru/video/private/912253505f21eac1dc4faaa60f004951/?p=KbuMQ-nRAqtgYDwNrUU65w)
 
 #### Механизм работы ключей
 Каждый пользователь вводит уникальный ник, после чего ключ вычисляется при помощи необратимой функции:

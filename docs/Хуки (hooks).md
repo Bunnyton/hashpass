@@ -76,7 +76,7 @@ def cmd_whitelist(cmd: str, stage: int):
 Если же cmd в результате передастся как ```"cmd": []```, то дальнейшая обработка правил **прекращается**
 
 
-[![Watch the video](../photo/hashpass.png)](https://rutube.ru/video/private/223fe36ac08b715cd1052539dd8a2e24/?p=pemUIqtMRS_KEfp0Yd7R3g)
+[![Watch the video](photo/hashpass.png)](https://rutube.ru/video/private/223fe36ac08b715cd1052539dd8a2e24/?p=pemUIqtMRS_KEfp0Yd7R3g)
 
 ### @filter
 Суть состоит в том, что можно создать обработчик, который встанет на стыке между чтением файла или получением результата вывода команды и получением символьного хэша. 
@@ -111,4 +111,4 @@ def filt_lsal(cmd: str, data: str, stage: int):
 
 Если обработчиков несколько - выполняются все они по очереди сверху вниз
 
-[![Watch the video](../photo/hashpass.png)](https://rutube.ru/video/private/6c1739e3991e1f320c62f08310e01b4d/?p=jKb68ehtNxfCEUwIiv6oqg)
+[![Watch the video](photo/hashpass.png)](https://rutube.ru/video/private/6c1739e3991e1f320c62f08310e01b4d/?p=jKb68ehtNxfCEUwIiv6oqg)

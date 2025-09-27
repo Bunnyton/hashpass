@@ -41,7 +41,7 @@ sudo ./hashengine.py edit bunnyton/student:latest
 sudo ./hashengine.py rm bunnyton/student:latest
 ```
 
-[![Watch the video](../photo/hashpass.png)](https://rutube.ru/video/private/d4933a3a9ae3d9f2a8046c8e45c14479/?p=R69WqvIWwCcBhdxf1l1BOw)
+[![Watch the video](photo/hashpass.png)](https://rutube.ru/video/private/d4933a3a9ae3d9f2a8046c8e45c14479/?p=R69WqvIWwCcBhdxf1l1BOw)
 
 
 #### Задания (task)
@@ -70,4 +70,4 @@ sudo ./hashengine.py pull bunnyton/student:latest
 sudo ./hashengine.py push bunnyton/custom:no_latest
 ```
 
-[![Watch the video](../photo/hashpass.png)](https://rutube.ru/video/private/8e16f924ebfdc222bfd3fdeba3c7a6d8/?p=CIkfCe4vqX1aUzeNDQbu1Q)
+[![Watch the video](photo/hashpass.png)](https://rutube.ru/video/private/8e16f924ebfdc222bfd3fdeba3c7a6d8/?p=CIkfCe4vqX1aUzeNDQbu1Q)

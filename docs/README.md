@@ -1,5 +1,5 @@
 
-[![Watch the video](../photo/hashpass.png)](https://rutube.ru/video/private/37627480156ee69286cb988bc4b2ac25/?p=b9p6xcUlqOUY8EyyyyH-4w)
+[![Watch the video](photo/hashpass.png)](https://rutube.ru/video/private/37627480156ee69286cb988bc4b2ac25/?p=b9p6xcUlqOUY8EyyyyH-4w)
 Данный проект призван облегчить освоение пользователями Linux. При помощи данного проекта легко можно создавать интерактивные задания под Linux.
 
 Механизм приема задания заключается в фиксации текущего состояния системы. Если система (а вместе с ней и вывод последней команды) приняла необходимое состояние, то пользователь получает ключ.
