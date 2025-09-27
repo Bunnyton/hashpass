@@ -97,11 +97,21 @@ def main():
     while True:
         if task_num == 0 or check_key(userconfig, task_num=task_num - 1):
             # Запуск задания
-            cmd = ['/'.join([settings.sys_app_path]), "start", userconfig.get_task_name(task_num)]
-            exec_cmd(cmd)
+            try:
+                cmd = ['/'.join([settings.sys_app_path]), "start", userconfig.get_task_name(task_num)]
+                exec_cmd(cmd)
+
+            except Exception as e:
+                print(' '.join(["❌", str(e)]))
+                return
 
             while True:
-                user_key = input("Введите ключ, чтобы перейти к следующему заданию (Ctrl+C = выход): ").strip()
+                if check_key(userconfig, task_num=task_num):
+                    break
+
+                user_key = ""
+                while not user_key:
+                    user_key = input("Введите ключ, чтобы перейти к следующему заданию (Ctrl+C = выход): ").strip()
 
                 if check_key(userconfig, task_num=task_num, key=user_key):
                     userconfig.save(key=user_key, task_num=task_num)
@@ -120,7 +130,7 @@ def main():
             while True:
                 user_key = input(f"Введите ключ, полученный в {task_num - 1} задании (Ctrl+C = выход): ").strip()
 
-                if check_key(userconfig, task_num=task_num - 1, key=user_key):
+                if user_key and check_key(userconfig, task_num=task_num - 1, key=user_key):
                     userconfig.save(key=user_key, task_num=task_num - 1)
                     break
 

@@ -41,11 +41,11 @@ class UserConfig():
 
             
     def get_task_name(self, task_num: int = None, all : bool = False) -> list:
-        if task_num and settings.tasks.get(str(task_num)):
-            return settings.tasks[str(task_num)]
-
-        elif all:
+        if task_num is None and all: 
             return settings.tasks.values()
+
+        elif str(task_num) in settings.tasks:
+            return settings.tasks[str(task_num)]
 
         else:
             raise Exception(f"Task with number {task_num} doesn't exist")

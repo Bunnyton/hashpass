@@ -9,8 +9,8 @@ class Settings(BaseSettings):
         validation_alias = None
     )
 
-    server_url: str = "http://127.0.0.1:8000"
-    # server_url: str = "http://185.212.148.108:8000"
+    # server_url: str = "http://127.0.0.1:8000"
+    server_url: str = "http://185.212.148.108:8000"
 
     app_dir: str = "/opt/.hashpass"
     sys_app_path: str = os.path.join(app_dir, "make_env.py")
@@ -44,7 +44,6 @@ class Settings(BaseSettings):
         default = { 
             '0': "bunnyton/hello:latest", 
             '1': "bunnyton/simple_ls:latest",
-            '2': "bunnyton/ls_la:latest",
         },
         validation_alias = None
     )

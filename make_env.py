@@ -786,7 +786,8 @@ def push(server_url: str, param: str):
     except:
         pass
     else:
-        raise Exception(f"{param} already exist on registry")
+        print(f"{param} already exist on registry")
+        return
 
     image = Image(param)
 
@@ -809,7 +810,8 @@ def pull(server_url: str, param = None):
         raise Exception(f"Image with name {param} can't be exist")
 
     if Image.get(param):
-        raise Exception(f"{param} already pulled")
+        print(f"{param} already pulled")
+        return
 
     manifest = get_info(server_url, param)
 
