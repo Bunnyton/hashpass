@@ -1,3 +1,9 @@
+image:
+```
+bunnyton/simple_ls:latest
+```
+
+
 readme.txt:
 ```
 
