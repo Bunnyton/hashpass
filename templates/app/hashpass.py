@@ -42,13 +42,21 @@ def main():
     userconfig = UserConfig()
     if not userconfig.username:
         userconfig.save(username=ensure_username())
+    print("\nОбновление списка заданий")
+    try:
+        for task_name in userconfig.get_task_name(all=True):
+            pull_cmd = ['/'.join([settings.sys_app_path]), "pull", task_name]
+            exec_cmd(pull_cmd)
 
-    print(f"Добро пожаловать, {userconfig.username}!\n")
+        print("Обновление завершено")
+
+    except Exception:
+        print("Ошибка обновления")
 
 
-    for task_name in userconfig.get_task_name(all=True):
-        pull_cmd = ['/'.join([settings.sys_app_path]), "pull", task_name]
-        exec_cmd(pull_cmd)
+    print(f"\nДобро пожаловать, {userconfig.username}!\n")
+
+
 
         
     # --- Режим проверки ---

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
         default = { 
             '0': "bunnyton/hello:latest", 
             '1': "bunnyton/simple_ls:latest",
+            '2': "bunnyton/ls_la:latest",
         },
         validation_alias = None
     )
