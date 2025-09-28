@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # server_url: str = "http://127.0.0.1:8000"
     server_url: str = "http://185.212.148.108:8000"
 
-    app_dir: str = "/opt/.hashpass"
+    app_dir: str = "/opt/.hashpass_dev"
     sys_app_path: str = os.path.join(app_dir, "hashengine.py")
     config_dir: str = os.path.join(app_dir, "config")
     templates_dir: str = os.path.join(app_dir, "templates")

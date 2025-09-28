@@ -52,13 +52,13 @@ class UserConfig():
 
 
 
-    def get_last_task_num(self) -> int:
+    def get_last_task_num(self) -> int | None:
         try:
             nums = []
             for k in self.task_progress.keys():
                 nums.append(int(k))
 
-            return max(nums) if nums else 0
+            return max(nums) if nums else None
 
         except Exception:
             e = "Task number must be int or str(int)"

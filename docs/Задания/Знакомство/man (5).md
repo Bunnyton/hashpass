@@ -56,3 +56,20 @@ action cat /opt/yoda.txt
 
 «На оружие полагаешься, но оружием нельзя выиграть сражение. Разум твой всего сильнее»
 ```
+
+/.hash/bin/hooks/all.py добавлен 
+```
+@check(stages=None)
+def check_man(cmd: str, stage:int):
+    parts = shlex.split(cmd)
+    
+    if parts[0] == "man":
+        parser = argparse.ArgumentParser()
+        parser.add_argument('pages', nargs='*')
+        
+        args, _ = parser.parse_known_args(parts[1:])
+
+        if len(args.pages) == 1 and 'man' in args.pages:
+            return True
+```
+

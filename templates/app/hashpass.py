@@ -83,10 +83,20 @@ def main():
 
     while True:
         try:
-            choice = input(f"Введите номер задания (Enter = продолжить с {lt + 1}): ").strip()
-            task_num = lt + 1
-            if choice != "": 
-                task_num = int(choice)
+            if lt is None:
+                task_num = 0
+                print("Рады приветствовать Вас в системе HASHPASS!")
+                print("Сейчас Вы перейдете в приветственное задание")
+                print("Для входа Вам понадобятся учетные данные student:student\n")
+                time.sleep(5)
+                print("Удачи!")
+                time.sleep(2)
+
+            else:
+                choice = input(f"Введите номер задания (Enter = продолжить с {lt + 1}): ").strip()
+                task_num = lt + 1
+                if choice != "": 
+                    task_num = int(choice)
 
             break
 
