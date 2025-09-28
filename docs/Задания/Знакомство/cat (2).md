@@ -84,5 +84,5 @@ key_here.txt:
 
 final action:
 ```
-action echo "Круто!"
+action echo -e "\n\nКруто!"
 ```

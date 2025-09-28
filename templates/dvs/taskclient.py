@@ -17,20 +17,30 @@ def handle_cmd(cmd: list):
         if len(cmd) == 0:
             raise Exception("Args num incorrect" )
         # for task creator server
-        if cmd[0] == "start":
-            if len(cmd) != 1:
-                raise Exception("Args num incorrect" )
 
-            taskclient.send_cmd("start") 
+        if cmd[0] == "task":
+            if len(cmd) != 2:
+                    raise Exception("Args num incorrect" )
 
-        elif cmd[0] == "save":
-            if len(cmd) == 1:
-                taskclient.send_cmd("save")
+            if cmd[1] == "start" or cmd[1] == "save" or cmd[1] == "stop" or cmd[1] == "settings":
+                    taskclient.send_cmd(cmd[1]) 
+
+            elif cmd[1] == "restart":
+                with open(config.statusfile, 'w') as sf:
+                    sf.write("restarting")
+
+            elif cmd[1] == "play":
+                with open(config.statusfile, 'w') as sf:
+                    sf.write("task playing")
+
+            elif cmd[1] == "exit":
+                with open(config.statusfile, 'w') as sf:
+                    sf.write("stopping")
 
             else:
-                raise Exception("Args num incorrect" )
+                raise Exception("Unknown args")
             
-        elif cmd[0] == "action" or cmd[0] == "stage" or cmd[0] == "stop" or cmd[0] == "settings":
+        elif cmd[0] == "action" or cmd[0] == "stage":
             taskclient.send_cmd(' '.join(cmd))
 
         elif cmd[0] == "check" or cmd[0] == "cmd":
@@ -43,24 +53,10 @@ def handle_cmd(cmd: list):
                     except:
                         pass
 
-        elif cmd[0] == "exit":
-            if len(cmd) == 1:
-                with open(config.statusfile, 'w') as sf:
-                    sf.write("stopping")
-
-            else:
-                raise Exception("Args num incorrect" )
-
-
-        elif cmd[0] == "restart":
-            if len(cmd) == 1:
-                with open(config.statusfile, 'w') as sf:
-                    sf.write("restarting")
-
-            else:
-                raise Exception("Args num incorrect" )
-
         elif cmd[0] == "image":
+            if len(cmd) != 2:
+                raise Exception("Args num incorrect" )
+
             if len(cmd) == 2 and cmd[1] == "save":
                 with open(config.statusfile, 'w') as sf:
                     sf.write("image saving")
@@ -70,10 +66,10 @@ def handle_cmd(cmd: list):
                     sf.write("image updating")
 
             else:
-                raise Exception("Args num incorrect" )
+                raise Exception("Unknown args")
 
         else:
-            raise Exception("Unknown args" + str(cmd))
+            raise Exception("Unknown args")
 
     except Exception as e:
         print(e)

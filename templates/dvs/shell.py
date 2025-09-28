@@ -202,14 +202,14 @@ def main():
                 cmdstr = ' '.join(' '.join(x) if isinstance(x, list) else x for x in cmd)
 
                 if search_start_with_cmd(cmd, ["task", "exit"]):
-                    taskclient.handle_cmd(["exit"])
+                    taskclient.handle_cmd(cmd[0])
                     sys.exit()
 
                 if search_start_with_cmd(cmd, ["exit"]):
                     sys.exit()
 
                 if search_start_with_cmd(cmd, ["task"]):
-                    taskclient.handle_cmd(cmd[0][1::])  #FIXME fix costil with cmd format
+                    taskclient.handle_cmd(cmd[0])  #FIXME fix costil with cmd format
                     continue
 
                 if search_start_with_cmd(cmd, ["stage"]):

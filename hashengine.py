@@ -279,7 +279,7 @@ class Container():
 
     class Mode():
         edit = "Editing image environment for tasks"
-        task_complete = "Completing a task"
+        task_play = "Completing a task"
         task_create = "Creating a task"
 
     class Status():
@@ -291,6 +291,7 @@ class Container():
         deleted = "Container with task has been deleted or doesn't exist"
         image_updating = "Container fs changes will be saved to self image and restart"
         image_saving = "Container fs changes will be saved to self image and exit"
+        task_playing = "Container fs changes will be saved to self image and play task"
 
 
         def get_from(status_item):
@@ -319,6 +320,10 @@ class Container():
 
             elif status_text == "deleted":
                 return Container.Status.deleted
+
+            elif status_text == "task playing":
+                return Container.Status.task_playing
+
 
             elif status_text == "image updating":
                 return Container.Status.image_updating
@@ -433,7 +438,7 @@ class Container():
             os.chmod(os.path.join(self.mountpoint, settings.task_config_dirname), 0o777)
 
 
-        elif mode == Container.Mode.task_complete:
+        elif mode == Container.Mode.task_play:
             copy(os.path.join(Container.Config.templates_dir, "dvs", "taskchecker.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "taskchecker.service"))
 
             if not os.path.islink(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service")):
@@ -633,12 +638,12 @@ class Container():
 
 
 
-    def start(self, mode=Mode.task_complete):
+    def start(self, mode=Mode.task_play):
         if self.id:
             self.mode = mode
             image_is_empty = True
 
-            if mode == Container.Mode.task_complete:
+            if mode == Container.Mode.task_play:
                 if self.image.type != Image.Type.task:
                     raise Exception(' '.join(["Image with id =", self.image.id, "is not task image"]))
 
@@ -675,12 +680,16 @@ class Container():
 
                     self.stop() 
 
-                    if self.status == Container.Status.image_saving or self.status == Container.Status.image_updating:
+                    if self.status == Container.Status.image_saving or self.status == Container.Status.image_updating or self.status == Container.Status.task_playing:
                         self.image.load_task_hooks(self._task_hooks_dir)
 
                     self._deconfigure()
 
                     self._umount()
+
+                if self.status == Container.Status.task_playing:
+                    mode = Container.Mode.task_play
+                    continue
 
                 if self.status == Container.Status.restarting:
                     continue
@@ -699,7 +708,7 @@ class Container():
                     print("❌ Deleting empty image")
                     self.image.delete()
 
-                elif mode != Container.Mode.task_complete:
+                elif mode != Container.Mode.task_play:
                     if mode == Container.Mode.edit:
                         print(f"✅ Edit {self.image.fullname} successfull")
 
@@ -917,7 +926,7 @@ def main():
                     image = Image(sys.argv[2])
                     image.edit()
 
-                elif sys.argv[1] == "start":
+                elif sys.argv[1] == "start" or sys.argv[1] == "play":
                     try:
                         image = Image(sys.argv[2])
 
@@ -926,7 +935,7 @@ def main():
                         image = Image(sys.argv[2])
                         
                     container = Container(image)
-                    container.start(mode=Container.Mode.task_complete)
+                    container.start(mode=Container.Mode.task_play)
 
                 elif sys.argv[1] == "create":
                     image = Image()

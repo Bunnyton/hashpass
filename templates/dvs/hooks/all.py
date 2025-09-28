@@ -75,7 +75,7 @@ def filt_ls_l(cmd: str, data: str, stage: int):
         parser = argparse.ArgumentParser(prog='ls')
         parser.add_argument('-l', '--long', action='store_true')
         
-        args, _ = parser.parse_know_args(parts[1:])  # Разрешает неизвестные аргументы
+        args, _ = parser.parse_known_args(parts[1:])  # Разрешает неизвестные аргументы
         # args = parser.parse_args(parts[1:])  # Не разрешает неизвестные аргументы
 
         if args.long:
