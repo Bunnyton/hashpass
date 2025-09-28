@@ -8,7 +8,7 @@ student:student
 ```
 
 #### Установка
-Для установки достаточно установить deb пакет [ссылка](/install/hashpass.deb)
+Для установки достаточно установить deb пакет [ссылка](https://gitlab.com/Bunnyton/hashpass/-/raw/main/install/hashpass.deb)
 
 #### Первый запуск
 Для того, чтобы приступить к решению задач выполните:
