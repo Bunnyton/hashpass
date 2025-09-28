@@ -83,8 +83,8 @@ def main():
 
     while True:
         try:
-            choice = input(f"Введите номер задания (Enter = продолжить с {lt}): ").strip()
-            task_num = lt 
+            choice = input(f"Введите номер задания (Enter = продолжить с {lt + 1}): ").strip()
+            task_num = lt + 1
             if choice != "": 
                 task_num = int(choice)
 
