@@ -21,6 +21,6 @@ sudo hashpass
 The authenticity of host 'gitlab.com (172.65.251.78)' can't be established.
 ED25519 key fingerprint is SHA256:eUXGGm1YGsMAS7vkcx6JOJdOGHPem5gQp4taiCfCLB8.
 This key is not known by any other names.
-Are you sure you want to continue connecting (yes/no/[fingerprint])?
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
 ```
 Введите yes, больше данная надпись выскакивать не будет
