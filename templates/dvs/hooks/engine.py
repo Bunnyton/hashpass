@@ -4,7 +4,7 @@ import importlib
 
 
 # Словарь для регистрации команд
-cmd_hooks_handlers = list() #FIXME add functional to dynamically update code
+cmd_hooks = list() #FIXME add functional to dynamically update code
 filter_hooks = list() 
 check_hooks = list()
 

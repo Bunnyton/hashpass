@@ -1,10 +1,13 @@
 from hooks.engine import *
+
 import re
+import argparse
+import shlex
 
 
 # @command(stages=None)
 # def cmd_whitelist(cmd: str, stage: int):
-#     if cmd.split()[0] != 'ls':
+#     if shlex.split(cmd)[0] != 'ls':
 #         res = {"before": ["echo \"This command is on the blacklist\""]
 #                 , "cmd": []
 #                 , "after": []}
@@ -20,7 +23,7 @@ import re
 # @command(stages=None)
 # def cmd_blacklist(cmd: str, stage: int):
 # 
-#     primary_cmd = cmd.split()[0]
+#     primary_cmd = shlex.split(cmd)[0]
 # 
 #     if primary_cmd == 'grep':
 #         res = {"before": ["echo \"This command is on the blacklist\""]
@@ -42,9 +45,16 @@ import re
 
 # @command(stages=[0, 1])
 # def cmd_ls(cmd: str, stage: int):
-#     res = {"before": ["echo \"Успех\""]
-#             , "cmd": [cmd]
-#             , "after": []}
+#     primary_cmd = shlex.split(cmd)[0]
+#     if primary_cmd == "ls":
+#         res = {"before": ["echo \"Успех\""]
+#                 , "cmd": [cmd]
+#                 , "after": []}
+# 
+#     else:
+#         res = {"before": []
+#                 , "cmd": [cmd]
+#                 , "after": []}
 # 
 #     return res
 
@@ -57,31 +67,48 @@ def filt(cmd: str, data: str, stage: int):
     return re.sub(r'key{.*}', '', filter_data, flags=re.IGNORECASE)
 
 
-@filter(stages=None) #FIXME добавить прощенное распознавание команд (любых)
-def filt_lsal(cmd: str, data: str, stage: int):
-    if cmd == "ls -la" or cmd == "ls -al":
-        lines = data.split('\n')
-        result = []
+@filter(stages=None) 
+def filt_ls_l(cmd: str, data: str, stage: int):
+    parts = shlex.split(cmd)
+    
+    if parts[0] == "ls":
+        parser = argparse.ArgumentParser(prog='ls')
+        parser.add_argument('-l', '--long', action='store_true')
+        
+        args, _ = parser.parse_know_args(parts[1:])  # Разрешает неизвестные аргументы
+        # args = parser.parse_args(parts[1:])  # Не разрешает неизвестные аргументы
 
-        for line in lines:
-            if line.strip():  # Пропускаем пустые строки
-                columns = line.split()
-                if len(columns) > 1:
-                    # Берем все кроме предпоследней колонки
-                    new_columns = columns[:len(columns)-2] + columns[len(columns)-1:]
-                    result.append(' '.join(new_columns))
+        if args.long:
+            lines = data.split('\n')
+            result = []
+
+            for line in lines:
+                if line.strip():  # Пропускаем пустые строки
+                    columns = line.split()
+                    if len(columns) > 1:
+                        # Берем все кроме предпоследней колонки
+                        new_columns = columns[:len(columns)-2] + columns[len(columns)-1:]
+                        result.append(' '.join(new_columns))
+                    else:
+                        result.append('')
                 else:
                     result.append('')
-            else:
-                result.append('')
 
-        return '\n'.join(result)
+            return '\n'.join(result)
 
     return data
 
 
-@check(stages=None)
-def check_man(cmd: str, stage:int):
-    if cmd == "man man":
-        return True
+# @check(stages=None)
+# def check_man(cmd: str, stage:int):
+#     parts = shlex.split(cmd)
+#     
+#     if parts[0] == "man":
+#         parser = argparse.ArgumentParser()
+#         parser.add_argument('pages', nargs='*')
+#         
+#         args, _ = parser.parse_known_args(parts[1:])
+# 
+#         if len(args.pages) == 1 and 'man' in args.pages:
+#             return True
 
