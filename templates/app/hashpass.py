@@ -44,6 +44,11 @@ def main():
     userconfig = UserConfig()
     if not userconfig.username:
         userconfig.save(username=ensure_username())
+
+    print("\nПроверка обновлений")
+    result = subprocess.run( ['git', '-C', settings.app_dir, 'pull', 'origin', 'main']
+                                         , capture_output=True, text=True)
+
     print("\nОбновление списка заданий")
     try:
         for task_name in userconfig.get_task_name(all=True):
