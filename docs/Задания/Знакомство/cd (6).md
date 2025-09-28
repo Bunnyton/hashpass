@@ -31,7 +31,7 @@ cd ./downloads
 pwd
 
 #Задание 
-Перейдите в директорию dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9 и выполните команду ls
+Перейдите в директорию dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и выполните команду ls
 ```
 
 infra:

@@ -1,6 +1,5 @@
 toml
 tqdm
 tabulate
-pyarmor
 pydantic-settings
 requests
