@@ -6,6 +6,7 @@ import importlib
 # Словарь для регистрации команд
 cmd_hooks = {"common_handlers": [], "handlers": []} #FIXME add functional to dynamically update code
 filter_hooks =  {"common_handlers": [], "handlers": []} 
+check_hooks =  {"common_handlers": [], "handlers": []} 
 
 
 def command(cmds=None, stages=None):
@@ -25,6 +26,16 @@ def filter(cmds=None, stages=None):
 
         else:
             filter_hooks["handlers"].append({"cmds": cmds, "stages": stages, "handler": handler})
+    return register
+
+
+def check(cmds=None, stages=None):
+    def register(handler):
+        if cmds is None:
+            check_hooks["common_handlers"].append({"stages": stages, "handler": handler})
+
+        else:
+            check_hooks["handlers"].append({"cmds": cmds, "stages": stages, "handler": handler})
     return register
 
 
@@ -57,7 +68,6 @@ def cmd_hook(cmd: str, stage: int):
     return res
 
 
-
 def filter_hook(cmd: str, data: str, stage: int):
     filter_data = data
     for ch in filter_hooks["common_handlers"]:
@@ -71,3 +81,20 @@ def filter_hook(cmd: str, data: str, stage: int):
 
     return filter_data
 
+
+def check_hook(cmd: str, stage: int):
+    for ch in check_hooks["common_handlers"]:
+        if ch["stages"] is None or stage in ch["stages"]:
+            check_res = ch["handler"](cmd, stage)
+            if check_res is not None:
+                return check_res
+            
+
+    for h in check_hooks["handlers"]:
+        if cmd in h["cmds"]:
+            if h["stages"] is None or stage in h["stages"]:
+                check_res = h["handler"](cmd, stage)
+                if check_res is not None:
+                    return check_res
+
+    return None

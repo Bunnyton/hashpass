@@ -51,13 +51,6 @@ class UserConfig():
             raise Exception(f"Task with number {task_num} doesn't exist")
 
 
-    def get_tasks(self, task_num: int) -> list:
-        if settings.tasks:
-            return settings.tasks.values()
-
-        else:
-            return []
-
 
     def get_last_task_num(self) -> int:
         try:

@@ -11,7 +11,7 @@ from server import Server
 
 from syshelp import readfile
 
-from hooks.engine import cmd_hook, filter_hook
+from hooks.engine import cmd_hook, filter_hook, check_hook
 import json
 import re
 
@@ -69,14 +69,21 @@ class TaskCheckerServer(Server):
 
 
     def check_stage(self) -> list | None:
-        if self.curstage_num < self.config['stage_amount']:
-            stage_config = self.config[''.join(['stage', str(self.curstage_num)])]
+        if self.curstage_num >= self.config['stage_amount']:
+            return None
+
+        stage_config = self.config[''.join(['stage', str(self.curstage_num)])]
+        res = check_hook(self._cmd, self.curstage_num)
+        if res == False:
+            return None
+
+        elif res is None:
             self.reply_with_logging(stage_config, self.clientsocket)
             for change in stage_config['changes']:
                 if not self.check_change(change):
                     return None
 
-            return stage_config["actions"]
+        return stage_config["actions"]
 
 
     def check(self) -> list | None:
