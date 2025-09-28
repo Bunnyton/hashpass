@@ -1,0 +1,10 @@
+config/images/*
+config/containers/*
+config/userconfig.toml
+
+build/*
+dist/*
+settings.py
+*.spec
+*.log
+env/*
