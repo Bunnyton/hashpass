@@ -1,0 +1,63 @@
+Package: hashpass
+Version: 1.13
+Architecture: arm64
+Essential: no
+Maintainer: bunnyton <toni.suvorov.15@mail.ru>
+Installed-Size: 720
+Depends: docker.io, openssl, libc6, hashpass.data
+Filename: ./hashpass_arm64.deb
+Size: 272692
+MD5sum: 85f00bda6cb829cc9c2505eba7effbc3
+SHA1: aaae6241de7a45a875450f8287141ccb946e4cb4
+SHA256: 6ab9800c8c0f061a8527753eb6e3c6c366487bf0904c77d3bc6931799b67322c
+Section: unknown
+Priority: optional
+Description: hashpass system for labs
+
+Package: hashpass
+Version: 1.13
+Architecture: amd64
+Essential: no
+Maintainer: bunnyton <toni.suvorov.15@mail.ru>
+Installed-Size: 28
+Depends: docker.io, openssl, libc6, hashpass.data
+Filename: ./hashpass.deb
+Size: 17636
+MD5sum: be20c612a7c9bcb4edfd4fcc29184965
+SHA1: b9803df6a532daacaf1f097c9e93d7a2a8871d13
+SHA256: 2ac902418e18e46e8c1affeadea37a7f8d36ea427ce5b49dcfa53ec5a2e174e2
+Section: unknown
+Priority: optional
+Description: hashpass system for labs
+
+Package: hashpass-alt
+Version: 1.13
+Architecture: arm64
+Essential: no
+Maintainer: bunnyton <toni.suvorov.15@mail.ru>
+Installed-Size: 720
+Depends: openssl, libc6, hashpass.data
+Filename: ./hashpass-alt.deb
+Size: 290112
+MD5sum: 3af71497fb7b98b383be7fc5f1f06488
+SHA1: c9cd0588e33c052d1cc530530b8fb888174a20e5
+SHA256: 6c1e44fbb24b62fd0182d2f564f0a5fafa9700d9a133dccf465e6fb4ac1c411a
+Section: unknown
+Priority: optional
+Description: hashpass system for labs
+
+Package: hashpass.data
+Version: 1.0
+Architecture: all
+Essential: no
+Maintainer: bunnyton <toni.suvorov.15@mail.ru>
+Installed-Size: 3196
+Filename: ./hashpass.data.d.deb
+Size: 1401088
+MD5sum: e922b5f76b685e3ade20a0ae06bc43af
+SHA1: ae4d1d22e45715f00de98cd96ec805232651c7c5
+SHA256: 01b1cf69febf6ab6b98588d786509fe1485b89f4966561f91ad460deb0587af7
+Section: unknown
+Priority: optional
+Description: hashpass key's hashes for check
+

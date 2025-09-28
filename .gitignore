@@ -2,6 +2,7 @@ config/images/*
 config/containers/*
 config/userconfig.toml
 
+public/hashpass*
 build/*
 dist/*
 settings.py
