@@ -89,8 +89,7 @@ def filt_lsal(cmd: str, data: str, stage: int):
 #     return "\n".join(lines)
 
 
-# @check(cmds=["man"], stages=None)
+# @check(cmds=["man man"], stages=None)
 # def check_man(cmd: str, stage:int):
-#     if re.sub(r'\s*', ' ', cmd).split() == ["man", "man"]:
-#         return True
+#     return True
 
