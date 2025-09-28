@@ -72,7 +72,7 @@ def filt_ls_l(cmd: str, data: str, stage: int):
     parts = shlex.split(cmd)
     
     if parts[0] == "ls":
-        parser = argparse.ArgumentParser(prog='ls')
+        parser = argparse.ArgumentParser(prog='ls', add_help=False)
         parser.add_argument('-l', '--long', action='store_true')
         
         args, _ = parser.parse_known_args(parts[1:])  # Разрешает неизвестные аргументы
@@ -104,7 +104,7 @@ def filt_ls_l(cmd: str, data: str, stage: int):
 #     parts = shlex.split(cmd)
 #     
 #     if parts[0] == "man":
-#         parser = argparse.ArgumentParser()
+#         parser = argparse.ArgumentParser(add_help=False)
 #         parser.add_argument('pages', nargs='*')
 #         
 #         args, _ = parser.parse_known_args(parts[1:])
