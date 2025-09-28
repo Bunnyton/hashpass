@@ -53,8 +53,47 @@ dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me/key_here.txt
 
 action: 
 ```
-action echo -e "\n\nМожешь пролистать глазами, а ключ будет через 45 секунд"
+action echo -e "\nТы же исползовал Tab, да? ;)"
 ```
 ```
-action sleep 45
+action echo "Ты почти у цели, перейди теперь обратно, в key_here.txt найдешь свой ключ :)"
+```
+```
+action echo "Хватит ходить туда-сюда, нужно двигаться дальше!" > /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me/key_here.txt 
+```
+
+/.hash/bin/hooks/all.py
+```python
+@command(stages=[0])
+def cd_normal(cmd: str, stage: int):
+    res = {"before": []
+            , "cmd": [cmd]
+            , "after": []}
+
+    if shlex.split(cmd)[0] == 'cd':
+        if len(cmd.split('/')) < 4 or not re.search(r"/home/student", cmd):
+            res = {"before": ["echo -e \"no no no, mister fish!\nИспользуй абсолютный путь\"" ]
+                    , "cmd": []
+                    , "after": []}
+
+
+
+    return res
+
+
+@command(stages=[1])
+def cd_normal2(cmd: str, stage: int):
+    res = {"before": []
+            , "cmd": [cmd]
+            , "after": []}
+
+    if shlex.split(cmd)[0] == 'cd':
+        proc_cmd = re.sub(r'\.\/', '', shlex.split(cmd)[1].strip('/'))
+        if proc_cmd != '..':
+            res = {"before": ["echo -e \"Так, ты правда решил что лучше будет использовать абсолютный путь?\"" ]
+                    , "cmd": []
+                    , "after": []}
+
+
+	return res
 ```

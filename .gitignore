@@ -17,3 +17,5 @@ __pycache__
 *.tar.gz
 docs/.obsidian/*
 docs/.trash/*
+
+update.sh

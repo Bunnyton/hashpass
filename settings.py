@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     sys_app_path: str = os.path.join(app_dir, "hashengine.py")
     config_dir: str = os.path.join(app_dir, "config")
     templates_dir: str = os.path.join(app_dir, "templates")
-    userconfig_path: str = os.path.join(config_dir, "userconfig.toml")
+    userconfig_path: str = os.path.join("/root/.local/share/hashpass", "userconfig.toml")
 
     image_config_dir: str = os.path.join(config_dir, 'images')
     image_config_filename: str = "manifest.toml"
@@ -48,6 +48,10 @@ class Settings(BaseSettings):
             '3': "bunnyton/ls_la:latest",
             '4': "bunnyton/help:latest",
             '5': "bunnyton/man:secret",
+            '6': "bunnyton/cd:latest",
+            '7': "bunnyton/cp:latest",
+            '8': "bunnyton/cp:2",
+            '9': "bunnyton/mv:1",
         },
         validation_alias = None
     )
