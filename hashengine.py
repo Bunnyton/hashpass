@@ -522,6 +522,7 @@ class Container():
         remove(self._task_cmdoutfile)
         remove(self._task_tmpfile)
         remove(self._task_statusfile)
+        remove(self._task_pwdfile)
 
         remove(self._task_bindir)
         remove(os.path.join(self.mountpoint, "usr", "bin", "hash"))
@@ -776,6 +777,7 @@ def pull(server_url: str, param = None):
 
     for thr in thrs:
         thr.join()
+
 
 
 def get_remote_images(server_url: str):
