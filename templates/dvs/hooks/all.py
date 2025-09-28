@@ -40,7 +40,7 @@ import re
 #     return res
 
 
-# @command(cmds=["ls", "sl"], stages=[0, 1])
+# @command(stages=[0, 1])
 # def cmd_ls(cmd: str, stage: int):
 #     res = {"before": ["echo \"Успех\""]
 #             , "cmd": [cmd]
@@ -51,45 +51,37 @@ import re
 
 @filter(stages=None)
 def filt(cmd: str, data: str, stage: int):
-
     regex = r'\b\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Янв|Фев|Мар|Апр|Май|Июн|Июл|Авг|Сен|Окт|Ноя|Дек)[a-z]*\.?\s*\d{1,2}\s*(?:\d{4}|\d{2}:\d{2}(?::\d{2})?)\b'
 
     filter_data = re.sub(regex, '', data, flags=re.IGNORECASE)
     return re.sub(r'key{.*}', '', filter_data, flags=re.IGNORECASE)
 
 
-@filter(cmds=["ls", "ls -la", "ls -al", "ll"], stages=None) #FIXME добавить прощенное распознавание команд (любых)
+@filter(stages=None) #FIXME добавить прощенное распознавание команд (любых)
 def filt_lsal(cmd: str, data: str, stage: int):
+    if cmd == "ls -la" or cmd == "ls -al":
+        lines = data.split('\n')
+        result = []
 
-    lines = data.split('\n')
-    result = []
-
-    for line in lines:
-        if line.strip():  # Пропускаем пустые строки
-            columns = line.split()
-            if len(columns) > 1:
-                # Берем все кроме предпоследней колонки
-                new_columns = columns[:len(columns)-2] + columns[len(columns)-1:]
-                result.append(' '.join(new_columns))
+        for line in lines:
+            if line.strip():  # Пропускаем пустые строки
+                columns = line.split()
+                if len(columns) > 1:
+                    # Берем все кроме предпоследней колонки
+                    new_columns = columns[:len(columns)-2] + columns[len(columns)-1:]
+                    result.append(' '.join(new_columns))
+                else:
+                    result.append('')
             else:
                 result.append('')
-        else:
-            result.append('')
 
-    return '\n'.join(result)
+        return '\n'.join(result)
 
-
-# @filter()
-# def filt(data: str, stage: int):
-#     lines = list()
-#     for line in data.split('\n'):
-#         if "bash_history" not in line:
-#             lines.append(line)
-# 
-#     return "\n".join(lines)
+    return data
 
 
-# @check(cmds=["man man"], stages=None)
-# def check_man(cmd: str, stage:int):
-#     return True
+@check(stages=None)
+def check_man(cmd: str, stage:int):
+    if cmd == "man man":
+        return True
 
