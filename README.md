@@ -15,8 +15,11 @@ sudo apt install -y curl
 ```
 curl https://gitlab.com/Bunnyton/hashpass/-/raw/main/install/install.sh?ref_type=heads | bash
 ```
+```
+sudo hashpass
+```
 
-#### Первый запуск
+#### запуск
 Для того, чтобы приступить к решению задач выполните:
 ```
 sudo hashpass
