@@ -5,7 +5,6 @@ import re
 
 def copy(src, dest, progress_bar=False, with_replace=True, clear_copy=False):
     try:
-        print('copy: ' + src + ' -> ' + dest + ' replace_flag: ' + str(with_replace))
         args = list()
 
         if progress_bar:
