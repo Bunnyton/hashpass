@@ -3,11 +3,12 @@ import os
 import toml
 import glob
 import json
-from db_module import add_record
+from db_module import DBConnector
 
 
 app = Flask(__name__)
 STORAGE_DIR = 'storage'
+DATABASE_CONNECTOR = DBConnector(os.path.join(STORAGE_DIR, "students.sqlite"))
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
 
@@ -103,7 +104,7 @@ def task_confirmation():
     task_number: int = int(task_number_str) if (isinstance(task_number_str, int) or (isinstance(task_number_str, str) and task_number_str.isdigit())) else None
     if task_number == None:
         return abort(404, description="Task not provided")
-    if not add_record(username=username, task_number=task_number):
+    if not DATABASE_CONNECTOR.add_record(username=username, task_number=task_number):
         return abort(404, description="DB Err!")
     return "Ok"
 
