@@ -16,7 +16,7 @@ def copy(src, dest, progress_bar=False, with_replace=True, clear_copy=False):
         if clear_copy:
             args.append("--delete")
 
-        subprocess.run(["rsync", "-a", "--mkpath", *args, src, dest])
+        subprocess.run(["rsync", "-a", *args, src, dest])
 
 
     except Exception:
