@@ -3,6 +3,7 @@ import os
 import toml
 import glob
 import json
+from db_module import add_record
 
 
 app = Flask(__name__)
@@ -89,6 +90,22 @@ def download_image(image_id):
         return abort(404, description="Image not found")
 
     return send_file(image_path, as_attachment=True)
+
+
+@app.route("/student/confirmed", methods=["POST"])
+def task_confirmation():
+    username: str = request.form.get("user", "")
+    if not username:
+        return abort(404, description="Username not provided")
+
+    # Валидация номера задания
+    task_number_str = request.form.get("last_task", None)
+    task_number: int = int(task_number_str) if (isinstance(task_number_str, int) or (isinstance(task_number_str, str) and task_number_str.isdigit())) else None
+    if task_number == None:
+        return abort(404, description="Task not provided")
+    if not add_record(username=username, task_number=task_number):
+        return abort(404, description="DB Err!")
+    return "Ok"
 
 
 if __name__ == "__main__":
