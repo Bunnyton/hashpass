@@ -10,6 +10,9 @@ student:student
 #### Установка
 В терминале (ctrl + alt + T):
 ```
+sudo apt update
+```
+```
 sudo apt install -y curl
 ```
 ```
