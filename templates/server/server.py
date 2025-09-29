@@ -104,7 +104,7 @@ def task_confirmation():
     task_number: int = int(task_number_str) if (isinstance(task_number_str, int) or (isinstance(task_number_str, str) and task_number_str.isdigit())) else None
     if task_number == None:
         return abort(404, description="Task not provided")
-    if not DATABASE_CONNECTOR.add_record(username=username, task_number=task_number):
+    if not DATABASE_CONNECTOR.add_record(username=username, task_number=task_number, ip_address=request.remote_addr):
         return abort(404, description="DB Err!")
     return "Ok"
 
