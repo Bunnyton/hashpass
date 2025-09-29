@@ -3,19 +3,9 @@ import shutil
 import os
 import re
 
-def copy(src, dest, progress_bar=False, with_replace=True):
+def copy(src, dest, progress_bar=False, with_replace=True, clear_copy=False):
     try:
-        if os.path.isdir(src) and not dest.endswith('/'):
-            src = str(src + '/').replace('//', '/')
-            dest = str(dest + '/').replace('//', '/')
-
-
-        if dest.endswith('/'):
-            os.makedirs(dest, exist_ok=True)
-
-        else:
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-
+        print('copy: ' + src + ' -> ' + dest + ' replace_flag: ' + str(with_replace))
         args = list()
 
         if progress_bar:
@@ -24,13 +14,13 @@ def copy(src, dest, progress_bar=False, with_replace=True):
         if not with_replace:
             args.append("--ignore-existing")
 
-        subprocess.run(["rsync", "-a", "-l", *args, src, dest])
+        if clear_copy:
+            args.append("--delete")
+
+        subprocess.run(["rsync", "-a", "--mkpath", *args, src, dest])
 
 
     except Exception:
-        if not os.path.isfile(src):
-            remove(dest)
-
         raise
 
 
@@ -44,9 +34,12 @@ def remove(path, missing_ok=True):
 
     elif os.path.islink(path):
         os.unlink(path)
-        
+
     else:
-        shutil.rmtree(path)
+        def handle_remove_error(func, path, exc_info):
+            print(f"Не удалось удалить {path}: {exc_info[1]}")
+
+        shutil.rmtree(path, onerror=handle_remove_error)
 
 
 def move(src, dest, progress_bar=False):
