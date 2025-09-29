@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 from pydantic import Field
 from typing import Optional
 import os
@@ -12,11 +13,11 @@ class Settings(BaseSettings):
     # server_url: str = "http://127.0.0.1:8000"
     server_url: str = "http://185.212.148.108:8000"
 
-    app_dir: str = "/opt/.hashpass_dev"
+    app_dir: str = "/opt/.hashpass"
     sys_app_path: str = os.path.join(app_dir, "hashengine.py")
     config_dir: str = os.path.join(app_dir, "config")
     templates_dir: str = os.path.join(app_dir, "templates")
-    userconfig_path: str = os.path.join("/root/.local/share/hashpass", "userconfig.toml")
+    userconfig_path: str = os.path.join(Path.home(), "/.local/share/hashpass", "userconfig.toml")
 
     image_config_dir: str = os.path.join(config_dir, 'images')
     image_config_filename: str = "manifest.toml"
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
             '7': "bunnyton/cp:latest",
             '8': "bunnyton/cp:2",
             '9': "bunnyton/mv:1",
+            '10': "bunnyton/rm:1",
         },
         validation_alias = None
     )

@@ -7,10 +7,10 @@ import subprocess
 import toml
 import glob
 import time
-import shutil
 import requests
 import tarfile
 import json
+from pathlib import Path
 
 from threading import Thread
 from tabulate import tabulate
@@ -66,6 +66,7 @@ class Image():
             self.type = image['image']['type']
 
             self.config_dir = os.path.join(Image.Config.config_dir, self.id)
+            self.config_path = os.path.join(self.config_dir, Image.Config.config_filename)
 
 
     def edit(self):
@@ -76,7 +77,14 @@ class Image():
     def import_from_fs(self, path: str): 
         # функция отвечает за копирование файловой системы в образ path - путь до каталога, после которого начинается файловая система
         if os.path.isdir(path):
-            copy(path, self.config_dir)
+            _path = Path(path)
+            all_copy_items = [item for item in _path.iterdir() if item.name != Image.Config.task_work_dirname]
+            for copy_item in all_copy_items:
+                if os.path.isdir(copy_item):
+                    copy(str(copy_item.absolute()) + '/', os.path.join(self.config_dir, str(copy_item.name)) + '/', with_replace=True)
+
+                else:
+                    copy(str(copy_item.absolute()), os.path.join(self.config_dir, str(copy_item.name)), with_replace=True)
         else:
             raise Exception("Import path doesn't exist or isn't dir")
 
@@ -107,6 +115,7 @@ class Image():
 
         self.id = str(uuid.uuid4()).replace("-", "")
         self.config_dir = os.path.join(Image.Config.config_dir, self.id)
+        self.config_path = os.path.join(self.config_dir, Image.Config.config_filename)
         self.save()
 
         return self.id
@@ -127,9 +136,8 @@ class Image():
 
     def info(self) -> dict:
         data = dict()
-        config_path = os.path.join(self.config_dir, Image.Config.config_filename)
-        if os.path.isfile(config_path):
-            data = toml.load(config_path)
+        if os.path.isfile(self.config_path):
+            data = toml.load(self.config_path)
 
         else:
             data["image"] = dict()
@@ -147,14 +155,13 @@ class Image():
 
     def save(self, is_base_image=False):
         data = self.info()
-        with open(Image.Config.config_filename, "w") as f:
+
+        os.makedirs(self.config_dir, exist_ok=True)
+        with open(self.config_path, "w") as f:
             toml.dump(data, f)
 
         if is_base_image:
-            copy(os.getcwd(), self.config_dir, progress_bar=True)
-
-        else:
-            move(Image.Config.config_filename, self.config_dir + '/')
+            copy(os.getcwd(), self.config_dir + '/', progress_bar=True)
 
 
     def _parse_fullname(fullname: str) -> list: # return [author, name, version]
@@ -264,7 +271,8 @@ class Image():
 
 
     def load_task_hooks(self, path: str):
-        copy(path, os.path.join(self.config_dir, Image.Config.task_work_dirname, Image.Config.task_hooks_dirname))
+        hooks_dir = os.path.join(self.config_dir, Image.Config.task_work_dirname, Image.Config.task_hooks_dirname)
+        copy(path + '/', hooks_dir + '/', with_replace=True)
 
 
 
@@ -413,7 +421,7 @@ class Container():
         os.chmod(os.path.join(self.mountpoint, "usr", "bin", "task"), 0o555)
 
         # copy(self._task_bindir, os.path.join(self.mountpoint, "tmp/"))
-        copy(os.path.join(Container.Config.templates_dir, "dvs"), self._task_bindir, with_replace=False)
+        copy(os.path.join(Container.Config.templates_dir, "dvs") + '/', self._task_bindir + '/', with_replace=False)
         # move(os.path.join(self.mountpoint, "tmp/bin"), self._task_bindir)
 
         # subprocess.run(["pyarmor", "gen", "-r", self._task_bindir, "-O", os.path.join(self.mountpoint, "tmp/dist")], check=True)
@@ -956,6 +964,7 @@ def main():
             raise Exception("Incorrect command")
 
     except Exception as e:
+        raise
         print(' '.join(['❌' , str(e)]))
 
 
