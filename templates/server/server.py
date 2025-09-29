@@ -16,7 +16,7 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 def ip_validation(f):
     @wraps(f)
     def decorator(*args, **kwargs):
-        if not request.remote_addr in ["127.0.0.1", "195.19.37.169"]: # Localhost и белый IP 408
+        if not request.remote_addr in ["127.0.0.1", "195.19.37.169", "10.10.1.229"]: # Localhost и белый IP 408
             return abort(404, description="Invalid IP")
         return f(*args, **kwargs)
     return decorator
