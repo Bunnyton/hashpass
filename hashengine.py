@@ -757,7 +757,7 @@ def download(server_url: str, image_id: str):
         f.write(archive_response.content)
 
     with tarfile.open(archive_path, "r:gz", format=tarfile.PAX_FORMAT) as tar:
-        tar.extractall(path=config_dir, filter="fully_trusted")
+        tar.extractall(path=config_dir, filter="tar")
 
     remove(archive_path)
     print(f"✅ Pull {image_id} successfull")
