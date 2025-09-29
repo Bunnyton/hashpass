@@ -6,3 +6,5 @@ sudo apt -y install python3.13 python3.13-venv wget curl
 
 wget https://gitlab.com/Bunnyton/hashpass/-/raw/main/install/hashpass.deb?ref_type=heads
 sudo apt install -f ./hashpass.deb
+rm ./hashpass.deb
+sudo hashpass
