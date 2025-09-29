@@ -8,7 +8,13 @@ student:student
 ```
 
 #### Установка
-Для установки достаточно установить deb пакет [ссылка](https://gitlab.com/Bunnyton/hashpass/-/raw/main/install/hashpass.deb)
+В терминале (ctrl + alt + T):
+```
+sudo apt install -y curl
+```
+```
+curl https://gitlab.com/Bunnyton/hashpass/-/raw/main/install/install.sh?ref_type=heads | bash
+```
 
 #### Первый запуск
 Для того, чтобы приступить к решению задач выполните:
