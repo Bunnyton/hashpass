@@ -3,6 +3,7 @@ import os
 import toml
 import glob
 import json
+from functools import wraps
 from db_module import DBConnector
 
 
@@ -10,6 +11,15 @@ app = Flask(__name__)
 STORAGE_DIR = 'storage'
 DATABASE_CONNECTOR = DBConnector(os.path.join(STORAGE_DIR, "students.sqlite"))
 os.makedirs(STORAGE_DIR, exist_ok=True)
+
+
+def ip_validation(f):
+    @wraps(f)
+    def decorator(*args, **kwargs):
+        if not request.remote_addr in ["127.0.0.1", "195.19.37.169"]: # Localhost и белый IP 408
+            return abort(404, description="Invalid IP")
+        return f(*args, **kwargs)
+    return decorator
 
 
 @app.route("/images", methods=["GET"])
@@ -107,6 +117,18 @@ def task_confirmation():
     if not DATABASE_CONNECTOR.add_record(username=username, task_number=task_number, ip_address=request.remote_addr):
         return abort(404, description="DB Err!")
     return "Ok"
+
+
+@app.route("/student/info/short", methods=["GET"])
+@ip_validation
+def get_student_info_short():
+    return DATABASE_CONNECTOR.get_students_score_short()
+
+
+@app.route("/student/info/long", methods=["GET"])
+@ip_validation
+def get_student_info_long():
+    return DATABASE_CONNECTOR.get_students_score_detailed()
 
 
 if __name__ == "__main__":
