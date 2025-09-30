@@ -15,8 +15,15 @@ sudo apt update
 ```
 sudo apt install -y curl
 ```
+
+Для Amd64
 ```
 curl https://gitlab.com/Bunnyton/hashpass/-/raw/main/install/install.sh?ref_type=heads | bash
+```
+
+Для Arm64
+```
+curl https://gitlab.com/Bunnyton/hashpass/-/raw/main/install/install_arm.sh?ref_type=heads | bash
 ```
 ```
 sudo hashpass
