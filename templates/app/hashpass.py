@@ -114,7 +114,7 @@ def main():
                 exec_cmd(cmd)
 
             except Exception as e:
-                print(' '.join(["❌", str(e)]))
+                print(" ".join(["❌", str(e)]))
                 return
 
             while True:

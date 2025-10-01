@@ -6,7 +6,7 @@ import os
 
 class Settings(BaseSettings):
     masterkey: str = Field(
-        default = '10383f373f292407117439070130373440255468657365206172652',
+        default = "10383f373f292407117439070130373440255468657365206172652",
         validation_alias = None
     )
 
@@ -19,10 +19,10 @@ class Settings(BaseSettings):
     templates_dir: str = os.path.join(app_dir, "templates")
     userconfig_path: str = os.path.join(Path.home(), "/.local/share/hashpass", "userconfig.toml")
 
-    image_config_dir: str = os.path.join(config_dir, 'images')
+    image_config_dir: str = os.path.join(config_dir, "images")
     image_config_filename: str = "manifest.toml"
 
-    container_config_dir: str = os.path.join(config_dir, 'containers')
+    container_config_dir: str = os.path.join(config_dir, "containers")
     container_config_filename: str = "manifest.toml"
     container_mountpoint_dirname: str = "mountpoint"
 
@@ -43,17 +43,17 @@ class Settings(BaseSettings):
     tasks: dict = Field(
         # fullname: author/name:version
         default = { 
-            '0': "bunnyton/hello:latest", 
-            '1': "bunnyton/simple_ls:latest",
-            '2': "bunnyton/cat:latest",
-            '3': "bunnyton/ls_la:latest",
-            '4': "bunnyton/help:latest",
-            '5': "bunnyton/man:secret",
-            '6': "bunnyton/cd:latest",
-            '7': "bunnyton/cp:latest",
-            '8': "bunnyton/cp:2",
-            '9': "bunnyton/mv:1",
-            '10': "bunnyton/rm:1",
+            "0": "bunnyton/hello:latest", 
+            "1": "bunnyton/simple_ls:latest",
+            "2": "bunnyton/cat:latest",
+            "3": "bunnyton/ls_la:latest",
+            "4": "bunnyton/help:latest",
+            "5": "bunnyton/man:secret",
+            "6": "bunnyton/cd:latest",
+            "7": "bunnyton/cp:latest",
+            "8": "bunnyton/cp:2",
+            "9": "bunnyton/mv:1",
+            "10": "bunnyton/rm:1",
         },
         validation_alias = None
     )
