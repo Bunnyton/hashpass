@@ -29,7 +29,7 @@ class TaskCheckerServer(Server):
 
 
     def task_complete(self):
-        return 'echo -e "\nkey{f2bf3954874ecebd}\n"'
+        return 'echo -e "\nkey{}\n"'
 
 
     def check_change(self, path) -> bool:
