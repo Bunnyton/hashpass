@@ -12,7 +12,6 @@ env/*
 
 docs/*
 keygen.py
-obfuscate.py
 requirements/base_image_requirements.txt
 requirements/base_image_sys_requirements.txt
 
