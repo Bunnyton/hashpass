@@ -1,0 +1,9 @@
+services:
+  hashpass_server:
+    build: .
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    volumes:
+      - ./storage:/app/storage
+

@@ -74,6 +74,7 @@ class TaskCheckerServer(Server):
 
         stage_config = self.config[''.join(['stage', str(self.curstage_num)])]
         res = check_hook(self._cmd, self.curstage_num)
+        print(res)
         if res == False:
             return None
 
