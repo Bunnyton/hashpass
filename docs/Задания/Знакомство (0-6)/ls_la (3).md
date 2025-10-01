@@ -47,7 +47,7 @@ ls -lt
 
 .key_here.txt
 ```
-Ты нашел его! Ключ - key{} 
+Ты нашел его! Ключ - key{f2bf3954874ecebd} 
 ```
 
 action: 
