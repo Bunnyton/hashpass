@@ -457,7 +457,7 @@ class Container():
                                                                                 self.image.name, 
                                                                                 self.image.version))
 
-            for d in ['etc', 'home', 'root', '.hash/bin']:
+            for d in ['etc', 'home', 'root', '.hash/bin', 'opt']:
                 try:
                     # Используем grep для быстрого поиска файлов с key{}
                     result = subprocess.run(['grep', '-rl', 'key{}', os.path.join(self.mountpoint, d)], 
