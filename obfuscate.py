@@ -135,16 +135,21 @@ def find_python_files(path):
     python_files = []
     exclude_dirs = ['config']
     exclude_files = ['taskcheckerserver.py']
-    
-    python_files.extend(_path.glob('*.py'))
 
-    for subdir in _path.iterdir():
-        if subdir.is_dir() and subdir.name not in exclude_dirs:
-            subdir_files = subdir.rglob('*.py')
-            for sfile in subdir_files:
-                _sfile = Path(sfile)
-                if _sfile.is_file() and _sfile.name not in exclude_files:
-                    python_files.append(sfile)
+    if _path.is_file():
+        if _path.name.endswith(".py"):
+            python_files.append(path)
+
+    elif _path.is_dir():
+        python_files.extend(_path.glob('*.py'))
+
+        for subdir in _path.iterdir():
+            if subdir.is_dir() and subdir.name not in exclude_dirs:
+                subdir_files = subdir.rglob('*.py')
+                for sfile in subdir_files:
+                    _sfile = Path(sfile)
+                    if _sfile.is_file() and _sfile.name not in exclude_files:
+                        python_files.append(sfile)
     
     return python_files
 
