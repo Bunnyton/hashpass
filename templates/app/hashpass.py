@@ -12,6 +12,7 @@ from key import calc_key
 from settings import Settings
 from userconfig import UserConfig
 
+import requests
 
 settings = Settings()
 
@@ -48,7 +49,7 @@ def main():
     print("\nОбновление списка заданий")
     try:
         for task_name in userconfig.get_task_name(all=True):
-            pull_cmd = ["/".join([settings.sys_app_path]), "pull", task_name]
+            pull_cmd = ['python3.13', '/'.join([settings.sys_app_path]), "pull", task_name]
             exec_cmd(pull_cmd)
 
         print("Обновление завершено")
@@ -109,7 +110,7 @@ def main():
         if task_num == 0 or check_key(userconfig, task_num=task_num - 1):
             # Запуск задания
             try:
-                cmd = ["/".join([settings.sys_app_path]), "start", userconfig.get_task_name(task_num)]
+                cmd = ['python3.13', '/'.join([settings.sys_app_path]), "start", userconfig.get_task_name(task_num)]
                 exec_cmd(cmd)
 
             except Exception as e:
@@ -126,6 +127,10 @@ def main():
 
                 if check_key(userconfig, task_num=task_num, key=user_key):
                     userconfig.save(key=user_key, task_num=task_num)
+                    try:
+                        requests.post(f"{settings.server_url}/student/confirmed", data={"user": userconfig.username, "last_task": task_num})
+                    except Exception:
+                        pass # Незачем пугать студента какой-то ошибкой
                     break
                 
                 else:

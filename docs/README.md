@@ -16,7 +16,7 @@
 
 
 #### Установка
-Программа должна располагаться по фиксированному пути. По умолчанию это /opt/.hashpass_dev
+Программа должна располагаться по фиксированному пути. По умолчанию это /opt/.hashpass
 
 Если нужно поменять путь достаточно отредактировать settings.py
 
@@ -32,6 +32,19 @@ sudo ./hashpass.py
 sudo ./hashengine.py create ...
 ```
 
+
+#### Требования 
+ПО требует python3.13
+
+Для установки:
+```
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt -y install python3.13 python3.13-venv wget curl
+```
+
+И необходимо установить sys_requirements.txt и requirements.txt (при использовании pip)
 
 
 

@@ -6,4 +6,6 @@ services:
     restart: unless-stopped
     volumes:
       - ./storage:/app/storage
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
 
