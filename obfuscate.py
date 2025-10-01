@@ -134,12 +134,17 @@ def find_python_files(path):
     _path = Path(path)
     python_files = []
     exclude_dirs = ['config']
+    exclude_files = ['taskcheckerserver.py']
     
     python_files.extend(_path.glob('*.py'))
 
     for subdir in _path.iterdir():
         if subdir.is_dir() and subdir.name not in exclude_dirs:
-            python_files.extend(subdir.rglob('*.py'))
+            subdir_files = subdir.rglob('*.py')
+            for sfile in subdir_files:
+                _sfile = Path(sfile)
+                if _sfile.is_file() and _sfile.name not in exclude_files:
+                    python_files.append(sfile)
     
     return python_files
 
@@ -183,9 +188,18 @@ def Obfuscate(path: str = None):
                     data = f.read()
                     Encode(15, data, file, 100)
 
+                    print("\n [-] Successfully Encrypted %s" % file)
+                    print(" [-] Saved as %s" % file)
+                    FileSize(file)
+
     except KeyboardInterrupt:
         time.sleep(1)
         sys.exit()
 
 if __name__ == "__main__":
-    MainMenu()
+    if len(sys.argv) == 2:
+        Obfuscate(sys.argv[1])
+
+    else:
+        Obfuscate()
+
