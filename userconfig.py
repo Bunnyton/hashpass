@@ -30,7 +30,7 @@ class UserConfig():
 
 
         except Exception as e:
-            raise Exception(': '.join([f"User config file {path} - damaged, please fix it", str(e)]))
+            raise Exception(": ".join([f"User config file {path} - damaged, please fix it", str(e)]))
 
 
     def get_key(self, task_number: int) -> str:
@@ -62,7 +62,7 @@ class UserConfig():
 
         except Exception:
             e = "Task number must be int or str(int)"
-            raise Exception(': '.join([f"User config file {path} - damaged, please fix it", e])) 
+            raise Exception(": ".join([f"User config file {path} - damaged, please fix it", e])) 
 
 
 
@@ -87,11 +87,11 @@ class UserConfig():
             self._config["username"] = self.username
             self._config["task_progress"] = self.task_progress
 
-            with open(settings.userconfig_path, 'w') as ucf:
+            with open(settings.userconfig_path, "w") as ucf:
                 toml.dump(self._config, ucf)
 
         except Exception as e:
-            raise Exception(' '.join(["Can't modify user config and save to", settings.userconfig_path, e]))
+            raise Exception(" ".join(["Can't modify user config and save to", settings.userconfig_path, e]))
 
 
 

@@ -12,6 +12,7 @@ from key import calc_key
 from settings import Settings
 from userconfig import UserConfig
 
+import requests
 
 settings = Settings()
 
@@ -113,7 +114,7 @@ def main():
                 exec_cmd(cmd)
 
             except Exception as e:
-                print(' '.join(["❌", str(e)]))
+                print(" ".join(["❌", str(e)]))
                 return
 
             while True:
@@ -126,6 +127,10 @@ def main():
 
                 if check_key(userconfig, task_num=task_num, key=user_key):
                     userconfig.save(key=user_key, task_num=task_num)
+                    try:
+                        requests.post(f"{settings.server_url}/student/confirmed", data={"user": userconfig.username, "last_task": task_num})
+                    except Exception:
+                        pass # Незачем пугать студента какой-то ошибкой
                     break
                 
                 else:
