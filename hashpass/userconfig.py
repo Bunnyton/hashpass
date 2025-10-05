@@ -1,7 +1,7 @@
 import toml
 import os
 
-from settings import Settings
+from .settings import Settings
 
 settings = Settings()
 

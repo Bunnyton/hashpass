@@ -1,18 +1,19 @@
-#!/bin/python3
+#!/bin/python3.13
 
 import os
 import sys
 import toml
 import subprocess
 import time
+import requests
 
 from threading import Thread
 
-from key import calc_key
-from settings import Settings
-from userconfig import UserConfig
+from hashpass.key import calc_key
+from hashpass.settings import Settings
+from hashpass.userconfig import UserConfig
+from hashpass.engine import pull, play, send_statistic
 
-import requests
 
 settings = Settings()
 
@@ -37,10 +38,6 @@ def check_key(userconfig: UserConfig, task_num: int, key: str=None):
         return true_key == userconfig.get_key(task_num)
 
 
-def exec_cmd(cmd: list):
-    subprocess.run(cmd)
-
-
 def main():
     userconfig = UserConfig()
     if not userconfig.username:
@@ -48,14 +45,11 @@ def main():
 
     print("\nОбновление списка заданий")
     try:
-        for task_name in userconfig.get_task_name(all=True):
-            pull_cmd = ['python3.13', '/'.join([settings.sys_app_path]), "pull", task_name]
-            exec_cmd(pull_cmd)
-
+        pull(*userconfig.get_task_name(all=True))
         print("Обновление завершено")
 
-    except Exception:
-        print("Ошибка обновления")
+    except Exception as e:
+        print("Ошибка обновления: ", str(e))
 
 
     print(f"\nДобро пожаловать, {userconfig.username}!\n")
@@ -110,8 +104,7 @@ def main():
         if task_num == 0 or check_key(userconfig, task_num=task_num - 1):
             # Запуск задания
             try:
-                cmd = ['python3.13', '/'.join([settings.sys_app_path]), "start", userconfig.get_task_name(task_num)]
-                exec_cmd(cmd)
+                play(userconfig.get_task_name(task_num))
 
             except Exception as e:
                 print(" ".join(["❌", str(e)]))
@@ -128,7 +121,8 @@ def main():
                 if check_key(userconfig, task_num=task_num, key=user_key):
                     userconfig.save(key=user_key, task_num=task_num)
                     try:
-                        requests.post(f"{settings.server_url}/student/confirmed", data={"user": userconfig.username, "last_task": task_num})
+                        send_statistic()
+
                     except Exception:
                         pass # Незачем пугать студента какой-то ошибкой
                     break
@@ -163,5 +157,6 @@ if __name__ == "__main__":
 
     try:
         main()
+
     except KeyboardInterrupt:
         sys.exit()
