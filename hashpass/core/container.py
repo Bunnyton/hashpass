@@ -186,7 +186,8 @@ class Container():
             os.chmod(os.path.join(self._task_workdir, "config", "task_settings.toml"), 0o666)
             os.chmod(os.path.join(self._task_workdir, "config"), 0o777)
 
-            os.chmod(self._task_config_dir, 0o777)
+            if os.path.isdir(self._task_config_dir):
+                os.chmod(self._task_config_dir, 0o777)
 
 
         elif mode == Container.Mode.task_play:
