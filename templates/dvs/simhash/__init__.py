@@ -141,7 +141,7 @@ class Simhash(object):
             skip_batch = False
             if not isinstance(f, basestring):
                 f, w = f
-                skip_batch = w > self.large_weight_cutoff or not isinstance(w, int)
+                skip_batch = w < self.large_weight_cutoff or not isinstance(w, int)
 
             count += w
             if self.hashfunc_returns_int:

@@ -49,7 +49,7 @@ class Client():
         data = {'param': param}
         response = requests.post(f"{self.server_url}/info", data=data)
         if response.status_code != 200:
-            raise Exception(f"{param} not found on registry")
+            return None
 
         return response.json()
 
@@ -57,7 +57,6 @@ class Client():
     def _pull(self, image_id: str, force=False):
         config_dir = os.path.join(Image.Config.config_dir, image_id)
         os.makedirs(config_dir, exist_ok=True)
-
         archive_path = os.path.join(config_dir, f"{image_id}.tar.gz")
         try:
             if Image.get(image_id):
@@ -83,9 +82,9 @@ class Client():
             with open(archive_path, "wb") as f:
                 f.write(archive_response.content)
 
-            subprocess.run( ["tar", "--extract", "--gzip", "--preserve-permissions"
-                                                         , "--file", archive_path
-                                                         , "--directory", config_dir], check=True,)
+            subprocess.run(["tar", "--extract", "--gzip", "--preserve-permissions"
+                                                        , "--file", archive_path
+                                                        , "--directory", config_dir], check=True,)
 
         except Exception:
             raise 
@@ -95,33 +94,28 @@ class Client():
                 
 
     def _push(self, image_id: str):
-        archive_path = os.path.join(image.config_dir, image.id + '.tar.gz')
+        archive_path = os.path.join(Image.Config.config_dir, image_id + '.tar.gz')
         try:
-            try:
-                self.get_info(image_id)
-
-            except:
-                pass
-
-            else:
+            if self.get_info(image_id):
                 raise Exception(f"Image already exist on registry")
 
-            image = Image(image_id)
-            manifest = image.info()
+            else:
+                image = Image(image_id)
+                manifest = image.info()
 
-            with tarfile.open(archive_path, "w:gz", format=tarfile.PAX_FORMAT) as tar:
-                for item in os.listdir(image.config_dir):
-                    item_path = os.path.join(image.config_dir, item)
-                    tar.add(item_path, arcname=item, recursive=True)
+                
+                subprocess.run(["tar", "--create", "--gzip", "--preserve-permissions"
+                                                           , "--file", archive_path
+                                                           , "--directory", image.config_dir, '.'], check=True,)
 
-            with open(archive_path, "rb") as f:
-                files = {
-                    'image': f,
-                }
-                data = {
-                    'manifest': json.dumps(manifest)
-                }
-                return requests.post(f"{self.server_url}/push", files=files, data=data, stream=True)
+                with open(archive_path, "rb") as f:
+                    files = {
+                        'image': f,
+                    }
+                    data = {
+                        'manifest': json.dumps(manifest)
+                    }
+                    return requests.post(f"{self.server_url}/push", files=files, data=data, stream=True)
 
         except Exception:
             raise
@@ -135,50 +129,44 @@ class Client():
             if not self.check_connection():
                 raise Exception("Can't connect to server")
 
-            try:
-                self.get_info(param)
-
-            except:
-                pass
-
-            else:
+            if self.get_info(param):
                 raise Exception(f"{param} already exist on registry")
 
-            image = Image(param)
+            else:
+                image = Image(param)
 
-            errors = {}
-            thrs: [str, Thread] = {}
+                errors = {}
+                thrs: [str, Thread] = {}
 
-            def worker(image_id: str):
-                try:
-                    self._push(image_id)
+                def worker(image_id: str):
+                    try:
+                        self._push(image_id)
 
-                except Exception as e:
-                    errors[image_id] = e
+                    except Exception as e:
+                        errors[image_id] = e
 
-            for image_layer_id in image.layers:
-                print(f"Pushing image: {image_layer_id}")
+                for image_layer_id in image.layers:
+                    if not self.get_info(image_layer_id):
+                        print(f"Pushing image: {image_layer_id}")
 
-                thr = Thread(target=worker, args=(image_layer_id,))
+                        thr = Thread(target=worker, args=(image_layer_id,))
+                        thr.start()
+                        thrs[image_layer_id] = thr
+
+
+                print(f"Pushing image: {param}")
+
+                thr = Thread(target=worker, args=(image.id,))
                 thr.start()
-                thrs[image_layer_id] = thr
+                thrs[image.id] = thr
 
+                for image_id, thr in thrs.items():
+                    thr.join()
+                    if image_id in errors:
+                        raise errors[image_id]
 
-            print(f"Pushing image: {param}")
-
-            thr = Thread(target=worker, args=(image.id,))
-            thr.start()
-            thrs[image.id] = thr
-
-            thrs.append(thr)
-
-            for image_id, thr in thrs.items():
-                thr.join()
-                if image_id in errors:
-                    raise errors[image_id]
-
-                else:
-                    print(f"✅ Push {image_id} successfull")
+                    else:
+                        print(f"{image_id} ✅")
 
         except Exception as e:
             raise Exception("Push error: " + str(e))
@@ -198,6 +186,8 @@ class Client():
                 raise Exception("Can't connect to server")
 
             manifest = self.get_info(param)
+            if manifest is None:
+                raise Exception(f"Image {param} not found on registry")
 
 
             errors = {}
@@ -224,11 +214,11 @@ class Client():
                     thrs[layer_image_id] = thr
 
 
-            print(f"Pulling image: {manifest["image"]["id"]}")
+            print(f"Pulling image: {param}")
 
             thr = Thread(target=worker, args=(manifest["image"]["id"],))
             thr.start()
-            thrs[manifest["image"]["id"]] = thr
+            thrs[param] = thr
 
             for image_id, thr in thrs.items():
                 thr.join()
