@@ -56,6 +56,7 @@ class Settings(BaseSettings):
             "10": "bunnyton/rm:1",
             "11": "bunnyton/ls_mv_cp:1",
             "12": "bunnyton/grep:1",
+            "13": "bunnyton/find:1",
         },
         validation_alias = None
     )
