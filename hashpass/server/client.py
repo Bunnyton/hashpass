@@ -224,11 +224,11 @@ class Client():
                     thrs[layer_image_id] = thr
 
 
-            print(f"Pulling image: {manifest["image"]["id"]}")
+            print(f"Pulling image: {param}")
 
             thr = Thread(target=worker, args=(manifest["image"]["id"],))
             thr.start()
-            thrs[manifest["image"]["id"]] = thr
+            thrs[param] = thr
 
             for image_id, thr in thrs.items():
                 thr.join()
