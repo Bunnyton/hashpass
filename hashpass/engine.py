@@ -28,7 +28,7 @@ def pull(*args):
 
     elif len(args) > 0:
         for image_name in args:
-            client.pull(image_name)
+            client.pull(image_name, force=True)
 
 
 def push(*args):
