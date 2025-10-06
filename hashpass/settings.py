@@ -58,6 +58,7 @@ class Settings(BaseSettings):
             "12": "bunnyton/grep:1",
             "13": "bunnyton/find:1",
             "14": "bunnyton/find:2",
+            "15": "bunnyton/find:3",
         },
         validation_alias = None
     )
