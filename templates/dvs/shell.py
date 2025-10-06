@@ -266,10 +266,14 @@ def main():
                         os.chdir(pwd)
 
                 if os.path.exists("/etc/systemd/system/taskchecker.service"):
-                    actions = taskclient.handle_cmd(["check"])
-                    if actions:
-                        for cmd in actions:
-                            subprocess.run(["script", "-qc", ' '.join(["/usr/bin/bash -ic", "'", cmd, "'"]), config.tmpfile]) # the last command change file
+                    while True:
+                        actions = taskclient.handle_cmd(["check"])
+                        if actions:
+                            for cmd in actions:
+                                subprocess.run(["script", "-qc", ' '.join(["/usr/bin/bash -ic", "'", cmd, "'"]), config.tmpfile]) # the last command change file
+
+                        else:
+                            break
 
             except Exception as e:
                 raise
