@@ -68,7 +68,7 @@ def filt(cmd: str, data: str, stage: int):
 
 
 @filter(stages=None) 
-def filt_ls_l(cmd: str, data: str, stage: int):
+def filt_cmds(cmd: str, data: str, stage: int):
     parts = shlex.split(cmd)
     
     if parts[0] == "ls":
@@ -96,8 +96,10 @@ def filt_ls_l(cmd: str, data: str, stage: int):
 
             return '\n'.join(result)
 
-    return data
+    if parts[0] == "find":
+        return '\n'.join([line for line in data.splitlines() if '/' in line])
 
+    return data
 
 # @check(stages=None)
 # def check_man(cmd: str, stage:int):
