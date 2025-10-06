@@ -1,6 +1,6 @@
 image:
 ```
-bunnyton/find:3
+bunnyton/find:4
 ```
 
 
@@ -9,23 +9,16 @@ readme.txt
 
 
 #Задание 
-Найдите все директории 4 уровня при помощи -name
+Найдите все файлы, которые начинаются с level2 или содержат в названии "3"
 ```
 
 
 #### Решение
 ```
-find . -type d -name "level4*"
+find . -name "level2*" -type f -o -name "*3*" -type f 
 ```
 
-/.hash/bin/hooks/all.py
-```python
 
-@check(stages=None)
-def check_name(cmd: str, stage: int):
-	if "name" not in cmd:
-		return False
-```
 
 #### Примечание
 Для создания инфры использовался скрипт:

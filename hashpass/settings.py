@@ -59,6 +59,7 @@ class Settings(BaseSettings):
             "13": "bunnyton/find:1",
             "14": "bunnyton/find:2",
             "15": "bunnyton/find:3",
+            "16": "bunnyton/find:4",
         },
         validation_alias = None
     )
