@@ -1,23 +1,24 @@
 import subprocess
+import hashlib
 import shutil
 import os
 import re
 
 def copy(src, dest, progress_bar=False, with_replace=True, clear_copy=False):
     try:
-        args = list()
+        if os.path.exists(src):
+            args = list()
 
-        if progress_bar:
-            args.append("--info=progress2")
+            if progress_bar:
+                args.append("--info=progress2")
 
-        if not with_replace:
-            args.append("--ignore-existing")
+            if not with_replace:
+                args.append("--ignore-existing")
 
-        if clear_copy:
-            args.append("--delete")
+            if clear_copy:
+                args.append("--delete")
 
-        subprocess.run(["rsync", "-a", "--mkpath", *args, src, dest])
-
+            subprocess.run(["rsync", "-a", "--mkpath", *args, src, dest])
 
     except Exception:
         raise
@@ -70,6 +71,13 @@ def readfile(path: str):
 
     else:
         return None
+
+
+def hashsum(path: str):
+    if os.path.exists(path):
+        return hashlib.sha256(open(path, 'rb').read()).hexdigest()
+
+    return None
 
 
 

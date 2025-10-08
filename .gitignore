@@ -3,7 +3,7 @@ config/containers/*
 config/userconfig.toml
 config/images.tar.gz
 
-templates/server/storage/*
+hashpass/server/server/storage/*
 
 __pycache__/*
 __pycache__

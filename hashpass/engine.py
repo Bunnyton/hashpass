@@ -1,12 +1,13 @@
 import sys
 import os
+import argparse
 
 from .server import Client
 from .core import Image, Container
 
 
 def print_images():
-    Image.print_list()
+    Image.print_images()
 
 
 def new(*args):
@@ -21,22 +22,52 @@ def new(*args):
 
 
 def pull(*args):
+    parser = argparse.ArgumentParser(description='hashengine.py pull')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='pull all images from registry')
+    parser.add_argument('images', nargs='*', help='to pull images')
+    pargs = parser.parse_args(args)
+
     client = Client()
+    if len(pargs.images) == 0:
+        if pargs.all:
+            remote_images = client.get_remote_images()
+            for image in remote_images:
+                client.pull(image)
 
-    if len(args) == 0:
-        client.print_remote_images()
+        else:
+            client.print_remote_images()
 
-    elif len(args) > 0:
-        for image_name in args:
-            client.pull(image_name, force=True)
+    elif len(pargs.images) > 0:
+        client.pull(*pargs.images)
 
 
 def push(*args):
-    client = Client()
+    parser = argparse.ArgumentParser(description='hashengine.py push')
+    parser.add_argument('-f', '--force', action='store_true',
+                        help='replace image layers on registry')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='push all images to registry')
+    parser.add_argument('images', nargs='*', help='to push image layers')
+    pargs = parser.parse_args(args)
 
-    if len(args) > 0:
-        for image_name in args:
-            client.push(image_name)
+    if pargs.force:
+        ans = input("This command replace image layer on registry, you are sure? [y] ")
+        if 'y' != ans.strip().lower():
+            return
+
+    client = Client()
+    if pargs.images:
+        for image_name in pargs.images:
+            try:
+                client.push(image_name, force=pargs.force)
+            except Exception as e:
+                print(e)
+
+    elif pargs.all:
+        images = Image.list()
+        for image in images:
+            client.push(image.id, force=pargs.force)
 
     else:
         raise Exception("Function push() must has one or more args")
@@ -54,21 +85,44 @@ def send_statistic(*args):
 
 
 def delete(*args):
-    if len(args) > 0:
-        ans = input("This command remove all dependecies image, you are sure? [y] ")
+    parser = argparse.ArgumentParser(description='hashengine.py push')
+    parser.add_argument('-f', '--force', action='store_true',
+                        help='replace image layers on registry')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='push all images to registry')
+    parser.add_argument('images', nargs='*', help='to delete image layers')
+    pargs = parser.parse_args(args)
+
+    if pargs.force:
+        ans = input(f"This command force delete all dependecies images too, you are sure? [y] ")
         if 'y' != ans.strip().lower():
             return
 
-        for image_id in args:
-            try:
-                image = Image(image_id)
-                image.delete()
+    images = pargs.images
+    if len(images) == 0:
+        if pargs.all:
+            images = Image.list()
 
-            except Exception as e:
-                print(' '.join(['❌' , str(e)]))
+        else:
+            raise Exception("Function remove() must has one or more args")
 
-    else:
-        raise Exception("Function remove() must has one or more args")
+    for _image in images:
+        try:
+            if isinstance(_image, Image):
+                image = _image
+            else:
+                image = Image(_image)
+
+            if not pargs.force:
+                ans = input(f"This command delete all dependecies image of {image.fullname} too, you are sure? [y] ")
+                if 'y' != ans.strip().lower():
+                    print(f"❌ Cancel deleting of {image.fullname}")
+                    continue
+
+            image.delete()
+
+        except Exception as e:
+            print(' '.join(['❌' , str(e)]))
 
 
 def edit(*args):
@@ -109,6 +163,21 @@ def create(*args):
     else:
         raise Exception("Function play() must has only one arg")
 
+
+def remote(*args):
+    if len(args) > 1:
+        if args[0] in ['remove', 'rm', 'delete', 'del']:
+            client = Client()
+
+            ans = input("This command remove image layer only, you are sure? [y] ")
+            if 'y' != ans.strip().lower():
+                return
+
+            for image_name in args[1::]:
+                client.remote_remove(image_name)
+
+    else:
+        raise Exception("Function remote() must has more one arg")
 
 
 
