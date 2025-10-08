@@ -88,7 +88,7 @@ def play(*args):
             image = Image(args[0])
 
         except Exception as e:
-            pull([args[0]])
+            pull(args[0])
             image = Image(args[0])
             
         container = Container(image)
