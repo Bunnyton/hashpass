@@ -189,6 +189,17 @@ class Image():
         raise Exception("Image incorrect")
 
 
+    def check_manifest(manifest: dict):
+        if isinstance(manifest, dict) and 'image' in manifest:
+            for _ in ['id', 'author', 'name', 'version']:
+                if _ not in manifest['image']:
+                    return False
+
+            return True
+
+        return False
+
+
     def get(param) -> dict: # return fullname
         if isinstance(param, str):
             if '/' in param:
@@ -205,6 +216,9 @@ class Image():
 
                     if temp['image']['id'] == id:
                         return temp
+
+        elif check_manifest(param):
+            return param
 
         return None
 

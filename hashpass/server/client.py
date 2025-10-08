@@ -176,64 +176,70 @@ class Client():
             raise Exception("Push error: " + str(e))
 
 
-    def pull(self, param: str = None, force=False):
-        try:
-            if not param:
-                raise Exception(f"Image with name {param} can't be exist")
+    def pull(self, *params, force=False):
+        for _param in params:
+            if Image.check_manifest(_param):
+                param = _param["image"]["id"]
+            else:
+                param = _param
 
-            if Image.get(param):
-                # raise Exception(f"{param} already pulled")
-                print(f"{param} already pulled")
-                return
+            try:
+                if not param:
+                    raise Exception(f"Image with name {param} can't be exist")
 
-            if not self.check_connection():
-                raise Exception("Can't connect to server")
+                if Image.get(param):
+                    # raise Exception(f"{param} already pulled")
+                    print(f"{param} already pulled")
+                    return
 
-            manifest = self.get_info(param)
-            if manifest is None:
-                raise Exception(f"Image {param} not found on registry")
+                if not self.check_connection():
+                    raise Exception("Can't connect to server")
 
-
-            errors = {}
-            thrs: dict[str, Thread] = {}
-
-            def worker(image_id: str):
-                try:
-                    self._pull(image_id, force)
-
-                except Exception as e:
-                    print(e)
-                    errors[image_id] = e
+                manifest = self.get_info(param)
+                if manifest is None:
+                    raise Exception(f"Image {param} not found on registry")
 
 
-            for layer_image_id in manifest["image"]["layers"]:
-                if Image.get(layer_image_id):
-                    print(f"{layer_image_id} ✅")
+                errors = {}
+                thrs: dict[str, Thread] = {}
 
-                else:
-                    print(f"Pulling image: {layer_image_id}")
+                def worker(image_id: str):
+                    try:
+                        self._pull(image_id, force)
 
-                    thr = Thread(target=worker, args=(layer_image_id,))
-                    thr.start()
-                    thrs[layer_image_id] = thr
+                    except Exception as e:
+                        print(e)
+                        errors[image_id] = e
 
 
-            print(f"Pulling image: {param}")
+                for layer_image_id in manifest["image"]["layers"]:
+                    if Image.get(layer_image_id):
+                        print(f"{layer_image_id} ✅")
 
-            thr = Thread(target=worker, args=(manifest["image"]["id"],))
-            thr.start()
-            thrs[param] = thr
+                    else:
+                        print(f"Pulling image: {layer_image_id}")
 
-            for image_id, thr in thrs.items():
-                thr.join()
-                if image_id in errors:
-                    raise errors[image_id]
+                        thr = Thread(target=worker, args=(layer_image_id,))
+                        thr.start()
+                        thrs[layer_image_id] = thr
 
-                else:
-                    print(f"{image_id} ✅")
 
-        except Exception as e:
-            raise Exception("Pull error: " + str(e))
+                print(f"Pulling image: {param}")
+
+                thr = Thread(target=worker, args=(manifest["image"]["id"],))
+                thr.start()
+                thrs[param] = thr
+
+                for image_id, thr in thrs.items():
+                    thr.join()
+                    if image_id in errors:
+                        raise errors[image_id]
+
+                    else:
+                        print(f"{image_id} ✅")
+
+            except Exception as e:
+                raise Exception("Pull error: " + str(e))
 
 
     def remove(self, param: str = None):
@@ -259,7 +265,7 @@ class Client():
             raise Exception("Remote remove error: " + str(e))
 
 
-    def print_remote_images(self):
+    def get_remote_images(self):
         try:
             if not self.check_connection():
                 raise Exception("Can't connect to server")
@@ -268,23 +274,26 @@ class Client():
             if response.status_code != 200:
                 raise Exception(f"Ошибка: {response.text}")
 
-            images = response.json()
-
-            print("Список образов в registry:")
-            table = [["ID", "NAME", "TYPE", "PARENT IMAGE ID"]]
-            for img in images:
-                parent_image_id = None
-                if img["image"]["layers"]:
-                    parent_image_id = img["image"]["layers"][-1]
-
-                table.append([img["image"]["id"]
-                              , Image._to_fullname(img["image"]["author"], img["image"]["name"], img["image"]["version"])
-                              , img["image"]["type"], parent_image_id])
-
-            print(tabulate(table, headers="firstrow", tablefmt="grid"))
+            return response.json()
 
         except Exception as e:
             raise Exception("Can't get info from server: ", str(e))
+
+    def print_remote_images(self):
+        images = self.get_remote_images()
+
+        print("Список образов в registry:")
+        table = [["ID", "NAME", "TYPE", "PARENT IMAGE ID"]]
+        for img in images:
+            parent_image_id = None
+            if img["image"]["layers"]:
+                parent_image_id = img["image"]["layers"][-1]
+
+            table.append([img["image"]["id"]
+                          , Image._to_fullname(img["image"]["author"], img["image"]["name"], img["image"]["version"])
+                          , img["image"]["type"], parent_image_id])
+
+        print(tabulate(table, headers="firstrow", tablefmt="grid"))
 
 
     def send_statistic(self):

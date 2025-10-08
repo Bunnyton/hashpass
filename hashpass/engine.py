@@ -22,14 +22,23 @@ def new(*args):
 
 
 def pull(*args):
+    parser = argparse.ArgumentParser(description='hashengine.py pull')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='pull all images from registry')
+    parser.add_argument('images', nargs='*', help='to pull images')
+    pargs = parser.parse_args(args)
+
     client = Client()
+    if len(pargs.images) == 0:
+        if pargs.all:
+            remote_images = client.get_remote_images()
+            client.pull(*remote_images, force=True)
 
-    if len(args) == 0:
-        client.print_remote_images()
+        else:
+            client.print_remote_images()
 
-    elif len(args) > 0:
-        for image_name in args:
-            client.pull(image_name, force=True)
+    elif len(pargs.images) > 0:
+        client.pull(*pargs.images, force=True)
 
 
 def push(*args):
