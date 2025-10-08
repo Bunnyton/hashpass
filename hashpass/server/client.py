@@ -1,17 +1,18 @@
-import os
 import subprocess
 import requests
 import json
-from pathlib import Path
+import toml
+import os
 
-from threading import Thread
 from tabulate import tabulate
+from threading import Thread
+from pathlib import Path
 
 from ..utils import remove, hashsum
 from ..core.image import Image
 
-from ..settings import Settings
 from ..userconfig import UserConfig
+from ..settings import Settings
 
 
 
@@ -54,24 +55,14 @@ class Client():
         return response.json()
 
 
-    def _pull(self, image_id: str, force=False):
+    def _pull(self, manifest: dict):
+        image_id = manifest["image"]["id"]
         config_dir = os.path.join(Image.Config.config_dir, image_id)
-        os.makedirs(config_dir, exist_ok=True)
+        config_path = os.path.join(config_dir, Image.Config.config_filename)
         archive_path = os.path.join(config_dir, f"{image_id}.tar.gz")
+
         try:
-            if Image.exist(image_id):
-                return
-
-            _path = Path(config_dir)
-            if len(list(_path.iterdir())) > 1:
-                error_text = f"Directory {config_dir} is not empty"
-                if force:
-                    print(error_text)
-                    print(f"Force option is enabled -> remove {config_dir}")
-                    remove(config_dir)
-
-                else:
-                    raise Exception(error_text)
+            remove(config_dir)
 
             archive_response = requests.get(f"{self.server_url}/download/{image_id}", stream=True)
             if archive_response.status_code != 200:
@@ -85,6 +76,8 @@ class Client():
             subprocess.run(["tar", "--extract", "--gzip", "--preserve-permissions"
                                                         , "--file", archive_path
                                                         , "--directory", config_dir], check=True,)
+            with open(config_path, "w") as f:
+                toml.dump(manifest, f)
 
         except Exception:
             raise 
@@ -103,7 +96,6 @@ class Client():
                 image = Image(image_id)
                 manifest = image.info()
                 flags = {"force": force}
-
                 remove(image.config_path)
 
                 subprocess.run(["tar", "--create", "--gzip", "--preserve-permissions"
@@ -165,7 +157,7 @@ class Client():
 
                 print(f"Pushing image: {param}")
 
-                thr = Thread(target=worker, args=(image.id, force,))
+                thr = Thread(target=worker, args=(image.id,))
                 thr.start()
                 thrs[image.id] = thr
 
@@ -181,37 +173,46 @@ class Client():
         except Exception as e:
             raise Exception("Push error: " + str(e))
 
+    
+    def get_newest_version(self, param) -> dict|None: # return manifest if newest verion on registry
+        if not param:
+            raise Exception(f"Image with name {param} can't be exist")
 
-    def pull(self, *params, force=False):
+        if not self.check_connection():
+            raise Exception("Can't connect to server")
+
+        manifest = self.get_info(param)
+        if manifest is None:
+            raise Exception(f"Image {param} not found on registry")
+
+
+        if not Image.exist(param) or manifest["image"]["hashsum"] != Image.get_hashsum(param):
+            return manifest
+
+        return None
+
+
+    def pull(self, *params):
         for _param in params:
             if Image.check_manifest(_param):
                 param = _param["image"]["id"]
             else:
                 param = _param
-
             try:
-                if not param:
-                    raise Exception(f"Image with name {param} can't be exist")
+                manifest = self.get_newest_version(param)
+                if not manifest:
+                    print(f"Newest version of {param} already pulled")
+                    continue
 
-                if Image.exist(param):
-                    # raise Exception(f"{param} already pulled")
-                    print(f"{param} already pulled")
-                    return
-
-                if not self.check_connection():
-                    raise Exception("Can't connect to server")
-
-                manifest = self.get_info(param)
-                if manifest is None:
-                    raise Exception(f"Image {param} not found on registry")
-
+                else:
+                    print(f"Found a new version of {param} on registry")
 
                 errors = {}
                 thrs: dict[str, Thread] = {}
 
-                def worker(image_id: str):
+                def worker(_manifest: str):
                     try:
-                        self._pull(image_id, force)
+                        self._pull(_manifest)
 
                     except Exception as e:
                         print(e)
@@ -219,20 +220,20 @@ class Client():
 
 
                 for layer_image_id in manifest["image"]["layers"]:
-                    if Image.exist(layer_image_id):
-                        print(f"{layer_image_id} ✅")
-
-                    else:
+                    layer_manifest = get_newest_version(layer_image_id)
+                    if layer_manifest:
                         print(f"Pulling image: {layer_image_id}")
 
-                        thr = Thread(target=worker, args=(layer_image_id,))
+                        thr = Thread(target=worker, args=(layer_manifest,))
                         thr.start()
                         thrs[layer_image_id] = thr
+                    else:
+                        print(f"{layer_image_id} ✅")
 
 
                 print(f"Pulling image: {param}")
 
-                thr = Thread(target=worker, args=(manifest["image"]["id"],))
+                thr = Thread(target=worker, args=(manifest,))
                 thr.start()
                 thrs[param] = thr
 
@@ -264,7 +265,7 @@ class Client():
                     raise Exception(resp.text)
 
                 else:
-                    print(f"✅ Image {param} removed on registry successfully")
+                    print(f"✅ Image {param} successfully removed on registry")
 
             else:
                 raise Exception(f"Image with name {param} doesn't exist on registry")

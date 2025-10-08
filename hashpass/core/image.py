@@ -79,9 +79,9 @@ class Image():
             raise Exception("Import path doesn't exist or isn't dir")
 
 
-    def exist(self):
+    def exist(param) -> bool:
         try:
-            Image(fullname)
+            Image(param)
             return True
         except:
             return False
@@ -236,8 +236,18 @@ class Image():
         return None
 
 
-    def get_fullname(param) -> str:
-        return Image(param).fullname
+    def get_fullname(param) -> str|None:
+        try:
+            return Image(param).fullname
+        except:
+            return None
+
+
+    def get_hashsum(param) -> str|None:
+        try:
+            return Image(param).hashsum
+        except:
+            return None
 
 
     def list(manifests=False) -> list: # return all images

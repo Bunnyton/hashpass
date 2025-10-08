@@ -32,13 +32,13 @@ def pull(*args):
     if len(pargs.images) == 0:
         if pargs.all:
             remote_images = client.get_remote_images()
-            client.pull(*remote_images, force=True)
+            client.pull(*remote_images)
 
         else:
             client.print_remote_images()
 
     elif len(pargs.images) > 0:
-        client.pull(*pargs.images, force=True)
+        client.pull(*pargs.images)
 
 
 def push(*args):
