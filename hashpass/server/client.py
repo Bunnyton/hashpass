@@ -131,7 +131,8 @@ class Client():
                 raise Exception("Can't connect to server")
 
             if not force and self.get_info(param):
-                raise Exception(f"{param} already exist on registry")
+                print(f"{param} already exist on registry")
+                return
 
             else:
                 image = Image(param)
@@ -195,61 +196,60 @@ class Client():
         return None
 
 
-    def pull(self, *params):
-        for _param in params:
-            if Image.check_manifest(_param):
-                param = _param["image"]["id"]
+    def pull(self, _param):
+        if Image.check_manifest(_param):
+            param = _param["image"]["id"]
+        else:
+            param = _param
+        try:
+            manifest = self.get_newest_version(param)
+            if not manifest:
+                print(f"The newest version of {param} already pulled")
+                return
+
             else:
-                param = _param
-            try:
-                manifest = self.get_newest_version(param)
-                if not manifest:
-                    print(f"The newest version of {param} already pulled")
-                    continue
+                print(f"\nThe new version of {param} has been found on registry")
+
+            errors = {}
+            thrs: dict[str, Thread] = {}
+
+            def worker(_manifest: str):
+                try:
+                    self._pull(_manifest)
+
+                except Exception as e:
+                    print(e)
+                    errors[image_id] = e
+
+
+            for layer_image_id in manifest["image"]["layers"]:
+                layer_manifest = self.get_newest_version(layer_image_id)
+                if layer_manifest:
+                    print(f"Pulling image: {layer_image_id}")
+
+                    thr = Thread(target=worker, args=(layer_manifest,))
+                    thr.start()
+                    thrs[layer_image_id] = thr
+                else:
+                    print(f"{layer_image_id} ✅\n")
+
+
+            print(f"Pulling image: {param}")
+
+            thr = Thread(target=worker, args=(manifest,))
+            thr.start()
+            thrs[param] = thr
+
+            for image_id, thr in thrs.items():
+                thr.join()
+                if image_id in errors:
+                    raise errors[image_id]
 
                 else:
-                    print(f"The new version of {param} has been found on registry")
+                    print(f"{image_id} ✅")
 
-                errors = {}
-                thrs: dict[str, Thread] = {}
-
-                def worker(_manifest: str):
-                    try:
-                        self._pull(_manifest)
-
-                    except Exception as e:
-                        print(e)
-                        errors[image_id] = e
-
-
-                for layer_image_id in manifest["image"]["layers"]:
-                    layer_manifest = self.get_newest_version(layer_image_id)
-                    if layer_manifest:
-                        print(f"Pulling image: {layer_image_id}")
-
-                        thr = Thread(target=worker, args=(layer_manifest,))
-                        thr.start()
-                        thrs[layer_image_id] = thr
-                    else:
-                        print(f"{layer_image_id} ✅")
-
-
-                print(f"Pulling image: {param}")
-
-                thr = Thread(target=worker, args=(manifest,))
-                thr.start()
-                thrs[param] = thr
-
-                for image_id, thr in thrs.items():
-                    thr.join()
-                    if image_id in errors:
-                        raise errors[image_id]
-
-                    else:
-                        print(f"{image_id} ✅")
-
-            except Exception as e:
-                raise Exception("Pull error: " + str(e))
+        except Exception as e:
+            raise Exception("Pull error: " + str(e))
 
 
     def remote_remove(self, param: str = None):
@@ -296,8 +296,12 @@ class Client():
     def print_remote_images(self):
         images = self.get_remote_images()
 
-        print("Список образов в registry:")
-        Image.print_images(*images)
+        if images:
+            print("Список образов в registry:")
+            Image.print_images(*images)
+
+        else:
+            print("registry пуст")
 
 
     def send_statistic(self):

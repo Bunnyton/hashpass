@@ -32,7 +32,8 @@ def pull(*args):
     if len(pargs.images) == 0:
         if pargs.all:
             remote_images = client.get_remote_images()
-            client.pull(*remote_images)
+            for image in remote_images:
+                client.pull(image)
 
         else:
             client.print_remote_images()
@@ -45,6 +46,8 @@ def push(*args):
     parser = argparse.ArgumentParser(description='hashengine.py push')
     parser.add_argument('-f', '--force', action='store_true',
                         help='replace image layers on registry')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='push all images to registry')
     parser.add_argument('images', nargs='*', help='to push image layers')
     pargs = parser.parse_args(args)
 
@@ -56,7 +59,15 @@ def push(*args):
     client = Client()
     if pargs.images:
         for image_name in pargs.images:
-            client.push(image_name, force=pargs.force)
+            try:
+                client.push(image_name, force=pargs.force)
+            except Exception as e:
+                print(e)
+
+    elif pargs.all:
+        images = Image.list()
+        for image in images:
+            client.push(image.id, force=pargs.force)
 
     else:
         raise Exception("Function push() must has one or more args")
