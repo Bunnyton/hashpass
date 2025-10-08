@@ -3,7 +3,7 @@
 import os
 import sys
 
-from hashpass.engine import print_images, new, pull, push, send_statistic, delete, edit, create, play
+from hashpass.engine import print_images, new, pull, push, send_statistic, delete, edit, create, play, remote
 
 
 def main():
@@ -41,6 +41,9 @@ def main():
 
         elif sys.argv[0] == "start" or sys.argv[0] == "play":
             play(*sys.argv[1::])
+
+        elif sys.argv[0] == "remote":
+            remote(*sys.argv[1::])
 
         # elif sys.argv[0] == "rename": #FIXME change to tag
         #     rename(sys.argv[1::])
