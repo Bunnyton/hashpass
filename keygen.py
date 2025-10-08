@@ -1,9 +1,10 @@
 #!/bin/python3
 
 from tabulate import tabulate
-from settings import Settings
-from userconfig import UserConfig
-from key import calc_key
+
+from hashpass.settings import Settings
+from hashpass.userconfig import UserConfig
+from hashpass.key import calc_key
 
 settings = Settings()
 userconfig = UserConfig()

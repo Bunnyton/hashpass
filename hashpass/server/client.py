@@ -172,7 +172,7 @@ class Client():
             raise Exception("Push error: " + str(e))
 
 
-    def pull(self, param = None, force=False):
+    def pull(self, param: str = None, force=False):
         try:
             if not param:
                 raise Exception(f"Image with name {param} can't be exist")
