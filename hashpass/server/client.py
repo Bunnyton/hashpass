@@ -142,9 +142,9 @@ class Client():
                 errors = {}
                 thrs: [str, Thread] = {}
 
-                def worker(_image_id: str, _force=False):
+                def worker(_image_id: str):
                     try:
-                        self._push(_image_id, _force)
+                        self._push(_image_id, force=force)
 
                     except Exception as e:
                         errors[_image_id] = e
