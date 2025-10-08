@@ -35,13 +35,16 @@ def pull(*args):
 def push(*args):
     parser = argparse.ArgumentParser(description='hashengine.py push')
     parser.add_argument('-f', '--force', action='store_true',
-                        help='replace image on registry')
-    parser.add_argument('images', nargs='*', help='to push images')
-
+                        help='replace image layers on registry')
+    parser.add_argument('images', nargs='*', help='to push image layers')
     pargs = parser.parse_args(args)
 
-    client = Client()
+    if pargs.force:
+        ans = input("This command replace image layer on registry, you are sure? [y] ")
+        if 'y' != ans.strip().lower():
+            return
 
+    client = Client()
     if pargs.images:
         for image_name in pargs.images:
             client.push(image_name, force=pargs.force)
@@ -117,6 +120,21 @@ def create(*args):
     else:
         raise Exception("Function play() must has only one arg")
 
+
+def remote(*args):
+    if len(args) > 1:
+        if args[0] in ['remove', 'rm', 'delete', 'del']:
+            client = Client()
+
+            ans = input("This command remove image layer only, you are sure? [y] ")
+            if 'y' != ans.strip().lower():
+                return
+
+            for image_name in args[1::]:
+                client.remove(image_name)
+
+    else:
+        raise Exception("Function remote() must has more one arg")
 
 
 

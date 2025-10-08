@@ -117,7 +117,9 @@ class Client():
                         'manifest': json.dumps(manifest),
                         'flags': json.dumps(flags)
                     }
-                    return requests.post(f"{self.server_url}/push", files=files, data=data, stream=True)
+                    resp = requests.post(f"{self.server_url}/push", files=files, data=data, stream=True)
+                    if resp.status_code != 200:
+                        raise Exception(resp.text)
 
         except Exception:
             raise
@@ -234,6 +236,29 @@ class Client():
             raise Exception("Pull error: " + str(e))
 
 
+    def remove(self, param: str = None):
+        try:
+            if not param:
+                raise Exception(f"Image with name {param} can't be exist")
+
+            manifest = self.get_info(param)
+            if manifest:
+                data = {
+                    'id': manifest['image']['id']
+                }
+                resp = requests.post(f"{self.server_url}/remove", data=data)
+
+                if resp.status_code != 200:
+                    raise Exception(resp.text)
+
+            else:
+                raise Exception(f"Image with name {param} doesn't exist on registry")
+
+
+        except Exception as e:
+            raise Exception("Remote remove error: " + str(e))
+
+
     def print_remote_images(self):
         try:
             if not self.check_connection():
@@ -272,4 +297,7 @@ class Client():
 
         except Exception as e:
             raise Exception("Send statistic error: " + str(e))
+
+
+
 

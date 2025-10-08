@@ -2,10 +2,12 @@ import os
 import glob
 import json
 import shutil
+import toml
+
 from functools import wraps
 from db_module import DBConnector
 
-import toml
+
 from flask import Flask, abort, jsonify, request, send_file
 
 app = Flask(__name__)
