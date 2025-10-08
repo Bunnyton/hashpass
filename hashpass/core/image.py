@@ -270,9 +270,11 @@ class Image():
         table = [["ID", "NAME", "TYPE", "PARENT IMAGE", "HASHSUM"]]
 
         for manifest in manifests:
-            parent_image_fullname = None
+            parent_image_name = None
             if manifest["image"]["layers"]:
-                parent_image_fullname = Image.get_fullname(manifest["image"]["layers"][-1])
+                parent_image_name = Image.get_fullname(manifest["image"]["layers"][-1])
+                if not parent_image_name:
+                    parent_image_name = manifest["image"]["layers"][-1]
 
             hashsum = "not pushed"
             if "hashsum" in manifest["image"] and manifest["image"]["hashsum"]:
@@ -281,8 +283,8 @@ class Image():
             table.append([manifest["image"]["id"]
                             , Image.get_fullname(manifest)
                             , manifest["image"]["type"]
-                            , parent_image_fullname
-                            , manifest["image"]["hashsum"]])
+                            , parent_image_name
+                            , hashsum])
 
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 

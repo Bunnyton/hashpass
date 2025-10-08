@@ -186,7 +186,10 @@ class Client():
             raise Exception(f"Image {param} not found on registry")
 
 
-        if not Image.exist(param) or manifest["image"]["hashsum"] != Image.get_hashsum(param):
+        if not Image.exist(param): 
+            return manifest
+
+        elif "hashsum" in manifest["image"] and manifest["image"]["hashsum"] != Image.get_hashsum(param):
             return manifest
 
         return None
@@ -201,11 +204,11 @@ class Client():
             try:
                 manifest = self.get_newest_version(param)
                 if not manifest:
-                    print(f"Newest version of {param} already pulled")
+                    print(f"The newest version of {param} already pulled")
                     continue
 
                 else:
-                    print(f"Found a new version of {param} on registry")
+                    print(f"The new version of {param} has been found on registry")
 
                 errors = {}
                 thrs: dict[str, Thread] = {}
@@ -220,7 +223,7 @@ class Client():
 
 
                 for layer_image_id in manifest["image"]["layers"]:
-                    layer_manifest = get_newest_version(layer_image_id)
+                    layer_manifest = self.get_newest_version(layer_image_id)
                     if layer_manifest:
                         print(f"Pulling image: {layer_image_id}")
 
