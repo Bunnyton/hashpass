@@ -45,7 +45,7 @@ def main():
 
     print("\nОбновление списка заданий")
     try:
-        pull(*userconfig.get_task_name(all=True))
+        pull(*userconfig.get_task_name(all=True), "-l")
         print("Обновление завершено")
 
     except Exception as e:

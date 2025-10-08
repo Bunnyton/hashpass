@@ -177,7 +177,7 @@ class Client():
             raise Exception("Push error: " + str(e))
 
     
-    def get_newest_version(self, param) -> dict|None: # return manifest if newest verion on registry
+    def get_newest_version(self, param) -> [bool, dict]: # return manifest if newest verion on registry
         if not param:
             raise Exception(f"Image with name {param} can't be exist")
 
@@ -190,24 +190,27 @@ class Client():
 
 
         if not Image.exist(param): 
-            return manifest
+            return True, manifest
 
         elif "hashsum" in manifest["image"] and manifest["image"]["hashsum"] != Image.get_hashsum(param):
-            return manifest
+            return True, manifest
 
-        return None
+        return False, manifest
 
 
-    def pull(self, _param):
+    def pull(self, _param, pull_layers=False):
         if Image.check_manifest(_param):
             param = _param["image"]["id"]
         else:
             param = _param
         try:
-            manifest = self.get_newest_version(param)
-            if not manifest:
+            status, manifest = self.get_newest_version(param)
+            if not status:
                 print(f"The newest version of {param} already pulled")
-                return
+                if pull_layers:
+                    print(f"Checking layers of {param}")
+                else:
+                    return
 
             else:
                 print(f"\nThe new version of {param} has been found on registry")
@@ -225,8 +228,8 @@ class Client():
 
 
             for layer_image_id in manifest["image"]["layers"]:
-                layer_manifest = self.get_newest_version(layer_image_id)
-                if layer_manifest:
+                _status, layer_manifest = self.get_newest_version(layer_image_id)
+                if _status:
                     print(f"Pulling image: {layer_image_id}")
 
                     thr = Thread(target=worker, args=(layer_manifest,))
@@ -236,11 +239,12 @@ class Client():
                     print(f"{layer_image_id} ✅")
 
 
-            print(f"Pulling image: {param}")
+            if status:
+                print(f"Pulling image: {param}")
 
-            thr = Thread(target=worker, args=(manifest,))
-            thr.start()
-            thrs[param] = thr
+                thr = Thread(target=worker, args=(manifest,))
+                thr.start()
+                thrs[param] = thr
 
             for image_id, thr in thrs.items():
                 thr.join()
