@@ -44,6 +44,7 @@ class Image():
             manifest: dict
             if Image.check_manifest(param):
                 manifest = param
+
             else:
                 manifest = Image.get_manifest(param)
                 if not manifest:

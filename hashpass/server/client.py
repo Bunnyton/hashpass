@@ -8,7 +8,7 @@ from tabulate import tabulate
 from threading import Thread
 from pathlib import Path
 
-from ..utils import remove, hashsum
+from ..utils import remove, hashsum, move
 from ..core.image import Image
 
 from ..userconfig import UserConfig
@@ -62,13 +62,12 @@ class Client():
         archive_path = os.path.join(config_dir, f"{image_id}.tar.gz")
 
         try:
-            remove(config_dir)
+            move(config_dir, config_dir + "_backup")
+            os.makedirs(config_dir, exist_ok=True)
 
             archive_response = requests.get(f"{self.server_url}/download/{image_id}", stream=True)
             if archive_response.status_code != 200:
                 raise Exception(f"Download image error: {archive_response.text}")
-
-            os.makedirs(config_dir, exist_ok=True)
 
             with open(archive_path, "wb") as f:
                 f.write(archive_response.content)
@@ -79,7 +78,10 @@ class Client():
             with open(config_path, "w") as f:
                 toml.dump(manifest, f)
 
+            remove(config_dir + "_backup")
+
         except Exception:
+            move(config_dir + "_backup", config_dir)
             raise 
 
         finally:
@@ -231,7 +233,7 @@ class Client():
                     thr.start()
                     thrs[layer_image_id] = thr
                 else:
-                    print(f"{layer_image_id} ✅\n")
+                    print(f"{layer_image_id} ✅")
 
 
             print(f"Pulling image: {param}")

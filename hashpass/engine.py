@@ -85,21 +85,44 @@ def send_statistic(*args):
 
 
 def delete(*args):
-    if len(args) > 0:
-        ans = input("This command remove all dependecies image, you are sure? [y] ")
+    parser = argparse.ArgumentParser(description='hashengine.py push')
+    parser.add_argument('-f', '--force', action='store_true',
+                        help='replace image layers on registry')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='push all images to registry')
+    parser.add_argument('images', nargs='*', help='to delete image layers')
+    pargs = parser.parse_args(args)
+
+    if pargs.force:
+        ans = input(f"This command force delete all dependecies images too, you are sure? [y] ")
         if 'y' != ans.strip().lower():
             return
 
-        for image_id in args:
-            try:
-                image = Image(image_id)
-                image.delete()
+    images = pargs.images
+    if len(images) == 0:
+        if pargs.all:
+            images = Image.list()
 
-            except Exception as e:
-                print(' '.join(['❌' , str(e)]))
+        else:
+            raise Exception("Function remove() must has one or more args")
 
-    else:
-        raise Exception("Function remove() must has one or more args")
+    for _image in images:
+        try:
+            if isinstance(_image, Image):
+                image = _image
+            else:
+                image = Image(_image)
+
+            if not pargs.force:
+                ans = input(f"This command delete all dependecies image of {image.fullname} too, you are sure? [y] ")
+                if 'y' != ans.strip().lower():
+                    print(f"❌ Cancel deleting of {image.fullname}")
+                    continue
+
+            image.delete()
+
+        except Exception as e:
+            print(' '.join(['❌' , str(e)]))
 
 
 def edit(*args):
