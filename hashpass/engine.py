@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 
 from .server import Client
 from .core import Image, Container
@@ -32,11 +33,18 @@ def pull(*args):
 
 
 def push(*args):
+    parser = argparse.ArgumentParser(description='hashengine.py push')
+    parser.add_argument('-f', '--force', action='store_true',
+                        help='replace image on registry')
+    parser.add_argument('images', nargs='*', help='to push images')
+
+    pargs = parser.parse_args(args)
+
     client = Client()
 
-    if len(args) > 0:
-        for image_name in args:
-            client.push(image_name)
+    if pargs.images:
+        for image_name in pargs.images:
+            client.push(image_name, force=pargs.force)
 
     else:
         raise Exception("Function push() must has one or more args")

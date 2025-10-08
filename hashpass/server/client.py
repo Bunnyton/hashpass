@@ -93,15 +93,16 @@ class Client():
             remove(archive_path)
                 
 
-    def _push(self, image_id: str):
+    def _push(self, image_id: str, force=False):
         archive_path = os.path.join(Image.Config.config_dir, image_id + '.tar.gz')
         try:
-            if self.get_info(image_id):
+            if not force and self.get_info(image_id):
                 raise Exception(f"Image already exist on registry")
 
             else:
                 image = Image(image_id)
                 manifest = image.info()
+                flags = {"force": force}
 
                 
                 subprocess.run(["tar", "--create", "--gzip", "--preserve-permissions"
@@ -113,7 +114,8 @@ class Client():
                         'image': f,
                     }
                     data = {
-                        'manifest': json.dumps(manifest)
+                        'manifest': json.dumps(manifest),
+                        'flags': json.dumps(flags)
                     }
                     return requests.post(f"{self.server_url}/push", files=files, data=data, stream=True)
 
@@ -124,12 +126,12 @@ class Client():
             remove(archive_path)
 
 
-    def push(self, param: str):
+    def push(self, param: str, force=False):
         try:
             if not self.check_connection():
                 raise Exception("Can't connect to server")
 
-            if self.get_info(param):
+            if not force and self.get_info(param):
                 raise Exception(f"{param} already exist on registry")
 
             else:
@@ -138,12 +140,12 @@ class Client():
                 errors = {}
                 thrs: [str, Thread] = {}
 
-                def worker(image_id: str):
+                def worker(_image_id: str, _force=False):
                     try:
-                        self._push(image_id)
+                        self._push(_image_id, _force)
 
                     except Exception as e:
-                        errors[image_id] = e
+                        errors[_image_id] = e
 
                 for image_layer_id in image.layers:
                     if not self.get_info(image_layer_id):
@@ -156,7 +158,7 @@ class Client():
 
                 print(f"Pushing image: {param}")
 
-                thr = Thread(target=worker, args=(image.id,))
+                thr = Thread(target=worker, args=(image.id, force,))
                 thr.start()
                 thrs[image.id] = thr
 

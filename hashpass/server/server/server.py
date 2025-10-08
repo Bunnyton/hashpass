@@ -1,5 +1,7 @@
+import os
 import glob
 import json
+import shutil
 from functools import wraps
 from db_module import DBConnector
 
@@ -60,15 +62,52 @@ def get(param: str):
     return None
 
 
+def check_flag(flags_raw, flag: str):
+    if flags_raw:
+        flags = json.loads(flags_raw)
+        if flag in flags and flags[flag]:
+            return True
+
+    return False
+
+
+def remove(image_id: str):
+    image_path = os.path.join(STORAGE_DIR, image_id)
+    shutil.rmtree(image_path)
+
+
+@app.route("/remove", methods=["POST"])
+def remove_image():
+    id = request.form.get("id")
+    if id:
+        if get(id):
+            remove(id)
+            return f"Image {id} removed successfully", 200
+
+        else:
+            return f"Image {id} doesn't exist", 500
+
+    return "Invalid format", 400
+
+
+
 @app.route("/push", methods=["POST"])
 def push_image():
     manifest_raw = request.form.get("manifest")
+    flags_raw = request.form.get("flags")
     image_file = request.files.get("image")  # получаем список файлов
+
 
     if manifest_raw and image_file:
         manifest = json.loads(manifest_raw)
         if manifest["image"]["id"] and manifest["image"]["name"] and manifest["image"]["version"] and "layers" in manifest["image"] and manifest["image"]["author"] and manifest["image"]["type"]:
             image_path = os.path.join(STORAGE_DIR, manifest["image"]["id"])
+
+            if check_flag(flags_raw, "force"):
+                remove(manifest["image"]["id"])
+
+            elif get(manifest["image"]["id"]):
+                return f"Image {manifest["image"]["id"]} already exist", 500
 
             os.makedirs(image_path, exist_ok=True)
             with open(os.path.join(image_path, "manifest.toml"), "w") as f:
