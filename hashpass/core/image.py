@@ -36,22 +36,29 @@ class Image():
         self.author : str
         self.fullname: str
         self.version : str
+        self.hashsum: str = ""
         self.layers = list()
         self.type: str
         
-        image: list
         if param is not None:
-            image = Image.get(param)
-            if not image:
-                raise Exception(' '.join(["Can't find image", param, "locally"]))
+            manifest: dict
+            if Image.check_manifest(param):
+                manifest = param
+            else:
+                manifest = Image.get_manifest(param)
+                if not manifest:
+                    raise Exception(' '.join(["Can't find image", param, "locally"]))
 
-            self.id = image['image']['id']
-            self.name = image['image']['name']
-            self.author = image['image']['author']
-            self.version = image['image']['version']
+            self.id = manifest['image']['id']
+            self.name = manifest['image']['name']
+            self.author = manifest['image']['author']
+            self.version = manifest['image']['version']
             self.fullname = Image._to_fullname(self.author, self.name, self.version)
-            self.layers = image['image']['layers']
-            self.type = image['image']['type']
+            self.layers = manifest['image']['layers']
+            self.type = manifest['image']['type']
+
+            if 'hashsum' in manifest['image']:
+                self.hashsum = manifest['image']['hashsum']
 
             self.config_dir = os.path.join(Image.Config.config_dir, self.id)
             self.config_path = os.path.join(self.config_dir, Image.Config.config_filename)
@@ -71,21 +78,26 @@ class Image():
         else:
             raise Exception("Import path doesn't exist or isn't dir")
 
+
+    def exist(self):
+        try:
+            Image(fullname)
+            return True
+        except:
+            return False
     
+
     def create(self, param=None): #FIXME create must create new image and return them
         if param is None:
             # FIXME update tree with exists image
             self.type = Image.Type.base
 
         else:
-            parent_image = Image.get(param)
+            parent_image = Image(param)
             if parent_image:
                 self.type = Image.Type.simple
-                self.layers = parent_image['image']['layers']
-                self.layers.append(parent_image['image']['id'])
-
-            else:
-                raise Exception(f"Can't find image {param}")
+                self.layers = parent_image.layers
+                self.layers.append(parent_image.id)
 
         
         self.name = read("Enter name of image: ").strip()
@@ -93,7 +105,7 @@ class Image():
         self.version = read("Enter version of image: ", default="latest").strip()
 
         self.fullname = Image._to_fullname(self.author, self.name, self.version)
-        if Image.get(self.fullname):
+        if Image.exist(self.fullname):
             raise Exception(f"{self.fullname} already exist")
 
         self.id = str(uuid.uuid4()).replace("-", "")
@@ -132,6 +144,7 @@ class Image():
         data["image"]["id"] = self.id
         data["image"]["type"] = self.type
         data["image"]["layers"] = self.layers
+        data["image"]["hashsum"] = self.hashsum
 
         return data
 
@@ -200,7 +213,7 @@ class Image():
         return False
 
 
-    def get(param) -> dict: # return fullname
+    def get_manifest(param) -> dict:
         if isinstance(param, str):
             if '/' in param:
                 author, name, version = Image._parse_fullname(param)
@@ -223,37 +236,43 @@ class Image():
         return None
 
 
-    def get_fullname(param) -> str: # return fullname
-        manifest = Image.get(param)
-        if manifest:
-            return Image._to_fullname(manifest['image']['author'], manifest['image']['name'], manifest['image']['name'])
-
-        return None
+    def get_fullname(param) -> str:
+        return Image(param).fullname
 
 
-    def list() -> list: # return [manifest, manifest, ...]
+    def list(manifests=False) -> list: # return all images
         images = list()
         for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
             manifest = toml.load(file)
-            if manifest:
-                images.append(Image(manifest['image']['id']))
+            if Image.check_manifest(manifest):
+                if manifests:
+                    images.append(manifest)
+                else:
+                    images.append(Image(manifest))
 
         return images
 
 
-    def print_list():
-        table = [["ID", "NAME", "TYPE", "PARENT IMAGE"]]
+    def print_images(*manifests):
+        if not manifests:
+            manifests = Image.list(manifests=True)
 
-        for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-            temp = toml.load(file)
+        table = [["ID", "NAME", "TYPE", "PARENT IMAGE", "HASHSUM"]]
 
+        for manifest in manifests:
             parent_image_fullname = None
-            if temp["image"]["layers"]:
-                parent_image_fullname = Image.get_fullname(temp["image"]["layers"][-1])
+            if manifest["image"]["layers"]:
+                parent_image_fullname = Image.get_fullname(manifest["image"]["layers"][-1])
 
-            table.append([temp["image"]["id"]
-                          , Image._to_fullname(temp["image"]["author"], temp["image"]["name"], temp["image"]["version"])
-                          , temp["image"]["type"], parent_image_fullname])
+            hashsum = "not pushed"
+            if "hashsum" in manifest["image"] and manifest["image"]["hashsum"]:
+                hashsum = manifest["image"]["hashsum"]
+
+            table.append([manifest["image"]["id"]
+                            , Image.get_fullname(manifest)
+                            , manifest["image"]["type"]
+                            , parent_image_fullname
+                            , manifest["image"]["hashsum"]])
 
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 

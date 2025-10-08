@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Thread
 from tabulate import tabulate
 
-from ..utils import remove
+from ..utils import remove, hashsum
 from ..core.image import Image
 
 from ..settings import Settings
@@ -59,7 +59,7 @@ class Client():
         os.makedirs(config_dir, exist_ok=True)
         archive_path = os.path.join(config_dir, f"{image_id}.tar.gz")
         try:
-            if Image.get(image_id):
+            if Image.exist(image_id):
                 return
 
             _path = Path(config_dir)
@@ -104,10 +104,15 @@ class Client():
                 manifest = image.info()
                 flags = {"force": force}
 
-                
+                remove(image.config_path)
+
                 subprocess.run(["tar", "--create", "--gzip", "--preserve-permissions"
                                                            , "--file", archive_path
                                                            , "--directory", image.config_dir, '.'], check=True,)
+
+                manifest['image']['hashsum'] = hashsum(archive_path)
+                image.hashsum = manifest['image']['hashsum']
+                image.save()
 
                 with open(archive_path, "rb") as f:
                     files = {
@@ -171,6 +176,7 @@ class Client():
 
                     else:
                         print(f"{image_id} ✅")
+                        Image.print_images(Image.get_manifest(image_id))
 
         except Exception as e:
             raise Exception("Push error: " + str(e))
@@ -187,7 +193,7 @@ class Client():
                 if not param:
                     raise Exception(f"Image with name {param} can't be exist")
 
-                if Image.get(param):
+                if Image.exist(param):
                     # raise Exception(f"{param} already pulled")
                     print(f"{param} already pulled")
                     return
@@ -213,7 +219,7 @@ class Client():
 
 
                 for layer_image_id in manifest["image"]["layers"]:
-                    if Image.get(layer_image_id):
+                    if Image.exist(layer_image_id):
                         print(f"{layer_image_id} ✅")
 
                     else:
@@ -242,7 +248,7 @@ class Client():
                 raise Exception("Pull error: " + str(e))
 
 
-    def remove(self, param: str = None):
+    def remote_remove(self, param: str = None):
         try:
             if not param:
                 raise Exception(f"Image with name {param} can't be exist")
@@ -256,6 +262,9 @@ class Client():
 
                 if resp.status_code != 200:
                     raise Exception(resp.text)
+
+                else:
+                    print(f"✅ Image {param} removed on registry successfully")
 
             else:
                 raise Exception(f"Image with name {param} doesn't exist on registry")
@@ -279,21 +288,12 @@ class Client():
         except Exception as e:
             raise Exception("Can't get info from server: ", str(e))
 
+
     def print_remote_images(self):
         images = self.get_remote_images()
 
         print("Список образов в registry:")
-        table = [["ID", "NAME", "TYPE", "PARENT IMAGE ID"]]
-        for img in images:
-            parent_image_id = None
-            if img["image"]["layers"]:
-                parent_image_id = img["image"]["layers"][-1]
-
-            table.append([img["image"]["id"]
-                          , Image._to_fullname(img["image"]["author"], img["image"]["name"], img["image"]["version"])
-                          , img["image"]["type"], parent_image_id])
-
-        print(tabulate(table, headers="firstrow", tablefmt="grid"))
+        Image.print_images(*images)
 
 
     def send_statistic(self):

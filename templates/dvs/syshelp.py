@@ -1,4 +1,5 @@
 import subprocess
+import hashlib
 import shutil
 import os
 import re
@@ -70,6 +71,13 @@ def readfile(path: str):
 
     else:
         return None
+
+
+def hashsum(path: str):
+    if os.path.exists(path):
+        return hashlib.sha256(open(path, 'rb').read()).hexdigest()
+
+    return None
 
 
 

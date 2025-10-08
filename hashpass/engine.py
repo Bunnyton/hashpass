@@ -7,7 +7,7 @@ from .core import Image, Container
 
 
 def print_images():
-    Image.print_list()
+    Image.print_images()
 
 
 def new(*args):
@@ -140,7 +140,7 @@ def remote(*args):
                 return
 
             for image_name in args[1::]:
-                client.remove(image_name)
+                client.remote_remove(image_name)
 
     else:
         raise Exception("Function remote() must has more one arg")

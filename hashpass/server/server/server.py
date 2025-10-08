@@ -75,7 +75,8 @@ def check_flag(flags_raw, flag: str):
 
 def remove(image_id: str):
     image_path = os.path.join(STORAGE_DIR, image_id)
-    shutil.rmtree(image_path)
+    if os.path.exists(image_path):
+        shutil.rmtree(image_path)
 
 
 @app.route("/remove", methods=["POST"])
@@ -93,6 +94,8 @@ def remove_image():
 
 
 
+
+
 @app.route("/push", methods=["POST"])
 def push_image():
     manifest_raw = request.form.get("manifest")
@@ -105,17 +108,19 @@ def push_image():
         if manifest["image"]["id"] and manifest["image"]["name"] and manifest["image"]["version"] and "layers" in manifest["image"] and manifest["image"]["author"] and manifest["image"]["type"]:
             image_path = os.path.join(STORAGE_DIR, manifest["image"]["id"])
 
-            if check_flag(flags_raw, "force"):
-                remove(manifest["image"]["id"])
+            if get(manifest["image"]["id"]):
+                if check_flag(flags_raw, "force"):
+                    remove(manifest["image"]["id"])
 
-            elif get(manifest["image"]["id"]):
-                return f"Image {manifest["image"]["id"]} already exist", 500
+                else:
+                    return f"Image {manifest["image"]["id"]} already exist", 500
 
             os.makedirs(image_path, exist_ok=True)
+
+            image_file.save(os.path.join(image_path, manifest["image"]["id"] + ".tar.gz"))
             with open(os.path.join(image_path, "manifest.toml"), "w") as f:
                 toml.dump(manifest, f)
 
-            image_file.save(os.path.join(image_path, manifest["image"]["id"] + ".tar.gz"))
             return f"Image {manifest['image']['author']}/{manifest['image']['name']}:{manifest['image']['version']} uploaded successfully", 200
 
 
