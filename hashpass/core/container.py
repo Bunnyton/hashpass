@@ -177,6 +177,9 @@ class Container():
             copy(os.path.join(Container.Config.templates_dir, "dvs", "action.sh"), os.path.join(self.mountpoint, "usr", "bin", "action"))
             os.chmod(os.path.join(self.mountpoint, "usr", "bin", "action"), 0o555)
 
+            copy(os.path.join(Container.Config.templates_dir, "dvs", "gentree.py"), os.path.join(self.mountpoint, "usr", "bin", "gentree"))
+            os.chmod(os.path.join(self.mountpoint, "usr", "bin", "gentree"), 0o555)
+
             copy(os.path.join(Container.Config.templates_dir, "dvs", "taskcreator.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "taskcreator.service"))
             if not os.path.islink(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service")):
                 remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service"))

@@ -2,14 +2,15 @@ import watchdog
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from simhash import Simhash
-
-import os
 import toml
-
-from syshelp import readfile
-import hooks
+import time
+import os
 import re
+
+import hooks
+
+from simhash import Simhash
+from syshelp import readfile
 
 
 class Stage():

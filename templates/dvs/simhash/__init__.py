@@ -1,7 +1,5 @@
 from __future__ import division, unicode_literals
 
-from watchdog.events import FileSystemEventHandler
-
 import collections
 import hashlib
 import logging
@@ -141,7 +139,7 @@ class Simhash(object):
             skip_batch = False
             if not isinstance(f, basestring):
                 f, w = f
-                skip_batch = w < self.large_weight_cutoff or not isinstance(w, int)
+                skip_batch = w > self.large_weight_cutoff or not isinstance(w, int)
 
             count += w
             if self.hashfunc_returns_int:
@@ -150,7 +148,7 @@ class Simhash(object):
                 h = self.hashfunc(f.encode('utf-8'))[-self.f_bytes:]
 
             if skip_batch:
-                sums.append(self._bitarray_from_bytes(h) * w)
+                sums.append(self._bitarray_from_bytes(h).astype(np.int64) * w)
             else:
                 batch.append(h * w)
                 if len(batch) >= self.batch_size:
