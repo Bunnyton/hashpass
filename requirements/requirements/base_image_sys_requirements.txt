@@ -1,0 +1,6 @@
+python3
+rsync
+python3-watchdog
+python3-numpy
+python3-toml
+python3-tqdm
