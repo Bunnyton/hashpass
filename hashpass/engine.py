@@ -43,7 +43,6 @@ def pull(*args):
         images = pargs.images
 
     for image in images:
-        print(image)
         client.pull(image, pull_layers=pargs.layers)
 
 
