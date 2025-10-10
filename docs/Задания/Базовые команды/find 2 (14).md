@@ -3,6 +3,7 @@ image:
 bunnyton/find:2
 ```
 
+Основан на [[bunnyton_find_base]]
 
 readme.txt
 ```
@@ -104,86 +105,3 @@ action cat /opt/stateham.txt
 action cat /home/student/readme.txt
 ```
 
-
-/.hash/bin/hooks/all.py
-```python
-@command(stages=None)
-def cmd_blacklist(cmd: str, stage: int):
-    if shlex.split(cmd)[0] == 'cd':
-        res = {"before": ["echo \"Не беги от меня\""]
-                , "cmd": []
-                , "after": []}
-
-    elif "name" in cmd:
-        res = {"before": ["echo \"Не шути со мной!!!\""]
-                , "cmd": []
-                , "after": []}
-
-    else:
-        res = {"before": []
-                , "cmd": [cmd]
-                , "after": []}
-
-    return res
-
-@filter(stages=None) 
-def filt_cmds(cmd: str, data: str, stage: int):
-    parts = shlex.split(cmd)
-    
-    if parts[0] == "ls":
-        parser = argparse.ArgumentParser(prog='ls', add_help=False)
-        parser.add_argument('-l', '--long', action='store_true')
-        
-        args, _ = parser.parse_known_args(parts[1:])  # Разрешает неизвестные аргументы
-        # args = parser.parse_args(parts[1:])  # Не разрешает неизвестные аргументы
-
-        if args.long:
-            lines = data.split('\n')
-            result = []
-
-            for line in lines:
-                if line.strip():  # Пропускаем пустые строки
-                    columns = line.split()
-                    if len(columns) > 1:
-                        # Берем все кроме предпоследней колонки
-                        new_columns = columns[:len(columns)-2] + columns[len(columns)-1:]
-                        result.append(' '.join(new_columns))
-                    else:
-                        result.append('')
-                else:
-                    result.append('')
-
-            return '\n'.join(result)
-
-    if parts[0] == "find":
-        return '\n'.join([line for line in data.splitlines() if '/' in line])
-
-    return data
-	
-	
-@check(stages=[0])
-def check_files(cmd: str, stage:int):
-	if 'type f' in cmd:
-		return True
-```
-
-#### Примечание
-Для создания инфры использовался скрипт:
-```bash
-#!/bin/bash
-
-for i in $(seq 0 4)
-do
-	mkdir level1_$i
-	touch level1_$$${i}
-done
-
-for j in $(seq 1 4)
-do
-	for i in $(seq 0 4)
-	do
-		find . -type d -mindepth $j -maxdepth $j | xargs -I {} mkdir {}/level$((j+1))_$i
-		find . -type d -maxdepth $j -mindepth $j | xargs -I {} touch {}/level$((j+1))_$$${i}
-	done
-done
-```
