@@ -67,6 +67,11 @@ class Settings(BaseSettings):
             "16": "bunnyton/find:4_new",
             "17": "bunnyton/find:5",
             "18": "bunnyton/sudo:intro",
+            "19": "bunnyton/apt:install",
+            "20": "bunnyton/apt:remove",
+            "21": "bunnyton/apt:add_repo",
+            "22": "bunnyton/apt:deb",
+            "23": "bunnyton/sw:latest",
         },
         validation_alias = None
     )
