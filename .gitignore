@@ -21,3 +21,5 @@ docs/.trash/*
 update.sh
 
 *venv/
+
+.idea/workspace.xml
