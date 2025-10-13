@@ -6,6 +6,7 @@
       <excludeFolder url="file://$MODULE_DIR$/config/images" />
     </content>
     <content url="file://$MODULE_DIR$/config/images/base" />
+    <content url="file://$MODULE_DIR$/config/images/basesettings" />
     <content url="file://$MODULE_DIR$/config/images/taskchecker" />
     <content url="file://$MODULE_DIR$/config/images/taskcreator" />
     <orderEntry type="inheritedJdk" />

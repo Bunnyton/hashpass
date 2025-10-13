@@ -64,11 +64,11 @@ def read(s: str, default=None) -> str:
 
 def readfile(path: str):
     if os.path.isfile(path):
-        with open(path, 'r', encoding='utf-8') as f:
-            data = f.read()
-
-            return data
-
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except:
+            return ""
     else:
         return None
 
