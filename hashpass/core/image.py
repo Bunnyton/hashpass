@@ -80,10 +80,12 @@ class Image:
 
                 else:
                     copy(str(copy_item.absolute()), os.path.join(self.config_dir, str(copy_item.name)), with_replace=True)
-
-            if os.path.exists(os.path.join(path, Image.Config.task_hooks_dirname)):
-                copy(os.path.join(path, Image.Config.task_hooks_dirname)
-                     , os.path.join(self.config_dir, Image.Config.task_hooks_dirname), with_replace=True)
+                    
+                    
+            path_hooks = os.path.join(path, Image.Config.task_work_dirname, Image.Config.task_hooks_dirname)
+            image_hooks = os.path.join(self.config_dir, Image.Config.task_work_dirname, Image.Config.task_hooks_dirname)
+            if path_hooks:
+                copy(path_hooks + '/', image_hooks, with_replace=True)
 
             for ex_item in Image.Config.exclude_list:
                 remove(os.path.join(self.config_dir, ex_item))

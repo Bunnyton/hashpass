@@ -140,7 +140,7 @@ class Container:
         self._layers.append(Image.Config.config_layer_basehooks)
         self._layers.append(self.image.config_dir)
         self._layers.append(Image.Config.config_layer_base)
-        if self.mode == Container.Mode.task_play:
+        if mode == Container.Mode.task_play:
             self._layers.append(Image.Config.config_layer_taskchecker)
         else:
             self._layers.append(Image.Config.config_layer_taskcreator)

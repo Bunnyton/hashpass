@@ -19,7 +19,7 @@ sudo hashpass
 
 Но чтобы все время не заходить под новым пользователем, придумали sudo - superuser do
 
-Он выполняет команду от имени суперпользователя
+Она выполняет команду от имени суперпользователя
 При этом, пароль запрашивается от текущего пользователя, если он имеет права на выполнение sudo, то команда будет выполнена от имени суперпользователя
 
 #Задание 
@@ -65,7 +65,7 @@ action echo -e "\nПопробуй sudo rm -rf /     ;)"
 ```
 stage 3:
 ```
-sudo rm -rf --no-preserve-root /
+sudo rm -rf /
 ```
 stage 3:
 /opt/fatality.txt
@@ -79,49 +79,49 @@ stage 3:
 | )      | )   ( |   | |   | )   ( || (____/\___) (___   | |      | |
 |/       |/     \|   )_(   |/     \|(_______/\_______/   )_(      \_/
 ```
-/.hash/bin/hooks/all.py
+/.hash/dvs/hooks/all.py
 ```python
-@command(stages=[3])
+@command(stages=None)
 def rm_rf(cmd: str, stage: int):
-    parse = shlex.split(cmd)
-    print(parse)
+    res = {"before": []
+        , "cmd": [cmd]
+        , "after": []}
 
-    if not os.path.exists("/opt/fatality.txt"):
-        res = {"before": [' '.join(['echo \"bash:\",', parse[0], ': command not found\"'])]
-                , "cmd": []
-                , "after": []}
+    cmds = parse_cmds(cmd)
 
-    elif parse[0] == ["sudo"] and parse[1] == ["rm"] and '-r' in parse and '-f' in parse and '/' in parse:
-        res = {"before": ["cat /opt/fatality.txt"]
+    if len(cmds) == 1:
+        if not os.path.exists("/opt/fatality.txt"):
+            res = {"before": [' '.join(['echo \"bash:', cmds[0].basecmd, ': command not found\"'])]
+                    , "cmd": []
+                    , "after": []}
+
+        elif Cmd("sudo rm -rf /") == cmds[0]:
+            res = {"before": ["cat /opt/fatality.txt"]
                 , "cmd": ['echo -e "\nДаже эта система будет плохо чувствовать после такого..."']
-               , "after": ["rm /opt/fatality.txt; echo 'Попробуй ввести какую-нибудь команду: key{}'"]}
+                , "after": ["rm /opt/fatality.txt"]}
 
-    elif parse[0] == ["sudo"] and parse[1] == "rm":
-        res = {"before": ["echo 'Не рекомендую шутить с этой командой))'"]
-                , "cmd": []
-                , "after": []}
+        elif Cmd("sudo rm -r") in cmds[0]:
+            res = {"before": ["echo 'Не рекомендую шутить с этой командой))'"]
+                    , "cmd": []
+                    , "after": []}
 
-    else:
-        res = {"before": []
-                , "cmd": [cmd]
-                , "after": []}
     return res
-	
+
 @command(stages=[1])
 def rm_rf(cmd: str, stage: int):
-    parse = shlex.split(cmd)
+    res = {"before": []
+            , "cmd": [cmd]
+            , "after": []}
 
-    if parse[0] == ["sudo"]:
+    cmds = parse_cmds(cmd)
+
+    if cmds[0].is_sudo:
         res = {"before": ["echo -e '\nСначала без sudo' "]
                 , "cmd": []
                 , "after": []}
 
-    else:
-        res = {"before": []
-                , "cmd": [cmd]
-                , "after": []}
     return res
-	
+
 @filter(stages=None)
 def to_abs_path(cmd: str, data: str, stage: int):
     if shlex.split(cmd)[0] == 'ls':
@@ -132,8 +132,10 @@ def to_abs_path(cmd: str, data: str, stage: int):
             else:
                 filt_data += word
 
+		print(filt_data)
         return filt_data
 
     else:
         return data
+
 ```
