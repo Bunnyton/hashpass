@@ -1,0 +1,8 @@
+[image]
+name = "basesettings"
+author = "hashpass"
+version = "latest"
+id = "basesettings"
+type = "base"
+layers = [ "base",]
+hashsum = "0e02ad314c9661c36f923d0739830abe4c94b2fe2268922309304ecdc83899e1"
