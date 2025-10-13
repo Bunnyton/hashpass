@@ -21,8 +21,8 @@ class Image:
         task_config_filename = settings.task_config_filename
         task_hooks_dirname = settings.task_hooks_dirname
         config_layer_base = settings.image_config_layer_base
-        config_layer_taskcreator = settings.image_config_layer_base
-        config_layer_taskchecker = settings.image_config_layer_base
+        config_layer_taskcreator = settings.image_config_layer_taskcreator
+        config_layer_taskchecker = settings.image_config_layer_taskchecker
 
     class Type:
         simple = "simple"

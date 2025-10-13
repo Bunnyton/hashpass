@@ -163,11 +163,6 @@ class Container:
         else:
             self._lowerdir = ':'.join(self._lowerdirs[::-1])
 
-
-        print([ "mount", "overlay", "-t", "overlay",
-                         "-o", ','.join(["lowerdir=" + self._lowerdir
-                                            ,"upperdir=" + self._upperdir, "workdir=" + self._workdir]),
-                         self.mountpoint])
         subprocess.run([ "mount", "overlay", "-t", "overlay",
                                   "-o", ','.join(["lowerdir=" + self._lowerdir
                                       ,"upperdir=" + self._upperdir, "workdir=" + self._workdir]),
