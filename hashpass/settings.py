@@ -66,6 +66,7 @@ class Settings(BaseSettings):
             "15": "bunnyton/find:3",
             "16": "bunnyton/find:4_new",
             "17": "bunnyton/find:5",
+            "18": "bunnyton/sudo:intro",
         },
         validation_alias = None
     )
