@@ -4,15 +4,13 @@ import json
 import toml
 import os
 
-from tabulate import tabulate
 from threading import Thread
-from pathlib import Path
 
-from ..utils import remove, hashsum, move
-from ..core.image import Image
+from hashpass.utils import remove, hashsum, move
+from hashpass.core.image import Image
 
-from ..userconfig import UserConfig
-from ..settings import Settings
+from hashpass.userconfig import UserConfig
+from hashpass.settings import Settings
 
 
 

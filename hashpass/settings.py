@@ -1,13 +1,13 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 from pydantic import Field
-from typing import Optional
-import os
 
 class Settings(BaseSettings):
     masterkey: str = Field(
-        default = "10383f373f292407117439070130373440255468657365206172652",
-        validation_alias = None
+        default="10383f373f292407117439070130373440255468657365206172652",
+        validation_alias=None
     )
 
     # server_url: str = "http://127.0.0.1:8000"
@@ -16,12 +16,15 @@ class Settings(BaseSettings):
     app_dir: str = "/opt/.hashpass"
     sys_app_path: str = os.path.join(app_dir, "hashengine.py")
     config_dir: str = os.path.join(app_dir, "config")
-    templates_dir: str = os.path.join(app_dir, "templates")
+    templates_dir: str = os.path.join(app_dir, "hashpass")
     userconfig_path: str = os.path.join(Path.home(), "/.local/share/hashpass", "userconfig.toml")
 
     image_config_dir: str = os.path.join(config_dir, "images")
     image_config_filename: str = "manifest.toml"
-
+    image_config_base_layer: str = "base"
+    image_config_taskcreator_layer: str = "taskcreator"
+    image_config_taskchecker_layer: str = "taskchecker"
+    container_config_imagelink_dirname: str = "l"
     container_config_dir: str = os.path.join(config_dir, "containers")
     container_config_filename: str = "manifest.toml"
     container_mountpoint_dirname: str = "mountpoint"
@@ -29,7 +32,7 @@ class Settings(BaseSettings):
     task_work_dirname: str = ".hash"
     task_config_dirname: str = os.path.join(task_work_dirname, ".task")
     task_config_filename: str = "config.toml"
-    task_hooks_dirname: str = "bin/hooks"
+    task_hooks_dirname: str = "dvs/hooks"
 
     task_log_filename: str = ".hash.log"
     task_cmd_filename: str = ".hash.cmd"

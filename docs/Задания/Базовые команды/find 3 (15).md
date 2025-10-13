@@ -18,7 +18,7 @@ readme.txt
 find . -type d -name "level4*"
 ```
 
-/.hash/bin/hooks/all.py
+/.hash/dvs/hooks/all.py
 ```python
 
 @check(stages=None)

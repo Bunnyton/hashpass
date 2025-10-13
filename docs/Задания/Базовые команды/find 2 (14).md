@@ -105,7 +105,7 @@ action cat /home/student/readme.txt
 ```
 
 
-/.hash/bin/hooks/all.py
+/.hash/dvs/hooks/all.py
 ```python
 @command(stages=None)
 def cmd_blacklist(cmd: str, stage: int):

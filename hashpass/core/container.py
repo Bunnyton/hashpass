@@ -2,38 +2,39 @@ import os
 import uuid
 import subprocess
 import toml
-import glob
 import time
 
 from threading import Thread
 
-from .image import Image
+from hashpass.core.image import Image
 
-from ..settings import Settings
-from ..userconfig import UserConfig
+from hashpass.settings import Settings
+from hashpass.userconfig import UserConfig
 
-from ..utils import copy,remove,move,read
-from ..key import calc_key
-
+from hashpass.utils import remove
+from hashpass.key import calc_key
 
 
 settings = Settings()
 
 
-class Container():
-    class Config():
+class Container:
+    class Config:
         config_dir = settings.container_config_dir
         templates_dir = settings.templates_dir
         config_filename = settings.container_config_filename
         task_config_filename = settings.task_config_filename
+        config_imagelink_dirname = settings.container_config_imagelink_dirname
+        image_config_layer_base = settings.image_config_base_layer
+        image_config_layer_taskcreator = settings.image_config_taskcreator_layer
+        image_config_layer_taskchecker = settings.image_config_taskchecker_layer
 
-
-    class Mode():
+    class Mode:
         edit = "Editing image environment for tasks"
         task_play = "Completing a task"
         task_create = "Creating a task"
 
-    class Status():
+    class Status:
         created = "Container with task has been created, but not started"
         started = "Container with task has been started"
         stopping = "Container stopping"
@@ -43,7 +44,6 @@ class Container():
         image_updating = "Container fs changes will be saved to self image and restart"
         image_saving = "Container fs changes will be saved to self image and exit"
         task_playing = "Container fs changes will be saved to self image and play task"
-
 
         def get_from(status_item):
             status_text: str
@@ -75,7 +75,6 @@ class Container():
             elif status_text == "task playing":
                 return Container.Status.task_playing
 
-
             elif status_text == "image updating":
                 return Container.Status.image_updating
 
@@ -84,7 +83,6 @@ class Container():
 
             else:
                 raise Exception("Can't read a some status from text or file")
-
 
     def __init__(self, image: Image):
         os.makedirs(Container.Config.config_dir, exist_ok=True)
@@ -108,7 +106,6 @@ class Container():
         self._task_tmpfile = os.path.join(self._task_workdir, settings.task_tmp_filename)
         self._task_pwdfile = os.path.join(self._task_workdir, settings.task_pwd_filename)
         self._task_bindir = os.path.join(self._task_workdir, settings.task_bin_dirname)
-        self._task_signal_string = settings.task_signal_string
         self._task_statusfile = os.path.join(self._task_workdir, settings.task_status_filename)
         self._task_hooks_dir = os.path.join(self._task_workdir, settings.task_hooks_dirname)
 
@@ -116,10 +113,9 @@ class Container():
 
         self.status = Container.Status.created
 
-
     def __del__(self):
-        remove(self.config_dir)
-
+        pass
+        # remove(self.config_dir)
 
     def save(self, exists_ok=False):
         if os.path.isdir(self.config_dir):
@@ -136,192 +132,29 @@ class Container():
         with open(os.path.join(self.config_dir, Container.Config.config_filename), "w") as f:
             toml.dump(data, f)
 
-
-    def _configure(self, mode: Mode):
-        os.makedirs(self._task_workdir, exist_ok=True)
-        with open(self._task_logfile, "a") as f:
-            pass # make file 
-        with open(self._task_cmdfile, "a") as f:
-            pass # make file 
-        with open(self._task_cmdoutfile, "a") as f:
-            pass # make file 
-        with open(self._task_tmpfile, "a") as f:
-            pass # make file 
-        with open(self._task_pwdfile, "a") as f:
-            pass # make file 
-        with open(self._task_statusfile, "w") as f:
-            f.write("created\n")
-
-        os.chmod(self._task_workdir, 0o755)
-        os.chmod(self._task_logfile, 0o666)
-        os.chmod(self._task_cmdfile, 0o666)
-        os.chmod(self._task_cmdoutfile, 0o666)
-        os.chmod(self._task_tmpfile, 0o666)
-        os.chmod(self._task_pwdfile, 0o666)
-        os.chmod(self._task_statusfile, 0o666)
-
-        copy(os.path.join(Container.Config.templates_dir, "dvs", "task.sh"), os.path.join(self.mountpoint, "usr", "bin", "task"))
-        os.chmod(os.path.join(self.mountpoint, "usr", "bin", "task"), 0o555)
-
-        # copy(self._task_bindir, os.path.join(self.mountpoint, "tmp/"))
-        copy(os.path.join(Container.Config.templates_dir, "dvs") + '/', self._task_bindir + '/', with_replace=False)
-        # move(os.path.join(self.mountpoint, "tmp/bin"), self._task_bindir)
-
-        # subprocess.run(["pyarmor", "gen", "-r", self._task_bindir, "-O", os.path.join(self.mountpoint, "tmp/dist")], check=True)
-        
-
-        if mode == Container.Mode.task_create or mode == Container.Mode.edit:
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "image.sh"), os.path.join(self.mountpoint, "usr", "bin", "image"))
-            os.chmod(os.path.join(self.mountpoint, "usr", "bin", "image"), 0o555)
-
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "action.sh"), os.path.join(self.mountpoint, "usr", "bin", "action"))
-            os.chmod(os.path.join(self.mountpoint, "usr", "bin", "action"), 0o555)
-
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "gentree.py"), os.path.join(self.mountpoint, "usr", "bin", "gentree"))
-            os.chmod(os.path.join(self.mountpoint, "usr", "bin", "gentree"), 0o555)
-
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "taskcreator.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "taskcreator.service"))
-            if not os.path.islink(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service")):
-                remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service"))
-                os.symlink(os.path.join("/", "etc", "systemd", "system", "taskcreator.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service")) # magic
-
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "task_settings.toml"), os.path.join(self._task_workdir, "config", "task_settings.toml"))
-            os.chmod(os.path.join(self._task_workdir, "config", "task_settings.toml"), 0o666)
-            os.chmod(os.path.join(self._task_workdir, "config"), 0o777)
-
-            if os.path.isdir(self._task_config_dir):
-                os.chmod(self._task_config_dir, 0o777)
-
-
-        elif mode == Container.Mode.task_play:
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "taskchecker.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "taskchecker.service"))
-
-            if not os.path.islink(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service")):
-                remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service"))
-                os.symlink(os.path.join("/", "etc", "systemd", "system", "taskchecker.service"), os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service"))
-
-            userconfig = UserConfig()
-            k = calc_key(settings.masterkey, userconfig.username, Image._to_fullname(self.image.author, 
-                                                                                self.image.name, 
-                                                                                self.image.version))
-
-            for d in ['etc', 'home', 'root', '.hash/bin', 'opt']:
-                try:
-                    # Используем grep для быстрого поиска файлов с key{}
-                    result = subprocess.run(['grep', '-rl', 'key{}', os.path.join(self.mountpoint, d)], 
-                                          capture_output=True, text=True)
-                    files = result.stdout.splitlines()
-                    
-                    # Заменяем только в найденных файлах
-                    for file in files:
-                        try:
-                            subprocess.run(['sed', '-i', 's/key{}/' + k + '/g', file], 
-                                         check=False)
-                        except:
-                            continue
-                except:
-                    continue
-
-
-        copy(os.path.join(Container.Config.templates_dir, "dvs", "hash.sh")
-                      , os.path.join(self.mountpoint, "usr", "bin", "hash"))
-        os.chmod(os.path.join(self.mountpoint, "usr", "bin", "hash"), 0o555)
-
-        if mode == Container.Mode.task_create or mode == Container.Mode.edit:
-            copy(os.path.join(Container.Config.templates_dir, "dvs", "stage.sh")
-                  , os.path.join(self.mountpoint, "usr", "bin", "stage"))
-            os.chmod(os.path.join(self.mountpoint, "usr", "bin", "stage"), 0o555)
-
-
-        with open(os.path.join(self.mountpoint, "etc", "bash.bashrc"), "a+") as f:
-            f.seek(0)
-            for line in reversed(f.readlines()):
-                if line.strip() != "/usr/bin/hash":
-                    continue
-                break
-
-            else:
-                conf_lines = list()
-
-                conf_lines.append("alias bash=\"/usr/bin/hash\"")
-                # conf_lines.append("alias alert='notify-send --urgency=low -i \"$([ $? = 0 ] && echo terminal || echo error)\" \"$(history|tail -n1|sed -e '\\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\\'')\"'")
-                conf_lines.append("alias egrep=\"egrep --color=auto\"")
-                conf_lines.append("alias fgrep=\"fgrep --color=auto\"")
-                conf_lines.append("alias grep=\"grep --color=auto\"")
-                conf_lines.append("alias l=\"ls -CF\"")
-                conf_lines.append("alias la=\"ls -A\"")
-                conf_lines.append("alias ll=\"ls -alF\"")
-                conf_lines.append("alias ls=\"ls --color=auto\"")
-
-                conf_lines.append("echo \"started\" > /.hash/.hash.status")
-
-                conf_lines.append("if [[ -z \"$(grep 'set fish_greeting' ~/.config/fish/config.fish 2> /dev/null)\" ]]; then")
-                conf_lines.append("\techo \"set fish_greeting\" >> ~/.config/fish/config.fish")
-                conf_lines.append("fi")
-
-                conf_lines.append("while [[ ! -f ~/.hash && -z \"$(grep stop /.hash/.hash.status 2> /dev/null)\" ]]; do")
-
-
-                conf_lines.append("\ttouch ~/.hash")
-                conf_lines.append("\tbash")
-                conf_lines.append("\trm ~/.hash 2> /dev/null")
-
-                conf_lines.append("done")
-
-                for line in conf_lines:
-                    f.write(line + " # " + self._task_signal_string + "\n")
-
-
-    def _deconfigure(self):
-        remove(self._task_cmdfile)
-        remove(self._task_logfile)
-        remove(self._task_cmdoutfile)
-        remove(self._task_tmpfile)
-        remove(self._task_statusfile)
-        remove(self._task_pwdfile)
-
-        remove(self._task_bindir)
-        remove(os.path.join(self.mountpoint, "usr", "bin", "hash"))
-        remove(os.path.join(self.mountpoint, "usr", "bin", "task"))
-        remove(os.path.join(self.mountpoint, "usr", "bin", "stage"))
-        remove(os.path.join(self.mountpoint, "usr", "bin", "image"))
-        remove(os.path.join(self.mountpoint, "usr", "bin", "action"))
-        remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskcreator.service"))
-        remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "multi-user.target.wants", "taskchecker.service"))
-        remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "taskcreator.service"))
-        remove(os.path.join(self.mountpoint, "etc", "systemd", "system", "taskchecker.service"))
-
-        try:
-            os.chmod(self._task_config_dir, 0o700)
-            os.chmod(os.path.join(self._task_config_dir, Container.Config.task_config_filename), 0o700)
-        except:
-            pass
-
-        deconf_lines: list
-        with open(os.path.join(self.mountpoint, "etc", "bash.bashrc"), "r") as f:
-            f.seek(0)
-            lines = f.readlines()
-            deconf_lines = [line for line in lines if self._task_signal_string not in line]
-
-        with open(os.path.join(self.mountpoint, "etc", "bash.bashrc"), 'w') as f:
-            f.writelines(deconf_lines)
-
-        for f in glob.glob(os.path.join(self.mountpoint, "home", "**", ".hash"), recursive=False, include_hidden=True):
-            remove(f)
-
-        remove(os.path.join(self.mountpoint, "root", ".hash"))
-
-
     def _mount(self, mode: Mode):
         self._workdir = os.path.join(self.config_dir, "work")
         for dir in [self._workdir, self.mountpoint]:
             os.makedirs(dir, exist_ok=True)
 
         self._lowerdirs = list()
-        for layer in self.image.layers:
-            self._lowerdirs.append(os.path.join(Image.Config.config_dir, layer))
+        self._layers = self.image.layers.copy()
 
-        self._lowerdirs.append(self.image.config_dir)
+        self._layers.append(Container.Config.image_config_layer_base)
+        if self.mode == Container.Mode.task_play:
+            self._layers.append(Container.Config.image_config_layer_taskchecker)
+        else:
+            self._layers.append(Container.Config.image_config_layer_taskcreator)
+
+        self._layers.append(self.image.config_dir)
+
+        imagelink_path = os.path.join(self.config_dir, Container.Config.config_imagelink_dirname)
+        os.makedirs(imagelink_path, exist_ok=True)
+        for num, layer in enumerate(self._layers):
+            layer_path = os.path.join(Image.Config.config_dir, layer)
+            os.symlink(layer_path, os.path.join(imagelink_path, str(num)), target_is_directory=True)
+            self._lowerdirs.append(os.path.join(Container.Config.config_imagelink_dirname, str(num)))
+
         self._upperdir = os.path.join(self.config_dir, "emptyupper")
         remove(self._upperdir)
         os.makedirs(self._upperdir, exist_ok=True)
@@ -334,18 +167,50 @@ class Container():
             self._lowerdir = ':'.join(self._lowerdirs[::-1])
 
 
-        subprocess.run([ "mount", "overlay", "-t", "overlay", 
+        print([ "mount", "overlay", "-t", "overlay",
+                         "-o", ','.join(["lowerdir=" + self._lowerdir
+                                            ,"upperdir=" + self._upperdir, "workdir=" + self._workdir]),
+                         self.mountpoint])
+        subprocess.run([ "mount", "overlay", "-t", "overlay",
                                   "-o", ','.join(["lowerdir=" + self._lowerdir
-                                      , "upperdir=" + self._upperdir , "workdir=" + self._workdir]),
-                                self.mountpoint], check=True)
+                                      ,"upperdir=" + self._upperdir, "workdir=" + self._workdir]),
+                                self.mountpoint], check=True, cwd=self.config_dir)
+
+        with open(self._task_statusfile, "w") as f:
+            f.write("created\n")
+
+        if mode == Container.Mode.task_play:
+            userconfig = UserConfig()
+            k = calc_key(settings.masterkey, userconfig.username, Image._to_fullname(self.image.author,
+                                                                                     self.image.name,
+                                                                                     self.image.version))
+
+            for d in ['etc', 'home', 'root', '.hash/dvs', 'opt']:
+                try:
+                    # Используем grep для быстрого поиска файлов с key{}
+                    result = subprocess.run(['grep', '-rl', 'key{}', os.path.join(self.mountpoint, d)],
+                                            capture_output=True, text=True)
+                    files = result.stdout.splitlines()
+
+                    # Заменяем только в найденных файлах
+                    for file in files:
+                        try:
+                            subprocess.run(['sed', '-i', 's/key{}/' + k + '/g', file],
+                                           check=False)
+                        except:
+                            continue
+                except:
+                    continue
+
 
 
     def _umount(self):
-        subprocess.run([ "umount", self.mountpoint], check=True)
+        remove(os.path.join(self.config_dir, Container.Config.config_imagelink_dirname))
+        subprocess.run(["umount", self.mountpoint], check=True)
 
 
     def _start(self):
-        subprocess.run([ "systemd-nspawn", "-b", "-q"
+        subprocess.run(["systemd-nspawn", "-b", "-q"
                                                  , "-M", self.id
                                                  , "--user", "root"
                                                  , "-D", self.mountpoint], check=True) # True or False #FIXME
@@ -412,7 +277,6 @@ class Container():
             while True:
                 try:
                     self._mount(mode)
-                    self._configure(mode)
 
                     thr = Thread(target=self._monitoring)
                     thr.start()
@@ -436,12 +300,6 @@ class Container():
 
 
                     self.stop() 
-
-                    if self.status == Container.Status.image_saving or self.status == Container.Status.image_updating or self.status == Container.Status.task_playing:
-                        self.image.load_task_hooks(self._task_hooks_dir)
-
-                    self._deconfigure()
-
                     self._umount()
 
                 if self.status == Container.Status.task_playing:

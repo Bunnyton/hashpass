@@ -57,7 +57,7 @@ action cat /opt/yoda.txt
 «На оружие полагаешься, но оружием нельзя выиграть сражение. Разум твой всего сильнее»
 ```
 
-/.hash/bin/hooks/all.py добавлен 
+/.hash/dvs/hooks/all.py добавлен 
 ```
 @check(stages=None)
 def check_man(cmd: str, stage:int):

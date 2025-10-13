@@ -4,16 +4,15 @@ import toml
 import glob
 
 from pathlib import Path
-from threading import Thread
 from tabulate import tabulate
 
-from ..settings import Settings
+from hashpass.settings import Settings
 
-from ..utils import copy,remove,move,read
+from hashpass.utils import copy, remove, read
 
 
-class Image():
-    class Config():
+class Image:
+    class Config:
         settings = Settings()
         config_dir = settings.image_config_dir
         config_filename = settings.image_config_filename
@@ -22,7 +21,7 @@ class Image():
         task_config_filename = settings.task_config_filename
         task_hooks_dirname = settings.task_hooks_dirname
 
-    class Type():
+    class Type:
         simple = "simple"
         task = "task"
         base = "base"
@@ -65,7 +64,7 @@ class Image():
             self.config_path = os.path.join(self.config_dir, Image.Config.config_filename)
 
 
-    def import_from_fs(self, path: str): 
+    def import_from_fs(self, path: str): #FIXME try rsync --delete
         # функция отвечает за копирование файловой системы в образ path - путь до каталога, после которого начинается файловая система
         if os.path.isdir(path):
             _path = Path(path)
@@ -76,6 +75,11 @@ class Image():
 
                 else:
                     copy(str(copy_item.absolute()), os.path.join(self.config_dir, str(copy_item.name)), with_replace=True)
+
+            if os.path.exists(os.path.join(path, Image.Config.task_hooks_dirname)):
+                copy(os.path.join(path, Image.Config.task_hooks_dirname)
+                     , os.path.join(self.config_dir, Image.Config.task_hooks_dirname), with_replace=True)
+
         else:
             raise Exception("Import path doesn't exist or isn't dir")
 
@@ -231,7 +235,7 @@ class Image():
                     if temp['image']['id'] == id:
                         return temp
 
-        elif check_manifest(param):
+        elif Image.check_manifest(param):
             return param
 
         return None

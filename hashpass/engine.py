@@ -2,8 +2,8 @@ import sys
 import os
 import argparse
 
-from .server import Client
-from .core import Image, Container
+from hashpass.server import Client
+from hashpass.core import Image, Container
 
 
 def print_images():

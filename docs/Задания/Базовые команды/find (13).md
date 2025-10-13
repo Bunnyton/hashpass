@@ -45,7 +45,7 @@ action echo -e "\nЭто только начало..."
 find source -maxdepth 3
 ```
 
-/.hash/bin/hooks/all.py
+/.hash/dvs/hooks/all.py
 ```python
 @command(stages=None)
 def cmd_blacklist(cmd: str, stage: int):

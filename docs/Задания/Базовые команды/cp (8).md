@@ -67,7 +67,7 @@ action cat /opt/.cat.txt
 
 Кот: «Некоторые не видят выход, даже если найдут. Другие же просто не ищут.»
 ```
-/.hash/bin/hooks/all.py
+/.hash/dvs/hooks/all.py
 ```
 @check(stages=None)
 def not_cp_without_r(cmd: str, stage:int):
