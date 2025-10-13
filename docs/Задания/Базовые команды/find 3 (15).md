@@ -3,6 +3,7 @@ image:
 bunnyton/find:3
 ```
 
+Основан на [[bunnyton_find_base]]
 
 readme.txt
 ```
@@ -25,25 +26,4 @@ find . -type d -name "level4*"
 def check_name(cmd: str, stage: int):
 	if "name" not in cmd:
 		return False
-```
-
-#### Примечание
-Для создания инфры использовался скрипт:
-```bash
-#!/bin/bash
-
-for i in $(seq 0 4)
-do
-	mkdir level1_$i
-	touch level1_$$${i}
-done
-
-for j in $(seq 1 4)
-do
-	for i in $(seq 0 4)
-	do
-		find . -type d -mindepth $j -maxdepth $j | xargs -I {} mkdir {}/level$((j+1))_$i
-		find . -type d -maxdepth $j -mindepth $j | xargs -I {} touch {}/level$((j+1))_$$${i}
-	done
-done
 ```
