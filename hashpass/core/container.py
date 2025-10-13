@@ -137,13 +137,14 @@ class Container:
         self._lowerdirs = list()
         self._layers = self.image.layers.copy()
 
+        self._layers.append(Image.Config.config_layer_basehooks)
+        self._layers.append(self.image.config_dir)
         self._layers.append(Image.Config.config_layer_base)
         if self.mode == Container.Mode.task_play:
             self._layers.append(Image.Config.config_layer_taskchecker)
         else:
             self._layers.append(Image.Config.config_layer_taskcreator)
 
-        self._layers.append(self.image.config_dir)
 
         imagelink_path = os.path.join(self.config_dir, Container.Config.config_imagelink_dirname)
         os.makedirs(imagelink_path, exist_ok=True)

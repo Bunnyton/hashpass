@@ -21,8 +21,10 @@ class Image:
         task_config_filename = settings.task_config_filename
         task_hooks_dirname = settings.task_hooks_dirname
         config_layer_base = settings.image_config_layer_base
+        config_layer_basehooks = settings.image_config_layer_basehooks
         config_layer_taskcreator = settings.image_config_layer_taskcreator
         config_layer_taskchecker = settings.image_config_layer_taskchecker
+        exclude_list = settings.image_exclude_list
 
     class Type:
         simple = "simple"
@@ -82,6 +84,9 @@ class Image:
             if os.path.exists(os.path.join(path, Image.Config.task_hooks_dirname)):
                 copy(os.path.join(path, Image.Config.task_hooks_dirname)
                      , os.path.join(self.config_dir, Image.Config.task_hooks_dirname), with_replace=True)
+
+            for ex_item in Image.Config.exclude_list:
+                remove(os.path.join(self.config_dir, ex_item))
 
         else:
             raise Exception("Import path doesn't exist or isn't dir")

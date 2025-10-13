@@ -22,8 +22,10 @@ class Settings(BaseSettings):
     image_config_dir: str = os.path.join(config_dir, "images")
     image_config_filename: str = "manifest.toml"
     image_config_layer_base: str = "base"
+    image_config_layer_basehooks: str = "basehooks"
     image_config_layer_taskcreator: str = "taskcreator"
     image_config_layer_taskchecker: str = "taskchecker"
+    image_exclude_list: list = []
     container_config_imagelink_dirname: str = "l"
     container_config_dir: str = os.path.join(config_dir, "containers")
     container_config_filename: str = "manifest.toml"
