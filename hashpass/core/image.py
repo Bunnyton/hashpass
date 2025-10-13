@@ -21,7 +21,7 @@ class Image:
         task_config_filename = settings.task_config_filename
         task_hooks_dirname = settings.task_hooks_dirname
         config_layer_base = settings.image_config_layer_base
-        config_layer_basehooks = settings.image_config_layer_basehooks
+        config_layer_basesettings = settings.image_config_layer_basesettings
         config_layer_taskcreator = settings.image_config_layer_taskcreator
         config_layer_taskchecker = settings.image_config_layer_taskchecker
         exclude_list = settings.image_exclude_list

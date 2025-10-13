@@ -224,7 +224,7 @@ class Client():
                     print(e)
                     errors[image_id] = e
 
-            layers = [Image.Config.config_layer_base, Image.Config.config_layer_basehooks,
+            layers = [Image.Config.config_layer_base, Image.Config.config_layer_basesettings,
                       Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker]
             layers.extend(manifest["image"]["layers"])
             for layer_image_id in layers:

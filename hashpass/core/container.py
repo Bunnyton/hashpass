@@ -137,7 +137,7 @@ class Container:
         self._lowerdirs = list()
         self._layers = self.image.layers.copy()
 
-        self._layers.append(Image.Config.config_layer_basehooks)
+        self._layers.append(Image.Config.config_layer_basesettings)
         self._layers.append(self.image.config_dir)
         self._layers.append(Image.Config.config_layer_base)
         if mode == Container.Mode.task_play:
