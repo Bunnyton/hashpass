@@ -1,0 +1,8 @@
+[image]
+name = "taskchecker"
+author = "hashpass"
+version = "latest"
+id = "taskchecker"
+type = "simple"
+layers = [ "base",]
+hashsum = "8dd072e5b4b11d7471463d1e59e3b5d38e13f74448fa10970eb0313fd4f4dcb3"

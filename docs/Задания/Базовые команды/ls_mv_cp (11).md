@@ -24,7 +24,7 @@ r - recursive f - force - рекурсивно удали все файлы в �
 Используйте <tab> для автодополнения названий файлов 
 ```
 Для белого списка 
-/.hash/bin/hooks/all.py
+/.hash/dvs/hooks/all.py
 ```python
 @command(stages=None)
 

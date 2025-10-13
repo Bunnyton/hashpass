@@ -2,12 +2,7 @@
 
 import os
 import sys
-import toml
-import subprocess
 import time
-import requests
-
-from threading import Thread
 
 from hashpass.key import calc_key
 from hashpass.settings import Settings

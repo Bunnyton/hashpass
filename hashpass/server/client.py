@@ -4,15 +4,13 @@ import json
 import toml
 import os
 
-from tabulate import tabulate
 from threading import Thread
-from pathlib import Path
 
-from ..utils import remove, hashsum, move
-from ..core.image import Image
+from hashpass.utils import remove, hashsum, move
+from hashpass.core.image import Image
 
-from ..userconfig import UserConfig
-from ..settings import Settings
+from hashpass.userconfig import UserConfig
+from hashpass.settings import Settings
 
 
 
@@ -226,8 +224,10 @@ class Client():
                     print(e)
                     errors[image_id] = e
 
-
-            for layer_image_id in manifest["image"]["layers"]:
+            layers = [Image.Config.config_layer_base, Image.Config.config_layer_basesettings,
+                      Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker]
+            layers.extend(manifest["image"]["layers"])
+            for layer_image_id in layers:
                 _status, layer_manifest = self.get_newest_version(layer_image_id)
                 if _status:
                     print(f"Pulling image: {layer_image_id}")

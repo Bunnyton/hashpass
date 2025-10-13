@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="PYTHON_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/config/containers" />
+      <excludeFolder url="file://$MODULE_DIR$/config/images" />
+    </content>
+    <content url="file://$MODULE_DIR$/config/images/28e7414a3ced4dc4a8294d8da7d5b333/.hash/dvs/hooks" />
+    <content url="file://$MODULE_DIR$/config/images/base" />
+    <content url="file://$MODULE_DIR$/config/images/basesettings" />
+    <content url="file://$MODULE_DIR$/config/images/taskchecker" />
+    <content url="file://$MODULE_DIR$/config/images/taskcreator" />
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

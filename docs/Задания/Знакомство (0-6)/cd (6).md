@@ -62,7 +62,7 @@ action echo "Ты почти у цели, перейди теперь обрат
 action echo "Хватит ходить туда-сюда, нужно двигаться дальше!" > /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me/key_here.txt 
 ```
 
-/.hash/bin/hooks/all.py
+/.hash/dvs/hooks/all.py
 ```python
 @command(stages=[0])
 def cd_normal(cmd: str, stage: int):

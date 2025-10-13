@@ -1,5 +1,6 @@
 import hashlib
 
+
 def calc_key(*args) -> str:
 
     phrase = ""

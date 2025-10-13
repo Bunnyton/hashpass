@@ -3,6 +3,11 @@ config/containers/*
 config/userconfig.toml
 config/images.tar.gz
 
+!config/images/base
+!config/images/basesettings
+!config/images/taskchecker
+!config/images/taskcreator
+
 hashpass/server/server/storage/*
 
 __pycache__/*
@@ -21,3 +26,5 @@ docs/.trash/*
 update.sh
 
 *venv/
+
+.idea/workspace.xml

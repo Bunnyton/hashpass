@@ -3,6 +3,8 @@ image:
 bunnyton/find:1
 ```
 
+Основан на [[bunnyton_find_base]]
+
 
 readme.txt
 ```
@@ -45,7 +47,7 @@ action echo -e "\nЭто только начало..."
 find source -maxdepth 3
 ```
 
-/.hash/bin/hooks/all.py
+/.hash/dvs/hooks/all.py
 ```python
 @command(stages=None)
 def cmd_blacklist(cmd: str, stage: int):
@@ -60,25 +62,4 @@ def cmd_blacklist(cmd: str, stage: int):
                 , "after": []}
 
     return res
-
-```
-#### Примечание
-Для создания инфры использовался скрипт:
-```bash
-#!/bin/bash
-
-for i in $(seq 0 4)
-do
-	mkdir level1_$i
-	touch level1_$$${i}
-done
-
-for j in $(seq 1 4)
-do
-	for i in $(seq 0 4)
-	do
-		find . -type d -mindepth $j -maxdepth $j | xargs -I {} mkdir {}/level$((j+1))_$i
-		find . -type d -maxdepth $j -mindepth $j | xargs -I {} touch {}/level$((j+1))_$$${i}
-	done
-done
 ```

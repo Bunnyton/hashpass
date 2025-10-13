@@ -1,12 +1,12 @@
 import toml
 import os
 
-from .settings import Settings
+from hashpass.settings import Settings
 
 settings = Settings()
 
 
-class UserConfig():
+class UserConfig:
     _config: dict
 
     username: str
@@ -62,7 +62,7 @@ class UserConfig():
 
         except Exception:
             e = "Task number must be int or str(int)"
-            raise Exception(": ".join([f"User config file {path} - damaged, please fix it", e])) 
+            raise Exception(": ".join([f"User config file {settings.userconfig_path} - damaged, please fix it", e]))
 
 
 
