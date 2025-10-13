@@ -20,6 +20,9 @@ class Image:
         task_config_dirname = settings.task_config_dirname
         task_config_filename = settings.task_config_filename
         task_hooks_dirname = settings.task_hooks_dirname
+        config_layer_base = settings.image_config_layer_base
+        config_layer_taskcreator = settings.image_config_layer_base
+        config_layer_taskchecker = settings.image_config_layer_base
 
     class Type:
         simple = "simple"
@@ -285,11 +288,11 @@ class Image:
             if "hashsum" in manifest["image"] and manifest["image"]["hashsum"]:
                 hashsum = manifest["image"]["hashsum"]
 
-            table.append([manifest["image"]["id"]
+            table.append([manifest["image"]["id"][:16]
                             , Image.get_fullname(manifest)
                             , manifest["image"]["type"]
                             , parent_image_name
-                            , hashsum])
+                            , hashsum[:16]])
 
         print(tabulate(table, headers="firstrow", tablefmt="grid"))
 

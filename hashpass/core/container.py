@@ -25,9 +25,6 @@ class Container:
         config_filename = settings.container_config_filename
         task_config_filename = settings.task_config_filename
         config_imagelink_dirname = settings.container_config_imagelink_dirname
-        image_config_layer_base = settings.image_config_base_layer
-        image_config_layer_taskcreator = settings.image_config_taskcreator_layer
-        image_config_layer_taskchecker = settings.image_config_taskchecker_layer
 
     class Mode:
         edit = "Editing image environment for tasks"
@@ -140,11 +137,11 @@ class Container:
         self._lowerdirs = list()
         self._layers = self.image.layers.copy()
 
-        self._layers.append(Container.Config.image_config_layer_base)
+        self._layers.append(Image.Config.config_layer_base)
         if self.mode == Container.Mode.task_play:
-            self._layers.append(Container.Config.image_config_layer_taskchecker)
+            self._layers.append(Image.Config.config_layer_taskchecker)
         else:
-            self._layers.append(Container.Config.image_config_layer_taskcreator)
+            self._layers.append(Image.Config.config_layer_taskcreator)
 
         self._layers.append(self.image.config_dir)
 
