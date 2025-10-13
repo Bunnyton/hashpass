@@ -1,4 +1,4 @@
-observe_list = ["/home/", "/root", "/usr/bin/", "/usr/local/bin/", "/etc/"]
+observe_list = ["/home/", "/root", "/usr/bin/", "/usr/local/bin/", "/etc/", "/usr/games/"]
 exclude_list = ["bash_history", "*.swp"]
 
 [options]
