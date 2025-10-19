@@ -1,8 +1,0 @@
-[image]
-name = "taskcreator"
-author = "hashpass"
-version = "latest"
-id = "taskcreator"
-type = "simple"
-layers = [ "base",]
-hashsum = "136397dc9e8b55f8272538c78c0f3f7243b149f4bce73d38ad3f3e5d887837a7"

@@ -1,8 +1,0 @@
-[image]
-name = "base"
-author = "hashpass"
-version = "latest"
-id = "base"
-type = "base"
-layers = []
-hashsum = "1a174fa0ac287a9acbc9e7dd49b945f963ef226c07963ff589682f97f8537fc5"
