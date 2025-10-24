@@ -1,3 +1,5 @@
+#!/bin/env python3
+
 import sys
 import os
 import subprocess
@@ -161,7 +163,7 @@ def input_cmd(config):
 def search_start_with_cmd(cmd: list, search_cmd: list): # without argument features
     if search_cmd:
         for part in cmd:
-            if isinstance(part, list) and len(search_cmd) < len(part):
+            if isinstance(part, list) and len(search_cmd) <= len(part):
                 if part[:len(search_cmd)] == search_cmd:
                     return True
     return False
@@ -202,10 +204,10 @@ def main():
 
                 if search_start_with_cmd(cmd, ["task", "exit"]):
                     taskclient.handle_cmd(cmd[0])
-                    sys.exit()
+                    sys.exit(0)
 
                 if search_start_with_cmd(cmd, ["exit"]):
-                    sys.exit()
+                    sys.exit(0)
 
                 if search_start_with_cmd(cmd, ["task"]):
                     taskclient.handle_cmd(cmd[0])  #FIXME fix costil with cmd format
@@ -263,6 +265,7 @@ def main():
                         config.curdir = pwd
                         os.chdir(pwd)
 
+
                 if os.path.exists("/etc/systemd/system/taskchecker.service"):
                     while True:
                         actions = taskclient.handle_cmd(["check"])
@@ -274,10 +277,13 @@ def main():
                             break
 
             except Exception as e:
-                raise
+                # raise
                 print(e)
-                break
-                pass
+                continue
+                # break
+                # pass
+
+        print("Bye")
 
 
 if __name__ == "__main__":
