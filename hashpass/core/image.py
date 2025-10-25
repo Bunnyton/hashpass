@@ -32,14 +32,15 @@ class Image:
         base = "base"
     
 
-    def __init__(self, param=None):
+    def __init__(self, param=None, arch="multi"):
         os.makedirs(Image.Config.config_dir, exist_ok=True)
 
-        self.id : str
-        self.name : str
-        self.author : str
+        self.id: str
+        self.name: str
+        self.author: str
         self.fullname: str
-        self.version : str
+        self.version: str
+        self.arch: str = arch
         self.hashsum: str = ""
         self.layers = list()
         self.type: str
@@ -64,6 +65,9 @@ class Image:
 
             if 'hashsum' in manifest['image']:
                 self.hashsum = manifest['image']['hashsum']
+
+            if 'arch' in manifest['image']:
+                self.arch = manifest['image']['arch']
 
             self.config_dir = os.path.join(Image.Config.config_dir, self.id)
             self.config_path = os.path.join(self.config_dir, Image.Config.config_filename)

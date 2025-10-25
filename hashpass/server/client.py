@@ -13,6 +13,25 @@ from hashpass.userconfig import UserConfig
 from hashpass.settings import Settings
 
 
+def get_arch() -> str:
+    m = platform.machine() or ""
+    m = m.strip().lower()
+
+    # Базовая нормализация самых частых вариантов
+    mapping = {
+        "x86_64": "amd64",
+        "amd64": "amd64",
+        "x64":    "amd64",
+
+        "aarch64": "arm64",
+        "arm64":   "arm64",
+    }
+    if m in mapping:
+        return mapping[m]
+
+    else:
+        raise Exception(f"Exotic arch - {m}")
+
 
 class Client():
     server_url: str = None
@@ -45,7 +64,8 @@ class Client():
         if not self.check_connection():
             raise Exception("Can't connect to server")
             
-        data = {'param': param}
+        data = {'param': param,
+                'arch': get_arch()}
         response = requests.post(f"{self.server_url}/info", data=data)
         if response.status_code != 200:
             return None
@@ -86,7 +106,7 @@ class Client():
             remove(archive_path)
                 
 
-    def _push(self, image_id: str, force=False):
+    def _push(self, image_id: str, force=False, arch="multi"):
         archive_path = os.path.join(Image.Config.config_dir, image_id + '.tar.gz')
         try:
             if not force and self.get_info(image_id):
@@ -103,6 +123,7 @@ class Client():
                                                            , "--directory", image.config_dir, '.'], check=True,)
 
                 manifest['image']['hashsum'] = hashsum(archive_path)
+                manifest['image']['arch'] = arch
                 image.hashsum = manifest['image']['hashsum']
                 image.save()
 
