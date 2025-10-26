@@ -59,6 +59,7 @@ def pull(*args):
             images = client.get_remote_images()
         else:
             client.print_remote_images()
+            return
 
     elif len(pargs.images) > 0:
         images = pargs.images
