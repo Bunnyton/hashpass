@@ -1,4 +1,6 @@
 import subprocess
+import platform
+
 import requests
 import json
 import toml
@@ -60,12 +62,12 @@ class Client():
             return False
 
 
-    def get_info(self, param: str):
+    def get_info(self, param: str, arch=get_arch()) -> str | None:
         if not self.check_connection():
             raise Exception("Can't connect to server")
-            
+
         data = {'param': param,
-                'arch': get_arch()}
+                'arch': arch}
         response = requests.post(f"{self.server_url}/info", data=data)
         if response.status_code != 200:
             return None
@@ -146,7 +148,7 @@ class Client():
             remove(archive_path)
 
 
-    def push(self, param: str, force=False):
+    def push(self, param: str, force=False, arch="multi"):
         try:
             if not self.check_connection():
                 raise Exception("Can't connect to server")
@@ -163,7 +165,7 @@ class Client():
 
                 def worker(_image_id: str):
                     try:
-                        self._push(_image_id, force=force)
+                        self._push(_image_id, force=force, arch=arch)
 
                     except Exception as e:
                         errors[_image_id] = e
@@ -196,14 +198,14 @@ class Client():
             raise Exception("Push error: " + str(e))
 
     
-    def get_newest_version(self, param) -> [bool, dict]: # return manifest if newest verion on registry
+    def get_newest_version(self, param, arch=get_arch()) -> [bool, dict]: # return manifest if newest verion on registry
         if not param:
             raise Exception(f"Image with name {param} can't be exist")
 
         if not self.check_connection():
             raise Exception("Can't connect to server")
 
-        manifest = self.get_info(param)
+        manifest = self.get_info(param, arch=arch)
         if manifest is None:
             raise Exception(f"Image {param} not found on registry")
 
@@ -217,13 +219,13 @@ class Client():
         return False, manifest
 
 
-    def pull(self, _param, pull_layers=False):
+    def pull(self, _param, pull_layers=False, arch=get_arch()):
         if Image.check_manifest(_param):
             param = _param["image"]["id"]
         else:
             param = _param
         try:
-            status, manifest = self.get_newest_version(param)
+            status, manifest = self.get_newest_version(param, arch=arch)
             if not status:
                 print(f"The newest version of {param} already pulled")
                 if pull_layers:
@@ -237,7 +239,7 @@ class Client():
             errors = {}
             thrs: dict[str, Thread] = {}
 
-            def worker(_manifest: str):
+            def worker(_manifest: dict):
                 try:
                     self._pull(_manifest)
 
@@ -249,7 +251,7 @@ class Client():
                       Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker]
             layers.extend(manifest["image"]["layers"])
             for layer_image_id in layers:
-                _status, layer_manifest = self.get_newest_version(layer_image_id)
+                _status, layer_manifest = self.get_newest_version(layer_image_id, arch=arch)
                 if _status:
                     print(f"Pulling image: {layer_image_id}")
 

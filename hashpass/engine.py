@@ -27,6 +27,9 @@ def pull(*args):
                         help='pull all images from registry')
     parser.add_argument('-l', '--layers', action='store_true',
                         help='pull all layers with update from registry')
+    parser.add_argument( '--arch', metavar='ARCH',
+                         nargs='?', choices=['amd64', 'arm64', 'multi'],
+                         help='Architecture of pulling image')
     parser.add_argument('images', nargs='*', help='to pull images')
     pargs = parser.parse_args(args)
 
@@ -43,7 +46,10 @@ def pull(*args):
         images = pargs.images
 
     for image in images:
-        client.pull(image, pull_layers=pargs.layers)
+        if pargs.arch:
+            client.pull(image, pull_layers=pargs.layers, arch=pargs.arch)
+        else:
+            client.pull(image, pull_layers=pargs.layers)
 
 
 def push(*args):
@@ -52,6 +58,10 @@ def push(*args):
                         help='replace image layers on registry')
     parser.add_argument('-a', '--all', action='store_true',
                         help='push all images to registry')
+    parser.add_argument( '--arch', metavar='ARCH',
+                                        nargs='?', choices=['amd64', 'arm64', 'multi'],
+                                        default=['multi'],
+                                        help='Architecture of pushing image')
     parser.add_argument('images', nargs='*', help='to push image layers')
     pargs = parser.parse_args(args)
 
@@ -64,14 +74,14 @@ def push(*args):
     if pargs.images:
         for image_name in pargs.images:
             try:
-                client.push(image_name, force=pargs.force)
+                client.push(image_name, force=pargs.force, arch=pargs.arch)
             except Exception as e:
                 print(e)
 
     elif pargs.all:
         images = Image.list()
         for image in images:
-            client.push(image.id, force=pargs.force)
+            client.push(image.id, force=pargs.force, arch=pargs.arch)
 
     else:
         raise Exception("Function push() must has one or more args")

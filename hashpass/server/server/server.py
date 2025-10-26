@@ -38,13 +38,11 @@ def list_images():
     return jsonify(images)
 
 
-def get(param: str):
-    temp = None
+def get(param: str, arch="multi"):
     if "/" in param:
         author, name = param.split("/")
         if ":" in name:
             name, version = name.split(":")
-
         else:
             version = "latest"
 
@@ -52,7 +50,8 @@ def get(param: str):
             temp = toml.load(file)
 
             if temp["image"]["name"] == name and temp["image"]["version"] == version and temp["image"]["author"] == author:
-                return temp
+                if not temp["image"]["arch"] or temp["image"]["arch"] == "multi" or temp["image"]["arch"] == arch:
+                    return temp
 
     else:
         for file in glob.glob(STORAGE_DIR + "/**/" + "manifest.toml", recursive=False):
@@ -130,7 +129,8 @@ def push_image():
 @app.route("/info", methods=["POST"])
 def get_info():
     param = request.form.get("param")
-    manifest = get(param)
+    arch = request.form.get("arch")
+    manifest = get(param, arch=arch)
     if not manifest:
         return abort(404, description="Image not found")
 
