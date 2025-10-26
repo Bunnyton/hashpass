@@ -43,6 +43,9 @@ def main():
         pull(*userconfig.get_task_name(all=True), "-l")
         print("Обновление завершено")
 
+    except KeyboardInterrupt:
+        print("Обновление прервано пользователем")
+
     except Exception as e:
         print("Ошибка обновления: ", str(e))
 
