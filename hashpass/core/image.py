@@ -98,7 +98,7 @@ class Image:
             raise Exception("Import path doesn't exist or isn't dir")
 
 
-    def exist(param) -> bool:
+    def exist(param, arch='multi') -> bool:
         try:
             Image(param)
             return True
@@ -106,7 +106,7 @@ class Image:
             return False
     
 
-    def create(self, param=None): #FIXME create must create new image and return them
+    def create(self, param=None, arch='multi'): #FIXME create must create new image and return them
         if param is None:
             # FIXME update tree with exists image
             self.type = Image.Type.base
@@ -122,9 +122,10 @@ class Image:
         self.name = read("Enter name of image: ").strip()
         self.author = read("Enter author of image: ").strip()
         self.version = read("Enter version of image: ", default="latest").strip()
+        self.arch = arch
 
         self.fullname = Image._to_fullname(self.author, self.name, self.version)
-        if Image.exist(self.fullname):
+        if Image.exist(self.fullname, arch=arch):
             raise Exception(f"{self.fullname} already exist")
 
         self.id = str(uuid.uuid4()).replace("-", "")

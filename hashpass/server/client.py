@@ -111,8 +111,8 @@ class Client():
     def _push(self, image_id: str, force=False, arch="multi"):
         archive_path = os.path.join(Image.Config.config_dir, image_id + '.tar.gz')
         try:
-            if not force and self.get_info(image_id):
-                raise Exception(f"Image already exist on registry")
+            if not force and self.get_info(image_id, arch=arch):
+                raise Exception(f"Image {image_id} arch=multi|{arch} already exist on registry")
 
             else:
                 image = Image(image_id)
@@ -153,8 +153,8 @@ class Client():
             if not self.check_connection():
                 raise Exception("Can't connect to server")
 
-            if not force and self.get_info(param):
-                print(f"{param} already exist on registry")
+            if not force and self.get_info(param, arch=arch):
+                print(f"{param} arch=multi|{arch} already exist on registry")
                 return
 
             else:
@@ -171,15 +171,15 @@ class Client():
                         errors[_image_id] = e
 
                 for image_layer_id in image.layers:
-                    if not self.get_info(image_layer_id):
-                        print(f"Pushing image: {image_layer_id}")
+                    if not self.get_info(image_layer_id, arch=arch):
+                        print(f"Pushing image: {image_layer_id} arch={arch}")
 
                         thr = Thread(target=worker, args=(image_layer_id,))
                         thr.start()
                         thrs[image_layer_id] = thr
 
 
-                print(f"Pushing image: {param}")
+                print(f"Pushing image: {param} arch={arch}")
 
                 thr = Thread(target=worker, args=(image.id,))
                 thr.start()
@@ -253,7 +253,7 @@ class Client():
             for layer_image_id in layers:
                 _status, layer_manifest = self.get_newest_version(layer_image_id, arch=arch)
                 if _status:
-                    print(f"Pulling image: {layer_image_id}")
+                    print(f"Pulling image: {layer_image_id} arch=multi|{arch}")
 
                     thr = Thread(target=worker, args=(layer_manifest,))
                     thr.start()
@@ -263,7 +263,7 @@ class Client():
 
 
             if status:
-                print(f"Pulling image: {param}")
+                print(f"Pulling image: {param} arch=multi|{arch}")
 
                 thr = Thread(target=worker, args=(manifest,))
                 thr.start()
@@ -281,12 +281,12 @@ class Client():
             raise Exception("Pull error: " + str(e))
 
 
-    def remote_remove(self, param: str = None):
+    def remote_remove(self, param: str = None, arch="multi"):
         try:
             if not param:
                 raise Exception(f"Image with name {param} can't be exist")
 
-            manifest = self.get_info(param)
+            manifest = self.get_info(param, arch=arch)
             if manifest:
                 data = {
                     'id': manifest['image']['id']

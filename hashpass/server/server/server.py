@@ -50,7 +50,7 @@ def get(param: str, arch="multi"):
             temp = toml.load(file)
 
             if temp["image"]["name"] == name and temp["image"]["version"] == version and temp["image"]["author"] == author:
-                if not temp["image"]["arch"] or temp["image"]["arch"] == "multi" or temp["image"]["arch"] == arch:
+                if arch not in temp["image"] or temp["image"]["arch"] == "multi" or temp["image"]["arch"] == arch:
                     return temp
 
     else:

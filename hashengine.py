@@ -2,59 +2,35 @@
 
 import os
 import sys
+import argparse
 
 from hashpass.engine import print_images, new, pull, push, send_statistic, delete, edit, create, play, remote
 
 
 def main():
-    try:
-        # Проверка, запущена ли программа с правами суперпользователя
-        if os.geteuid() != 0:
-            print("Эта программа должна быть запущена с правами суперпользователя. Используйте 'sudo'.")
-            sys.exit(1)  # Завершение программы с кодом 1 (ошибка)
+    # Проверка, запущена ли программа с правами суперпользователя
+    if os.geteuid() != 0:
+        print("Эта программа должна быть запущена с правами суперпользователя. Используйте 'sudo'.")
+        sys.exit(1)  # Завершение программы с кодом 1 (ошибка)
 
-        sys.argv.pop(0)
+    cmds = {
+        'images': print_images,
+        'new': new,
+        'pull': pull,
+        'push': push,
+        'delete': delete, 'remove': delete, 'rm': delete, 'del': delete,
+        'edit': edit,
+        'create': create,
+        'play': play, 'start': play,
+        'remote': remote
+    }
 
-        if len(sys.argv) == 0:
-            print_images()
+    parser = argparse.ArgumentParser(description='hashengine.py')
+    parser.add_argument('cmd', nargs='?', default='images', choices=cmds.keys(), help='cmd of hashengine')
+    parser.add_argument('args', nargs=argparse.REMAINDER, help='args of cmd')
+    pargs = parser.parse_args()
 
-        elif sys.argv[0] == "new":
-            new(*sys.argv[1::])
-
-        elif sys.argv[0] == "pull":
-            pull(*sys.argv[1::])
-
-        elif sys.argv[0] == "push":
-            push(*sys.argv[1::])
-
-        elif sys.argv[0] == "send":
-            send_statistic(*sys.argv[1::])
-
-        elif sys.argv[0] == "rm" or sys.argv[0] == "remove" or sys.argv[0] == "del" or sys.argv[0] == "delete":
-            delete(*sys.argv[1::])
-
-        elif sys.argv[0] == "edit":
-            edit(*sys.argv[1::])
-
-        elif sys.argv[0] == "create":
-            create(*sys.argv[1::])
-
-        elif sys.argv[0] == "start" or sys.argv[0] == "play":
-            play(*sys.argv[1::])
-
-        elif sys.argv[0] == "remote":
-            remote(*sys.argv[1::])
-
-        # elif sys.argv[0] == "rename": #FIXME change to tag
-        #     rename(sys.argv[1::])
-
-        else:
-            raise Exception("Incorrect command")
-
-
-    except Exception as e:
-        raise
-        print(' '.join(['❌' , str(e)]))
+    cmds[pargs.cmd](*pargs.args)
 
 
 if __name__ == "__main__":
