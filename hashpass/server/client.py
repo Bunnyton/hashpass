@@ -148,24 +148,24 @@ class Client():
                 errors = {}
                 thrs: [str, Thread] = {}
 
-                def worker(_param: str):
+                def worker(_param: str, _arch):
                     try:
-                        print(f"Pushing image: {_param} arch={arch}")
-                        self._push(Image(_param, arch=arch).get_id(), force=force, arch=arch)
-                        print(f"Image {_param} arch={arch} pushed successfully ✅")
+                        print(f"Pushing image: {_param} arch={_arch}")
+                        self._push(Image(_param, arch=_arch).get_id(), force=force, arch=_arch)
+                        print(f"Image {_param} arch={_arch} pushed successfully ✅")
 
                     except Exception as e:
                         errors[_param] = e
                     
 
                 for image_layer in image.get_layers():
-                    if not self.get_info(image_layer, arch=arch):
-                        thr = Thread(target=worker, args=(image_layer,))
+                    if not self.get_info(image_layer, arch=get_machine_arch()):
+                        thr = Thread(target=worker, args=(image_layer, get_machine_arch()))
                         thr.start()
                         thrs[image_layer] = thr
 
 
-                thr = Thread(target=worker, args=(image.fullname,))
+                thr = Thread(target=worker, args=(image.fullname, arch,))
                 thr.start()
                 thrs[image.fullname] = thr
 
@@ -221,15 +221,15 @@ class Client():
             errors = {}
             thrs: dict[str, Thread] = {}
 
-            def worker(__param: str):
+            def worker(__param: str, _arch):
                 try:
-                    _status, _manifest = self.get_newest_version(__param, arch=arch)
+                    _status, _manifest = self.get_newest_version(__param, arch=_arch)
                     if _status:
-                        print(f"Pulling image: {__param} arch=multi|{arch}")
+                        print(f"Pulling image: {__param} arch=multi|{_arch}")
                         self._pull(_manifest)
-                        print(f"Image {__param} arch=multi|{arch} pulled successfully ✅")
+                        print(f"Image {__param} arch=multi|{_arch} pulled successfully ✅")
                     else:
-                        print(f"{__param} arch=multi|{arch} ✅")
+                        print(f"{__param} arch=multi|{_arch} ✅")
 
                 except Exception as e:
                     errors[__param] = e
@@ -238,13 +238,13 @@ class Client():
                       Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker]
             layers.extend(manifest["image"]["layers"])
             for layer_image in layers:
-                thr = Thread(target=worker, args=(layer_image,))
+                thr = Thread(target=worker, args=(layer_image, get_machine_arch(),))
                 thr.start()
                 thrs[layer_image] = thr
 
 
             if status:
-                thr = Thread(target=worker, args=(_param,))
+                thr = Thread(target=worker, args=(_param, arch))
                 thr.start()
                 thrs[_param] = thr
 

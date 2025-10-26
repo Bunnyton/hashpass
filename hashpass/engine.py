@@ -29,7 +29,7 @@ def info(*args):
 def new(*args):
     parser = argparse.ArgumentParser(description='hashengine.py new make a new base image from fs in current directory')
     parser.add_argument( '--arch', metavar='ARCH',
-                         nargs='?', choices=['amd64', 'arm64', 'multi'],
+                         choices=['amd64', 'arm64', 'multi'],
                          help='Architecture of new base image')
     pargs = parser.parse_args(args)
     image = Image()
@@ -77,7 +77,7 @@ def push(*args):
                         help='push all images to registry')
     parser.add_argument( '--arch', metavar='ARCH',
                                         nargs='?', choices=['amd64', 'arm64', 'multi'],
-                                        default=get_machine_arch(),
+                                        default='multi',
                                         help='Architecture of pushing image')
     parser.add_argument('images', nargs='*', help='to push image layers')
     pargs = parser.parse_args(args)
@@ -201,7 +201,7 @@ def create(*args):
     parser.add_argument('-f', '-p', '--from', '--parent', help='parent image') #FIXME
     parser.add_argument('--arch', metavar='ARCH',
                                             choices=['amd64', 'arm64', 'multi'],
-                                            default=get_machine_arch(),
+                                            default='multi',
                                             help='Architecture of image')
     pargs = parser.parse_args(args)
 
