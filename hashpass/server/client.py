@@ -56,6 +56,13 @@ class Client():
 
 
     def _pull(self, manifest: dict, arch=get_machine_arch()) -> dict:
+        old_image_fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
+        old_image_fullname += ':' + manifest["image"]["version"]
+        old_config_dir = None
+        if Image.exist(old_image_fullname, arch=arch):
+            old_image_id = Image(old_image_fullname).get_id()
+            old_config_dir = os.path.join(Image.Config.config_dir, old_image_id)
+
         image_id = manifest["image"]["id"]
         config_dir = os.path.join(Image.Config.config_dir, image_id)
         config_path = os.path.join(config_dir, Image.Config.config_filename)
@@ -78,10 +85,8 @@ class Client():
                 toml.dump(manifest, f)
 
             remove(archive_path)
-            old_image_fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
-            old_image_fullname += ':' + manifest["image"]["version"]
-            if Image.exist(old_image_fullname, arch=arch):
-                Image(old_image_fullname, arch=arch).delete(dependencies=False)
+            if old_config_dir:
+                remove(old_config_dir)
 
         except Exception:
             remove(config_dir)
@@ -231,16 +236,14 @@ class Client():
 
             for param in set(params):
                 status, manifest = self.get_newest_version(param, arch=arch)
-                if not status:
-                    print(f"The newest version of {param} arch=multi|{arch} already pulled")
-                    continue
-
-                else:
-                    print(f"\nThe new version of {param} has been found on registry")
+                if status:
+                    print(f"The new version of {param} has been found on registry")
                     thr = Thread(target=worker, args=(param, arch))
                     thr.start()
                     thrs[param] = thr
-
+                else:
+                    print(f"The newest version of {param} arch=multi|{arch} already pulled")
+                    continue
 
             for _image, thr in thrs.items():
                 thr.join()
