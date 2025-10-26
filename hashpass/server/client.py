@@ -170,7 +170,7 @@ class Client():
                         print(f"Image {_param} arch={arch} pushed successfully ✅")
 
                     except Exception as e:
-                        errors[_image] = e
+                        errors[_param] = e
                     
 
                 for image_layer in image.layers:
@@ -248,7 +248,7 @@ class Client():
                         print(f"{__param} arch=multi|{arch} ✅")
 
                 except Exception as e:
-                    errors[image_id] = e
+                    errors[__param] = e
 
             layers = [Image.Config.config_layer_base, Image.Config.config_layer_basesettings,
                       Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker]
