@@ -116,7 +116,7 @@ class Image:
             if parent_image:
                 self.type = Image.Type.simple
                 self.layers = parent_image.layers
-                self.layers.append(parent_image.id)
+                self.layers.append(parent_image.fullname)
 
         
         self.name = read("Enter name of image: ").strip()

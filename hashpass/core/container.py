@@ -149,7 +149,7 @@ class Container:
         imagelink_path = os.path.join(self.config_dir, Container.Config.config_imagelink_dirname)
         os.makedirs(imagelink_path, exist_ok=True)
         for num, layer in enumerate(self._layers):
-            layer_path = os.path.join(Image.Config.config_dir, layer)
+            layer_path = os.path.join(Image.Config.config_dir, Image(layer).id)
             os.symlink(layer_path, os.path.join(imagelink_path, str(num)), target_is_directory=True)
             self._lowerdirs.append(os.path.join(Container.Config.config_imagelink_dirname, str(num)))
 
