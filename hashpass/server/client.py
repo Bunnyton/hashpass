@@ -206,8 +206,7 @@ class Client():
         if manifest is None:
             raise Exception(f"Image {param} not found on registry")
 
-
-        if not Image.exist(param): 
+        if not Image.exist(param):
             return True, manifest
 
         elif manifest["image"]["id"] != Image(param).get_id():

@@ -104,23 +104,27 @@ def push_image():
 
     if manifest_raw and image_file:
         manifest = json.loads(manifest_raw)
-        if manifest["image"]["id"] and manifest["image"]["name"] and manifest["image"]["version"] and "layers" in manifest["image"] and manifest["image"]["author"] and manifest["image"]["type"]:
-            image_path = os.path.join(STORAGE_DIR, manifest["image"]["id"])
+        if manifest["image"]["id"] and manifest["image"]["name"] and manifest["image"]["version"]:
+            if "layers" in manifest["image"] and manifest["image"]["author"] and manifest["image"]["type"]:
+                image_path = os.path.join(STORAGE_DIR, manifest["image"]["id"])
 
-            if get(manifest["image"]["id"]):
-                if check_flag(flags_raw, "force"):
-                    remove(manifest["image"]["id"])
+                if get(manifest["image"]["id"]):
+                    if check_flag(flags_raw, "force"):
+                        fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
+                        fullname += ':' + manifest["image"]["version"]
+                        image_old_manifest = get(fullname, arch=manifest["image"]["arch"])
+                        remove(image_old_manifest["image"]["id"])
 
-                else:
-                    return f"Image {manifest["image"]["id"]} already exist", 500
+                    else:
+                        return f"Image {manifest["image"]["id"]} already exist", 500
 
-            os.makedirs(image_path, exist_ok=True)
+                os.makedirs(image_path, exist_ok=True)
 
-            image_file.save(os.path.join(image_path, manifest["image"]["id"] + ".tar.gz"))
-            with open(os.path.join(image_path, "manifest.toml"), "w") as f:
-                toml.dump(manifest, f)
+                image_file.save(os.path.join(image_path, manifest["image"]["id"] + ".tar.gz"))
+                with open(os.path.join(image_path, "manifest.toml"), "w") as f:
+                    toml.dump(manifest, f)
 
-            return f"Image {manifest['image']['author']}/{manifest['image']['name']}:{manifest['image']['version']} uploaded successfully", 200
+                return f"Image {manifest['image']['author']}/{manifest['image']['name']}:{manifest['image']['version']} uploaded successfully", 200
 
 
     return "Invalid format", 400
