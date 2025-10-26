@@ -108,13 +108,13 @@ def push_image():
             if "layers" in manifest["image"] and manifest["image"]["author"] and manifest["image"]["type"]:
                 image_path = os.path.join(STORAGE_DIR, manifest["image"]["id"])
 
-                if get(manifest["image"]["id"]):
-                    if check_flag(flags_raw, "force"):
-                        fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
-                        fullname += ':' + manifest["image"]["version"]
-                        image_old_manifest = get(fullname, arch=manifest["image"]["arch"])
-                        remove(image_old_manifest["image"]["id"])
+                fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
+                fullname += ':' + manifest["image"]["version"]
+                image_old_manifest = get(fullname, arch=manifest["image"]["arch"])
 
+                if get(image_old_manifest["image"]["id"]):
+                    if check_flag(flags_raw, "force"):
+                        remove(image_old_manifest["image"]["id"])
                     else:
                         return f"Image {manifest["image"]["id"]} already exist", 500
 
