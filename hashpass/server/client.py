@@ -225,6 +225,7 @@ class Client():
             if pull_layers:
                 for param in set(params):
                     for layer in self.get_info(param, arch=get_machine_arch())['image']['layers']:
+                        print(layer)
                         layers.add(Image.to_fullname(self.get_info(layer, arch=get_machine_arch())))
 
             errors = {}

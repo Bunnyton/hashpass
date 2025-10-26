@@ -1,8 +1,0 @@
-[image]
-name = "taskchecker"
-author = "hashpass"
-version = "latest"
-id = "e167d2e134eef22ab4fce5456e47b8e43ce65a2bd145dfd2ddd39499c31328ae"
-type = "simple"
-layers = []
-arch = "multi"

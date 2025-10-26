@@ -283,7 +283,7 @@ class Image:
         elif Image.check_manifest(param):
             return param
 
-        raise Exception(' '.join(["Can't find image", str(param), "locally"]))
+        raise Exception(' '.join(["Can't find image", str(param), f"arch=multi|{arch}", "locally"]))
 
 
     def get_fullname(param) -> str|None:

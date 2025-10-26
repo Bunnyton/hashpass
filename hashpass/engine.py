@@ -52,7 +52,17 @@ def pull(*args):
     pargs = parser.parse_args(args)
 
     client = Client()
-    client.pull(*pargs.images, pull_layers=True, arch=pargs.arch)
+    if len(pargs.images) == 0 and not pargs.all:
+        Image.print_images(*client.get_remote_images())
+
+    elif pargs.all:
+        images = set()
+        for image in client.get_remote_images():
+            images.add(Image.to_fullname(image))
+        client.pull(*images, pull_layers=True, arch=pargs.arch)
+
+    else:
+        client.pull(*pargs.images, pull_layers=True, arch=pargs.arch)
 
 
 def push(*args):
@@ -61,6 +71,8 @@ def push(*args):
                         help='replace image layers on registry')
     parser.add_argument('-a', '--all', action='store_true',
                         help='push all images to registry')
+    parser.add_argument('-i', '--ignore', action='store_true',
+                        help='ignore errors')
     parser.add_argument( '--arch', metavar='ARCH',
                                         nargs='?', choices=['amd64', 'arm64', 'multi'],
                                         default='multi',
@@ -79,12 +91,21 @@ def push(*args):
             try:
                 client.push(image_name, force=pargs.force, arch=pargs.arch)
             except Exception as e:
-                print(e)
+                if pargs.ignore:
+                    print(e)
+                else:
+                    raise
 
     elif pargs.all:
         images = Image.list()
         for image in images:
-            client.push(image.id, force=pargs.force, arch=pargs.arch)
+            try:
+                client.push(image.get_id(), force=pargs.force, arch=pargs.arch)
+            except Exception as e:
+                if pargs.ignore:
+                    print(str(e) + '❌')
+                else:
+                    raise
 
 
 def send_statistic(*args):

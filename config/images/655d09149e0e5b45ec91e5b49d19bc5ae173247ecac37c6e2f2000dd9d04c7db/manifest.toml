@@ -1,8 +1,0 @@
-[image]
-name = "basesettings"
-author = "hashpass"
-version = "latest"
-id = "655d09149e0e5b45ec91e5b49d19bc5ae173247ecac37c6e2f2000dd9d04c7db"
-type = "base"
-layers = []
-arch = "multi"
