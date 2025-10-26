@@ -320,9 +320,7 @@ class Image:
 
             parent_image_name = None
             if manifest["image"]["layers"]:
-                parent_image_name = Image.get_fullname(manifest["image"]["layers"][-1])
-                if not parent_image_name:
-                    parent_image_name = manifest["image"]["layers"][-1]
+                parent_image_name = manifest["image"]["layers"][-1]
 
             table.append([manifest["image"]["id"][:16]
                             , Image.get_fullname(manifest)

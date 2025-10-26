@@ -199,7 +199,7 @@ class Client():
         return False, manifest
 
 
-    def pull(self, param, pull_layers=False, arch=get_machine_arch()):
+    def pull(self, param, pull_layers=True, arch=get_machine_arch()):
         _param = param
         if Image.check_manifest(_param):
             _param = param["image"]["id"]
@@ -232,13 +232,14 @@ class Client():
                 except Exception as e:
                     errors[__param] = e
 
-            layers = [Image.Config.config_layer_base, Image.Config.config_layer_basesettings,
-                      Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker]
-            layers.extend(manifest["image"]["layers"])
-            for layer_image in layers:
-                thr = Thread(target=worker, args=(layer_image, get_machine_arch(),))
-                thr.start()
-                thrs[layer_image] = thr
+            if pull_layers:
+                layers = [Image.Config.config_layer_base, Image.Config.config_layer_basesettings,
+                          Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker]
+                layers.extend(manifest["image"]["layers"])
+                for layer_image in layers:
+                    thr = Thread(target=worker, args=(layer_image, get_machine_arch(),))
+                    thr.start()
+                    thrs[layer_image] = thr
 
 
             if status:
