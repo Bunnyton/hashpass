@@ -60,7 +60,7 @@ def push(*args):
                         help='push all images to registry')
     parser.add_argument( '--arch', metavar='ARCH',
                                         nargs='?', choices=['amd64', 'arm64', 'multi'],
-                                        default=['multi'],
+                                        default='multi',
                                         help='Architecture of pushing image')
     parser.add_argument('images', nargs='*', help='to push image layers')
     pargs = parser.parse_args(args)
