@@ -44,7 +44,7 @@ def main():
         print("Обновление завершено")
 
     except KeyboardInterrupt:
-        print("Обновление прервано пользователем")
+        print("\nОбновление прервано пользователем")
 
     except Exception as e:
         print("Ошибка обновления: ", str(e))
