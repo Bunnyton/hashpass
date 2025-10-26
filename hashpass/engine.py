@@ -52,29 +52,7 @@ def pull(*args):
     pargs = parser.parse_args(args)
 
     client = Client()
-
-    images = list()
-    if len(pargs.images) == 0:
-        if pargs.all:
-            images = client.get_remote_images()
-        else:
-            client.print_remote_images()
-            return
-
-    elif len(pargs.images) > 0:
-        images = pargs.images
-
-    layers = set()
-    for image in images:
-        _image = client.get_info(image, arch=pargs.arch)
-        for layer in _image['image']['layers']:
-            layers.add(layer)
-
-    for layer in layers:
-        client.pull(layer, pull_layers=False, arch=get_machine_arch())
-
-    for image in images:
-        client.pull(image, pull_layers=False, arch=pargs.arch)
+    client.pull(*pargs.images, pull_layers=True, arch=pargs.arch)
 
 
 def push(*args):

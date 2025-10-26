@@ -60,7 +60,7 @@ class Image:
             self.name = manifest['image']['name']
             self.author = manifest['image']['author']
             self.version = manifest['image']['version']
-            self.fullname = Image._to_fullname(self.author, self.name, self.version)
+            self.fullname = Image.to_fullname(self.author, self.name, self.version)
 
 
             if 'arch' in manifest['image']:
@@ -155,7 +155,7 @@ class Image:
         self.version = read("Enter version of image: ", default="latest").strip()
         self._arch = arch
 
-        self.fullname = Image._to_fullname(self.author, self.name, self.version)
+        self.fullname = Image.to_fullname(self.author, self.name, self.version)
         if Image.exist(self.fullname, arch=arch):
             raise Exception(f"{self.fullname} already exist")
 
@@ -226,7 +226,7 @@ class Image:
             raise Exception("Image name incorrect")
 
 
-    def _to_fullname(*args) -> str:
+    def to_fullname(*args) -> str:
         if len(args) == 1 and type(args[0]) == dict:
             data = args[0]
             if data.get("image") and data["image"].get("name") \
@@ -246,7 +246,6 @@ class Image:
 
         elif len(args) == 2:
             return args[0] + '/' + args[1] + ':' + 'latest'
-
 
 
         raise Exception("Image incorrect")

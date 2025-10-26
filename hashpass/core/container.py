@@ -174,9 +174,9 @@ class Container:
 
         if mode == Container.Mode.task_play:
             userconfig = UserConfig()
-            k = calc_key(settings.masterkey, userconfig.username, Image._to_fullname(self.image.author,
-                                                                                     self.image.name,
-                                                                                     self.image.version))
+            k = calc_key(settings.masterkey, userconfig.username, Image.to_fullname(self.image.author,
+                                                                                    self.image.name,
+                                                                                    self.image.version))
 
             for d in ['etc', 'home', 'root', '.hash/dvs', 'opt']:
                 try:

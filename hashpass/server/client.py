@@ -199,53 +199,48 @@ class Client():
         return False, manifest
 
 
-    def pull(self, param, pull_layers=True, arch=get_machine_arch()):
-        _param = param
-        if Image.check_manifest(_param):
-            _param = param["image"]["id"]
+    def pull(self, *params, pull_layers=True, arch=get_machine_arch()):
+        def worker(_param: str, _arch):
+            try:
+                _status, _manifest = self.get_newest_version(_param, arch=_arch)
+                if _status:
+                    print(f"Pulling image: {_param} arch=multi|{_arch}")
+                    self._pull(_manifest)
+                    print(f"Image {_param} arch=multi|{_arch} pulled successfully ✅")
+                else:
+                    print(f"{_param} arch=multi|{_arch} ✅")
+
+            except Exception as e:
+                errors[_param] = e
 
         try:
-            status, manifest = self.get_newest_version(_param, arch=arch)
-            if not status:
-                print(f"The newest version of {_param} arch=multi|{arch} already pulled")
-                if pull_layers:
-                    print(f"Checking layers of {_param} arch=multi|{arch}")
-                else:
-                    return
-
-            else:
-                print(f"\nThe new version of {_param} has been found on registry")
+            layers = (Image.Config.config_layer_base, Image.Config.config_layer_basesettings,
+                  Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker)
+            layers = set(layers)
+            if pull_layers:
+                for param in set(params):
+                    for layer in self.get_info(param, arch=get_machine_arch())['image']['layers']:
+                        layers.add(Image.to_fullname(self.get_info(layer, arch=get_machine_arch())))
 
             errors = {}
             thrs: dict[str, Thread] = {}
-
-            def worker(__param: str, _arch):
-                try:
-                    _status, _manifest = self.get_newest_version(__param, arch=_arch)
-                    if _status:
-                        print(f"Pulling image: {__param} arch=multi|{_arch}")
-                        self._pull(_manifest)
-                        print(f"Image {__param} arch=multi|{_arch} pulled successfully ✅")
-                    else:
-                        print(f"{__param} arch=multi|{_arch} ✅")
-
-                except Exception as e:
-                    errors[__param] = e
-
-            if pull_layers:
-                layers = [Image.Config.config_layer_base, Image.Config.config_layer_basesettings,
-                          Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker]
-                layers.extend(manifest["image"]["layers"])
-                for layer_image in layers:
-                    thr = Thread(target=worker, args=(layer_image, get_machine_arch(),))
-                    thr.start()
-                    thrs[layer_image] = thr
-
-
-            if status:
-                thr = Thread(target=worker, args=(_param, arch))
+            for layer in layers:
+                thr = Thread(target=worker, args=(layer, get_machine_arch(),))
                 thr.start()
-                thrs[_param] = thr
+                thrs[layer] = thr
+
+            for param in set(params):
+                status, manifest = self.get_newest_version(param, arch=arch)
+                if not status:
+                    print(f"The newest version of {param} arch=multi|{arch} already pulled")
+                    continue
+
+                else:
+                    print(f"\nThe new version of {param} has been found on registry")
+                    thr = Thread(target=worker, args=(param, arch))
+                    thr.start()
+                    thrs[param] = thr
+
 
             for _image, thr in thrs.items():
                 thr.join()
