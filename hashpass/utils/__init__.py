@@ -42,10 +42,13 @@ def remove(path, missing_ok=True):
         shutil.rmtree(path, onerror=handle_remove_error)
 
 
-def move(src, dest, progress_bar=False):
-    copy(src, dest, progress_bar)
-    remove(src)
-        
+def move(src, dest):
+    try:
+        if os.path.exists(src):
+            subprocess.run(["mv", src, dest])
+    except Exception:
+        raise
+
 
 def read(s: str, default=None) -> str:
     val = str(input(s))

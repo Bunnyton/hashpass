@@ -50,7 +50,7 @@ def get(param: str, arch="multi"):
             temp = toml.load(file)
 
             if temp["image"]["name"] == name and temp["image"]["version"] == version and temp["image"]["author"] == author:
-                if arch not in temp["image"] or temp["image"]["arch"] == "multi" or temp["image"]["arch"] == arch:
+                if 'arch' not in temp["image"] or temp["image"]["arch"] == "multi" or temp["image"]["arch"] == arch:
                     return temp
 
     else:
@@ -100,7 +100,6 @@ def push_image():
     manifest_raw = request.form.get("manifest")
     flags_raw = request.form.get("flags")
     image_file = request.files.get("image")  # получаем список файлов
-
 
     if manifest_raw and image_file:
         manifest = json.loads(manifest_raw)

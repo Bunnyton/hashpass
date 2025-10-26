@@ -38,12 +38,12 @@ class Image:
         self._id: str
         self._layers = list()
         self._type: str
+        self._arch: str = arch
 
         self.name: str
         self.author: str
         self.fullname: str
         self.version: str
-        self.arch: str = arch
 
         if param is not None:
             manifest: dict
@@ -66,7 +66,7 @@ class Image:
 
 
             if 'arch' in manifest['image']:
-                self.arch = manifest['image']['arch']
+                self._arch = manifest['image']['arch']
 
             self._config_dir = os.path.join(Image.Config.config_dir, self._id)
             self._config_path = os.path.join(self._config_dir, Image.Config.config_filename)
@@ -82,10 +82,17 @@ class Image:
         self._config_path = new_config_path
         self.save()
 
+    def set_arch(self, arch: str):
+        self._arch = arch
+        self.save()
+
     def set_type(self, type):
         self._type = type
     def get_id(self):
         return self._id
+
+    def get_arch(self):
+        return self._arch
 
     def get_layers(self):
         return self._layers
@@ -148,7 +155,7 @@ class Image:
         self.name = read("Enter name of image: ").strip()
         self.author = read("Enter author of image: ").strip()
         self.version = read("Enter version of image: ", default="latest").strip()
-        self.arch = arch
+        self._arch = arch
 
         self.fullname = Image._to_fullname(self.author, self.name, self.version)
         if Image.exist(self.fullname, arch=arch):
@@ -187,9 +194,11 @@ class Image:
         data["image"]["name"] = self.name
         data["image"]["author"] = self.author
         data["image"]["version"] = self.version
+
         data["image"]["id"] = self.get_id()
         data["image"]["type"] = self.get_type()
         data["image"]["layers"] = self.get_layers()
+        data["image"]["arch"] = self.get_arch()
 
         return data
 

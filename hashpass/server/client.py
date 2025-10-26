@@ -8,7 +8,7 @@ import os
 
 from threading import Thread
 
-from hashpass.utils import remove, hashsum, move
+from hashpass.utils import remove, hashsum
 from hashpass.core.image import Image
 
 from hashpass.userconfig import UserConfig
@@ -76,13 +76,16 @@ class Client():
 
 
     def _pull(self, manifest: dict):
+        old_image_fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
+        old_image_fullname += ':' + manifest["image"]["version"]
+        old_image = Image(old_image_fullname)
+
         image_id = manifest["image"]["id"]
         config_dir = os.path.join(Image.Config.config_dir, image_id)
         config_path = os.path.join(config_dir, Image.Config.config_filename)
         archive_path = os.path.join(config_dir, f"{image_id}.tar.gz")
 
         try:
-            move(config_dir, config_dir + "_backup")
             os.makedirs(config_dir, exist_ok=True)
 
             archive_response = requests.get(f"{self.server_url}/download/{image_id}", stream=True)
@@ -98,15 +101,13 @@ class Client():
             with open(config_path, "w") as f:
                 toml.dump(manifest, f)
 
-            remove(config_dir + "_backup")
+            old_image.delete()
+            remove(archive_path)
 
         except Exception:
-            move(config_dir + "_backup", config_dir)
-            raise 
+            remove(config_dir)
+            raise
 
-        finally:
-            remove(archive_path)
-                
 
     def _push(self, image_id: str, force=False, arch="multi"):
         archive_path = os.path.join(Image.Config.config_dir, image_id + '.tar.gz')
@@ -116,29 +117,35 @@ class Client():
 
             else:
                 image = Image(image_id)
-                manifest = image.info()
-                flags = {"force": force}
-                remove(image.get_config_path())
+                try:
+                    manifest = image.info()
+                    flags = {"force": force}
+                    remove(image.get_config_path())
 
-                subprocess.run(["tar", "--create", "--gzip", "--preserve-permissions"
-                                                           , "--file", archive_path
-                                                           , "--directory", image.get_config_dir(), '.'], check=True,)
+                    subprocess.run(["tar", "--create", "--gzip", "--preserve-permissions"
+                                                               , "--file", archive_path
+                                                               , "--directory", image.get_config_dir(), '.'], check=True,)
 
-                manifest['image']['id'] = hashsum(archive_path)
-                manifest['image']['arch'] = arch
-                image.set_id(manifest['image']['id'])
+                    manifest['image']['id'] = hashsum(archive_path)
+                    manifest['image']['arch'] = arch
 
-                with open(archive_path, "rb") as f:
-                    files = {
-                        'image': f,
-                    }
-                    data = {
-                        'manifest': json.dumps(manifest),
-                        'flags': json.dumps(flags)
-                    }
-                    resp = requests.post(f"{self.server_url}/push", files=files, data=data, stream=True)
-                    if resp.status_code != 200:
-                        raise Exception(resp.text)
+                    with open(archive_path, "rb") as f:
+                        files = {
+                            'image': f,
+                        }
+                        data = {
+                            'manifest': json.dumps(manifest),
+                            'flags': json.dumps(flags)
+                        }
+                        resp = requests.post(f"{self.server_url}/push", files=files, data=data, stream=True)
+                        if resp.status_code != 200:
+                            raise Exception(resp.text)
+
+                    image.set_id(manifest['image']['id'])
+                    image.set_arch(arch)
+
+                finally:
+                    image.save()
 
         except Exception:
             raise
@@ -188,8 +195,8 @@ class Client():
                     if _image in errors:
                         raise errors[_image]
 
-                    else:
-                        Image.print_images(Image.get_manifest(_image))
+                image = Image(image.fullname)
+                Image.print_images(image.info())
 
         except Exception as e:
             raise Exception("Push error: " + str(e))
