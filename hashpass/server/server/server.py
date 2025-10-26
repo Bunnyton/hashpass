@@ -38,13 +38,11 @@ def list_images():
     return jsonify(images)
 
 
-def get(param: str):
-    temp = None
+def get(param: str, arch="multi"):
     if "/" in param:
         author, name = param.split("/")
         if ":" in name:
             name, version = name.split(":")
-
         else:
             version = "latest"
 
@@ -52,7 +50,8 @@ def get(param: str):
             temp = toml.load(file)
 
             if temp["image"]["name"] == name and temp["image"]["version"] == version and temp["image"]["author"] == author:
-                return temp
+                if 'arch' not in temp["image"] or temp["image"]["arch"] == "multi" or temp["image"]["arch"] == arch:
+                    return temp
 
     else:
         for file in glob.glob(STORAGE_DIR + "/**/" + "manifest.toml", recursive=False):
@@ -102,26 +101,29 @@ def push_image():
     flags_raw = request.form.get("flags")
     image_file = request.files.get("image")  # получаем список файлов
 
-
     if manifest_raw and image_file:
         manifest = json.loads(manifest_raw)
-        if manifest["image"]["id"] and manifest["image"]["name"] and manifest["image"]["version"] and "layers" in manifest["image"] and manifest["image"]["author"] and manifest["image"]["type"]:
-            image_path = os.path.join(STORAGE_DIR, manifest["image"]["id"])
+        if manifest["image"]["id"] and manifest["image"]["name"] and manifest["image"]["version"]:
+            if "layers" in manifest["image"] and manifest["image"]["author"] and manifest["image"]["type"]:
+                image_path = os.path.join(STORAGE_DIR, manifest["image"]["id"])
 
-            if get(manifest["image"]["id"]):
-                if check_flag(flags_raw, "force"):
-                    remove(manifest["image"]["id"])
+                fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
+                fullname += ':' + manifest["image"]["version"]
+                image_old_manifest = get(fullname, arch=manifest["image"]["arch"])
 
-                else:
-                    return f"Image {manifest["image"]["id"]} already exist", 500
+                if image_old_manifest:
+                    if check_flag(flags_raw, "force"):
+                        remove(image_old_manifest["image"]["id"])
+                    else:
+                        return f"Image {manifest["image"]["id"]} already exist", 500
 
-            os.makedirs(image_path, exist_ok=True)
+                os.makedirs(image_path, exist_ok=True)
 
-            image_file.save(os.path.join(image_path, manifest["image"]["id"] + ".tar.gz"))
-            with open(os.path.join(image_path, "manifest.toml"), "w") as f:
-                toml.dump(manifest, f)
+                image_file.save(os.path.join(image_path, manifest["image"]["id"] + ".tar.gz"))
+                with open(os.path.join(image_path, "manifest.toml"), "w") as f:
+                    toml.dump(manifest, f)
 
-            return f"Image {manifest['image']['author']}/{manifest['image']['name']}:{manifest['image']['version']} uploaded successfully", 200
+                return f"Image {manifest['image']['author']}/{manifest['image']['name']}:{manifest['image']['version']} uploaded successfully", 200
 
 
     return "Invalid format", 400
@@ -130,7 +132,8 @@ def push_image():
 @app.route("/info", methods=["POST"])
 def get_info():
     param = request.form.get("param")
-    manifest = get(param)
+    arch = request.form.get("arch")
+    manifest = get(param, arch=arch)
     if not manifest:
         return abort(404, description="Image not found")
 

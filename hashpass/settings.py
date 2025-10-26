@@ -21,10 +21,10 @@ class Settings(BaseSettings):
 
     image_config_dir: str = os.path.join(config_dir, "images")
     image_config_filename: str = "manifest.toml"
-    image_config_layer_base: str = "base"
-    image_config_layer_basesettings: str = "basesettings"
-    image_config_layer_taskcreator: str = "taskcreator"
-    image_config_layer_taskchecker: str = "taskchecker"
+    image_config_layer_base: str = "hashpass/base:latest"
+    image_config_layer_basesettings: str = "hashpass/basesettings:latest"
+    image_config_layer_taskcreator: str = "hashpass/taskcreator:latest"
+    image_config_layer_taskchecker: str = "hashpass/taskchecker:latest"
     image_exclude_list: list = []
     container_config_imagelink_dirname: str = "l"
     container_config_dir: str = os.path.join(config_dir, "containers")

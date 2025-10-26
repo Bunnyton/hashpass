@@ -43,6 +43,9 @@ def main():
         pull(*userconfig.get_task_name(all=True), "-l")
         print("Обновление завершено")
 
+    except KeyboardInterrupt:
+        print("\nОбновление прервано пользователем")
+
     except Exception as e:
         print("Ошибка обновления: ", str(e))
 
@@ -128,7 +131,7 @@ def main():
                     continue
 
 
-            cont = input("Желаете продолжить? (Enter = да, Ctrl+C = выход): ")
+            input("Желаете продолжить? (Enter = да, Ctrl+C = выход): ")
             task_num += 1
 
         else:

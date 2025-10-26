@@ -124,7 +124,7 @@ class Container:
         data = dict()
         data["container"] = dict()
         data["container"]["id"] = self.id
-        data["container"]["image"] = self.image.id
+        data["container"]["image"] = self.image.get_id()
 
         with open(os.path.join(self.config_dir, Container.Config.config_filename), "w") as f:
             toml.dump(data, f)
@@ -135,10 +135,10 @@ class Container:
             os.makedirs(dir, exist_ok=True)
 
         self._lowerdirs = list()
-        self._layers = self.image.layers.copy()
+        self._layers = self.image.get_layers()
 
         self._layers.append(Image.Config.config_layer_basesettings)
-        self._layers.append(self.image.config_dir)
+        self._layers.append(self.image.get_id())
         self._layers.append(Image.Config.config_layer_base)
         if mode == Container.Mode.task_play:
             self._layers.append(Image.Config.config_layer_taskchecker)
@@ -149,7 +149,7 @@ class Container:
         imagelink_path = os.path.join(self.config_dir, Container.Config.config_imagelink_dirname)
         os.makedirs(imagelink_path, exist_ok=True)
         for num, layer in enumerate(self._layers):
-            layer_path = os.path.join(Image.Config.config_dir, layer)
+            layer_path = os.path.join(Image.Config.config_dir, Image(layer).get_id())
             os.symlink(layer_path, os.path.join(imagelink_path, str(num)), target_is_directory=True)
             self._lowerdirs.append(os.path.join(Container.Config.config_imagelink_dirname, str(num)))
 
@@ -174,9 +174,9 @@ class Container:
 
         if mode == Container.Mode.task_play:
             userconfig = UserConfig()
-            k = calc_key(settings.masterkey, userconfig.username, Image._to_fullname(self.image.author,
-                                                                                     self.image.name,
-                                                                                     self.image.version))
+            k = calc_key(settings.masterkey, userconfig.username, Image.to_fullname(self.image.author,
+                                                                                    self.image.name,
+                                                                                    self.image.version))
 
             for d in ['etc', 'home', 'root', '.hash/dvs', 'opt']:
                 try:
@@ -259,8 +259,8 @@ class Container:
             image_is_empty = True
 
             if mode == Container.Mode.task_play:
-                if self.image.type != Image.Type.task:
-                    raise Exception(' '.join(["Image with id =", self.image.id, "is not task image"]))
+                if self.image.get_type() != Image.Type.task:
+                    raise Exception(' '.join(["Image with id =", self.image.get_id(), "is not task image"]))
 
                 image_is_empty = False
 
@@ -285,7 +285,7 @@ class Container:
                     if mode == Container.Mode.task_create or mode == Container.Mode.edit:
                         config_file = os.path.join(self._task_config_dir, Container.Config.task_config_filename)
                         if os.path.isfile(config_file):
-                            self.image.type = Image.Type.task
+                            self.image.set_type(Image.Type.task)
                             self.image.load_task_config(config_file)
                             self.image.save()
 
