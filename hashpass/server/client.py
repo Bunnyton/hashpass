@@ -56,10 +56,6 @@ class Client():
 
 
     def _pull(self, manifest: dict, arch=get_machine_arch()) -> dict:
-        old_image_fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
-        old_image_fullname += ':' + manifest["image"]["version"]
-        old_image = Image(old_image_fullname, arch=arch)
-
         image_id = manifest["image"]["id"]
         config_dir = os.path.join(Image.Config.config_dir, image_id)
         config_path = os.path.join(config_dir, Image.Config.config_filename)
@@ -81,8 +77,11 @@ class Client():
             with open(config_path, "w") as f:
                 toml.dump(manifest, f)
 
-            old_image.delete()
             remove(archive_path)
+            old_image_fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
+            old_image_fullname += ':' + manifest["image"]["version"]
+            if Image.exist(old_image_fullname, arch=arch):
+                Image(old_image_fullname, arch=arch).delete()
 
         except Exception:
             remove(config_dir)
