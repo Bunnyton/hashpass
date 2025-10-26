@@ -46,6 +46,7 @@ def pull(*args):
                         help='pull all layers with update from registry')
     parser.add_argument( '--arch', metavar='ARCH',
                          nargs='?', choices=['amd64', 'arm64', 'multi'],
+                         default=get_machine_arch(),
                          help='Architecture of pulling image')
     parser.add_argument('images', nargs='*', help='to pull images')
     pargs = parser.parse_args(args)
@@ -62,11 +63,17 @@ def pull(*args):
     elif len(pargs.images) > 0:
         images = pargs.images
 
+    layers = set()
     for image in images:
-        if pargs.arch:
-            client.pull(image, pull_layers=pargs.layers, arch=pargs.arch)
-        else:
-            client.pull(image, pull_layers=pargs.layers)
+        _image = client.get_info(image, arch=pargs.arch)
+        for layer in _image['image']['layers']:
+            layers.add(layer)
+
+    for layer in layers:
+        client.pull(layer, pull_layers=False, arch=get_machine_arch())
+
+    for image in images:
+        client.pull(image, pull_layers=False, arch=pargs.arch)
 
 
 def push(*args):
@@ -99,9 +106,6 @@ def push(*args):
         images = Image.list()
         for image in images:
             client.push(image.id, force=pargs.force, arch=pargs.arch)
-
-    else:
-        raise Exception("Function push() must has one or more args")
 
 
 def send_statistic(*args):

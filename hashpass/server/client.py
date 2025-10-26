@@ -165,14 +165,12 @@ class Client():
                         thrs[image_layer] = thr
 
 
-                thr = Thread(target=worker, args=(image.fullname, arch,))
-                thr.start()
-                thrs[image.fullname] = thr
-
                 for _image, thr in thrs.items():
                     thr.join()
                     if _image in errors:
                         raise errors[_image]
+
+                worker(image.fullname, arch)
 
                 image = Image(image.fullname, arch=arch)
                 Image.print_images(image.info())
