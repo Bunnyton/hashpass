@@ -81,7 +81,7 @@ class Client():
             old_image_fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
             old_image_fullname += ':' + manifest["image"]["version"]
             if Image.exist(old_image_fullname, arch=arch):
-                Image(old_image_fullname, arch=arch).delete()
+                Image(old_image_fullname, arch=arch).delete(dependencies=False)
 
         except Exception:
             remove(config_dir)

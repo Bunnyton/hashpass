@@ -167,17 +167,15 @@ class Image:
         return self._id
 
 
-    def delete(self):
-        print(f"Deleting {self.fullname}")
-
-        for image in Image.list():
-            if self._id in image.get_layers():
-                image.delete()
+    def delete(self, dependencies=True):
+        if dependencies:
+            for image in Image.list():
+                if self._id in image.get_layers():
+                    image.delete()
 
         if os.path.exists(self._config_dir):
             remove(self._config_dir)
 
-        print(f"✅ Delete {self.fullname} successfull")
 
 
     def info(self) -> dict:

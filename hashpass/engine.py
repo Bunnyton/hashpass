@@ -153,7 +153,9 @@ def delete(*args):
                     print(f"❌ Cancel deleting of {image.fullname}")
                     continue
 
+            print(f"Deleting {image.fullname}")
             image.delete()
+            print(f"✅ Delete {image.fullname} successfull")
 
         except Exception as e:
             print(' '.join(['❌' , str(e)]))
