@@ -128,7 +128,7 @@ def main():
                     continue
 
 
-            cont = input("Желаете продолжить? (Enter = да, Ctrl+C = выход): ")
+            input("Желаете продолжить? (Enter = да, Ctrl+C = выход): ")
             task_num += 1
 
         else:

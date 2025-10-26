@@ -18,7 +18,7 @@ def new(*args):
     image = Image()
     image.create(arch=pargs.arch)
     image.import_from_fs(os.getcwd())
-    print(image.id)
+    print(image.get_id())
 
 
 def pull(*args):

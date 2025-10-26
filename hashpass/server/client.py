@@ -118,16 +118,15 @@ class Client():
                 image = Image(image_id)
                 manifest = image.info()
                 flags = {"force": force}
-                remove(image.config_path)
+                remove(image.get_config_path())
 
                 subprocess.run(["tar", "--create", "--gzip", "--preserve-permissions"
                                                            , "--file", archive_path
-                                                           , "--directory", image.config_dir, '.'], check=True,)
+                                                           , "--directory", image.get_config_dir(), '.'], check=True,)
 
-                manifest['image']['hashsum'] = hashsum(archive_path)
+                manifest['image']['id'] = hashsum(archive_path)
                 manifest['image']['arch'] = arch
-                image.hashsum = manifest['image']['hashsum']
-                image.save()
+                image.set_id(manifest['image']['id'])
 
                 with open(archive_path, "rb") as f:
                     files = {
@@ -166,14 +165,14 @@ class Client():
                 def worker(_param: str):
                     try:
                         print(f"Pushing image: {_param} arch={arch}")
-                        self._push(Image(_param).id, force=force, arch=arch)
+                        self._push(Image(_param).get_id(), force=force, arch=arch)
                         print(f"Image {_param} arch={arch} pushed successfully ✅")
 
                     except Exception as e:
                         errors[_param] = e
                     
 
-                for image_layer in image.layers:
+                for image_layer in image.get_layers():
                     if not self.get_info(image_layer, arch=arch):
                         thr = Thread(target=worker, args=(image_layer,))
                         thr.start()
@@ -211,7 +210,7 @@ class Client():
         if not Image.exist(param): 
             return True, manifest
 
-        elif "hashsum" in manifest["image"] and manifest["image"]["hashsum"] != Image.get_hashsum(param):
+        elif manifest["image"]["id"] != Image(param).get_id():
             return True, manifest
 
         return False, manifest
@@ -331,11 +330,9 @@ class Client():
                 raise Exception("Can't connect to server")
 
             userconfig = UserConfig()
-            return requests.post(f"{self.server_url}/student/confirmed", data={"user": userconfig.username, "last_task": task_num})
+            return requests.post(f"{self.server_url}/student/confirmed", data={"user": userconfig.username,
+                                                                           "task_num": userconfig.get_last_task_num()})
 
         except Exception as e:
             raise Exception("Send statistic error: " + str(e))
-
-
-
 
