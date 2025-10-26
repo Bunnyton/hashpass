@@ -1,5 +1,4 @@
 import subprocess
-import platform
 
 import requests
 import json
@@ -8,31 +7,12 @@ import os
 
 from threading import Thread
 
-from hashpass.utils import remove, hashsum
+from hashpass.utils import remove, hashsum, get_machine_arch
 from hashpass.core.image import Image
 
 from hashpass.userconfig import UserConfig
 from hashpass.settings import Settings
 
-
-def get_arch() -> str:
-    m = platform.machine() or ""
-    m = m.strip().lower()
-
-    # Базовая нормализация самых частых вариантов
-    mapping = {
-        "x86_64": "amd64",
-        "amd64": "amd64",
-        "x64":    "amd64",
-
-        "aarch64": "arm64",
-        "arm64":   "arm64",
-    }
-    if m in mapping:
-        return mapping[m]
-
-    else:
-        raise Exception(f"Exotic arch - {m}")
 
 
 class Client():
@@ -62,7 +42,7 @@ class Client():
             return False
 
 
-    def get_info(self, param: str, arch=get_arch()) -> str | None:
+    def get_info(self, param: str, arch=get_machine_arch()) -> dict | None:
         if not self.check_connection():
             raise Exception("Can't connect to server")
 
@@ -202,7 +182,7 @@ class Client():
             raise Exception("Push error: " + str(e))
 
     
-    def get_newest_version(self, param, arch=get_arch()) -> [bool, dict]: # return manifest if newest verion on registry
+    def get_newest_version(self, param, arch=get_machine_arch()) -> [bool, dict]: # return manifest if newest verion on registry
         if not param:
             raise Exception(f"Image with name {param} can't be exist")
 
@@ -211,7 +191,7 @@ class Client():
 
         manifest = self.get_info(param, arch=arch)
         if manifest is None:
-            raise Exception(f"Image {param} not found on registry")
+            raise Exception(f"Image {param} arch=multi|{arch} not found on registry")
 
         if not Image.exist(param):
             return True, manifest
@@ -222,7 +202,7 @@ class Client():
         return False, manifest
 
 
-    def pull(self, param, pull_layers=False, arch=get_arch()):
+    def pull(self, param, pull_layers=False, arch=get_machine_arch()):
         _param = param
         if Image.check_manifest(_param):
             _param = param["image"]["id"]
@@ -230,9 +210,9 @@ class Client():
         try:
             status, manifest = self.get_newest_version(_param, arch=arch)
             if not status:
-                print(f"The newest version of {_param} already pulled")
+                print(f"The newest version of {_param} arch=multi|{arch} already pulled")
                 if pull_layers:
-                    print(f"Checking layers of {_param}")
+                    print(f"Checking layers of {_param} arch=multi|{arch}")
                 else:
                     return
 

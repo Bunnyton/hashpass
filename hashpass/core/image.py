@@ -8,7 +8,7 @@ from tabulate import tabulate
 
 from hashpass.settings import Settings
 
-from hashpass.utils import copy, remove, read, move
+from hashpass.utils import copy, remove, read, move, get_machine_arch
 
 
 class Image:
@@ -32,7 +32,7 @@ class Image:
         base = "base"
     
 
-    def __init__(self, param=None, arch="multi"):
+    def __init__(self, param=None, arch=get_machine_arch()):
         os.makedirs(Image.Config.config_dir, exist_ok=True)
 
         self._id: str
@@ -51,9 +51,7 @@ class Image:
                 manifest = param
 
             else:
-                manifest = Image.get_manifest(param)
-                if not manifest:
-                    raise Exception(' '.join(["Can't find image", param, "locally"]))
+                manifest = Image.get_manifest(param, arch)
 
             self._id = manifest['image']['id']
             self._layers = manifest['image']['layers']
@@ -131,9 +129,9 @@ class Image:
             raise Exception("Import path doesn't exist or isn't dir")
 
 
-    def exist(param, arch='multi') -> bool:
+    def exist(param, arch=get_machine_arch()) -> bool:
         try:
-            Image(param)
+            Image(param, arch)
             return True
         except:
             return False
@@ -267,14 +265,16 @@ class Image:
         return False
 
 
-    def get_manifest(param) -> dict | None:
+    def get_manifest(param, arch=get_machine_arch()) -> dict:
+        print(param)
         if isinstance(param, str):
             if '/' in param:
                 author, name, version = Image._parse_fullname(param)
                 for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
                     temp = toml.load(file)
                     if temp['image']['name'] == name and temp['image']['version'] == version and temp['image']['author'] == author:
-                        return temp
+                        if 'arch' not in temp['image'] or temp['image']['arch'] == 'multi' or temp['image']['arch'] == arch:
+                            return temp
 
             else:
                 id = param
@@ -287,7 +287,7 @@ class Image:
         elif Image.check_manifest(param):
             return param
 
-        return None
+        raise Exception(' '.join(["Can't find image", str(param), "locally"]))
 
 
     def get_fullname(param) -> str|None:

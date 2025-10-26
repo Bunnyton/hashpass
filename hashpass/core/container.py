@@ -138,7 +138,7 @@ class Container:
         self._layers = self.image.get_layers()
 
         self._layers.append(Image.Config.config_layer_basesettings)
-        self._layers.append(self.image.config_dir)
+        self._layers.append(self.image.get_id())
         self._layers.append(Image.Config.config_layer_base)
         if mode == Container.Mode.task_play:
             self._layers.append(Image.Config.config_layer_taskchecker)
@@ -260,7 +260,7 @@ class Container:
 
             if mode == Container.Mode.task_play:
                 if self.image.get_type() != Image.Type.task:
-                    raise Exception(' '.join(["Image with id =", self.image.get_id, "is not task image"]))
+                    raise Exception(' '.join(["Image with id =", self.image.get_id(), "is not task image"]))
 
                 image_is_empty = False
 

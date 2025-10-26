@@ -2,7 +2,7 @@ import subprocess
 import hashlib
 import shutil
 import os
-import re
+import platform
 
 def copy(src, dest, progress_bar=False, with_replace=True, clear_copy=False):
     try:
@@ -82,6 +82,25 @@ def hashsum(path: str):
 
     return None
 
+
+def get_machine_arch() -> str:
+    m = platform.machine() or ""
+    m = m.strip().lower()
+
+    # Базовая нормализация самых частых вариантов
+    mapping = {
+        "x86_64": "amd64",
+        "amd64": "amd64",
+        "x64":    "amd64",
+
+        "aarch64": "arm64",
+        "arm64":   "arm64",
+    }
+    if m in mapping:
+        return mapping[m]
+
+    else:
+        raise Exception(f"Exotic arch - {m}")
 
 
 

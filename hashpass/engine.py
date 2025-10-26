@@ -1,12 +1,29 @@
 import os
 import argparse
 
+from hashpass.utils import get_machine_arch
 from hashpass.server import Client
 from hashpass.core import Image, Container
 
 
 def print_images():
     Image.print_images()
+
+
+def info(*args):
+    parser = argparse.ArgumentParser(description='hashengine.py info')
+    parser.add_argument( '--arch', metavar='ARCH',
+                         nargs='?', choices=['amd64', 'arm64', 'multi'],
+                         default=get_machine_arch(),
+                         help='Architecture of image')
+    parser.add_argument('images', nargs='*', help="info's images")
+    pargs = parser.parse_args(args)
+
+    images_info = list()
+    for image in pargs.images:
+        images_info.append(Image.get_manifest(image, arch=pargs.arch))
+
+    Image.print_images(*images_info)
 
 
 def new(*args):
@@ -60,7 +77,7 @@ def push(*args):
                         help='push all images to registry')
     parser.add_argument( '--arch', metavar='ARCH',
                                         nargs='?', choices=['amd64', 'arm64', 'multi'],
-                                        default='multi',
+                                        default=get_machine_arch(),
                                         help='Architecture of pushing image')
     parser.add_argument('images', nargs='*', help='to push image layers')
     pargs = parser.parse_args(args)
@@ -105,8 +122,8 @@ def delete(*args):
     parser.add_argument('-a', '--all', action='store_true',
                         help='delete all local images')
     parser.add_argument('--arch', metavar='ARCH',
-                        nargs=1,  choices=['amd64', 'arm64', 'multi'],
-                        default='multi',
+                        choices=['amd64', 'arm64', 'multi'],
+                        default=get_machine_arch(),
                         help='Architecture of image')
     parser.add_argument('images', nargs='*', help='to delete image')
     pargs = parser.parse_args(args)
@@ -144,12 +161,11 @@ def delete(*args):
 
 def edit(*args):
     parser = argparse.ArgumentParser(description='hashengine.py edit')
-    parser.add_argument('image', nargs=1,
-                        help='image for editing')
+    parser.add_argument('image', help='image for editing')
     parser.add_argument('--arch', metavar='ARCH',
-                        nargs=1,  choices=['amd64', 'arm64', 'multi'],
-                        default='multi',
-                        help='Architecture of image')
+                                            choices=['amd64', 'arm64', 'multi'],
+                                            default=get_machine_arch(),
+                                            help='Architecture of image')
     pargs = parser.parse_args(args)
 
     image = Image(pargs.image, arch=pargs.arch)
@@ -159,12 +175,11 @@ def edit(*args):
 
 def play(*args):
     parser = argparse.ArgumentParser(description='hashengine.py play')
-    parser.add_argument('image', nargs=1,
-                        help='task (image) for playing')
+    parser.add_argument('image', help='task (image) for playing')
     parser.add_argument('--arch', metavar='ARCH',
-                        nargs=1,  choices=['amd64', 'arm64', 'multi'],
-                        default='multi',
-                        help='Architecture of image')
+                                            choices=['amd64', 'arm64', 'multi'],
+                                            default=get_machine_arch(),
+                                            help='Architecture of image')
     pargs = parser.parse_args(args)
 
     image: Image
@@ -181,12 +196,11 @@ def play(*args):
 
 def create(*args):
     parser = argparse.ArgumentParser(description='hashengine.py create')
-    parser.add_argument('-f', '-p', '--from', '--parent', nargs=1,
-                        help='parent image') #FIXME
+    parser.add_argument('-f', '-p', '--from', '--parent', help='parent image') #FIXME
     parser.add_argument('--arch', metavar='ARCH',
-                        nargs=1,  choices=['amd64', 'arm64', 'multi'],
-                        default='multi',
-                        help='Architecture of image')
+                                            choices=['amd64', 'arm64', 'multi'],
+                                            default=get_machine_arch(),
+                                            help='Architecture of image')
     pargs = parser.parse_args(args)
 
     image = Image()
@@ -198,21 +212,36 @@ def create(*args):
 
 def remote(*args):
     parser = argparse.ArgumentParser(description='hashengine.py remote')
-    parser.add_argument('remove', nargs=1, choices=['remove'], help='delete image from registry')
+    parser.add_argument('cmd', choices=['remove', 'info'], help='delete or info image from registry')
     parser.add_argument('--arch', metavar='ARCH',
-                        nargs=1,  choices=['amd64', 'arm64', 'multi'],
-                        default='multi',
-                        help='Architecture of remote removing image')
+                        choices=['amd64', 'arm64', 'multi'],
+                        default=get_machine_arch(),
+                        help='Architecture of image on registry')
+    parser.add_argument('images', nargs='*', help='image to remove or info from registry')
     pargs = parser.parse_args(args)
 
     client = Client()
-    ans = input("This command remove image layer only, you are sure? [y] ")
-    if 'y' != ans.strip().lower():
-        return
+    if pargs.cmd == 'remove':
+        ans = input("This command remove image layer only, you are sure? [y] ")
+        if 'y' != ans.strip().lower():
+            return
 
-    for image_name in args[1::]:
-        client.remote_remove(image_name, arch=pargs.arch)
+        for image in pargs.images:
+            client.remote_remove(image, arch=pargs.arch)
 
+    elif len(pargs.images) == 0:
+        client.print_remote_images()
+
+    else:
+        manifests = list()
+        for image in pargs.images:
+            manifest = client.get_info(image, arch=pargs.arch)
+            if manifest is None:
+                raise Exception(f"Image {image} arch=multi|{pargs.arch} not found on registry")
+            else:
+                manifests.append(manifest)
+
+        Image.print_images(*manifests)
 
 
 # def rename(*args):

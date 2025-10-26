@@ -4,7 +4,7 @@ import os
 import sys
 import argparse
 
-from hashpass.engine import print_images, new, pull, push, send_statistic, delete, edit, create, play, remote
+from hashpass.engine import print_images, info, new, pull, push, send_statistic, delete, edit, create, play, remote
 
 
 def main():
@@ -15,6 +15,7 @@ def main():
 
     cmds = {
         'images': print_images,
+        'info': info,
         'new': new,
         'pull': pull,
         'push': push,
