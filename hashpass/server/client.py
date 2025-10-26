@@ -55,10 +55,10 @@ class Client():
         return response.json()
 
 
-    def _pull(self, manifest: dict):
+    def _pull(self, manifest: dict, arch=get_machine_arch()) -> dict:
         old_image_fullname = manifest["image"]["author"] + '/' + manifest["image"]["name"]
         old_image_fullname += ':' + manifest["image"]["version"]
-        old_image = Image(old_image_fullname)
+        old_image = Image(old_image_fullname, arch=arch)
 
         image_id = manifest["image"]["id"]
         config_dir = os.path.join(Image.Config.config_dir, image_id)
@@ -96,7 +96,7 @@ class Client():
                 raise Exception(f"Image {image_id} arch=multi|{arch} already exist on registry")
 
             else:
-                image = Image(image_id)
+                image = Image(image_id, arch=arch)
                 try:
                     manifest = image.info()
                     flags = {"force": force}
@@ -144,7 +144,7 @@ class Client():
                 return
 
             else:
-                image = Image(param)
+                image = Image(param, arch=arch)
 
                 errors = {}
                 thrs: [str, Thread] = {}
@@ -152,7 +152,7 @@ class Client():
                 def worker(_param: str):
                     try:
                         print(f"Pushing image: {_param} arch={arch}")
-                        self._push(Image(_param).get_id(), force=force, arch=arch)
+                        self._push(Image(_param, arch=arch).get_id(), force=force, arch=arch)
                         print(f"Image {_param} arch={arch} pushed successfully ✅")
 
                     except Exception as e:
@@ -175,7 +175,7 @@ class Client():
                     if _image in errors:
                         raise errors[_image]
 
-                image = Image(image.fullname)
+                image = Image(image.fullname, arch=arch)
                 Image.print_images(image.info())
 
         except Exception as e:
@@ -193,10 +193,10 @@ class Client():
         if manifest is None:
             raise Exception(f"Image {param} arch=multi|{arch} not found on registry")
 
-        if not Image.exist(param):
+        if not Image.exist(param, arch=arch):
             return True, manifest
 
-        elif manifest["image"]["id"] != Image(param).get_id():
+        elif manifest["image"]["id"] != Image(param, arch=arch).get_id():
             return True, manifest
 
         return False, manifest

@@ -266,7 +266,6 @@ class Image:
 
 
     def get_manifest(param, arch=get_machine_arch()) -> dict:
-        print(param)
         if isinstance(param, str):
             if '/' in param:
                 author, name, version = Image._parse_fullname(param)

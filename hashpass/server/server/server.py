@@ -111,7 +111,7 @@ def push_image():
                 fullname += ':' + manifest["image"]["version"]
                 image_old_manifest = get(fullname, arch=manifest["image"]["arch"])
 
-                if get(image_old_manifest["image"]["id"]):
+                if image_old_manifest:
                     if check_flag(flags_raw, "force"):
                         remove(image_old_manifest["image"]["id"])
                     else:
