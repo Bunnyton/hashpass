@@ -1,0 +1,8 @@
+[image]
+name = "taskcreator"
+author = "hashpass"
+version = "latest"
+id = "95ca4d24b8e6ec748c12aa19e8d2819a82630590733fa5715d2cd4406403d109"
+type = "simple"
+layers = []
+arch = "multi"

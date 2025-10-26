@@ -165,7 +165,7 @@ class Client():
 
                 for image_layer in image.get_layers():
                     if not self.get_info(image_layer, arch=get_machine_arch()):
-                        thr = Thread(target=worker, args=(image_layer, get_machine_arch()))
+                        thr = Thread(target=worker, args=(image_layer, arch))
                         thr.start()
                         thrs[image_layer] = thr
 
