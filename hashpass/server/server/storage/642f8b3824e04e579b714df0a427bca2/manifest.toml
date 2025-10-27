@@ -1,8 +1,0 @@
-[image]
-name = "debian"
-author = "bunnyton"
-version = "latest"
-id = "642f8b3824e04e579b714df0a427bca2"
-type = "base"
-layers = []
-hashsum = "44f272463d0481b04d0e1aef6e230feff6782dbf74243fd932512ffb9f0a26a6"
