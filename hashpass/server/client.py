@@ -199,7 +199,6 @@ class Client():
                         raise Exception(f"{image}: {e}")
 
                 images.update(layers)
-                Image.print_images(*[Image.get_manifest(i, arch=arch) for i in images])
 
         except Exception as e:
             raise Exception("Push error: " + str(e))
@@ -287,8 +286,6 @@ class Client():
                         for f in future_to_image:
                             f.cancel()
                         raise Exception(f"Pull layer error: {image}: {e}")
-
-            Image.print_images(*[Image.get_manifest(task, arch=arch) for task in tasks])
 
         except Exception as e:
             raise Exception("Pull error: " + str(e))
