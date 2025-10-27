@@ -75,7 +75,7 @@ def push(*args):
                         help='ignore errors')
     parser.add_argument( '--arch', metavar='ARCH',
                                         nargs='?', choices=['amd64', 'arm64', 'multi'],
-                                        default='multi',
+                                        default=get_machine_arch(),
                                         help='Architecture of pushing image')
     parser.add_argument('images', nargs='*', help='to push image layers')
     pargs = parser.parse_args(args)
@@ -87,26 +87,11 @@ def push(*args):
 
     client = Client()
     if pargs.images:
-        for image_name in pargs.images:
-            try:
-                client.push(image_name, force=pargs.force, arch=pargs.arch)
-            except Exception as e:
-                if pargs.ignore:
-                    print(e)
-                else:
-                    raise
+        client.push(*pargs.images, force=pargs.force, arch=pargs.arch)
 
     elif pargs.all:
-        images = Image.list()
-        for image in images:
-            try:
-                client.push(image.get_id(), force=pargs.force, arch=pargs.arch)
-            except Exception as e:
-                if pargs.ignore:
-                    print(str(e) + '❌')
-                else:
-                    raise
-
+        images = Image.list(manifests=True)
+        client.push(*[Image.to_fullname(image) for image in images], force=pargs.force, arch=pargs.arch)
 
 def send_statistic(*args):
     client = Client()
@@ -144,21 +129,27 @@ def delete(*args):
         else:
             raise Exception("Image to delete not found")
 
-    for _image in images:
+    for image in images:
         try:
-            if isinstance(_image, Image):
-                image = _image
+            if isinstance(image, Image):
+                _image = image
             else:
-                image = Image(_image, arch=pargs.arch)
+                _image = Image(image, arch=pargs.arch)
 
             if not pargs.force:
-                ans = input(f"This command delete all dependecies image of {image.fullname} too, you are sure? [y] ")
+                ans = input(f"This command delete all dependecies image of {_image.fullname} too, you are sure? [y] ")
                 if 'y' != ans.strip().lower():
-                    print(f"❌ Cancel deleting of {image.fullname}")
+                    print(f"❌ Cancel deleting of {_image.fullname}")
                     continue
 
+            for __image in Image.list():
+                if image.fullname in __image.get_layers():
+                    print(f"Deleting {__image.fullname}")
+                    __image.delete()
+                    print(f"✅ Delete {__image.fullname} successfull")
+
             print(f"Deleting {image.fullname}")
-            image.delete()
+            _image.delete()
             print(f"✅ Delete {image.fullname} successfull")
 
         except Exception as e:

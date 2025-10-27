@@ -167,12 +167,7 @@ class Image:
         return self._id
 
 
-    def delete(self, dependencies=True):
-        if dependencies:
-            for image in Image.list():
-                if self._id in image.get_layers():
-                    image.delete()
-
+    def delete(self):
         if os.path.exists(self._config_dir):
             remove(self._config_dir)
 
@@ -267,18 +262,20 @@ class Image:
             if '/' in param:
                 author, name, version = Image._parse_fullname(param)
                 for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-                    temp = toml.load(file)
-                    if temp['image']['name'] == name and temp['image']['version'] == version and temp['image']['author'] == author:
-                        if 'arch' not in temp['image'] or temp['image']['arch'] == 'multi' or temp['image']['arch'] == arch:
-                            return temp
+                    if os.path.exists(file):
+                        temp = toml.load(file)
+                        if temp['image']['name'] == name and temp['image']['version'] == version and temp['image']['author'] == author:
+                            if 'arch' not in temp['image'] or temp['image']['arch'] == 'multi' or temp['image']['arch'] == arch:
+                                return temp
 
             else:
                 id = param
                 for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-                    temp = toml.load(file)
+                    if os.path.exists(file):
+                        temp = toml.load(file)
 
-                    if temp['image']['id'] == id:
-                        return temp
+                        if temp['image']['id'] == id:
+                            return temp
 
         elif Image.check_manifest(param):
             return param
@@ -296,12 +293,13 @@ class Image:
     def list(manifests=False) -> list: # return all images
         images = list()
         for file in glob.glob(Image.Config.config_dir + "/**/" + Image.Config.config_filename, recursive=False):
-            manifest = toml.load(file)
-            if Image.check_manifest(manifest):
-                if manifests:
-                    images.append(manifest)
-                else:
-                    images.append(Image(manifest))
+            if os.path.exists(file):
+                manifest = toml.load(file)
+                if Image.check_manifest(manifest):
+                    if manifests:
+                        images.append(manifest)
+                    else:
+                        images.append(Image(manifest))
 
         return images
 

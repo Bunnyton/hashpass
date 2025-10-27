@@ -37,7 +37,7 @@ def remove(path, missing_ok=True):
 
     else:
         def handle_remove_error(func, path, exc_info):
-            print(f"Не удалось удалить {path}: {exc_info[1]}")
+            print(f"Can't delete {path}: {exc_info[1]}")
 
         shutil.rmtree(path, onerror=handle_remove_error)
 
@@ -45,7 +45,7 @@ def remove(path, missing_ok=True):
 def move(src, dest):
     try:
         if os.path.exists(src):
-            subprocess.run(["mv", src, dest])
+            subprocess.run(["mv", src, dest], check=True)
     except Exception:
         raise
 

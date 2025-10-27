@@ -95,14 +95,13 @@ class Client():
             raise
 
 
-    def _push(self, image_id: str, force=False, arch="multi"):
-        archive_path = os.path.join(Image.Config.config_dir, image_id + '.tar.gz')
+    def _push(self, image: Image, force=False):
+        archive_path = os.path.join(Image.Config.config_dir, image.get_id() + '.tar.gz')
         try:
-            if not force and self.get_info(image_id, arch=arch):
-                raise Exception(f"Image {image_id} arch=multi|{arch} already exist on registry")
+            if not force and self.get_info(image.get_id(), arch=image.get_arch()):
+                raise Exception(f"Image {image.fullname} arch={image.get_arch()} already exist on registry")
 
             else:
-                image = Image(image_id, arch=arch)
                 try:
                     manifest = image.info()
                     flags = {"force": force}
@@ -113,7 +112,7 @@ class Client():
                                                                , "--directory", image.get_config_dir(), '.'], check=True,)
 
                     manifest['image']['id'] = hashsum(archive_path)
-                    manifest['image']['arch'] = arch
+                    manifest['image']['arch'] = image.get_arch()
 
                     with open(archive_path, "rb") as f:
                         files = {
@@ -128,7 +127,6 @@ class Client():
                             raise Exception(resp.text)
 
                     image.set_id(manifest['image']['id'])
-                    image.set_arch(arch)
 
                 finally:
                     image.save()
@@ -140,47 +138,68 @@ class Client():
             remove(archive_path)
 
 
-    def push(self, param: str, force=False, arch="multi"):
+    def push(self, *params: str, force=False, arch=get_machine_arch()):
+        errors = {}
+        stop_event = Event()
+
+        def worker(_param: str, _force: bool, _arch):
+            if stop_event.is_set():
+                return
+
+            if not _force and self.get_info(_param, arch=_arch):
+                print(f"{_param} arch=multi|{_arch} already exist on registry")
+                return
+            else:
+                _image = Image(_param, arch=_arch)
+                print(f"Pushing image: {_param} arch={_image.get_arch()}")
+                self._push(_image, force=force)
+                print(f"Image {_param} arch={_image.get_arch()} pushed successfully ✅")
+
         try:
             if not self.check_connection():
                 raise Exception("Can't connect to server")
 
-            if not force and self.get_info(param, arch=arch):
-                print(f"{param} arch=multi|{arch} already exist on registry")
-                return
+            layers = set()
+            images = set()
+            for param in set(params):
+                _layers = set()
+                try:
+                    for layer in Image(param, arch=arch).get_layers():
+                        Image(layer, arch=arch)  # raise Error if layer doesn't exist
+                        _layers.add(layer)
 
-            else:
-                image = Image(param, arch=arch)
+                    layers.update(_layers)
+                    images.add(param)
 
-                errors = {}
-                thrs: [str, Thread] = {}
+                except Exception as e:
+                    print(f"Push error with add image {param} arch=multi|{arch} to tasks: " + str(e))
+            layers.difference_update(images)
 
-                def worker(_param: str, _arch):
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_image = {}
+                for layer_name in layers:
+                    fut = executor.submit(worker, layer_name, False, arch)
+                    future_to_image[fut] = layer_name
+
+                for image_name in images:
+                    fut = executor.submit(worker, image_name, force, arch)
+                    future_to_image[fut] = image_name
+
+                # обрабатываем завершение задач
+                for future in as_completed(future_to_image):
+                    image = future_to_image[future]
                     try:
-                        print(f"Pushing image: {_param} arch={_arch}")
-                        self._push(Image(_param, arch=_arch).get_id(), force=force, arch=_arch)
-                        print(f"Image {_param} arch={_arch} pushed successfully ✅")
-
+                        future.result()
                     except Exception as e:
-                        errors[_param] = e
-                    
+                        errors[image] = e
+                        stop_event.set()  # сигнал остальным потокам
+                        # Отменяем все незапущенные/незавершённые
+                        for f in future_to_image:
+                            f.cancel()
+                        raise Exception(f"{image}: {e}")
 
-                for image_layer in image.get_layers():
-                    if not self.get_info(image_layer, arch=get_machine_arch()):
-                        thr = Thread(target=worker, args=(image_layer, arch))
-                        thr.start()
-                        thrs[image_layer] = thr
-
-
-                for _image, thr in thrs.items():
-                    thr.join()
-                    if _image in errors:
-                        raise errors[_image]
-
-                worker(image.fullname, arch)
-
-                image = Image(image.fullname, arch=arch)
-                Image.print_images(image.info())
+                images.update(layers)
+                Image.print_images(*[Image.get_manifest(i, arch=arch) for i in images])
 
         except Exception as e:
             raise Exception("Push error: " + str(e))
@@ -268,6 +287,8 @@ class Client():
                         for f in future_to_image:
                             f.cancel()
                         raise Exception(f"Pull layer error: {image}: {e}")
+
+            Image.print_images(*[Image.get_manifest(task, arch=arch) for task in tasks])
 
         except Exception as e:
             raise Exception("Pull error: " + str(e))
