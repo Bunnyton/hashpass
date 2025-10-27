@@ -2,7 +2,7 @@ import subprocess
 import hashlib
 import shutil
 import os
-import re
+import platform
 
 def copy(src, dest, progress_bar=False, with_replace=True, clear_copy=False):
     try:
@@ -42,10 +42,13 @@ def remove(path, missing_ok=True):
         shutil.rmtree(path, onerror=handle_remove_error)
 
 
-def move(src, dest, progress_bar=False):
-    copy(src, dest, progress_bar)
-    remove(src)
-        
+def move(src, dest):
+    try:
+        if os.path.exists(src):
+            subprocess.run(["mv", src, dest])
+    except Exception:
+        raise
+
 
 def read(s: str, default=None) -> str:
     val = str(input(s))
@@ -79,6 +82,25 @@ def hashsum(path: str):
 
     return None
 
+
+def get_machine_arch() -> str:
+    m = platform.machine() or ""
+    m = m.strip().lower()
+
+    # Базовая нормализация самых частых вариантов
+    mapping = {
+        "x86_64": "amd64",
+        "amd64": "amd64",
+        "x64":    "amd64",
+
+        "aarch64": "arm64",
+        "arm64":   "arm64",
+    }
+    if m in mapping:
+        return mapping[m]
+
+    else:
+        raise Exception(f"Exotic arch - {m}")
 
 
 
