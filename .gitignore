@@ -3,15 +3,6 @@ config/containers/*
 config/userconfig.toml
 config/images.tar.gz
 
-!config/images/base
-!config/images/basesettings
-!config/images/taskchecker
-!config/images/taskcreator
-config/images/base/manifest.toml
-config/images/basesettings/manifest.toml
-config/images/taskchecker/manifest.toml
-config/images/taskcreator/manifest.toml
-
 hashpass/server/server/storage/*
 
 __pycache__/*
