@@ -5,6 +5,8 @@ import json
 import toml
 import os
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Event
 from threading import Thread
 
 from hashpass.utils import remove, hashsum, get_machine_arch
@@ -29,7 +31,7 @@ class Client():
             r = requests.head(self.server_url, timeout=timeout, allow_redirects=True, verify=verify_tls)
 
             if r.status_code == 405:  # Method Not Allowed
-                r = requests.get(self.server_url, timeout=timeout, allow_redirects=True, verify=verify_tls)
+                requests.get(self.server_url, timeout=timeout, allow_redirects=True, verify=verify_tls)
 
             return True  # Любой ответ означает, что порт слушает и отвечает
 
@@ -203,57 +205,72 @@ class Client():
 
         return False, manifest
 
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from threading import Event
 
     def pull(self, *params, pull_layers=True, arch=get_machine_arch()):
-        def worker(_param: str, _arch):
-            try:
-                _status, _manifest = self.get_newest_version(_param, arch=_arch)
-                if _status:
-                    print(f"Pulling image: {_param} arch=multi|{_arch}")
-                    self._pull(_manifest)
-                    print(f"Image {_param} arch=multi|{_arch} pulled successfully ✅")
-                else:
-                    print(f"{_param} arch=multi|{_arch} ✅")
+        """
+        Pull images and their layers using thread pool.
+        Stops all operations on first error.
+        """
+        errors = {}
+        stop_event = Event()
 
-            except Exception as e:
-                errors[_param] = e
+        def worker(_param: str, _arch: str):
+            """Внутренняя задача для пула потоков"""
+            if stop_event.is_set():
+                return  # если кто-то уже упал, прекращаем работу
+
+            status, manifest = self.get_newest_version(_param, arch=_arch)
+            if status:
+                print(f"Pulling image: {_param} arch=multi|{_arch}")
+                self._pull(manifest)  # здесь может быть длительная операция
+                print(f"Image {_param} arch=multi|{_arch} pulled successfully ✅")
+            else:
+                print(f"{_param} arch=multi|{_arch} ✅")
 
         try:
-            layers = (Image.Config.config_layer_base, Image.Config.config_layer_basesettings,
-                  Image.Config.config_layer_taskcreator, Image.Config.config_layer_taskchecker)
-            layers = set(layers)
+            # === 1. Формируем список всех задач ===
+            layers = set((
+                Image.Config.config_layer_base,
+                Image.Config.config_layer_basesettings,
+                Image.Config.config_layer_taskcreator,
+                Image.Config.config_layer_taskchecker
+            ))
+
             if pull_layers:
                 for param in set(params):
-                    for layer in self.get_info(param, arch=get_machine_arch())['image']['layers']:
-                        print(layer)
-                        layers.add(Image.to_fullname(self.get_info(layer, arch=get_machine_arch())))
+                    info = self.get_info(param, arch=get_machine_arch())
+                    for layer in info['image']['layers']:
+                        full = Image.to_fullname(self.get_info(layer, arch=get_machine_arch()))
+                        layers.add(full)
 
-            errors = {}
-            thrs: dict[str, Thread] = {}
-            for layer in layers:
-                thr = Thread(target=worker, args=(layer, get_machine_arch(),))
-                thr.start()
-                thrs[layer] = thr
+            # === 2. Формируем очередь задач ===
+            tasks = list(layers) + list(set(params))
 
-            for param in set(params):
-                status, manifest = self.get_newest_version(param, arch=arch)
-                if status:
-                    print(f"The new version of {param} has been found on registry")
-                    thr = Thread(target=worker, args=(param, arch))
-                    thr.start()
-                    thrs[param] = thr
-                else:
-                    print(f"The newest version of {param} arch=multi|{arch} already pulled")
-                    continue
+            # === 3. Запуск пула потоков ===
+            # Можно указать max_workers = 4 или динамически по CPU
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_image = {
+                    executor.submit(worker, image_name, arch): image_name
+                    for image_name in tasks
+                }
 
-            for _image, thr in thrs.items():
-                thr.join()
-                if _image in errors:
-                    raise errors[_image]
+                # обрабатываем завершение задач
+                for future in as_completed(future_to_image):
+                    image = future_to_image[future]
+                    try:
+                        future.result()
+                    except Exception as e:
+                        errors[image] = e
+                        stop_event.set()  # сигнал остальным потокам
+                        # Отменяем все незапущенные/незавершённые
+                        for f in future_to_image:
+                            f.cancel()
+                        raise Exception(f"Pull layer error: {image}: {e}")
 
         except Exception as e:
             raise Exception("Pull error: " + str(e))
-
 
     def remote_remove(self, param: str = None, arch="multi"):
         try:
