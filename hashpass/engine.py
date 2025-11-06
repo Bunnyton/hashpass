@@ -143,14 +143,14 @@ def delete(*args):
                     continue
 
             for __image in Image.list():
-                if image.fullname in __image.get_layers():
+                if _image.fullname in __image.get_layers():
                     print(f"Deleting {__image.fullname}")
                     __image.delete()
                     print(f"✅ Delete {__image.fullname} successfull")
 
-            print(f"Deleting {image.fullname}")
+            print(f"Deleting {_image.fullname}")
             _image.delete()
-            print(f"✅ Delete {image.fullname} successfull")
+            print(f"✅ Delete {_image.fullname} successfull")
 
         except Exception as e:
             print(' '.join(['❌' , str(e)]))

@@ -204,6 +204,7 @@ class Container:
 
     def _start(self):
         subprocess.run(["systemd-nspawn", "-b", "-q"
+                                                 , "--capability", "CAP_SYS_ADMIN"
                                                  , "-M", self.id
                                                  , "--user", "root"
                                                  , "-D", self.mountpoint], check=True) # True or False #FIXME
