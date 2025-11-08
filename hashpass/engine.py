@@ -193,7 +193,7 @@ def play(*args):
 
 def create(*args):
     parser = argparse.ArgumentParser(description='hashengine.py create')
-    parser.add_argument('-f', '-p', '--from', '--parent', help='parent image') #FIXME
+    parser.add_argument('-p', '--parent', '-f', '--from', metavar="PARENT_IMAGE", help='parent image')
     parser.add_argument('--arch', metavar='ARCH',
                                             choices=['amd64', 'arm64', 'multi'],
                                             default='multi',

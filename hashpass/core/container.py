@@ -204,10 +204,17 @@ class Container:
 
     def _start(self):
         subprocess.run(["systemd-nspawn", "-b", "-q"
-                                                 , "--capability", "CAP_SYS_ADMIN"
-                                                 , "-M", self.id
-                                                 , "--user", "root"
-                                                 , "-D", self.mountpoint], check=True) # True or False #FIXME
+                                                # , "--bind", "/dev/snd:/dev/snd"
+                                                # , "--capability=all" 
+                                                # , "--private-users=off"
+                                                # , "--capability=CAP_SYS_ADMIN" 
+                                                # , "--capability=CAP_SYS_RAWIO"
+                                                 # , "--capability", "CAP_SYS_TTY_CONFIG"
+                                                 # , "--property=DeviceAllow=/dev/snd/*:rw"
+                                                 # ,"--setenv=ALSA_CARD=0"
+                                                , "-M", self.id
+                                                , "--user", "root"
+                                                , "-D", self.mountpoint], check=True) # True or False #FIXME
 
 
     def get_status(self):
