@@ -135,7 +135,8 @@ class Container:
             os.makedirs(dir, exist_ok=True)
 
         self._lowerdirs = list()
-        self._layers = self.image.get_layers()
+
+        self._layers = self.image.get_layers().copy()
 
         self._layers.append(Image.Config.config_layer_basesettings)
         self._layers.append(self.image.get_id())
@@ -198,8 +199,8 @@ class Container:
 
 
     def _umount(self):
-        remove(os.path.join(self.config_dir, Container.Config.config_imagelink_dirname))
         subprocess.run(["umount", self.mountpoint], check=True)
+        remove(os.path.join(self.config_dir, Container.Config.config_imagelink_dirname))
 
 
     def _start(self):
