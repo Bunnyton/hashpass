@@ -72,6 +72,7 @@ class Settings(BaseSettings):
             "21": "bunnyton/apt:add_repo",
             "22": "bunnyton/apt:deb",
             "23": "bunnyton/sw:latest",
+            "24": "bunnyton/vim:intro",
         },
         validation_alias = None
     )
