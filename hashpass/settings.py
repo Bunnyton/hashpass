@@ -74,6 +74,7 @@ class Settings(BaseSettings):
             "23": "bunnyton/sw:latest",
             "24": "bunnyton/vim:intro",
             "25": "bunnyton/chmod:1",
+            "26": "bunnyton/chgrp:1",
         },
         validation_alias = None
     )
