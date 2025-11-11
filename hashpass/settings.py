@@ -73,6 +73,7 @@ class Settings(BaseSettings):
             "22": "bunnyton/apt:deb",
             "23": "bunnyton/sw:latest",
             "24": "bunnyton/vim:intro",
+            "25": "bunnyton/chmod:1",
         },
         validation_alias = None
     )
