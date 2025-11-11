@@ -135,7 +135,8 @@ class Container:
             os.makedirs(dir, exist_ok=True)
 
         self._lowerdirs = list()
-        self._layers = self.image.get_layers()
+
+        self._layers = self.image.get_layers().copy()
 
         self._layers.append(Image.Config.config_layer_basesettings)
         self._layers.append(self.image.get_id())
@@ -198,15 +199,23 @@ class Container:
 
 
     def _umount(self):
-        remove(os.path.join(self.config_dir, Container.Config.config_imagelink_dirname))
         subprocess.run(["umount", self.mountpoint], check=True)
+        remove(os.path.join(self.config_dir, Container.Config.config_imagelink_dirname))
 
 
     def _start(self):
         subprocess.run(["systemd-nspawn", "-b", "-q"
-                                                 , "-M", self.id
-                                                 , "--user", "root"
-                                                 , "-D", self.mountpoint], check=True) # True or False #FIXME
+                                                # , "--bind", "/dev/snd:/dev/snd"
+                                                # , "--capability=all" 
+                                                # , "--private-users=off"
+                                                # , "--capability=CAP_SYS_ADMIN" 
+                                                # , "--capability=CAP_SYS_RAWIO"
+                                                 # , "--capability", "CAP_SYS_TTY_CONFIG"
+                                                 # , "--property=DeviceAllow=/dev/snd/*:rw"
+                                                 # ,"--setenv=ALSA_CARD=0"
+                                                , "-M", self.id
+                                                , "--user", "root"
+                                                , "-D", self.mountpoint], check=True) # True or False #FIXME
 
 
     def get_status(self):

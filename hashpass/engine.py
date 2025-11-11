@@ -143,14 +143,14 @@ def delete(*args):
                     continue
 
             for __image in Image.list():
-                if image.fullname in __image.get_layers():
+                if _image.fullname in __image.get_layers():
                     print(f"Deleting {__image.fullname}")
                     __image.delete()
                     print(f"✅ Delete {__image.fullname} successfull")
 
-            print(f"Deleting {image.fullname}")
+            print(f"Deleting {_image.fullname}")
             _image.delete()
-            print(f"✅ Delete {image.fullname} successfull")
+            print(f"✅ Delete {_image.fullname} successfull")
 
         except Exception as e:
             print(' '.join(['❌' , str(e)]))
@@ -193,7 +193,7 @@ def play(*args):
 
 def create(*args):
     parser = argparse.ArgumentParser(description='hashengine.py create')
-    parser.add_argument('-f', '-p', '--from', '--parent', help='parent image') #FIXME
+    parser.add_argument('-p', '--parent', '-f', '--from', metavar="PARENT_IMAGE", help='parent image')
     parser.add_argument('--arch', metavar='ARCH',
                                             choices=['amd64', 'arm64', 'multi'],
                                             default='multi',
