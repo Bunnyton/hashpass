@@ -76,6 +76,9 @@ class Settings(BaseSettings):
             "25": "bunnyton/chmod:1",
             "26": "bunnyton/chgrp:1",
             "27": "bunnyton/usermod:group",
+            "28": "bunnyton/chown:1",
+            "29": "bunnyton/change_user:1",
+            "30": "bunnyton/chmod:evil",
         },
         validation_alias = None
     )
