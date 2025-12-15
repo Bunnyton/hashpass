@@ -80,6 +80,9 @@ class Settings(BaseSettings):
             "28": "bunnyton/chown:1",
             "29": "bunnyton/change_user:1",
             "30": "bunnyton/chmod:evil",
+            "31": "bunnyton/links:intro",
+            "32": "bunnyton/links:symbolic_broken",
+            "33": "bunnyton/links:hard",
         },
         validation_alias = None
     )
