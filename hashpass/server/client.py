@@ -12,7 +12,6 @@ from threading import Thread
 from hashpass.utils import remove, hashsum, get_machine_arch
 from hashpass.core.image import Image
 
-from hashpass.userconfig import UserConfig
 from hashpass.settings import Settings
 
 
@@ -342,15 +341,13 @@ class Client():
             print("registry пуст")
 
 
-    def send_statistic(self):
+    def send_statistic(self, userconfig):
         try:
             if not self.check_connection():
                 raise Exception("Can't connect to server")
 
-            userconfig = UserConfig()
             return requests.post(f"{self.server_url}/student/confirmed", data={"user": userconfig.username,
                                                                            "task_num": userconfig.get_last_task_num()})
-
         except Exception as e:
             raise Exception("Send statistic error: " + str(e))
 

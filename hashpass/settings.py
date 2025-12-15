@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     sys_app_path: str = os.path.join(app_dir, "hashengine.py")
     config_dir: str = os.path.join(app_dir, "config")
     templates_dir: str = os.path.join(app_dir, "hashpass")
-    userconfig_path: str = os.path.join(Path.home(), "/.local/share/hashpass", "userconfig.toml")
+    userconfig_dir: str = os.path.join(config_dir, "users")
+    userconfig_tmp_file: str = os.path.join(userconfig_dir, "userconfig.toml")
 
     image_config_dir: str = os.path.join(config_dir, "images")
     image_config_filename: str = "manifest.toml"

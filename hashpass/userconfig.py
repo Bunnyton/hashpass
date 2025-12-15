@@ -8,29 +8,38 @@ settings = Settings()
 
 class UserConfig:
     _config: dict
+    _path: str
 
     username: str
     task_progress: dict
 
-    def __init__(self):
-        path = settings.userconfig_path
+    _new = True
+
+    def __init__(self, username=None):
         try:
-
-            if not os.path.isfile(path):
-                dirpath = os.path.dirname(os.path.abspath(path))
-                os.makedirs(dirpath, exist_ok=True)
+            if username:
+                self._path = settings.userconfig_dir + username.replace(' ', '_') + ".toml"
                 self._config = {"username": "", "task_progress": {}}
-            else:
-                self._config = toml.load(path)
+                os.makedirs(settings.userconfig_dir, exist_ok=True)
+                if os.path.isfile(self._path):
+                    self._config = toml.load(self._path)
+                    self._new = False
 
-            self._config.setdefault("username", "")
-            self._config.setdefault("task_progress", {})
-            self.username = self._config["username"]
-            self.task_progress = self._config["task_progress"]
+                self._config["username"] = username
+                self.username = self._config["username"]
+                self._config.setdefault("task_progress", {})
+                self.task_progress = self._config["task_progress"]
 
+            elif os.path.isfile(settings.userconfig_tmp_file):
+                self._config = toml.load(settings.userconfig_tmp_file)
+                self.username = self._config["username"]
+                self._path = settings.userconfig_dir + self.username.replace(' ', '_') + ".toml"
+                self._new = False
+
+                os.remove(settings.userconfig_tmp_file)
 
         except Exception as e:
-            raise Exception(": ".join([f"User config file {path} - damaged, please fix it", str(e)]))
+            raise Exception(": ".join([f"User config file {self._path} - damaged, please fix it", str(e)]))
 
 
     def get_key(self, task_number: int) -> str:
@@ -38,6 +47,10 @@ class UserConfig:
             return self.task_progress[str(task_number)]
 
         return ""
+
+
+    def is_new(self):
+        return self._new
 
             
     def get_task_name(self, task_num: int = None, all : bool = False) -> list:
@@ -62,7 +75,7 @@ class UserConfig:
 
         except Exception:
             e = "Task number must be int or str(int)"
-            raise Exception(": ".join([f"User config file {settings.userconfig_path} - damaged, please fix it", e]))
+            raise Exception(": ".join([f"User config file {self._path} - damaged, please fix it", e]))
 
 
 
@@ -87,11 +100,20 @@ class UserConfig:
             self._config["username"] = self.username
             self._config["task_progress"] = self.task_progress
 
-            with open(settings.userconfig_path, "w") as ucf:
-                toml.dump(self._config, ucf)
+            with open(self._path, "w") as cf:
+                toml.dump(self._config, cf)
 
         except Exception as e:
-            raise Exception(" ".join(["Can't modify user config and save to", settings.userconfig_path, e]))
+            raise Exception(" ".join(["Can't modify user config and save to", self._path, e]))
+
+
+    def save_tmp(self):
+        try:
+            with open(settings.userconfig_tmp_file, "w") as utf:
+                toml.dump(self._config, utf)
+        except Exception as e:
+            raise Exception(" ".join(["Can't modify user tmp config and save to", settings.userconfig_tmp_file, e]))
+
 
 
 

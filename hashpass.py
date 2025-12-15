@@ -18,7 +18,6 @@ def ensure_username() -> str:
         entered = input("Введите имя пользователя: ").strip()
         if entered:
             return entered
-
         else:
             print("Имя не может быть пустым. Повторите ввод.")
 
@@ -34,9 +33,12 @@ def check_key(userconfig: UserConfig, task_num: int, key: str=None):
 
 
 def main():
-    userconfig = UserConfig()
-    if not userconfig.username:
-        userconfig.save(username=ensure_username())
+    username = ensure_username()
+
+    userconfig = UserConfig(username)
+    if userconfig.is_new():
+        choice = input("Пользователь ранее не входил в систему, нажмите Enter чтобы продолжить (Ctrl+C = выход) ")
+        userconfig.save(username=username)
 
     print("\nОбновление списка заданий")
     try:
@@ -102,6 +104,7 @@ def main():
         if task_num == 0 or check_key(userconfig, task_num=task_num - 1):
             # Запуск задания
             try:
+                userconfig.save_tmp()
                 play(userconfig.get_task_name(task_num))
 
             except Exception as e:
@@ -119,7 +122,7 @@ def main():
                 if check_key(userconfig, task_num=task_num, key=user_key):
                     userconfig.save(key=user_key, task_num=task_num)
                     try:
-                        send_statistic()
+                        send_statistic(userconfig)
 
                     except Exception:
                         pass # Незачем пугать студента какой-то ошибкой
