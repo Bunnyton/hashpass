@@ -190,12 +190,17 @@ def Obfuscate(path: str = None):
         else:
             for file in find_python_files(path):
                 with open(file, 'r+') as f:
-                    data = f.read()
-                    Encode(15, data, file, 100)
+                    print("\n [-] Encrypting %s" % file)
+                    try:
+                        data = f.read()
+                        Encode(15, data, file, 100)
 
-                    print("\n [-] Successfully Encrypted %s" % file)
-                    print(" [-] Saved as %s" % file)
-                    FileSize(file)
+                        print(" [-] Successfully Encrypted %s" % file)
+                        print(" [-] Saved as %s" % file)
+                        FileSize(file)
+
+                    except Exception as e:
+                        print(" [x] Unseccessfully encrypted %s" % file)
 
     except KeyboardInterrupt:
         time.sleep(1)
