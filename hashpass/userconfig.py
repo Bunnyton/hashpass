@@ -18,7 +18,7 @@ class UserConfig:
     def __init__(self, username=None):
         try:
             if username:
-                self._path = settings.userconfig_dir + username.replace(' ', '_') + ".toml"
+                self._path = os.path.join(settings.userconfig_dir, username.replace(' ', '_') + ".toml")
                 self._config = {"username": "", "task_progress": {}}
                 os.makedirs(settings.userconfig_dir, exist_ok=True)
                 if os.path.isfile(self._path):
@@ -33,7 +33,7 @@ class UserConfig:
             elif os.path.isfile(settings.userconfig_tmp_file):
                 self._config = toml.load(settings.userconfig_tmp_file)
                 self.username = self._config["username"]
-                self._path = settings.userconfig_dir + self.username.replace(' ', '_') + ".toml"
+                self._path = os.path.join(settings.userconfig_dir, self.username.replace(' ', '_') + ".toml")
                 self._new = False
 
                 os.remove(settings.userconfig_tmp_file)
