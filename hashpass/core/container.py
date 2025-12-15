@@ -45,7 +45,7 @@ class Container:
         def get_from(status_item):
             status_text: str
             if '/' in status_item or '.' in status_item or os.path.isfile(status_item):
-                with open(status_item, 'r') as f:
+                with open(status_item, 'r', encoding='utf-8') as f:
                     status_text = f.read().strip()
 
             else:
@@ -126,7 +126,7 @@ class Container:
         data["container"]["id"] = self.id
         data["container"]["image"] = self.image.get_id()
 
-        with open(os.path.join(self.config_dir, Container.Config.config_filename), "w") as f:
+        with open(os.path.join(self.config_dir, Container.Config.config_filename), "w", encoding='utf-8') as f:
             toml.dump(data, f)
 
     def _mount(self, mode: Mode):
@@ -170,7 +170,7 @@ class Container:
                                       ,"upperdir=" + self._upperdir, "workdir=" + self._workdir]),
                                 self.mountpoint], check=True, cwd=self.config_dir)
 
-        with open(self._task_statusfile, "w") as f:
+        with open(self._task_statusfile, "w", encoding='utf-8') as f:
             f.write("created\n")
 
         if mode == Container.Mode.task_play:

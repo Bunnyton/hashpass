@@ -100,7 +100,7 @@ class UserConfig:
             self._config["username"] = self.username
             self._config["task_progress"] = self.task_progress
 
-            with open(self._path, "w") as cf:
+            with open(self._path, "w", encoding="utf-8") as cf:
                 toml.dump(self._config, cf)
 
         except Exception as e:
@@ -109,7 +109,7 @@ class UserConfig:
 
     def save_tmp(self):
         try:
-            with open(settings.userconfig_tmp_file, "w") as utf:
+            with open(settings.userconfig_tmp_file, "w", encoding="utf-8") as utf:
                 toml.dump(self._config, utf)
         except Exception as e:
             raise Exception(" ".join(["Can't modify user tmp config and save to", settings.userconfig_tmp_file, e]))

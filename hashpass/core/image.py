@@ -198,7 +198,7 @@ class Image:
         data = self.info()
 
         os.makedirs(self._config_dir, exist_ok=True)
-        with open(self._config_path, "w") as f:
+        with open(self._config_path, "w", encoding='utf-8') as f:
             toml.dump(data, f)
 
         if is_base_image:

@@ -82,7 +82,7 @@ class Client():
             subprocess.run(["tar", "--extract", "--gzip", "--preserve-permissions"
                                                         , "--file", archive_path
                                                         , "--directory", config_dir], check=True,)
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 toml.dump(manifest, f)
 
             remove(archive_path)
