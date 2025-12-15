@@ -10,6 +10,8 @@ from hashpass.userconfig import UserConfig
 from hashpass.engine import pull, play, send_statistic
 
 
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stdin.reconfigure(encoding='utf-8')
 settings = Settings()
 
 
