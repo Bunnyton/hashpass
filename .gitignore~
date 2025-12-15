@@ -1,18 +1,20 @@
 config/images/*
 config/containers/*
 config/userconfig.toml
-config/images.tar.gz
 
-!config/images/base
-!config/images/basesettings
-!config/images/taskchecker
-!config/images/taskcreator
-config/images/base/manifest.toml
-config/images/basesettings/manifest.toml
-config/images/taskchecker/manifest.toml
-config/images/taskcreator/manifest.toml
+install/hashpass/*
+build/*
+dist/*
+*.spec
+*.log
+.idea
 
-hashpass/server/server/storage/*
+env/*
+
+docs/*
+keygen.py
+requirements/base_image_requirements.txt
+requirements/base_image_sys_requirements.txt
 
 __pycache__/*
 __pycache__
@@ -24,11 +26,3 @@ __pycache__
 *.pyd
 
 *.tar.gz
-docs/.obsidian/*
-docs/.trash/*
-
-update.sh
-
-*venv/
-
-.idea/workspace.xml
