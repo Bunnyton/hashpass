@@ -25,9 +25,8 @@ class UserConfig:
                     self._config = toml.load(self._path)
                     self._new = False
 
+                self.username = username
                 self._config["username"] = username
-                self.username = self._config["username"]
-                self._config.setdefault("task_progress", {})
                 self.task_progress = self._config["task_progress"]
 
             elif os.path.isfile(settings.userconfig_tmp_file):
@@ -37,6 +36,12 @@ class UserConfig:
                 self._new = False
 
                 os.remove(settings.userconfig_tmp_file)
+
+            else:
+                self.username = "bunnyton"
+                self._config = {"username": self.username, "task_progress": {}}
+                self._path = os.path.join(settings.userconfig_dir, self.username.replace(' ', '_') + ".toml")
+                self._new = False
 
         except Exception as e:
             raise Exception(": ".join([f"User config file {self._path} - damaged, please fix it", str(e)]))
