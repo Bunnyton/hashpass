@@ -1,4 +1,5 @@
 import toml
+import time
 import os
 
 from hashpass.settings import Settings
@@ -116,6 +117,10 @@ class UserConfig:
         try:
             with open(settings.userconfig_tmp_file, "w", encoding="utf-8") as utf:
                 toml.dump(self._config, utf)
+
+            while not os.path.isfile(settings.userconfig_tmp_file):
+                time.sleep(1)
+
         except Exception as e:
             raise Exception(" ".join(["Can't modify user tmp config and save to", settings.userconfig_tmp_file, e]))
 
