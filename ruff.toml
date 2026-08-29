@@ -36,8 +36,8 @@ exclude = [
 line-length = 96
 indent-width = 4
 
-# Assume Python 3.12
-target-version = "py312"
+# Assume Python 3.13
+target-version = "py313"
 
 # Include extensionless Python scripts
 extend-include = ["runtime/usr/bin/hash"]
@@ -61,7 +61,7 @@ ignore = [
     "CPY001", # no copyright-header convention in this project's history
     "S101", "PT018", # assert and compound assertions in tests
     "UP012", # we keep .encode("utf-8") explicit for consistency
-    "S603", "S607", # subprocess calls (handled by noqa directives)
+    "S603", "S607", # subprocess use is pervasive and always argv-form (no shell=True)
 ] #  --ignore T201 --ignore TD002 --ignore FIX002 --ignore TD003
 
 # Allow fix for all enabled rules (when `--fix`) is provided.

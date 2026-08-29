@@ -111,9 +111,18 @@ class NspawnRunner:
         raise RuntimeError(msg)
 
     def poweroff(self) -> None:
-        """Power off the booted machine and wait for the nspawn process to exit."""
+        """
+        Power off the booted machine and wait for the nspawn process to exit.
+
+        No-op if the machine was never booted.
+
+        """
+        if self._proc is None:
+            return
         subprocess.run(["sudo", "machinectl", "poweroff", self._machine], check=False)
         self._proc.wait(timeout=30)
+        self._proc = None
+        self._machine = None
 
     @property
     def rootfs(self) -> Path:
@@ -126,5 +135,6 @@ class NspawnRunner:
         return self._upper
 
     def teardown(self) -> None:
-        """Unmount the overlay stack."""
+        """Power off the machine (if booted) and unmount the overlay stack."""
+        self.poweroff()
         overlay_umount(self._mnt, sudo=True)

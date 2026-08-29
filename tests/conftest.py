@@ -27,6 +27,8 @@ def base_tar(tmp_path_factory):
         encoding="utf-8",
         check=True,
     ).stdout.strip()
-    subprocess.run(["docker", "export", cid, "-o", str(tar)], check=True)
-    subprocess.run(["docker", "rm", cid], check=True, capture_output=True)
+    try:
+        subprocess.run(["docker", "export", cid, "-o", str(tar)], check=True)
+    finally:
+        subprocess.run(["docker", "rm", cid], check=True, capture_output=True)
     return tar

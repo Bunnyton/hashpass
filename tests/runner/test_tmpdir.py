@@ -1,6 +1,9 @@
+import pytest
+
 from hashpass.runner.tmpdir import TmpdirRunner
 
 
+@pytest.mark.tier1
 def test_run_captures_stdout_and_fs(tmp_path):
     r = TmpdirRunner(tmp_path)
     r.prepare([])
