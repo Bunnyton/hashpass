@@ -41,7 +41,7 @@ class TmpdirRunner:
             RunResult with stdout, stderr, and exit code.
 
         """
-        p = subprocess.run(  # noqa: S603
+        p = subprocess.run(
             argv,
             cwd=self._root,
             capture_output=True,

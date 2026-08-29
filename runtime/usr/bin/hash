@@ -22,7 +22,7 @@ def main():
         if not cmd:
             continue
         w(".cmd", cmd)
-        p = subprocess.run(  # noqa: S603
+        p = subprocess.run(
             ["/bin/sh", "-c", cmd],
             capture_output=True,
             text=True,

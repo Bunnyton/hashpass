@@ -21,12 +21,12 @@ def base_tar(tmp_path_factory):
     d = tmp_path_factory.mktemp("base")
     tar = d / "rootfs.tar"
     cid = subprocess.run(
-        ["docker", "create", "debian:trixie-slim"],  # noqa: S607
+        ["docker", "create", "debian:trixie-slim"],
         capture_output=True,
         text=True,
         encoding="utf-8",
         check=True,
     ).stdout.strip()
-    subprocess.run(["docker", "export", cid, "-o", str(tar)], check=True)  # noqa: S603, S607
-    subprocess.run(["docker", "rm", cid], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(["docker", "export", cid, "-o", str(tar)], check=True)
+    subprocess.run(["docker", "rm", cid], check=True, capture_output=True)
     return tar

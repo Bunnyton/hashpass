@@ -7,5 +7,5 @@ def local_key(task_id: str, stage: int, nonce: str) -> str:
 
     Format: key{<hex16>}
     """
-    d = hashlib.sha256(f"{task_id}|{stage}|{nonce}".encode()).digest()
+    d = hashlib.sha256(f"{task_id}|{stage}|{nonce}".encode("utf-8")).digest()
     return "key{" + d[:8].hex() + "}"

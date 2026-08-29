@@ -11,7 +11,7 @@ def _run(argv: list[str], sudo: bool) -> None:  # noqa: FBT001
         sudo: Whether to prefix the command with sudo.
 
     """
-    subprocess.run((["sudo"] if sudo else []) + argv, check=True)  # noqa: S603
+    subprocess.run((["sudo"] if sudo else []) + argv, check=True)
 
 
 def overlay_mount(

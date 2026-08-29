@@ -1,10 +1,7 @@
 import os
 import subprocess
-from pathlib import Path
 
 import pytest
-
-from hashpass.overlay import overlay_mount, overlay_umount
 
 
 @pytest.mark.tier2
@@ -24,7 +21,7 @@ overlay_umount(Path("{mnt}"), sudo=False)
 assert (Path("{up}")/"new.txt").read_text(encoding="utf-8") == "x"
 print("OK")
 """
-    r = subprocess.run(  # noqa: S603
+    r = subprocess.run(
         ["unshare", "-Umr", "python3", "-c", script],
         capture_output=True,
         text=True,

@@ -47,13 +47,13 @@ class NspawnRunner:
         for d in (self._lower, self._upper, self._work, self._mnt):
             d.mkdir(parents=True, exist_ok=True)
         if self._base_tar:
-            subprocess.run(  # noqa: S603
-                ["sudo", "tar", "-xpf", str(self._base_tar), "-C", str(self._lower)],  # noqa: S607
+            subprocess.run(
+                ["sudo", "tar", "-xpf", str(self._base_tar), "-C", str(self._lower)],
                 check=True,
             )
         elif self._base_dir:
-            subprocess.run(  # noqa: S603
-                ["sudo", "rsync", "-a", str(self._base_dir) + "/", str(self._lower) + "/"],  # noqa: S607
+            subprocess.run(
+                ["sudo", "rsync", "-a", str(self._base_dir) + "/", str(self._lower) + "/"],
                 check=True,
             )
         stack = [Path(p) for p in lowers] + [self._lower]  # first = top
@@ -70,8 +70,8 @@ class NspawnRunner:
             RunResult with stdout, stderr, and exit code.
 
         """
-        p = subprocess.run(  # noqa: S603
-            ["sudo", "systemd-nspawn", "-q", "--register=no", "-D", str(self._mnt), *argv],  # noqa: S607
+        p = subprocess.run(
+            ["sudo", "systemd-nspawn", "-q", "--register=no", "-D", str(self._mnt), *argv],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -90,16 +90,16 @@ class NspawnRunner:
             RuntimeError: If the machine does not register within 30 seconds.
 
         """
-        self._proc = subprocess.Popen(  # noqa: S603
-            ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, "-D", str(self._mnt)],  # noqa: S607
+        self._proc = subprocess.Popen(
+            ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, "-D", str(self._mnt)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         self._machine = machine
         for _ in range(30):
             if (
-                subprocess.run(  # noqa: S603
-                    ["sudo", "machinectl", "status", machine],  # noqa: S607
+                subprocess.run(
+                    ["sudo", "machinectl", "status", machine],
                     capture_output=True,
                     check=False,
                 ).returncode
@@ -112,7 +112,7 @@ class NspawnRunner:
 
     def poweroff(self) -> None:
         """Power off the booted machine and wait for the nspawn process to exit."""
-        subprocess.run(["sudo", "machinectl", "poweroff", self._machine], check=False)  # noqa: S603, S607
+        subprocess.run(["sudo", "machinectl", "poweroff", self._machine], check=False)
         self._proc.wait(timeout=30)
 
     @property

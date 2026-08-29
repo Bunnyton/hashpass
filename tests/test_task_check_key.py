@@ -1,8 +1,9 @@
+
 import pytest
-from pathlib import Path
-from hashpass.task import Task
+
 from hashpass.check import stub_check
 from hashpass.key import local_key
+from hashpass.task import Task
 
 
 @pytest.mark.tier1
@@ -16,6 +17,7 @@ def test_task_load_and_stub_check_and_key(tmp_path):
     assert stub_check(tmp_path, t.check) is False
     (tmp_path/"done.txt").write_text("x", encoding="utf-8")
     assert stub_check(tmp_path, t.check) is True
-    k1 = local_key("demo", 0, "n1"); k2 = local_key("demo", 0, "n1")
+    k1 = local_key("demo", 0, "n1")
+    k2 = local_key("demo", 0, "n1")
     assert k1 == k2 and k1.startswith("key{") and k1.endswith("}")
     assert local_key("demo", 0, "n2") != k1

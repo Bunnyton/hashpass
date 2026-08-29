@@ -18,13 +18,13 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
     """
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
-    subprocess.run(  # noqa: S603
-        ["sudo", "tar", "-xpf", str(from_tar), "-C", str(dest)],  # noqa: S607
+    subprocess.run(
+        ["sudo", "tar", "-xpf", str(from_tar), "-C", str(dest)],
         check=True,
     )
     # Runtime layer (usr/bin/hash + .hash) in a single rsync -- only granted-sudo commands.
-    subprocess.run(  # noqa: S603
-        ["sudo", "rsync", "-a", str(_RUNTIME) + "/", str(dest) + "/"],  # noqa: S607
+    subprocess.run(
+        ["sudo", "rsync", "-a", str(_RUNTIME) + "/", str(dest) + "/"],
         check=True,
     )
     return dest
