@@ -56,6 +56,7 @@ ignore = [
     "ANN201", "ANN001",
     "T201", #Print
     "E501", #line 2 long
+    "CPY001", # no copyright-header convention in this project's history
 ] #  --ignore T201 --ignore TD002 --ignore FIX002 --ignore TD003
 
 # Allow fix for all enabled rules (when `--fix`) is provided.

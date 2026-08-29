@@ -1,0 +1,23 @@
+[project]
+name = "hashpass"
+version = "0.0.0"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not tier3' -ra"
+markers = [
+    "tier1: pure logic, no containers",
+    "tier2: docker/rootless-overlay, no sudo",
+    "tier3: real systemd-nspawn, needs scoped sudo (local/self-hosted)",
+]

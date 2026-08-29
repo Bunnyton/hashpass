@@ -25,3 +25,11 @@ update.sh
 *venv/
 
 .idea/workspace.xml
+
+.superpowers/
+.claude/
+__pycache__/
+*.egg-info/
+src/*.egg-info/
+.pytest_cache/
+.venv/
