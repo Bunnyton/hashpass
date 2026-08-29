@@ -40,6 +40,9 @@ indent-width = 4
 # Assume Python 3.12
 target-version = "py312"
 
+# Include extensionless Python scripts
+extend-include = ["runtime/usr/bin/hash"]
+
 [lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
