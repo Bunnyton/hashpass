@@ -33,7 +33,14 @@ def _factory(tmp_path: Path) -> Callable[[], TmpdirRunner]:
 
 def _solve(task: TaskCode, tmp_path: Path, name: str,
            commands: list[str]) -> tuple[Path, str]:
-    """Run setup + `commands` in one fresh runner; return its rootfs + last stdout."""
+    """
+    Run setup + `commands` in one fresh runner; return its rootfs + the script's stdout.
+
+    Caveat: this returns the WHOLE script's stdout, whereas derive's `run_stage`
+    captures only the LAST command's stdout. Faithful only when the reference
+    commands emit nothing to stdout (our three tasks redirect) — for output-based
+    tasks validate `<output>` via `capture_candidate` (see test_codegen_path.py).
+    """
     r = TmpdirRunner(tmp_path / name)
     r.prepare([])
     result = r.run(["sh", "-c", "\n".join([*task.setup, *commands])])
