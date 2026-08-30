@@ -1,0 +1,8 @@
+id = "grep-todo"
+setup = ["printf 'alpha\nTODO fix\nbeta\n' > notes.txt"]
+
+[[stage]]
+commands = ["grep TODO notes.txt > found.txt"]
+observe = ["found.txt"]
+exclude = []
+message = "Put the TODO line into found.txt."

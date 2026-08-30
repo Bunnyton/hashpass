@@ -1,0 +1,8 @@
+id = "list-files"
+setup = ["mkdir -p work", "touch work/a work/b work/c"]
+
+[[stage]]
+commands = ["ls work > listing.txt"]
+observe = ["listing.txt"]
+exclude = []
+message = "List work/ into listing.txt."

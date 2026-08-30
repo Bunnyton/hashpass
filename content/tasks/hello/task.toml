@@ -1,0 +1,8 @@
+id = "hello"
+setup = []
+
+[[stage]]
+commands = ["echo hello > hello.txt"]
+observe = ["hello.txt"]
+exclude = []
+message = "Create hello.txt containing the word hello."
