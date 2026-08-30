@@ -53,7 +53,9 @@ def reconcile(progress: TaskProgress, server_passed: set[int]) -> list[int]:
     """
     Upgrade server-confirmed stages to GLOBAL; return PASSED_LOCAL-only stages as mismatches.
 
-    Mismatches are flagged (returned), never force-rolled-back. §7.
+    This is the full-state server-push reconciliation path (server hands back the set of
+    confirmed stages); the runtime loop's evidence-driven upgrade uses `sync.background_reverify`
+    instead. Both honor flag-not-rollback. Mismatches are flagged (returned), never force-rolled-back. §7.
     """
     mismatches: list[int] = []
     for i, status in enumerate(progress.statuses):

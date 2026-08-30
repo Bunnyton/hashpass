@@ -74,6 +74,18 @@ def test_feed_fires_matching_hint(tmp_path):
 
 
 @pytest.mark.tier1
+def test_feed_stuck_fires_by_elapsed_seconds(tmp_path):
+    hints = {0: [{"trigger": {"stuck": True}, "message": "take a break"}]}
+    session = PlaySession(_bundle(hints), new_progress("demo", 1),
+                          student_id="alice", nonce="n1")
+    # one wrong command far in the future (>120s after the first) -> stuck by SECONDS, not commands
+    session.feed(command="ls", rootfs=tmp_path, last_output="", ts="2026-08-30T12:00:00Z")
+    r = session.feed(command="ls", rootfs=tmp_path, last_output="", ts="2026-08-30T12:05:00Z")
+    assert session.stuck.commands_since_progress == 2  # noqa: PLR2004 # well under the 5-command threshold
+    assert r.hint == "take a break"                      # fired by the 300s elapsed instead
+
+
+@pytest.mark.tier1
 def test_reverify_upgrades_local_pass_to_global(tmp_path):
     session = PlaySession(_bundle(), new_progress("demo", 1),
                           student_id="alice", nonce="n1")

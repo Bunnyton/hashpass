@@ -1,5 +1,6 @@
 """Runtime student loop: invisible check + local advance + hints + background re-verify (§7)."""
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,11 @@ from hashpass.taskcode.execute import OUTPUT_KEY
 
 if TYPE_CHECKING:
     from hashpass.evidence import Evidence
+
+
+def _elapsed_seconds(start_ts: str, now_ts: str) -> float:
+    """Seconds between two ISO-8601 timestamps (used for the T-seconds stuck trigger)."""
+    return (datetime.fromisoformat(now_ts) - datetime.fromisoformat(start_ts)).total_seconds()
 
 
 def capture_candidate(rootfs: Path, checks: StageChecks, last_output: str) -> Observation:
@@ -51,10 +57,13 @@ class PlaySession:
         self.nonce = nonce
         self.evidences: dict[int, Evidence] = {}
         self.stuck = StuckState()
+        self._last_progress_ts: str | None = None
 
     def feed(self, *, command: str, rootfs: Path, last_output: str,
              ts: str, hooks=None) -> FeedResult:
         """Invisibly check the current stage; on accept advance locally + issue a local key."""
+        if self._last_progress_ts is None:
+            self._last_progress_ts = ts
         stage = current_stage(self.progress)
         advanced = False
         local_key = None
@@ -68,10 +77,12 @@ class PlaySession:
                 self.evidences[stage] = grade.evidence
                 mark_passed_local(self.progress, stage)
                 self.stuck = StuckState()
+                self._last_progress_ts = ts
                 advanced = True
                 local_key = grade.local_key
             else:
                 self.stuck.commands_since_progress += 1
+                self.stuck.seconds_since_progress = _elapsed_seconds(self._last_progress_ts, ts)
         hint = match_hint(self.bundle.hints.get(stage, []), command=command,
                           output=last_output, stuck=self.stuck)
         return FeedResult(advanced=advanced, stage=stage, local_key=local_key, hint=hint)
