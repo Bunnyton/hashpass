@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from hashpass.canon import Observation, canonicalize
 from hashpass.runner.base import Runner
-from hashpass.taskcode.execute import run_stage
+from hashpass.taskcode.execute import OUTPUT_KEY, run_stage
 from hashpass.taskcode.model import TaskCode
 
 _MIN_K = 2
@@ -29,6 +29,14 @@ class DerivedChecks:
     stages: tuple[StageChecks, ...]
 
 
+def _has_signal(canonical: Observation) -> bool:
+    """Return whether a canonical Observation carries a real discriminating signal."""
+    if any(k != OUTPUT_KEY for k in canonical):     # any observed FS field is a real signal
+        return True
+    out = canonical.get(OUTPUT_KEY)
+    return out is not None and bool(out.text)       # a non-empty output is a signal; empty is not
+
+
 def derive_checks(runner_factory: Callable[[], Runner], task: TaskCode, *,  # noqa: PLR0913
                   passes: int = 3, mode: str = "line", threshold: float = 1.0,
                   noise: list[list[str]] | None = None) -> DerivedChecks:
@@ -47,7 +55,7 @@ def derive_checks(runner_factory: Callable[[], Runner], task: TaskCode, *,  # no
         DerivedChecks with per-stage canonical invariants and pinned comparator parameters.
 
     Raises:
-        ValueError: If passes < _MIN_K.
+        ValueError: If passes < _MIN_K, or a stage's canonical is vacuous (no stable signal).
 
     """
     if passes < _MIN_K:
@@ -63,5 +71,8 @@ def derive_checks(runner_factory: Callable[[], Runner], task: TaskCode, *,  # no
             finally:
                 runner.teardown()
         canonical = canonicalize(observations)
+        if not _has_signal(canonical):
+            msg = f"stage {stage_index}: no stable discriminating signal (vacuous canonical)"
+            raise ValueError(msg)
         stage_checks.append(StageChecks(canonical=canonical, mode=mode, threshold=threshold))
     return DerivedChecks(task_id=task.id, stages=tuple(stage_checks))

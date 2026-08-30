@@ -59,3 +59,13 @@ def test_derive_checks_requires_min_passes(tmp_path) -> None:
     )
     with pytest.raises(ValueError, match="passes must be"):
         derive_checks(_factory(tmp_path), task, passes=1)
+
+
+@pytest.mark.tier1
+def test_derive_checks_raises_on_vacuous_canonical(tmp_path):
+    """A stage with only a volatile FS field and empty output has no stable signal."""
+    # observed file is volatile (pruned) and output is empty → no stable signal
+    task = TaskCode(id="demo", setup=(), stages=(
+        StageCode(commands=("date +%s%N > t.txt",), observe=("t.txt",)),))
+    with pytest.raises(ValueError, match="vacuous"):
+        derive_checks(_factory(tmp_path), task, passes=3)

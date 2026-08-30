@@ -49,3 +49,4 @@ def test_shell_captures_last_cmd_and_transcript_log(tmp_path):
     assert "echo bye" in log
     assert "hi" in log
     assert "bye" in log
+    assert log.endswith("\n")   # each record is newline-terminated; no glued-on next "$ " line

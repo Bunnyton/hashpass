@@ -25,6 +25,17 @@ def test_run_stage_captures_state_and_own_output(tmp_path):
 
 
 @pytest.mark.tier1
+def test_run_stage_output_is_last_command_only(tmp_path):
+    r = TmpdirRunner(tmp_path / "run")
+    r.prepare([])
+    task = TaskCode(id="t", setup=(), stages=(
+        StageCode(commands=("echo first", "echo second"), observe=()),))
+    obs = run_stage(r, task, 0)
+    assert obs["<output>"] == FileState("file", "second\n")   # NOT "first\nsecond\n"
+    r.teardown()
+
+
+@pytest.mark.tier1
 def test_run_stage_drops_excluded_prefix(tmp_path):
     r = TmpdirRunner(tmp_path / "run")
     r.prepare([])

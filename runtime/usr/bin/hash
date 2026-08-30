@@ -36,7 +36,7 @@ def main():
         sys.stdout.write(p.stdout)
         sys.stdout.flush()
         w(".cmd.out", p.stdout)
-        a(".cmd.log", f"$ {cmd}\n{p.stdout}")
+        a(".cmd.log", f"$ {cmd}\n{p.stdout}\n")
 
 
 if __name__ == "__main__":
