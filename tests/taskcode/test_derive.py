@@ -6,7 +6,8 @@ import pytest
 
 from hashpass.canon import FileState
 from hashpass.runner.tmpdir import TmpdirRunner
-from hashpass.taskcode.derive import derive_checks
+from hashpass.taskcode.derive import _has_signal, derive_checks
+from hashpass.taskcode.execute import OUTPUT_KEY
 from hashpass.taskcode.model import StageCode, TaskCode
 
 
@@ -69,3 +70,10 @@ def test_derive_checks_raises_on_vacuous_canonical(tmp_path):
         StageCode(commands=("date +%s%N > t.txt",), observe=("t.txt",)),))
     with pytest.raises(ValueError, match="vacuous"):
         derive_checks(_factory(tmp_path), task, passes=3)
+
+
+@pytest.mark.tier1
+def test_has_signal_rejects_whitespace_only_output():
+    assert not _has_signal({OUTPUT_KEY: FileState("file", "  \n")})   # whitespace-only → no signal
+    assert _has_signal({OUTPUT_KEY: FileState("file", "answer")})     # real output → signal
+    assert _has_signal({"result.txt": FileState("file", "x")})        # FS field → signal

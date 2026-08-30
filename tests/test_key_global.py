@@ -32,3 +32,11 @@ def test_local_key_unchanged_distinct_namespace():
     lk = local_key("task1", 0, "nonce1")
     assert lk.startswith("key{")
     assert not lk.startswith("gkey{")
+
+
+@pytest.mark.tier1
+def test_global_key_rejects_nul_in_ids():
+    with pytest.raises(ValueError, match="NUL"):
+        global_key(_SECRET, "a\x00b", "task1")
+    with pytest.raises(ValueError, match="NUL"):
+        global_key(_SECRET, "alice", "t\x00")

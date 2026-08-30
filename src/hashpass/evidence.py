@@ -17,6 +17,8 @@ class Evidence:
     ts: str
     kind: str
     candidate: Observation
+    # mode/threshold/k: informational echoes of the pinned comparator — the SERVER re-verifies with its
+    #   own reference checks and NEVER trusts these (see server/verify.py).
     mode: str
     threshold: float
     k: int

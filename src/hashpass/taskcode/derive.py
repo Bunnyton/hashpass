@@ -34,7 +34,7 @@ def _has_signal(canonical: Observation) -> bool:
     if any(k != OUTPUT_KEY for k in canonical):     # any observed FS field is a real signal
         return True
     out = canonical.get(OUTPUT_KEY)
-    return out is not None and bool(out.text)       # a non-empty output is a signal; empty is not
+    return out is not None and out.text is not None and bool(out.text.strip())
 
 
 def derive_checks(runner_factory: Callable[[], Runner], task: TaskCode, *,  # noqa: PLR0913
