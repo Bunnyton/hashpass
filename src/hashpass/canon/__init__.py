@@ -24,6 +24,8 @@ def matches(
     mode: str = "line",
     k: int = 1,
 ) -> bool:
+    if not canonical:
+        return False
     for key, want in canonical.items():
         got = candidate.get(key)
         if got is None or got.kind != want.kind:

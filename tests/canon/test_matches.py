@@ -22,3 +22,9 @@ def test_matches_tolerant_threshold():
     close = {"out": FileState("file", "a\nb\nX")}
     assert matches(canon, close, mode="line", k=1, threshold=0.5)
     assert not matches(canon, close, mode="line", k=1, threshold=0.6)
+
+
+@pytest.mark.tier1
+def test_empty_canonical_rejects_all():
+    assert not matches({}, {"a.txt": FileState(kind="file", text="anything\n")})
+    assert not matches({}, {})

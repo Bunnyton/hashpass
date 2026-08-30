@@ -21,4 +21,8 @@ def derive_canonical(run_once: Callable[[], Observation], *, k: int = 3) -> Obse
     if k < _MIN_K:
         msg = "k must be >= 2 for differential canonicalization"
         raise ValueError(msg)
-    return canonicalize([run_once() for _ in range(k)])
+    canonical = canonicalize([run_once() for _ in range(k)])
+    if not canonical:
+        msg = "no stable fields across runs; canonical invariant is empty"
+        raise ValueError(msg)
+    return canonical

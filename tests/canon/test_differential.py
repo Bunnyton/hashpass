@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from hashpass.canon.capture import FileState
+from hashpass.canon.capture import FileState, Observation
 from hashpass.canon.differential import canonicalize, derive_canonical
 
 
@@ -35,3 +35,15 @@ def test_derive_canonical_runs_k_times_and_requires_k_ge_2():
 
     with pytest.raises(ValueError, match="k must be"):
         derive_canonical(run_once, k=1)
+
+
+@pytest.mark.tier1
+def test_derive_canonical_raises_when_all_fields_volatile():
+    calls = {"n": 0}
+
+    def run_once() -> Observation:
+        calls["n"] += 1
+        return {"x.txt": FileState(kind="file", text=f"run-{calls['n']}\n")}
+
+    with pytest.raises(ValueError, match="empty"):
+        derive_canonical(run_once, k=3)
