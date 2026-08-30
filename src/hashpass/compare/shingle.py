@@ -3,6 +3,7 @@
 
 def shingle(text: str, *, mode: str = "word", k: int = 3) -> frozenset[str]:
     if mode == "line":
+        # In line mode, each non-blank line is one shingle; k parameter is ignored.
         return frozenset(line for line in text.splitlines() if line.strip())
     if mode == "char":
         units: str | list[str] = text

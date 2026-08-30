@@ -19,3 +19,11 @@ def test_minhash_estimates_jaccard():
 def test_minhash_length_mismatch_raises():
     with pytest.raises(ValueError, match="length"):
         minhash_jaccard((1, 2), (1, 2, 3))
+
+
+@pytest.mark.tier1
+def test_minhash_empty_edges():
+    # empty vs non-empty signatures → 0.0
+    assert minhash_jaccard(minhash_signature(set()), minhash_signature({"a", "b"})) == 0.0
+    # empty signatures short-circuit → 1.0
+    assert minhash_jaccard((), ()) == 1.0

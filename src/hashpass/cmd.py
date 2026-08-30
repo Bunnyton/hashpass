@@ -49,7 +49,7 @@ class Cmd:
     def __contains__(self, cmd: object) -> bool:
         """Check if this command contains another as a subset."""
         if not isinstance(cmd, Cmd):
-            return NotImplemented
+            return False
         return (self.basecmd == cmd.basecmd
                 and cmd.short_flags <= self.short_flags
                 and cmd.long_flags <= self.long_flags
