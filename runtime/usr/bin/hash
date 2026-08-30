@@ -11,6 +11,11 @@ def w(name, data):
         f.write(data)
 
 
+def a(name, data):
+    with open(os.path.join(HASH, name), "a", encoding="utf-8") as f:
+        f.write(data)
+
+
 def main():
     if os.path.isfile("readme.txt"):
         with open("readme.txt", encoding="utf-8") as f:
@@ -31,6 +36,7 @@ def main():
         sys.stdout.write(p.stdout)
         sys.stdout.flush()
         w(".cmd.out", p.stdout)
+        a(".cmd.log", f"$ {cmd}\n{p.stdout}")
 
 
 if __name__ == "__main__":
