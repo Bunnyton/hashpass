@@ -1,0 +1,31 @@
+id = "fruit-count"
+# Среда-заготовка: список фруктов с повторами (авторим echo'ами, без printf/\n — надёжнее в TOML).
+setup = [
+    "echo banana > fruits.txt",
+    "echo apple >> fruits.txt",
+    "echo cherry >> fruits.txt",
+    "echo apple >> fruits.txt",
+    "echo banana >> fruits.txt",
+    "echo apple >> fruits.txt",
+]
+
+# Этап 0 — отсортировать. Приём деривируется из эталонной команды.
+[[stage]]
+commands = ["sort fruits.txt > sorted.txt"]
+observe = ["sorted.txt"]
+exclude = []
+message = "Этап 1/3: отсортируй строки fruits.txt в sorted.txt (sort)."
+
+# Этап 1 — уникальные строки. Видит sorted.txt из этапа 0 (этап N видит setup + этапы 0..N-1).
+[[stage]]
+commands = ["uniq sorted.txt > unique.txt"]
+observe = ["unique.txt"]
+exclude = []
+message = "Этап 2/3: оставь только уникальные строки в unique.txt (uniq по отсортированному)."
+
+# Этап 2 — посчитать. Видит unique.txt из этапа 1.
+[[stage]]
+commands = ["wc -l < unique.txt > howmany.txt"]
+observe = ["howmany.txt"]
+exclude = []
+message = "Этап 3/3: запиши число уникальных фруктов в howmany.txt (wc -l)."
