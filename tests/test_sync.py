@@ -91,3 +91,43 @@ def test_local_sync_client_holds_secret_but_signature_is_narrow():
     # whose submit/online never expose server_secret.
     params = inspect.signature(background_reverify).parameters
     assert "server_secret" not in params
+
+
+@pytest.mark.tier1
+def test_multi_stage_pairs_by_index_and_upgrades_independently():
+    s0 = StageChecks(canonical={"a.txt": FileState("file", "AAA")}, mode="line", threshold=1.0, k=1)
+    s1 = StageChecks(canonical={"b.txt": FileState("file", "BBB")}, mode="line", threshold=1.0, k=1)
+    checks = DerivedChecks(task_id="demo", stages=(s0, s1))
+    progress = new_progress("demo", 2)
+    mark_passed_local(progress, 0)
+    mark_passed_local(progress, 1)
+    ev0 = build_evidence(s0, {"a.txt": FileState("file", "AAA")}, task_id="demo", stage=0,
+                         student_id="alice", nonce="n0", ts=_TS)
+    ev1 = build_evidence(s1, {"b.txt": FileState("file", "BBB")}, task_id="demo", stage=1,
+                         student_id="alice", nonce="n1", ts=_TS)
+    sync = LocalSyncClient(server_secret=_SECRET, principal="alice")
+    assert background_reverify(progress, {0: ev0, 1: ev1}, checks, sync) == []
+    assert progress.statuses[0] is StageStatus.PASSED_GLOBAL
+    assert progress.statuses[1] is StageStatus.PASSED_GLOBAL
+
+
+@pytest.mark.tier1
+def test_out_of_range_stage_key_fails_closed():
+    checks = _checks()  # 1 stage
+    progress = _passed_local()
+    ev = _evidence(checks, _ANSWER)
+    sync = LocalSyncClient(server_secret=_SECRET, principal="alice")
+    assert background_reverify(progress, {5: ev}, checks, sync) == [5]   # flagged, not crashed
+
+
+@pytest.mark.tier1
+def test_skips_non_passed_local_and_is_idempotent():
+    checks = _checks()
+    progress = _passed_local()
+    ev = _evidence(checks, _ANSWER)
+    sync = LocalSyncClient(server_secret=_SECRET, principal="alice")
+    assert background_reverify(progress, {0: ev}, checks, sync) == []
+    assert progress.statuses[0] is StageStatus.PASSED_GLOBAL
+    # second call: stage now PASSED_GLOBAL (not PASSED_LOCAL) -> skipped, no change, no mismatch
+    assert background_reverify(progress, {0: ev}, checks, sync) == []
+    assert progress.statuses[0] is StageStatus.PASSED_GLOBAL

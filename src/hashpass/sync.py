@@ -1,5 +1,5 @@
 """Sync port + in-process server model + background re-verification of provisional progress (§7)."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from hashpass.evidence import Evidence
@@ -19,7 +19,7 @@ class SyncClient(Protocol):
 class LocalSyncClient:
     """In-process model of the SERVER side (holds the secret). Dev/test only, never shipped."""
 
-    server_secret: bytes
+    server_secret: bytes = field(repr=False)
     principal: str
     online_flag: bool = True
 
@@ -41,10 +41,13 @@ def background_reverify(progress: TaskProgress, evidences: dict[int, Evidence],
         return []
     mismatches: list[int] = []
     for stage in sorted(evidences):
+        if not (0 <= stage < len(checks.stages)) or stage >= len(progress.statuses):
+            mismatches.append(stage)        # out-of-range key: fail closed, never index
+            continue
         if progress.statuses[stage] is not StageStatus.PASSED_LOCAL:
             continue
         evidence = evidences[stage]
-        if evidence.task_id != checks.task_id:   # never sign against the wrong task
+        if evidence.task_id != checks.task_id or evidence.stage != stage:  # bind task_id AND stage
             mismatches.append(stage)
             continue
         gkey = sync.submit(evidence, checks.stages[stage])   # pair checks by (task_id, stage)
