@@ -1,0 +1,48 @@
+import pytest
+
+from hashpass.hints import StuckState, match_hint
+
+_HINTS = [
+    {"trigger": {"command": "rm -rf"}, "message": "careful with rm"},
+    {"trigger": {"output": "Permission denied"}, "message": "you need sudo"},
+    {"trigger": {"stuck": True}, "message": "try reading the task again"},
+]
+_STUCK_AT = 5
+_SECS_AT = 120.0
+
+
+@pytest.mark.tier1
+def test_command_substring_trigger_fires():
+    hint = match_hint(_HINTS, command="rm -rf /", output="", stuck=StuckState())
+    assert hint == "careful with rm"
+
+
+@pytest.mark.tier1
+def test_output_substring_trigger_fires():
+    hint = match_hint(_HINTS, command="cat x", output="cat: x: Permission denied",
+                      stuck=StuckState())
+    assert hint == "you need sudo"
+
+
+@pytest.mark.tier1
+def test_stuck_fires_at_threshold_by_commands_or_seconds():
+    below = StuckState(commands_since_progress=_STUCK_AT - 1)
+    assert match_hint(_HINTS, command="ls", output="", stuck=below) is None
+    by_cmds = StuckState(commands_since_progress=_STUCK_AT)
+    assert match_hint(_HINTS, command="ls", output="", stuck=by_cmds) == "try reading the task again"
+    by_secs = StuckState(seconds_since_progress=_SECS_AT)
+    assert match_hint(_HINTS, command="ls", output="", stuck=by_secs) == "try reading the task again"
+
+
+@pytest.mark.tier1
+def test_first_match_wins_in_list_order():
+    hints = [
+        {"trigger": {"command": "make"}, "message": "first"},
+        {"trigger": {"command": "make"}, "message": "second"},
+    ]
+    assert match_hint(hints, command="make build", output="", stuck=StuckState()) == "first"
+
+
+@pytest.mark.tier1
+def test_no_match_returns_none():
+    assert match_hint(_HINTS, command="ls", output="ok", stuck=StuckState()) is None
