@@ -53,3 +53,24 @@ def test_check_conditions_deny_require_flags_mention():
                             ["ls -l", "sort file"])
     assert not check_conditions({"require_flags": ["-l"]}, ["ls"])     # missing flag
     assert not check_conditions({"mention": ["sort"]}, ["ls -l"])      # missing mention
+
+
+@pytest.mark.tier1
+def test_check_stage_threads_threshold_and_mode():
+    canonical = {"out": FileState("file", "a\nb\nc")}
+    candidate = {"out": FileState("file", "a\nb\nX")}   # line-Jaccard = 2/4 = 0.5
+    assert check_stage(StageChecks(canonical=canonical, mode="line", threshold=0.5), candidate)
+    assert not check_stage(StageChecks(canonical=canonical, mode="line", threshold=0.6), candidate)
+
+
+@pytest.mark.tier1
+def test_check_stage_at_check_false_short_circuits():
+    hooks = HookRegistry()
+
+    @hooks.check()
+    def _reject(cmd, stage):  # noqa: ANN202, ARG001
+        return False
+
+    canonical = {"out": FileState("file", "x")}
+    candidate = {"out": FileState("file", "x")}   # would MATCH, but @check False must win
+    assert not check_stage(StageChecks(canonical=canonical), candidate, hooks=hooks, probe_cmd="foo")
