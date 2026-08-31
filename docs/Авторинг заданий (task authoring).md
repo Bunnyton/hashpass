@@ -79,7 +79,7 @@ TMPDIR=/var/tmp/hp-pytest python3 docs/examples/author_playground.py content/tas
 
 | Директива | Синтаксис | Что делает |
 |---|---|---|
-| `image` | `image <name>:<ver>` | Самоимя образа/задания. Обязательно, ровно один раз. Без `:ver` → `latest`. |
+| `image` | `image <name>:<ver>` | Самоимя. **Необязательно** — иначе имя даётся при сборке (`-t name:ver`, иначе по каталогу). Если есть — один раз. Без `:ver` → `latest`. |
 | `from` | `from <ref>[, <ref> …]` | Наследование, **транзитивно**: тянет и всё, из чего собран родитель. Мульти-`from`: порядок = приоритет (правее побеждает при конфликте путей). |
 | `copy` | `copy <src> <dst>` | Скопировать хостовый `<src>` в образ по `<dst>` (запекается в слой). |
 | `run` | `run <команда>` | Выполнить команду на сборке (запекается — среда всегда у студента). |
@@ -237,7 +237,7 @@ react on command exec watch.sh   # (перехватчик на каждую к�
 
 ```bash
 hashpass                        # без аргументов → режим заданий: список задач, выбор по номеру
-hashpass build <Taskfile>       # собрать задание/образ (самоименуется по image name:ver)
+hashpass build <Taskfile> [-t name:ver]   # собрать; имя: -t > image-строка > каталог. Печатает прогресс.
 hashpass run <name:ver>         # задание → интерактивная сессия; образ → shell в контейнере
 hashpass images                 # список собранного (name:ver + kind: task|image)
 hashpass login <registry-url>   # логин/пароль → токен (кэш 7 дней)
