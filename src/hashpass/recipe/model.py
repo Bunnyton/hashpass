@@ -18,15 +18,44 @@ class RunStep:
 
 
 @dataclass(frozen=True)
+class ExecAction:
+    """A delegated action: run `value` as a hidden-layer script or shell command (auto-detected at run time)."""
+
+    value: str
+
+
+@dataclass(frozen=True)
+class StageSpec:
+    """One `stage` block: reference solution, observed paths, and delegated hooks."""
+
+    message: str
+    solve: tuple[str, ...]
+    observe: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = ()
+    neutral: tuple[str, ...] = ()
+    check: ExecAction | None = None
+    on_enter: tuple[ExecAction, ...] = ()
+    on_pass: tuple[ExecAction, ...] = ()
+
+
+@dataclass(frozen=True)
 class Recipe:
-    """A parsed phase-1 image recipe: self-name/version, parents, ordered build steps."""
+    """A parsed image/task recipe: self-name/version, parents, ordered build steps, optional task logic."""
 
     name: str
     version: str
     parents: tuple[str, ...]
     steps: tuple[CopyStep | RunStep, ...]  # copy/run in SOURCE order
+    stages: tuple[StageSpec, ...] = ()
+    hidden: str | None = None
+    readme: str | None = None
 
 
 def image_ref(r: Recipe) -> str:
     """Return the recipe's self-reference `name:version`."""
     return f"{r.name}:{r.version}"
+
+
+def is_task(recipe: Recipe) -> bool:
+    """Return True if the recipe carries task logic (has at least one stage)."""
+    return bool(recipe.stages)
