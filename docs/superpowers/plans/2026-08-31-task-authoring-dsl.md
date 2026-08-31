@@ -263,12 +263,31 @@ def test_plain_image_recipe_has_no_stages():
         ('image t:1\nstage "x"\n  solve echo hi\n  check verify.sh\n', "expected an 'exec"),
         ("image t:1\n  solve echo hi\n", "unexpected indentation"),
         ('image t:1\nstage "x"\n  solve:\n  observe f\n', "empty 'solve:' block"),
+        ('image t:1\nstage "x"\n  solve: echo hi\n    echo bye\n', "no inline content"),
+        ('image t:1\nstage "x"\n  solve: echo hi\n', "no inline content"),
+        ('image t:1\nstage "x"\n  solve echo hi\n  on exit exec x.sh\n', "unknown stage event"),
+        ("image t:1\nhidden a/\nhidden b/\n", "duplicate 'hidden'"),
+        ("image t:1\nreadme a.txt\nreadme b.txt\n", "duplicate 'readme'"),
+        ('image t:1\nstage "x"\n  solve echo hi\n  check exec a.sh\n  check exec b.sh\n', "duplicate 'check'"),
+        ("image t:1\nhidden a/ b/\n", "single <src>"),
+        ("image t:1\nreadme a b\n", "single <file>"),
     ],
 )
 def test_task_parse_errors(text, match):
     with pytest.raises(ValueError, match=match):
         parse_recipe(text)
+
+
+@pytest.mark.tier1
+def test_solve_block_still_parses_after_inline_guard():
+    r = parse_recipe('image t:1\nstage "x"\n  solve:\n    echo one\n    echo two\n  observe o\n')
+    assert r.stages[0].solve == ("echo one", "echo two")
 ```
+
+> **Review-hardening (applied):** the final review caught that `solve: <inline>` silently dropped the
+> inline command (`_kw_value` keeps it in `value`, which the `solve:` branch ignored) — a silent-data-loss
+> bug in the reference solution. Fixed by rejecting non-empty `value` on a `solve:` line. Added duplicate
+> guards for `hidden`/`readme`/`check` (symmetry with `image`), and the error tests above.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -385,6 +404,9 @@ def _do_run(value: str, acc: _Acc) -> None:
 
 
 def _do_hidden(value: str, acc: _Acc) -> None:
+    if acc.hidden is not None:
+        msg = "duplicate 'hidden' directive"
+        raise ValueError(msg)
     fields = value.split()
     if len(fields) != 1:
         msg = f"hidden requires a single <src> directory: {value!r}"
@@ -393,6 +415,9 @@ def _do_hidden(value: str, acc: _Acc) -> None:
 
 
 def _do_readme(value: str, acc: _Acc) -> None:
+    if acc.readme is not None:
+        msg = "duplicate 'readme' directive"
+        raise ValueError(msg)
     fields = value.split()
     if len(fields) != 1:
         msg = f"readme requires a single <file>: {value!r}"
@@ -455,6 +480,9 @@ def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
     elif kw == "neutral":
         sacc.neutral.extend(value.split())
     elif kw == "check":
+        if sacc.check is not None:
+            msg = "duplicate 'check' directive"
+            raise ValueError(msg)
         sacc.check = _parse_action(value)
     elif kw == "on":
         _apply_on(value, sacc)
@@ -490,6 +518,9 @@ def _parse_stage_block(header_value: str, lines: list[tuple[int, str]],
         indent, content = lines[i]
         kw, value = _kw_value(content)
         if kw == "solve:":
+            if value:
+                msg = f"'solve:' takes no inline content; put commands on indented lines: {value!r}"
+                raise ValueError(msg)
             i = _consume_solve_block(lines, i + 1, indent, sacc)
         else:
             _apply_simple_directive(kw, value, sacc)
@@ -687,3 +718,11 @@ git commit -m "feat(recipe): recipe_to_taskcode bridge onto the derivation model
 **Deviations from spec (recorded):**
 - `hidden <src>` takes a **single** source directory (staged to the fixed `/hp/work` in 2B), not the spec's 2-token `hidden .work grade/`. The `/hp` internal layout (bin/task/work/state.json, §4.1) is fixed by the system, so the author only controls the `work` contents; a single source dir is the faithful, simpler surface. If sub-structure is ever needed it is additive.
 - The spec's full stage example (§3.2) includes `hint`/`on pass say`/`show file` — those are Phase 3 and are **reserved** here; Phase-2A recipes use `exec` actions only.
+- **Top-level indentation is now significant** (Phase 1 stripped all leading whitespace before matching a directive). A cosmetically-indented top-level line now raises `"unexpected indentation (no open stage)"`. This is the price of indentation-delimited stage blocks; zero blast radius (no `Imagefile` data exists in-repo yet).
+- **`readme exec <script>` is unsupported.** Spec §3.1 shows an optional dynamic `readme exec make_readme.sh` form; Phase 2A accepts only a literal filename (`readme <file>`). The dynamic form is a render concern deferred to Phase 3 (additive).
+
+**Known-and-accepted (recorded, not fixed here):**
+- A top-level directive mis-indented *under* an open stage (e.g. a one-space-indented `run`) is swallowed into the stage body and rejected as `"unknown directive: 'run'"` — fails safe (errors, never misparses), but the message is imprecise. Left as-is; a stage-body-indent check is a possible future refinement.
+
+**Carried to Phase 2B (from the review's out-of-scope FYI):**
+- `taskcode/execute.py` applies `exclude` via `str.startswith(prefix)`, **not** glob. The DSL captures glob-style patterns (`exclude .cache *.log`); a literal `*.log` prefix will never match a real path. 2B must either translate globs or document that `exclude` is prefix-match. (Recorded in the 2B design notes.)

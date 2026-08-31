@@ -145,8 +145,22 @@ def test_plain_image_recipe_has_no_stages():
         ('image t:1\nstage "x"\n  solve echo hi\n  check verify.sh\n', "expected an 'exec"),
         ("image t:1\n  solve echo hi\n", "unexpected indentation"),
         ('image t:1\nstage "x"\n  solve:\n  observe f\n', "empty 'solve:' block"),
+        ('image t:1\nstage "x"\n  solve: echo hi\n    echo bye\n', "no inline content"),
+        ('image t:1\nstage "x"\n  solve: echo hi\n', "no inline content"),
+        ('image t:1\nstage "x"\n  solve echo hi\n  on exit exec x.sh\n', "unknown stage event"),
+        ("image t:1\nhidden a/\nhidden b/\n", "duplicate 'hidden'"),
+        ("image t:1\nreadme a.txt\nreadme b.txt\n", "duplicate 'readme'"),
+        ('image t:1\nstage "x"\n  solve echo hi\n  check exec a.sh\n  check exec b.sh\n', "duplicate 'check'"),
+        ("image t:1\nhidden a/ b/\n", "single <src>"),
+        ("image t:1\nreadme a b\n", "single <file>"),
     ],
 )
 def test_task_parse_errors(text, match):
     with pytest.raises(ValueError, match=match):
         parse_recipe(text)
+
+
+@pytest.mark.tier1
+def test_solve_block_still_parses_after_inline_guard():
+    r = parse_recipe('image t:1\nstage "x"\n  solve:\n    echo one\n    echo two\n  observe o\n')
+    assert r.stages[0].solve == ("echo one", "echo two")

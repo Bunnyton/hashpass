@@ -105,6 +105,9 @@ def _do_run(value: str, acc: _Acc) -> None:
 
 
 def _do_hidden(value: str, acc: _Acc) -> None:
+    if acc.hidden is not None:
+        msg = "duplicate 'hidden' directive"
+        raise ValueError(msg)
     fields = value.split()
     if len(fields) != 1:
         msg = f"hidden requires a single <src> directory: {value!r}"
@@ -113,6 +116,9 @@ def _do_hidden(value: str, acc: _Acc) -> None:
 
 
 def _do_readme(value: str, acc: _Acc) -> None:
+    if acc.readme is not None:
+        msg = "duplicate 'readme' directive"
+        raise ValueError(msg)
     fields = value.split()
     if len(fields) != 1:
         msg = f"readme requires a single <file>: {value!r}"
@@ -175,6 +181,9 @@ def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
     elif kw == "neutral":
         sacc.neutral.extend(value.split())
     elif kw == "check":
+        if sacc.check is not None:
+            msg = "duplicate 'check' directive"
+            raise ValueError(msg)
         sacc.check = _parse_action(value)
     elif kw == "on":
         _apply_on(value, sacc)
@@ -210,6 +219,9 @@ def _parse_stage_block(header_value: str, lines: list[tuple[int, str]],
         indent, content = lines[i]
         kw, value = _kw_value(content)
         if kw == "solve:":
+            if value:
+                msg = f"'solve:' takes no inline content; put commands on indented lines: {value!r}"
+                raise ValueError(msg)
             i = _consume_solve_block(lines, i + 1, indent, sacc)
         else:
             _apply_simple_directive(kw, value, sacc)
