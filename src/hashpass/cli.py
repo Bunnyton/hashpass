@@ -233,6 +233,7 @@ def cmd_run(env: Home, ref: str, io: Io | None = None) -> int:
     except KeyError:
         io.write(f"no such image: {ref}\n")
         return 1
+    ensure_base_tar(env.base_tar)  # run needs the base rootfs too — a pull doesn't transfer it
     if (stored.layer.parent / "task").exists():
         return _run_task(env, ref, store, io)
     return _run_image(env, ref, store)
@@ -323,10 +324,23 @@ def _dispatch(env: Home, args: argparse.Namespace) -> int:
     return cmd_pull(env, args.ref, args.registry)
 
 
+_EXIT_ABORTED = 130  # conventional shell exit code for Ctrl-C / EOF
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse args and dispatch; no sub-command drops into interactive task mode."""
     args = build_parser().parse_args(argv)
-    env = build_env()
-    if args.command is None:
-        return task_mode(env)
-    return _dispatch(env, args)
+    try:
+        env = build_env()
+        if args.command is None:
+            return task_mode(env)
+        return _dispatch(env, args)
+    except (KeyboardInterrupt, EOFError):
+        sys.stderr.write("\nhashpass: aborted\n")
+        return _EXIT_ABORTED
+    except (OSError, ValueError, RuntimeError, KeyError,
+            urllib.error.URLError, subprocess.CalledProcessError) as exc:
+        # never dump a traceback on an ordinary user error (bad Taskfile, no docker,
+        # push-before-login, unknown ref, bad URL, a failed build step).
+        sys.stderr.write(f"hashpass: {exc}\n")
+        return 1

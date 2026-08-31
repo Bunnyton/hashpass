@@ -237,3 +237,26 @@ def test_task_mode_lists_and_dispatches_pick(tmp_path, monkeypatch):
     assert cli.task_mode(env, io) == _FAKE_RUN_EXIT
     assert chosen["ref"] == "beta:1"                 # #2 of sorted [alpha, beta]
     assert listed == ["1. alpha:1\n", "2. beta:1\n"]
+
+
+@pytest.mark.tier1
+def test_main_reports_user_error_without_traceback(tmp_path, monkeypatch, capsys):
+    # a missing/broken Taskfile must exit 1 with a clean message, never a traceback.
+    monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))
+    assert cli.main(["build", str(tmp_path / "nope.Taskfile")]) == 1
+    assert capsys.readouterr().err.startswith("hashpass:")
+
+
+@pytest.mark.tier1
+def test_cmd_run_ensures_base_tar(tmp_path, monkeypatch):
+    # `run` must ensure the base rootfs too (a pull transfers layers, not the base tar).
+    home = tmp_path / "home"
+    store = ImageStore(home / "images")
+    _seed_image(store, tmp_path, "pulled")
+    env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
+    seen = {}
+    monkeypatch.setattr(cli, "ensure_base_tar", lambda dest: seen.setdefault("dest", dest))
+    monkeypatch.setattr(cli, "_run_image", lambda *_a: 0)
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "t")
+    assert cli.cmd_run(env, "pulled:1", io) == 0
+    assert seen["dest"] == env.base_tar
