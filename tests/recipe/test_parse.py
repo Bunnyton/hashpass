@@ -53,9 +53,11 @@ def test_run_before_copy_keeps_source_order():
 
 
 @pytest.mark.tier1
-def test_missing_image_raises():
-    with pytest.raises(ValueError, match="missing a required 'image"):
-        parse_recipe("run echo hi\n")
+def test_missing_image_is_optional():
+    # `image` is optional now: an unnamed recipe parses with name "" (named at build time).
+    r = parse_recipe("run echo hi\n")
+    assert r.name == ""
+    assert r.steps == (RunStep("echo hi"),)
 
 
 @pytest.mark.tier1

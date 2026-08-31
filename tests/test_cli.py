@@ -5,6 +5,7 @@ import pytest
 from hashpass import cli
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage, mark_passed_local, new_progress
+from hashpass.recipe.model import Recipe
 from hashpass.taskrun import FeedResult
 
 _FAKE_RUN_EXIT = 7
@@ -190,6 +191,8 @@ def test_cmd_run_unknown_ref_reports_and_exits_1(tmp_path):
 def test_build_parser_namespaces():
     p = cli.build_parser()
     assert p.parse_args(["build", "T"]).taskfile == "T"
+    assert p.parse_args(["build", "T", "-t", "n:1"]).tag == "n:1"
+    assert p.parse_args(["build", "T"]).tag is None
     assert p.parse_args(["run", "x:1"]).ref == "x:1"
     assert p.parse_args(["images"]).command == "images"
     a = p.parse_args(["login", "http://h", "-u", "alice"])
@@ -260,3 +263,16 @@ def test_cmd_run_ensures_base_tar(tmp_path, monkeypatch):
     io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "t")
     assert cli.cmd_run(env, "pulled:1", io) == 0
     assert seen["dest"] == env.base_tar
+
+
+@pytest.mark.tier1
+def test_resolve_ref(tmp_path):
+    named = Recipe("foo", "2", (), ())
+    unnamed = Recipe("", "latest", (), ())
+    tf = tmp_path / "myproj" / "Taskfile"
+    tf.parent.mkdir(parents=True)
+    tf.write_text("run echo hi\n", encoding="utf-8")
+    assert cli.resolve_ref(named, "bar:3", tf) == ("bar", "3")           # -t wins
+    assert cli.resolve_ref(named, "bar", tf) == ("bar", "latest")        # -t, default version
+    assert cli.resolve_ref(named, None, tf) == ("foo", "2")              # recipe's own image name
+    assert cli.resolve_ref(unnamed, None, tf) == ("myproj", "latest")    # else the Taskfile dir

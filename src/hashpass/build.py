@@ -1,5 +1,6 @@
 """Build reusable images from recipes (overlay + nspawn) and run bare images."""
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 from hashpass.image.base import build_base
@@ -10,13 +11,14 @@ from hashpass.recipe.model import CopyStep, Recipe, RunStep
 from hashpass.runner.nspawn import NspawnRunner
 
 
-def build(
+def build(  # noqa: PLR0913
     recipe: Recipe,
     store: ImageStore,
     *,
     base_tar: Path,
     workdir: Path,
     sudo: bool = True,
+    progress: Callable[[str], None] | None = None,
 ) -> StoredImage:
     """
     Build a recipe into a stored image layer (the overlay delta).
@@ -30,6 +32,7 @@ def build(
         base_tar: Rootfs tarball for the bottom base layer.
         workdir: Scratch directory for base/upper/work/mnt.
         sudo: Whether overlay mounts use sudo (True for real nspawn).
+        progress: Optional sink for per-step build-progress lines.
 
     Returns:
         The StoredImage for the newly built layer.
@@ -47,12 +50,16 @@ def build(
     try:
         for step in recipe.steps:
             if isinstance(step, CopyStep):
+                if progress is not None:
+                    progress(f"  copy {step.src} -> {step.dst}")
                 dst = mnt / step.dst.lstrip("/")
                 subprocess.run(
                     ["sudo", "rsync", "-a", "--mkpath", step.src, str(dst)],
                     check=True,
                 )
             elif isinstance(step, RunStep):
+                if progress is not None:
+                    progress(f"  run: {step.cmd}")
                 subprocess.run(
                     ["sudo", "systemd-nspawn", "-q", "--register=no",
                      "-D", str(mnt), "sh", "-c", step.cmd],

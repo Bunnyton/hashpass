@@ -75,11 +75,19 @@ def _no_exclude(task: TaskCode) -> TaskCode:
     )
 
 
-def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,
-                  stage_index: int, exclude: tuple[str, ...], passes: int) -> StageChecks:
+def _report(progress: Callable[[str], None] | None, msg: str) -> None:
+    """Emit a build-progress line if a progress sink is provided (no-op otherwise)."""
+    if progress is not None:
+        progress(msg)
+
+
+def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # noqa: PLR0913, PLR0917
+                  stage_index: int, exclude: tuple[str, ...], passes: int,
+                  progress: Callable[[str], None] | None = None) -> StageChecks:
     """Run one observed stage `passes` times on FRESH runners, curate, canonicalize."""
     observations: list[Observation] = []
-    for _ in range(passes):
+    for p in range(passes):
+        _report(progress, f"    pass {p + 1}/{passes}")
         runner = factory()
         try:
             obs = run_stage(runner, deriv_task, stage_index)
@@ -93,18 +101,23 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,
     return StageChecks(canonical=canonical)
 
 
-def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe,
-                      task: TaskCode, passes: int) -> tuple[list[StageChecks], list[str]]:
+def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task: TaskCode,
+                      passes: int,
+                      progress: Callable[[str], None] | None = None) -> tuple[list[StageChecks], list[str]]:
     """Per stage: handler -> sentinel checks; observed -> derived checks. Returns (checks, modes)."""
     deriv_task = _no_exclude(task)
     checks: list[StageChecks] = []
     acceptance: list[str] = []
+    total = len(recipe.stages)
     for i, stage in enumerate(recipe.stages):
         mode = _acceptance_of(stage)
+        label = f"  stage {i + 1}/{total}: {stage.message[:56]}"
         if mode == "handler":
+            _report(progress, f"{label} (check exec)")
             checks.append(StageChecks(canonical={}))       # sentinel; runtime uses run_handler
         else:
-            checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes))
+            _report(progress, label)
+            checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes, progress))
         acceptance.append(mode)
     return checks, acceptance
 
@@ -128,7 +141,8 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
 
 
 def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PLR0913
-               workdir: Path, passes: int = 3, sudo: bool = True) -> StoredTask:
+               workdir: Path, passes: int = 3, sudo: bool = True,
+               progress: Callable[[str], None] | None = None) -> StoredTask:
     """
     Build a task: bake the image, derive acceptance on its chain, stage `/hp`, write meta.
 
@@ -146,6 +160,7 @@ def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PL
         workdir: Scratch dir for the image build, base, and per-pass runners.
         passes: Derivation passes per observed stage (>= 2).
         sudo: Whether overlay mounts use sudo (True for real nspawn).
+        progress: Optional sink for build-progress lines (image steps, stages, passes).
 
     Returns:
         The StoredTask (ref, image, bundle dir, hidden `/hp` dir, meta).
@@ -155,10 +170,13 @@ def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PL
     if passes < _MIN_PASSES:
         msg = f"passes must be >= {_MIN_PASSES} for differential derivation, got {passes}"
         raise ValueError(msg)
-    image = build(recipe, store, base_tar=base_tar, workdir=workdir / "img", sudo=sudo)
     ref = image_ref(recipe)
+    _report(progress, f"building image {ref}: {len(recipe.steps)} build step(s)")
+    image = build(recipe, store, base_tar=base_tar, workdir=workdir / "img",
+                  sudo=sudo, progress=progress)
     task = recipe_to_taskcode(recipe)
 
+    _report(progress, f"deriving acceptance: {len(recipe.stages)} stage(s) x {passes} pass(es)")
     lowers = resolve_lowers((ref,), store)
     base = build_base(workdir / "base", from_tar=base_tar)
     counter = itertools.count()
@@ -168,7 +186,7 @@ def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PL
         runner.prepare(lowers)
         return runner
 
-    stage_checks, acceptance = _selective_derive(factory, recipe, task, passes)
+    stage_checks, acceptance = _selective_derive(factory, recipe, task, passes, progress)
 
     tdir = store.get(ref).layer.parent / "task"
     bundle_dir = tdir / "bundle"
@@ -177,8 +195,10 @@ def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PL
 
     hp_dir = tdir / "hp"
     work_src = Path(recipe.hidden) if recipe.hidden else None
+    _report(progress, "staging hidden /hp layer + acceptance bundle")
     stage_hidden_layer(hp_dir, work_src=work_src, bundle_dir=bundle_dir)
 
     meta = _build_meta(ref, recipe, acceptance)
     save_meta(meta, tdir)
+    _report(progress, f"stored task {ref}")
     return StoredTask(ref=ref, image=image, bundle_dir=bundle_dir, hp_src_dir=hp_dir, meta=meta)

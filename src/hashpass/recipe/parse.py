@@ -465,11 +465,10 @@ def parse_recipe(text: str) -> Recipe:
         else:
             handler(value, acc)
         i += 1
-    if not acc.name:
-        msg = "recipe is missing a required 'image <name>:<ver>' directive"
-        raise ValueError(msg)
+    # `image` is optional: an unnamed recipe gets name "" and is named at build time
+    # (CLI `-t`, else the Taskfile's directory). image_ref/build resolve it then.
     voice = Voice(hello=tuple(acc.hello), bye=tuple(acc.bye))
-    return Recipe(acc.name, acc.version, tuple(acc.parents), tuple(acc.steps),
+    return Recipe(acc.name or "", acc.version, tuple(acc.parents), tuple(acc.steps),
                   tuple(acc.stages), acc.hidden, acc.readme,
                   voice=voice, settings=acc.settings or Settings(), react=tuple(acc.react))
 

@@ -9,14 +9,14 @@ import time
 import urllib.error
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
 from hashpass.build import build, run_image
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage
-from hashpass.recipe.model import image_ref, is_task
+from hashpass.recipe.model import Recipe, image_ref, is_task
 from hashpass.recipe.parse import load_recipe
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.remote import RemoteRegistry
@@ -185,19 +185,37 @@ def interact(session: object, *, read: Callable[[str], str | None],
                 write("✓ all stages passed — task complete\n")
 
 
-def cmd_build(env: Home, taskfile: str) -> int:
+def _progress(msg: str) -> None:
+    """Print a live build-progress line (flushed so it shows as the build runs)."""
+    sys.stdout.write(msg + "\n")
+    sys.stdout.flush()
+
+
+def resolve_ref(recipe: Recipe, tag: str | None, taskfile: Path) -> tuple[str, str]:
+    """Resolve name:version: `-t` wins, else the recipe's `image` name, else the Taskfile's dir."""
+    if tag:
+        name, sep, version = tag.partition(":")
+        return name, (version if sep else "latest")
+    if recipe.name:
+        return recipe.name, recipe.version
+    return taskfile.resolve().parent.name, "latest"
+
+
+def cmd_build(env: Home, taskfile: str, tag: str | None = None) -> int:
     """Build an image or a task from a Taskfile (auto-exporting the base rootfs on first use)."""
     recipe = load_recipe(Path(taskfile))
+    name, version = resolve_ref(recipe, tag, Path(taskfile))
+    recipe = replace(recipe, name=name, version=version)
     ensure_base_tar(env.base_tar)
     store = ImageStore(env.images)
     ref = image_ref(recipe)
     if is_task(recipe):
-        build_task(recipe, store, base_tar=env.base_tar, workdir=env.work / "build")
+        build_task(recipe, store, base_tar=env.base_tar, workdir=env.work / "build", progress=_progress)
         kind = "task"
     else:
-        build(recipe, store, base_tar=env.base_tar, workdir=env.work / "build")
+        build(recipe, store, base_tar=env.base_tar, workdir=env.work / "build", progress=_progress)
         kind = "image"
-    sys.stdout.write(f"built {kind} {ref}\n")
+    sys.stdout.write(f"✓ built {kind} {ref}\n")
     return 0
 
 
@@ -293,6 +311,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
     p_build = sub.add_parser("build", help="build an image/task from a Taskfile")
     p_build.add_argument("taskfile")
+    p_build.add_argument("-t", "--tag", help="name[:version] (overrides the Taskfile's image line)")
     p_run = sub.add_parser("run", help="run a task (interactive) or a bare image (shell)")
     p_run.add_argument("ref")
     sub.add_parser("images", help="list built images and tasks")
@@ -312,7 +331,7 @@ def _dispatch(env: Home, args: argparse.Namespace) -> int:
     """Route a parsed (non-empty) sub-command to its handler."""
     command = args.command
     if command == "build":
-        return cmd_build(env, args.taskfile)
+        return cmd_build(env, args.taskfile, args.tag)
     if command == "run":
         return cmd_run(env, args.ref)
     if command == "images":
