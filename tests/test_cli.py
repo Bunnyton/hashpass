@@ -4,6 +4,8 @@ import pytest
 
 from hashpass import cli
 from hashpass.imagestore.store import ImageStore
+from hashpass.progress import current_stage, mark_passed_local, new_progress
+from hashpass.taskrun import FeedResult
 
 
 @pytest.mark.tier1
@@ -104,3 +106,70 @@ def test_cmd_images_prints_table(tmp_path, capsys):
     assert cli.cmd_images(env) == 0
     out = capsys.readouterr().out
     assert out == cli.format_image_rows([("base:1", "image"), ("lab:1", "task")])
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("1", 0), ("3", 2), ("  2 ", 1), ("0", None), ("4", None),
+     ("", None), (None, None), ("x", None)],
+)
+def test_select_index(text, expected):
+    assert cli.select_index(text, 3) == expected
+
+
+class _FakeSession:
+    """A container-free stand-in for TaskSession: real progress, scripted outcomes, a sink."""
+
+    def __init__(self, task_id: str, n_stages: int, script: dict, sink) -> None:
+        self.task_id = task_id
+        self.progress = new_progress(task_id, n_stages)
+        self._script = script            # command -> "advance" | ("hint", text)
+        self._sink = sink
+        self.entered = 0
+
+    def enter(self) -> list:
+        self.entered += 1
+        self._sink("<hello>\n")
+        return []
+
+    def feed(self, command: str, *, ts: str) -> FeedResult:  # noqa: ARG002
+        stage = current_stage(self.progress)
+        outcome = self._script.get(command)
+        if outcome == "advance":
+            mark_passed_local(self.progress, stage)
+            return FeedResult(advanced=True, stage=stage, local_key=f"key{stage}")
+        if isinstance(outcome, tuple):
+            self._sink(outcome[1] + "\n")   # the real Renderer types the hint here
+            return FeedResult(advanced=False, stage=stage, local_key=None, hint=outcome[1])
+        return FeedResult(advanced=False, stage=stage, local_key=None)
+
+
+@pytest.mark.tier1
+def test_interact_solves_with_hint_and_completion():
+    writes, sinks, prompts = [], [], []
+    session = _FakeSession("demo", 2,
+                           {"solve0": "advance", "solve1": "advance", "bad": ("hint", "try grep")},
+                           sinks.append)
+    lines = iter(["bad", "solve0", "solve1"])
+    cli.interact(session, read=lambda p: prompts.append(p) or next(lines),
+                 write=writes.append, clock=lambda: "2026-01-01T00:00:00")
+    assert session.entered == 1
+    assert prompts == ["hashpass:demo [stage 1/2]$ ",
+                       "hashpass:demo [stage 1/2]$ ",
+                       "hashpass:demo [stage 2/2]$ "]
+    assert "<hello>\n" in sinks
+    assert "try grep\n" in sinks                       # hint reached the sink, not double-printed
+    assert writes == ["✓ stage passed  key0\n",
+                      "✓ stage passed  key1\n",
+                      "✓ all stages passed — task complete\n"]
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("stopper", ["exit", None])
+def test_interact_stops_on_stop_word_and_eof(stopper):
+    writes = []
+    session = _FakeSession("t", 1, {}, lambda _s: None)
+    cli.interact(session, read=lambda _p: stopper, write=writes.append, clock=lambda: "t")
+    assert session.entered == 1
+    assert writes == []

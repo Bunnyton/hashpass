@@ -141,3 +141,45 @@ def cmd_images(env: Home) -> int:
     rows = [(ref, _kind(store, ref)) for ref in store.list()]
     sys.stdout.write(format_image_rows(rows))
     return 0
+
+
+def select_index(text: str | None, count: int) -> int | None:
+    """Parse a 1-based menu choice to a 0-based index; blank/EOF/non-digit/out-of-range -> None."""
+    if text is None:
+        return None
+    stripped = text.strip()
+    if not stripped.isdigit():
+        return None
+    idx = int(stripped) - 1
+    return idx if 0 <= idx < count else None
+
+
+def _stage_prompt(session: object) -> str:
+    """Return the shell-like prompt for the current stage (`hashpass:<task> [stage N/M]$ `)."""
+    stage = current_stage(session.progress)
+    total = len(session.progress.statuses)
+    if stage is None:
+        return f"hashpass:{session.task_id} [done]$ "
+    return f"hashpass:{session.task_id} [stage {stage + 1}/{total}]$ "
+
+
+def interact(session: object, *, read: Callable[[str], str | None],
+             write: Callable[[str], object], clock: Callable[[], str]) -> None:
+    """
+    Drive one interactive task session: prompt, feed, and report stage progress.
+
+    `read(prompt)` returns the next student line (None/EOF or a stop word ends the loop);
+    each line is fed with a `clock()` timestamp; `write` emits the structural pass/complete
+    lines. Narrative (say/show/voice/hint) is rendered by the session's own Renderer sink
+    (in the CLI, the same stdout `write`), so a fired hint is shown by feed, not re-printed.
+    """
+    session.enter()
+    while current_stage(session.progress) is not None:
+        line = read(_stage_prompt(session))
+        if line is None or line.strip() in _STOP_WORDS:
+            break
+        res = session.feed(line, ts=clock())
+        if res.advanced:
+            write(f"✓ stage passed  {res.local_key}\n")
+            if current_stage(session.progress) is None:
+                write("✓ all stages passed — task complete\n")
