@@ -2,7 +2,12 @@ import subprocess
 from pathlib import Path
 
 _RUNTIME = Path(__file__).resolve().parents[3] / "runtime"
-_SYSTEMD_INSTALL = "apt-get update && apt-get install -y systemd systemd-sysv dbus procps"
+_SYSTEMD_INSTALL = (
+    # chown 0:0 / first: the base dir is created by the unprivileged builder (uid 1000) while
+    # its extracted contents are root-owned; systemd's postinst tmpfiles refuses that "unsafe
+    # path transition" (/ owned by 1000 -> /etc owned by root) and aborts dpkg. Root-own / to fix.
+    "chown 0:0 / && apt-get update && apt-get install -y systemd systemd-sysv dbus procps"
+)
 
 
 def build_base(dest: Path, *, from_tar: Path) -> Path:
@@ -18,6 +23,12 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
 
     """
     dest = Path(dest)
+    if (dest / "usr/bin/hash").exists():
+        # Already fully built (idempotent): a caller may reuse one workdir for several
+        # builds, and re-extracting the tar over an already apt-configured tree corrupts
+        # it (dpkg aborts). The base (trixie-slim + systemd + runtime) is invariant, so
+        # reuse it -- this also avoids rebuilding the base on every build/build_task/run.
+        return dest
     dest.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["sudo", "tar", "-xpf", str(from_tar), "-C", str(dest)],
