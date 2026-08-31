@@ -2,8 +2,9 @@
 Booted systemd-nspawn runner: a real booted machine; commands via machinectl (mechanism §1-5).
 
 Limits of the fresh-overlay `/hp` handler branch (`run(binds=...)`, mechanism §4):
-  1. FS-snapshot, not live PID. The handler overlay stacks the booted upperdir as a
-     read-only lower, so a handler sees the student's *files* but not the booted
+  1. FS-snapshot, not live PID. The handler overlay stacks the booted machine's merged
+     rootfs (`self._mnt`) as a read-only lower, so a handler sees the student's *files*
+     (upper writes + image + base, as the running student sees them) but not the booted
      machine's *live processes*. Process/service acceptance must therefore be
      observe/FS-based (e.g. a stage command writes `pgrep ... > /count.txt`; the
      handler grades the file) -- a handler doing `pgrep` itself would see only its
@@ -53,11 +54,6 @@ def _machine_name() -> str:
     return f"{_MACHINE_PREFIX}{uuid4().hex[:_MACHINE_HEX]}"
 
 
-def _handler_lowers(booted_upper: Path, lowers: list[Path], base_lower: Path) -> list[Path]:
-    """Fresh /hp overlay stack (mechanism §4): live booted upper on top, same lowers, base bottom."""
-    return [booted_upper, *lowers, base_lower]
-
-
 def _read(path: Path) -> str:
     """Read a container-written file host-side (world-readable 644); '' if it never appeared."""
     try:
@@ -72,7 +68,6 @@ class BootedNspawnRunner(NspawnRunner):
     def prepare(self, lowers: list[Path]) -> None:
         """Mount the overlay (as NspawnRunner) then boot it; atomic — cleans up if boot fails."""
         super().prepare(lowers)
-        self._prepared_lowers = [Path(p) for p in lowers]   # remembered for the /hp handler stack
         self._hp = 0                                         # per-handler overlay counter
         try:
             self._boot()
@@ -121,14 +116,16 @@ class BootedNspawnRunner(NspawnRunner):
 
     def _run_handler(self, argv: list[str], binds: list[tuple[str, str]],
                      setenv: dict[str, str]) -> RunResult:
-        """Run a /hp handler on a FRESH overlay stacking the LIVE booted upper + lowers + base (§4)."""
+        """Run a /hp handler on a FRESH overlay over the booted machine's merged rootfs (§4)."""
         self._hp += 1
         hp = self._wd / f"hp{self._hp}"
         upper, work, mnt = hp / "upper", hp / "work", hp / "mnt"
         for d in (upper, work, mnt):
             d.mkdir(parents=True, exist_ok=True)
-        stack = _handler_lowers(self._upper, self._prepared_lowers, self._lower)
-        overlay_mount(stack, upper, work, mnt, sudo=True)
+        # Stack the booted machine's MERGED rootfs (self._mnt) as one read-only lower: it shows
+        # the student's current fs (upper+image+base). Reusing the live upperdir directly fails
+        # once the machine is booted; the merged mount is stable to nest under.
+        overlay_mount([self._mnt], upper, work, mnt, sudo=True)
         try:
             extra = [f"--bind={host}:{dst}" for host, dst in binds]
             extra += [f"--setenv={key}={val}" for key, val in setenv.items()]

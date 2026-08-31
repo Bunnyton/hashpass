@@ -1,10 +1,9 @@
 import re
-from pathlib import Path
 
 import pytest
 
 from hashpass.runner.base import RunResult
-from hashpass.runner.booted import _capture_files, _handler_lowers, _machine_name
+from hashpass.runner.booted import _capture_files, _machine_name
 
 
 @pytest.mark.tier1
@@ -31,17 +30,3 @@ def test_machine_name_is_valid_and_unique():
     assert len(name) <= 64                        # noqa: PLR2004
     assert name[0] != "-" and name[-1] != "-"
     assert len({_machine_name() for _ in range(2000)}) == 2000  # noqa: PLR2004
-
-
-@pytest.mark.tier1
-def test_handler_lowers_stack_order():
-    up, l1, l2, base = Path("/up"), Path("/l1"), Path("/l2"), Path("/base")
-    res = _handler_lowers(up, [l1, l2], base)
-    assert res[0] == up                          # live booted upper on top
-    assert res[-1] == base                        # base at bottom
-    assert res[1:-1] == [l1, l2]                   # lowers order preserved
-    assert ":".join(str(p) for p in res) == "/up:/l1:/l2:/base"
-    assert len(res) == 4                          # noqa: PLR2004
-    empty = _handler_lowers(up, [], base)
-    assert empty == [up, base]
-    assert ":".join(str(p) for p in empty) == "/up:/base"
