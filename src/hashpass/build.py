@@ -7,6 +7,7 @@ from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore, StoredImage
 from hashpass.overlay import overlay_mount, overlay_umount
 from hashpass.recipe.model import Recipe
+from hashpass.runner.nspawn import NspawnRunner
 
 
 def build(
@@ -56,3 +57,29 @@ def build(
     finally:
         overlay_umount(mnt, sudo=sudo)
     return store.save(recipe.name, recipe.version, upper, recipe.parents, sudo=sudo)
+
+
+def run_image(ref: str, store: ImageStore, workdir: Path, *, base_tar: Path) -> NspawnRunner:
+    """
+    Prepare an NspawnRunner over a stored image's overlay closure (bare env).
+
+    Resolves the image's transitive layer closure (the image itself topmost)
+    and mounts it over a fresh base, returning the prepared runner. The caller
+    drives it with `.run(...)`/`.rootfs` and must `.teardown()` when done.
+
+    Args:
+        ref: Image reference `name` or `name:version` to run.
+        store: Image store holding the image and its ancestors.
+        workdir: Scratch directory for base and the runner tree.
+        base_tar: Rootfs tarball for the bottom base layer.
+
+    Returns:
+        A prepared NspawnRunner (no task; a bare image environment).
+
+    """
+    workdir = Path(workdir)
+    lowers = resolve_lowers((ref,), store)  # raises KeyError if ref is absent
+    base = build_base(workdir / "base", from_tar=base_tar)
+    runner = NspawnRunner(workdir / "run", base_dir=base)
+    runner.prepare(lowers)
+    return runner
