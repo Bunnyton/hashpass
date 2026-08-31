@@ -1,5 +1,5 @@
-"""Image/task recipe model: parsed Imagefile as frozen dataclasses (phase 1: images only)."""
-from dataclasses import dataclass
+"""Image/task recipe model: parsed Imagefile/Taskfile as frozen dataclasses."""
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -19,14 +19,90 @@ class RunStep:
 
 @dataclass(frozen=True)
 class ExecAction:
-    """A delegated action: run `value` as a hidden-layer script or shell command (auto-detected at run time)."""
+    """An `exec <file-or-command>` action: run a hidden-layer script or shell command (§6)."""
 
     value: str
 
 
 @dataclass(frozen=True)
+class SayAction:
+    """A `say [dramatic] "<text>"` action: render literal text (optionally with dramatic pacing)."""
+
+    text: str
+    dramatic: bool = False
+
+
+@dataclass(frozen=True)
+class ShowFileAction:
+    """A `show file <path>` action: render a file's contents (large -> pager)."""
+
+    path: str
+
+
+Action = ExecAction | SayAction | ShowFileAction
+
+
+@dataclass(frozen=True)
+class TriesCond:
+    """`tries N`: fires after N real (neutral-excluded) attempts on the stage."""
+
+    n: int
+
+
+@dataclass(frozen=True)
+class IdleCond:
+    """`idle N`: fires after N seconds without progress."""
+
+    seconds: float
+
+
+@dataclass(frozen=True)
+class CmdCond:
+    """`cmd <base> [has <f...>] [missing <f...>]`: fires on a matching student command."""
+
+    base: str
+    has: tuple[str, ...] = ()
+    missing: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class OutputCond:
+    """`output "<substr>"`: fires when the last output contained the substring."""
+
+    substr: str
+
+
+Condition = TriesCond | IdleCond | CmdCond | OutputCond
+
+
+@dataclass(frozen=True)
+class HintRule:
+    """One `hint <condition> <action>` rule (first-match-wins in source order, §7.1)."""
+
+    condition: Condition
+    action: Action
+
+
+@dataclass(frozen=True)
+class Voice:
+    """Session voice: `hello` actions fired on first enter, `bye` actions on all-passed (§7.2)."""
+
+    hello: tuple[Action, ...] = ()
+    bye: tuple[Action, ...] = ()
+
+
+@dataclass(frozen=True)
+class Settings:
+    """Render settings (§7.2): `type-mode`, `type-speed` chars/sec, `pager` for large `show file`."""
+
+    type_mode: str = "normal"
+    type_speed: int = 45
+    pager: bool = False
+
+
+@dataclass(frozen=True)
 class StageSpec:
-    """One `stage` block: reference solution, observed paths, and delegated hooks."""
+    """One `stage` block: reference solution, observed paths, delegated hooks, hint rules."""
 
     message: str
     solve: tuple[str, ...]
@@ -34,13 +110,14 @@ class StageSpec:
     exclude: tuple[str, ...] = ()
     neutral: tuple[str, ...] = ()
     check: ExecAction | None = None
-    on_enter: tuple[ExecAction, ...] = ()
-    on_pass: tuple[ExecAction, ...] = ()
+    on_enter: tuple[Action, ...] = ()
+    on_pass: tuple[Action, ...] = ()
+    hints: tuple[HintRule, ...] = ()
 
 
 @dataclass(frozen=True)
 class Recipe:
-    """A parsed image/task recipe: self-name/version, parents, ordered build steps, optional task logic."""
+    """A parsed image/task recipe: self-name/version, parents, build steps, optional task logic."""
 
     name: str
     version: str
@@ -49,6 +126,9 @@ class Recipe:
     stages: tuple[StageSpec, ...] = ()
     hidden: str | None = None
     readme: str | None = None
+    voice: Voice = field(default_factory=Voice)
+    settings: Settings = field(default_factory=Settings)
+    react: tuple[Action, ...] = ()
 
 
 def image_ref(r: Recipe) -> str:

@@ -1,11 +1,18 @@
 import pytest
 
 from hashpass.recipe.model import (
+    CmdCond,
     CopyStep,
     ExecAction,
+    HintRule,
     Recipe,
     RunStep,
+    SayAction,
+    Settings,
+    ShowFileAction,
     StageSpec,
+    TriesCond,
+    Voice,
     image_ref,
     is_task,
 )
@@ -40,3 +47,38 @@ def test_exec_action_is_frozen_and_equatable():
     assert ExecAction("verify.sh") == ExecAction("verify.sh")
     with pytest.raises(AttributeError):
         ExecAction("x").value = "y"  # frozen
+
+
+@pytest.mark.tier1
+def test_recipe_interactivity_defaults():
+    r = Recipe("img", "1", (), (RunStep("echo hi"),))
+    assert r.voice == Voice()
+    assert r.settings == Settings()
+    assert r.react == ()
+    assert is_task(r) is False
+
+
+@pytest.mark.tier1
+def test_actions_and_conditions_frozen_equatable():
+    assert SayAction("hi") == SayAction("hi", dramatic=False)
+    assert SayAction("hi", dramatic=True) != SayAction("hi")
+    assert ShowFileAction("a.txt") == ShowFileAction("a.txt")
+    assert CmdCond("grep", ("-i",), ()) == CmdCond("grep", ("-i",), ())
+    with pytest.raises(AttributeError):
+        SayAction("x").text = "y"
+
+
+@pytest.mark.tier1
+def test_stage_spec_hints_default_and_actions_widened():
+    s = StageSpec(message="m", solve=("x",), on_pass=(SayAction("yo"),),
+                  hints=(HintRule(TriesCond(3), ExecAction("h.sh")),))
+    assert s.hints[0].condition == TriesCond(3)
+    assert s.on_pass == (SayAction("yo"),)
+    assert StageSpec(message="m", solve=("x",)).hints == ()
+
+
+@pytest.mark.tier1
+def test_settings_defaults():
+    assert Settings().type_mode == "normal"
+    assert Settings().type_speed == 45  # noqa: PLR2004
+    assert Settings().pager is False
