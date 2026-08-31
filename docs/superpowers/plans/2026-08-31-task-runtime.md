@@ -73,7 +73,9 @@ Expected: FAIL — `TypeError: run() got an unexpected keyword argument 'binds'`
         Args:
             argv: Command and arguments to run.
             binds: Optional (host, dst) pairs bound rw into THIS run's mount-ns only
-                (e.g. the hidden `/hp` layer). A run with `binds=None` sees no `/hp`.
+                (e.g. the hidden `/hp` layer). A run with `binds=None` sees no `/hp`,
+                and a bind leaves no trace: its mountpoint is cleaned up afterwards
+                so a later plain run cannot see it (§4.2 invisibility-by-namespace).
             setenv: Optional environment variables set inside the container.
 
         Returns:
@@ -90,8 +92,37 @@ Expected: FAIL — `TypeError: run() got an unexpected keyword argument 'binds'`
             encoding="utf-8",
             check=False,
         )
+        for _host, dst in binds or []:
+            self._clean_mountpoint(dst)
         return RunResult(p.stdout, p.stderr, p.returncode)
+
+    def _clean_mountpoint(self, dst: str) -> None:
+        """
+        Remove a bind mountpoint systemd-nspawn auto-created in the overlay upperdir.
+
+        nspawn creates the bind destination inside the container root; on our overlay
+        that mkdir lands in the writable upperdir and outlives the (per-run) mount, so a
+        later plain run would see the empty dir — leaking that `/hp` exists (§4.2). It is
+        removed THROUGH the overlay with a throwaway nspawn `rmdir` (never by touching the
+        upperdir directly, which is illegal under a live overlay and corrupts its cache).
+        Best-effort: a non-empty or already-gone mountpoint leaves rmdir a no-op.
+        """
+        subprocess.run(
+            ["sudo", "systemd-nspawn", "-q", "--register=no",
+             "-D", str(self._mnt), "rmdir", dst],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
 ```
+
+> **Implementation note (found in tier3 validation):** a naive `run()` that only appends
+> `--bind`/`--setenv` fails the second assertion of the test below — nspawn's auto-created `/hp`
+> mountpoint persists in the overlay upperdir, so a later plain run still sees an (empty) `/hp`,
+> breaking §4.2. The fix is `_clean_mountpoint` above. **It must go through the overlay (an nspawn
+> `rmdir`), never `rmdir` the upperdir path directly** — modifying an overlay's upperdir while it is
+> mounted corrupts the overlay's dentry cache (`stat /hp` then reports a directory that `ls /` cannot see).
 
 - [ ] **Step 4: Run tests to verify they pass**
 
