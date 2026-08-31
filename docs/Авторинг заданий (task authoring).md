@@ -38,51 +38,27 @@ stage "Вытащи строку с TODO из /notes.txt в /found.txt"
   observe /found.txt
 ```
 
-**2. Собери и прогони** (Python; нужен tier3: `systemd-nspawn` + scoped sudo + docker для base):
-
-```python
-from pathlib import Path
-from hashpass.imagestore.store import ImageStore
-from hashpass.recipe.parse import load_recipe
-from hashpass.taskbuild import build_task
-from hashpass.taskrun import run_task
-
-base_tar = Path("/var/tmp/hp-base/rootfs.tar")   # см. «как получить base_tar» ниже
-work = Path("/var/tmp/hp-demo")
-store = ImageStore(work / "images")
-
-recipe = load_recipe("Taskfile")
-build_task(recipe, store, base_tar=base_tar, workdir=work / "build", passes=2)
-
-sess = run_task("hello-grep:1", store, work / "run",
-                base_tar=base_tar, student_id="me", nonce="n1")
-try:
-    sess.enter()                                        # печатает приветствие/on-enter (если есть)
-    r = sess.feed("grep TODO /notes.txt > /found.txt",  # команда студента
-                  ts="2026-01-01T00:00:00")
-    print("принято:", r.advanced, "ключ:", r.local_key) # True key{...}
-    bad = sess.feed("echo nope > /found.txt", ts="2026-01-01T00:00:01")
-    print("принято:", bad.advanced)                     # False
-finally:
-    sess.teardown()
-```
-
-**Как получить `base_tar`** (rootfs Debian, экспорт из docker; делается один раз):
+**2. Собери и запусти** — через CLI `hashpass` (нужен `systemd-nspawn` + scoped sudo + docker):
 
 ```bash
-mkdir -p /var/tmp/hp-base
-cid=$(docker create debian:trixie-slim)
-docker export "$cid" -o /var/tmp/hp-base/rootfs.tar
-docker rm "$cid"
+hashpass build Taskfile          # собрать; base-rootfs Debian создастся сам при первом build
+hashpass run hello-grep:1        # запустить: интерактивная сессия задания
 ```
+
+Внутри `run` — промпт: вводишь Linux-команды, они выполняются в контейнере, система грейдит
+(`✓ stage passed key{…}`), даёт подсказки и продвигает стадии; `exit` — выйти. Неправильное
+решение просто не проходит стадию.
+
+> Команда `hashpass` появляется после `pip install -e .`; без установки — `python3 -m hashpass build …`.
+> Хранилище — `~/.hashpass/` (переопредели через `$HASHPASS_HOME`); base-rootfs кэшируется там же.
 
 ---
 
 ## Плейграунд одной командой
 
-Готовый скрипт `docs/examples/author_playground.py` собирает твой `Taskfile` и **автоматически
-прогоняет эталонное решение по всем стадиям**, печатая приём/ключ по каждой — быстрый способ
-проверить, что задание вообще решается:
+Интерактивно решать задание — `hashpass run` (выше). А для **CI / быстрой само-проверки** есть
+скрипт `docs/examples/author_playground.py`: собирает твой `Taskfile` и **автоматически прогоняет
+эталонное решение по всем стадиям**, печатая приём/ключ по каждой — проверить, что задание решается:
 
 ```bash
 # создаст base_tar при первом запуске; нужен docker + scoped sudo для nspawn
@@ -257,9 +233,27 @@ react on command exec watch.sh   # (перехватчик на каждую к�
 
 ---
 
-## API — команды
+## CLI — команды
 
-Всё в `src/hashpass/`. Ключевые вызовы:
+```bash
+hashpass                        # без аргументов → режим заданий: список задач, выбор по номеру
+hashpass build <Taskfile>       # собрать задание/образ (самоименуется по image name:ver)
+hashpass run <name:ver>         # задание → интерактивная сессия; образ → shell в контейнере
+hashpass images                 # список собранного (name:ver + kind: task|image)
+hashpass login <registry-url>   # логин/пароль → токен (кэш 7 дней)
+hashpass push <name:ver> <url>  # push (под токеном)
+hashpass pull <name:ver> <url>  # pull (аноним)
+```
+
+`hashpass` доступна после `pip install -e .`; иначе — `python3 -m hashpass …`. Ошибки пользователя
+(кривой Taskfile, нет docker, `push` без `login`, неизвестный ref) → чистое `hashpass: <причина>` в
+stderr, без трейсбека. `rmi` пока нет (удаление root-owned слоёв требует `sudo rm`, не выдан).
+
+---
+
+## Библиотечный API
+
+CLI — тонкая обёртка над этими вызовами; для программного использования / CI:
 
 ```python
 # Парсинг
