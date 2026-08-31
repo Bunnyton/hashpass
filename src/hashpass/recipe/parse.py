@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from hashpass.recipe.model import CopyStep, Recipe
+from hashpass.recipe.model import CopyStep, Recipe, RunStep
 
 _RESERVED = ("stage", "voice", "hidden", "readme")
 _COPY_ARGC = 2
@@ -16,8 +16,7 @@ class _Acc:
     name: str | None = None
     version: str = _DEFAULT_VERSION
     parents: list[str] = field(default_factory=list)
-    copies: list[CopyStep] = field(default_factory=list)
-    runs: list[str] = field(default_factory=list)
+    steps: list[CopyStep | RunStep] = field(default_factory=list)
 
 
 def _do_image(value: str, acc: _Acc) -> None:
@@ -38,11 +37,11 @@ def _do_copy(value: str, acc: _Acc) -> None:
     if len(fields) != _COPY_ARGC:
         msg = f"copy requires <src> <dst>: {value!r}"
         raise ValueError(msg)
-    acc.copies.append(CopyStep(fields[0], fields[1]))
+    acc.steps.append(CopyStep(fields[0], fields[1]))
 
 
 def _do_run(value: str, acc: _Acc) -> None:
-    acc.runs.append(value)
+    acc.steps.append(RunStep(value))
 
 
 _HANDLERS = {"image": _do_image, "from": _do_from, "copy": _do_copy, "run": _do_run}
@@ -93,7 +92,7 @@ def parse_recipe(text: str) -> Recipe:
     if not acc.name:
         msg = "recipe is missing a required 'image <name>:<ver>' directive"
         raise ValueError(msg)
-    return Recipe(acc.name, acc.version, tuple(acc.parents), tuple(acc.copies), tuple(acc.runs))
+    return Recipe(acc.name, acc.version, tuple(acc.parents), tuple(acc.steps))
 
 
 def load_recipe(path: Path) -> Recipe:

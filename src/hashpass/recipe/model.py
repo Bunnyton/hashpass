@@ -11,14 +11,20 @@ class CopyStep:
 
 
 @dataclass(frozen=True)
+class RunStep:
+    """A `run <command>` build step."""
+
+    cmd: str
+
+
+@dataclass(frozen=True)
 class Recipe:
-    """A parsed phase-1 image recipe: self-name/version, parents, and build steps."""
+    """A parsed phase-1 image recipe: self-name/version, parents, ordered build steps."""
 
     name: str
     version: str
     parents: tuple[str, ...]
-    copies: tuple[CopyStep, ...]
-    runs: tuple[str, ...]
+    steps: tuple[CopyStep | RunStep, ...]  # copy/run in SOURCE order
 
 
 def image_ref(r: Recipe) -> str:

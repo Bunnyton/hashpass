@@ -64,17 +64,17 @@ class ImageStore:
         """
         dest = self._dir(name, version)
         layer = dest / "layer"
-        if layer.exists():
-            shutil.rmtree(layer)
         dest.mkdir(parents=True, exist_ok=True)
         if sudo:
-            layer.mkdir()
-            # rsync as root: copies root-owned files AND preserves ownership/perms.
+            layer.mkdir(exist_ok=True)
+            # rsync as root: copies + preserves ownership AND deletes stale (root-owned) files.
             subprocess.run(
-                ["sudo", "rsync", "-a", str(layer_dir) + "/", str(layer) + "/"],
+                ["sudo", "rsync", "-a", "--delete", str(layer_dir) + "/", str(layer) + "/"],
                 check=True,
             )
         else:
+            if layer.exists():
+                shutil.rmtree(layer)
             shutil.copytree(layer_dir, layer)
         meta = {"name": name, "version": version, "parents": list(parents)}
         (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")

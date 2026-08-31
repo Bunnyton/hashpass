@@ -32,6 +32,19 @@ def test_build_stores_delta_layer(tmp_path, base_tar):
 
 
 @pytest.mark.tier3
+def test_copy_interleave_and_resave(tmp_path, base_tar):
+    src = tmp_path / "hostfile.txt"
+    src.write_text("payload", encoding="utf-8")
+    store = ImageStore(tmp_path / "images")
+    recipe = parse_recipe(f"image demo:1\nrun mkdir -p /opt/app\ncopy {src} /opt/app/f.txt\n")
+    demo = build(recipe, store, base_tar=base_tar, workdir=tmp_path / "b1")
+    # copy landed (interleave: run made /opt/app first) — the stored delta has the file
+    assert (demo.layer / "opt/app/f.txt").read_text(encoding="utf-8") == "payload"
+    # re-save the same tag must NOT crash (root-owned layer cleared via rsync --delete)
+    build(recipe, store, base_tar=base_tar, workdir=tmp_path / "b2")
+
+
+@pytest.mark.tier3
 def test_build_then_run_image_roundtrips(tmp_path, base_tar):
     store = ImageStore(tmp_path / "images")
     build(

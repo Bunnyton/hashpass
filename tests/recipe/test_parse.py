@@ -1,6 +1,6 @@
 import pytest
 
-from hashpass.recipe.model import CopyStep, Recipe, image_ref
+from hashpass.recipe.model import CopyStep, Recipe, RunStep, image_ref
 from hashpass.recipe.parse import load_recipe, parse_recipe
 
 _RECIPE = """\
@@ -21,10 +21,19 @@ def test_parse_full_recipe():
         name="log-archive",
         version="1",
         parents=("base", "coreutils-lab:1"),
-        copies=(CopyStep("assets/", "/home/student/"),),
-        runs=("mkdir -p /var/log/app", "touch /var/log/app/app.log"),
+        steps=(
+            CopyStep("assets/", "/home/student/"),
+            RunStep("mkdir -p /var/log/app"),
+            RunStep("touch /var/log/app/app.log"),
+        ),
     )
     assert image_ref(recipe) == "log-archive:1"
+
+
+@pytest.mark.tier1
+def test_run_before_copy_keeps_source_order():
+    recipe = parse_recipe("image t:1\nrun mkdir -p /opt/app\ncopy f /opt/app/\n")
+    assert recipe.steps == (RunStep("mkdir -p /opt/app"), CopyStep("f", "/opt/app/"))
 
 
 @pytest.mark.tier1
