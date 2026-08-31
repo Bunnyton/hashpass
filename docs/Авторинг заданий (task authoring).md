@@ -49,7 +49,7 @@ hashpass run hello-grep:1        # запустить: интерактивна�
 (`✓ stage passed key{…}`), даёт подсказки и продвигает стадии; `exit` — выйти. Неправильное
 решение просто не проходит стадию.
 
-> Команда `hashpass` появляется после `pip install -e .`; без установки — `python3 -m hashpass build …`.
+> Команда `hashpass` появляется после `make install` (в корне репо); без установки — `python3 -m hashpass build …`.
 > Хранилище — `~/.hashpass/` (переопредели через `$HASHPASS_HOME`); base-rootfs кэшируется там же.
 
 ---
@@ -245,7 +245,7 @@ hashpass push <name:ver> <url>  # push (под токеном)
 hashpass pull <name:ver> <url>  # pull (аноним)
 ```
 
-`hashpass` доступна после `pip install -e .`; иначе — `python3 -m hashpass …`. Ошибки пользователя
+`hashpass` доступна после `make install`; иначе — `python3 -m hashpass …`. Ошибки пользователя
 (кривой Taskfile, нет docker, `push` без `login`, неизвестный ref) → чистое `hashpass: <причина>` в
 stderr, без трейсбека. `rmi` пока нет (удаление root-owned слоёв требует `sudo rm`, не выдан).
 
