@@ -1,4 +1,24 @@
-"""Booted systemd-nspawn runner: a real booted machine; commands via machinectl (mechanism §1-5)."""
+"""
+Booted systemd-nspawn runner: a real booted machine; commands via machinectl (mechanism §1-5).
+
+Limits of the fresh-overlay `/hp` handler branch (`run(binds=...)`, mechanism §4):
+  1. FS-snapshot, not live PID. The handler overlay stacks the booted upperdir as a
+     read-only lower, so a handler sees the student's *files* but not the booted
+     machine's *live processes*. Process/service acceptance must therefore be
+     observe/FS-based (e.g. a stage command writes `pgrep ... > /count.txt`; the
+     handler grades the file) -- a handler doing `pgrep` itself would see only its
+     own transient namespace.
+  2. Racy if written concurrently. The stacked upper is a live directory; the
+     snapshot is consistent only because handlers run while the student is idle
+     between commands (`TaskSession.feed` runs the student command to completion,
+     *then* checks). Documented, accepted.
+  3. Handler rootfs writes are discarded. A handler's writes to the container root
+     land in the throwaway per-handler upperdir and never reach the live booted
+     student; only writes to the bound `/hp` persist (that is how `on_enter`/
+     `on_pass`/`state.json` survive). Consequence: an `on_enter` that must seed the
+     live student filesystem is unsupported -- seed via the image (`run`/`copy` at
+     build time) or via student/`solve` commands instead.
+"""
 import shlex
 import subprocess
 import time
