@@ -123,13 +123,14 @@ class BootedNspawnRunner(NspawnRunner):
 
     def _kill(self) -> None:
         """Terminate the background nspawn process (best-effort) and clear machine state."""
-        if self._proc is None:
-            return
-        self._proc.terminate()
-        try:
-            self._proc.wait(timeout=_KILL_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            self._proc.kill()
+        if self._proc is not None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=_KILL_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+        # Always clear BOTH, even if _proc was never started: _boot() sets self._machine
+        # before Popen, so a Popen failure must not leave a name for a machine that never ran.
         self._proc = None
         self._machine = None
 
