@@ -1,6 +1,4 @@
 """Build reusable images from recipes (overlay + nspawn) and run bare images."""
-import json
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -57,33 +55,4 @@ def build(
             )
     finally:
         overlay_umount(mnt, sudo=sudo)
-    # Save the layer using tar to handle root-owned files from nspawn
-    dest = store._root / recipe.name / recipe.version  # noqa: SLF001
-    layer = dest / "layer"
-    if layer.exists():
-        shutil.rmtree(layer)
-    dest.mkdir(parents=True, exist_ok=True)
-    layer.mkdir(exist_ok=True)
-    # Use tar via sudo to copy files with potentially restricted permissions
-    if sudo:
-        tar_proc = subprocess.Popen(
-            ["sudo", "tar", "-C", str(upper), "-cf", "-", "."],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        extract_proc = subprocess.Popen(
-            ["tar", "-C", str(layer), "-xf", "-"],
-            stdin=tar_proc.stdout,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        tar_proc.stdout.close()
-        tar_rc = tar_proc.wait()
-        extract_rc = extract_proc.wait()
-        if tar_rc != 0 or extract_rc != 0:
-            raise subprocess.CalledProcessError(tar_rc or extract_rc, "tar")
-    else:
-        shutil.copytree(upper, layer)
-    meta = {"name": recipe.name, "version": recipe.version, "parents": list(recipe.parents)}
-    (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    return StoredImage(recipe.name, recipe.version, layer, recipe.parents)
+    return store.save(recipe.name, recipe.version, upper, recipe.parents, sudo=sudo)

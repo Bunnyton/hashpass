@@ -1,6 +1,7 @@
 """Local image store: images/<name>/<version>/{layer/,meta.json}."""
 import json
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,6 +45,8 @@ class ImageStore:
         version: str,
         layer_dir: Path,
         parents: tuple[str, ...],
+        *,
+        sudo: bool = False,
     ) -> StoredImage:
         """
         Copy a layer directory into the store and record its parents.
@@ -53,6 +56,7 @@ class ImageStore:
             version: Image version.
             layer_dir: Source rootfs-delta directory copied in as the layer.
             parents: Direct `from` refs, in declaration order.
+            sudo: Whether to use sudo rsync for copying (handles root-owned files).
 
         Returns:
             The StoredImage describing the saved entry.
@@ -63,7 +67,15 @@ class ImageStore:
         if layer.exists():
             shutil.rmtree(layer)
         dest.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(layer_dir, layer)
+        if sudo:
+            layer.mkdir()
+            # rsync as root: copies root-owned files AND preserves ownership/perms.
+            subprocess.run(
+                ["sudo", "rsync", "-a", str(layer_dir) + "/", str(layer) + "/"],
+                check=True,
+            )
+        else:
+            shutil.copytree(layer_dir, layer)
         meta = {"name": name, "version": version, "parents": list(parents)}
         (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         return StoredImage(name, version, layer, parents)
