@@ -30,6 +30,20 @@ class FeedResult:
     hint: str | None = None
 
 
+def _is_neutral(command: str, neutral: tuple[str, ...]) -> bool:
+    """
+    Return True if the command's base command is a neutral ("just looking") command.
+
+    An unparseable command (e.g. an unbalanced-quote typo, which makes `shlex` raise) is
+    treated as a real attempt, never neutral — so a typo still counts toward tries and
+    never crashes the session.
+    """
+    try:
+        return Cmd(command).basecmd in neutral
+    except ValueError:
+        return False
+
+
 class TaskSession:
     """One student's live task run: a /hp-free student container + per-session hidden /hp."""
 
@@ -87,7 +101,7 @@ class TaskSession:
             return FeedResult(advanced=False, stage=None, local_key=None)
         sm = self.meta.stages[stage]
         out = self.student.run(["sh", "-c", command]).stdout
-        if Cmd(command).basecmd not in sm.neutral:
+        if not _is_neutral(command, sm.neutral):
             self.tries[stage] += 1
         accepted, key = self._accept(stage, sm, command, out, ts)
         if accepted:
@@ -129,6 +143,12 @@ def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
     base = build_base(workdir / "base", from_tar=base_tar)
     student = NspawnRunner(workdir / "student", base_dir=base)
     student.prepare(lowers)
-    hp_dir = workdir / "hp"
-    shutil.copytree(stored.hp_src_dir, hp_dir, dirs_exist_ok=True)
-    return TaskSession(stored, student, hp_dir, student_id=student_id, nonce=nonce)
+    try:
+        hp_dir = workdir / "hp"
+        shutil.copytree(stored.hp_src_dir, hp_dir, dirs_exist_ok=True)
+        return TaskSession(stored, student, hp_dir, student_id=student_id, nonce=nonce)
+    except Exception:
+        # prepare() already mounted the overlay; on any failure before the caller holds a
+        # TaskSession (its only teardown handle), unmount it here so we don't leak a mount.
+        student.teardown()
+        raise

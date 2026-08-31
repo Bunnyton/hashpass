@@ -102,3 +102,24 @@ def test_run_handler_command_predicate_exit_code(tmp_path, base_tar):
         assert no.exit_code != 0
     finally:
         r.teardown()
+
+
+@pytest.mark.tier1
+def test_hp_last_out_sanitized(work):
+    ctx = HandlerContext(student_cmd="cat bin", tries=0, last_out="a\x00b\x00c", stage=0)
+    _, env = build_invocation(ExecAction("grep x f"), ctx, hp_work_host=work)
+    assert env["HP_LAST_OUT"] == "abc"
+    assert "\x00" not in env["HP_LAST_OUT"]
+
+
+@pytest.mark.tier1
+def test_hp_last_out_bounded(work):
+    ctx = HandlerContext(student_cmd="c", tries=0, last_out="Z" * 200000, stage=0)
+    _, env = build_invocation(ExecAction("grep x f"), ctx, hp_work_host=work)
+    assert len(env["HP_LAST_OUT"]) == 65536  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_handler_result_stderr_defaults_empty():
+    assert HandlerResult(stdout="x", exit_code=0).stderr == ""
+    assert HandlerResult(stdout="x", exit_code=1, stderr="boom").stderr == "boom"

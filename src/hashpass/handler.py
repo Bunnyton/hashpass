@@ -10,6 +10,7 @@ _HP_WORK = "/hp/work"
 _HP_STATE = "/hp/state.json"
 _HP_HISTORY = "/hp/history"
 _HP_ROOTFS = "/"
+_MAX_ENV_OUT = 65536  # bound HP_LAST_OUT so argv+env stays well under ARG_MAX
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class HandlerResult:
 
     stdout: str
     exit_code: int
+    stderr: str = ""
 
 
 def _split_args(tokens: list[str]) -> tuple[list[str], dict[str, str]]:
@@ -78,7 +80,10 @@ def build_invocation(action: ExecAction, ctx: HandlerContext, *,
         argv = ["sh", "-c", action.value]
     env = {
         "HP_TRIES": str(ctx.tries),
-        "HP_LAST_OUT": ctx.last_out,
+        # env values are NUL-terminated C strings and count toward ARG_MAX: a student
+        # command emitting a NUL (binary output) or a huge stream would otherwise make
+        # subprocess raise "embedded null byte" / exceed ARG_MAX. Sanitize + bound.
+        "HP_LAST_OUT": ctx.last_out.replace("\x00", "")[:_MAX_ENV_OUT],
         "HP_HISTORY": _HP_HISTORY,
         "HP_STATE": _HP_STATE,
         "HP_ROOTFS": _HP_ROOTFS,
@@ -109,4 +114,4 @@ def run_handler(runner: NspawnRunner, action: ExecAction, ctx: HandlerContext, *
     """
     argv, env = build_invocation(action, ctx, hp_work_host=hp_dir / "work")
     res = runner.run(argv, binds=[(str(hp_dir), "/hp")], setenv=env)
-    return HandlerResult(stdout=res.stdout, exit_code=res.exit_code)
+    return HandlerResult(stdout=res.stdout, exit_code=res.exit_code, stderr=res.stderr)

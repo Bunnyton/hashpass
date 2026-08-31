@@ -41,3 +41,12 @@ def test_build_task_derives_and_stores_artifacts(tmp_path, base_tar):
     meta = load_task("logtask:1", store).meta
     assert [s.acceptance for s in meta.stages] == ["derived", "derived"]
     assert meta.image_ref == "logtask:1"
+
+
+@pytest.mark.tier1
+def test_build_task_rejects_passes_below_two(tmp_path):
+    store = ImageStore(tmp_path / "images")
+    recipe = parse_recipe('image t:1\nstage "x"\n  solve echo hi\n  observe o\n')
+    # guard fires before any build/nspawn, so the (absent) base_tar is never read
+    with pytest.raises(ValueError, match="passes must be >= 2"):
+        build_task(recipe, store, base_tar=tmp_path / "none.tar", workdir=tmp_path / "b", passes=1)

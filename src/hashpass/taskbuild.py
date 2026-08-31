@@ -19,6 +19,8 @@ from hashpass.taskcode.execute import OUTPUT_KEY, run_stage
 from hashpass.taskcode.model import StageCode, TaskCode
 from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, save_meta
 
+_MIN_PASSES = 2  # differential derivation needs >= 2 passes to cancel run noise
+
 
 def _excluded(key: str, patterns: tuple[str, ...]) -> bool:
     """
@@ -148,6 +150,9 @@ def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PL
 
     """
     workdir = Path(workdir)
+    if passes < _MIN_PASSES:
+        msg = f"passes must be >= {_MIN_PASSES} for differential derivation, got {passes}"
+        raise ValueError(msg)
     image = build(recipe, store, base_tar=base_tar, workdir=workdir / "img", sudo=sudo)
     ref = image_ref(recipe)
     task = recipe_to_taskcode(recipe)

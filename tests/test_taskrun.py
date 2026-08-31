@@ -3,7 +3,7 @@ import pytest
 from hashpass.imagestore.store import ImageStore
 from hashpass.recipe.parse import parse_recipe
 from hashpass.taskbuild import build_task
-from hashpass.taskrun import run_task
+from hashpass.taskrun import _is_neutral, run_task
 
 _DERIVED = """\
 image logtask:1
@@ -101,3 +101,11 @@ def test_e2e_on_enter_and_on_pass_fire(tmp_path, base_tar):
         assert "pass" in state2                                      # on_pass fired after accept
     finally:
         session.teardown()
+
+
+@pytest.mark.tier1
+def test_is_neutral_and_unparseable_command_counts_as_try():
+    assert _is_neutral("ls -la", ("ls", "cd")) is True
+    assert _is_neutral("grep x f", ("ls", "cd")) is False
+    # unbalanced quote makes shlex raise -> treated as a real try, never crashes feed
+    assert _is_neutral('echo "oops', ("ls", "cd")) is False
