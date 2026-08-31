@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from hashpass import cli
+from hashpass.imagestore.store import ImageStore
 
 
 @pytest.mark.tier1
@@ -61,3 +62,45 @@ def test_ensure_base_tar_export_argv(tmp_path):
     assert calls[1] == ["docker", "export", "cid123", "-o", str(dest)]
     assert calls[2] == ["docker", "rm", "cid123"]
     assert dest.parent.exists()
+
+
+def _seed_image(store: ImageStore, tmp_path, name: str, *, task: bool = False) -> None:
+    src = tmp_path / f"src-{name}"
+    src.mkdir(exist_ok=True)
+    (src / "f").write_text("x", encoding="utf-8")
+    store.save(name, "1", src, ())
+    if task:
+        (store.get(f"{name}:1").layer.parent / "task").mkdir()
+
+
+@pytest.mark.tier1
+def test_format_image_rows_empty_is_header_only():
+    assert cli.format_image_rows([]) == "REF  KIND\n"
+
+
+@pytest.mark.tier1
+def test_format_image_rows_aligns_columns():
+    out = cli.format_image_rows([("log-archive:1", "task"), ("base:latest", "image")])
+    assert out == ("REF            KIND\n"
+                   "log-archive:1  task\n"
+                   "base:latest    image\n")
+
+
+@pytest.mark.tier1
+def test_kind_detects_task_vs_image(tmp_path):
+    store = ImageStore(tmp_path / "images")
+    _seed_image(store, tmp_path, "base")
+    _seed_image(store, tmp_path, "lab", task=True)
+    assert cli._kind(store, "lab:1") == "task"  # noqa: SLF001
+    assert cli._kind(store, "base:1") == "image"  # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_cmd_images_prints_table(tmp_path, capsys):
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    store = ImageStore(env.images)
+    _seed_image(store, tmp_path, "base")
+    _seed_image(store, tmp_path, "lab", task=True)
+    assert cli.cmd_images(env) == 0
+    out = capsys.readouterr().out
+    assert out == cli.format_image_rows([("base:1", "image"), ("lab:1", "task")])

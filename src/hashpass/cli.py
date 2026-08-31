@@ -119,3 +119,25 @@ def ensure_base_tar(dest: Path, *, run: Callable[..., subprocess.CompletedProces
     finally:
         run([_DOCKER, "rm", cid], check=True, capture_output=True)
     return dest
+
+
+def _kind(store: ImageStore, ref: str) -> str:
+    """Classify a stored ref as a task (has a task/ artifacts dir) or a bare image."""
+    return "task" if (store.get(ref).layer.parent / "task").exists() else "image"
+
+
+def format_image_rows(rows: list[tuple[str, str]]) -> str:
+    """Format (ref, kind) rows as a Docker-like two-column table (header always emitted)."""
+    width = max((len(ref) for ref, _ in rows), default=0)
+    width = max(width, len(_HEADER[0]))
+    lines = [f"{_HEADER[0]:<{width}}{_COL_GAP}{_HEADER[1]}"]
+    lines += [f"{ref:<{width}}{_COL_GAP}{kind}" for ref, kind in rows]
+    return "\n".join(lines) + "\n"
+
+
+def cmd_images(env: Home) -> int:
+    """List built images and tasks (name:version + kind)."""
+    store = ImageStore(env.images)
+    rows = [(ref, _kind(store, ref)) for ref in store.list()]
+    sys.stdout.write(format_image_rows(rows))
+    return 0
