@@ -236,3 +236,34 @@ def cmd_run(env: Home, ref: str, io: Io | None = None) -> int:
     if (stored.layer.parent / "task").exists():
         return _run_task(env, ref, store, io)
     return _run_image(env, ref, store)
+
+
+def cmd_login(env: Home, registry: str, user: str | None) -> int:
+    """Prompt for credentials, authenticate to a registry, and cache the returned token."""
+    user = user or input("Username: ")
+    password = getpass.getpass("Password: ")
+    cache = CredentialCache(env.creds)
+    try:
+        RemoteRegistry(registry, cache=cache).login(user, password)
+    except urllib.error.URLError as exc:
+        sys.stdout.write(f"login failed: {exc}\n")
+        return 1
+    sys.stdout.write(f"login succeeded — token cached for {registry}\n")
+    return 0
+
+
+def cmd_push(env: Home, ref: str, registry: str) -> int:
+    """Push a ref and its `from` closure to a registry (using the cached login token)."""
+    store = ImageStore(env.images)
+    cache = CredentialCache(env.creds)
+    copied = RemoteRegistry(registry, cache=cache).push(store, ref)
+    sys.stdout.write(f"pushed {ref} ({len(copied)} layer(s))\n")
+    return 0
+
+
+def cmd_pull(env: Home, ref: str, registry: str) -> int:
+    """Pull a ref and its `from` closure from a registry (anonymous)."""
+    store = ImageStore(env.images)
+    copied = RemoteRegistry(registry).pull(ref, store)
+    sys.stdout.write(f"pulled {ref} ({len(copied)} layer(s))\n")
+    return 0
