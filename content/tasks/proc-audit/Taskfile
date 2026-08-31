@@ -1,0 +1,20 @@
+# proc-audit — a two-stage task: install a package (big FS change via apt), then audit processes.
+# Base debian:trixie-slim has apt but no ps/pgrep, so installing procps is a real, needed step
+# that also unlocks the process-search stage. Acceptance is derived from deterministic artifacts
+# (the dpkg install status; the sleep-process count), never the volatile process table itself.
+
+image proc-audit:1
+
+stage "Install the procps package with apt, then record its dpkg install status into /install-status.txt"
+  solve:
+    apt-get update >/dev/null 2>&1
+    apt-get install -y procps >/dev/null 2>&1
+    dpkg -s procps | grep '^Status:' > /install-status.txt
+  observe /install-status.txt
+
+stage "Launch a background 'sleep 600', then count the running sleep processes with pgrep into /proc-count.txt"
+  solve:
+    sleep 600 &
+    sleep 0.3
+    pgrep -x sleep | wc -l > /proc-count.txt
+  observe /proc-count.txt
