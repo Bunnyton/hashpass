@@ -62,3 +62,14 @@ def test_unknown_mode_raises():
     r = Renderer(Settings(), sink=lambda _s: None, sleep=lambda _s: None)
     with pytest.raises(ValueError, match="unknown type-mode"):
         r.render("x", mode="turbo")
+
+
+@pytest.mark.tier1
+def test_show_file_large_single_line_paged(tmp_path):
+    f = tmp_path / "wide.txt"
+    f.write_text("Z" * 5000, encoding="utf-8")  # one line but > _PAGER_BYTES
+    chunks, sleeps = _cap()
+    r = Renderer(Settings(pager=True), sink=chunks.append, sleep=sleeps.append)
+    r.show_file(f)
+    assert chunks == ["Z" * 5000]  # paged whole, never typed
+    assert sleeps == []

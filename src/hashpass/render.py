@@ -15,6 +15,7 @@ _DRAMATIC_PAUSE = 0.55
 _DRAMATIC_SLOW = 3.0
 _MIN_SPEED = 1
 _PAGER_LINES = 40
+_PAGER_BYTES = 4000  # a large single-line file is paged too, not just many-line files
 
 
 def _stdout_write(text: str) -> None:
@@ -55,7 +56,8 @@ class Renderer:
     def show_file(self, path: Path, *, mode: str | None = None) -> str:
         """Render a file's contents; a large file with `pager on` is emitted whole (paged), not typed."""
         text = Path(path).read_text(encoding="utf-8")
-        if self._settings.pager and text.count("\n") + 1 > _PAGER_LINES:
+        too_big = text.count("\n") + 1 > _PAGER_LINES or len(text) > _PAGER_BYTES
+        if self._settings.pager and too_big:
             self._sink(text)
             return text
         self.render(text, mode=mode)

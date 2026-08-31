@@ -133,6 +133,8 @@ _CTX = HandlerContext(student_cmd="grep x f", tries=1, last_out="", stage=0)
 @pytest.mark.tier1
 def test_elapsed_seconds_and_bad_ts():
     assert _elapsed("2026-08-31T00:00:00", "2026-08-31T00:01:30") == 90.0  # noqa: PLR2004
+    # mixed tz-aware/naive would raise TypeError on subtraction -> idle stays neutral (0.0)
+    assert _elapsed("2026-08-31T00:00:00", "2026-08-31T00:00:30+00:00") == 0.0
     assert _elapsed("not-a-ts", "2026-08-31T00:00:00") == 0.0
 
 

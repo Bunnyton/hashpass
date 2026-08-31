@@ -59,7 +59,8 @@ def _elapsed(start_ts: str, now_ts: str) -> float:
     """Seconds between two ISO timestamps; 0.0 if either is unparseable (idle stays neutral)."""
     try:
         return (datetime.fromisoformat(now_ts) - datetime.fromisoformat(start_ts)).total_seconds()
-    except ValueError:
+    except (ValueError, TypeError):
+        # ValueError: unparseable ts; TypeError: mixed tz-aware/naive subtraction. Idle stays neutral.
         return 0.0
 
 
@@ -71,6 +72,10 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,
     `say` renders its literal text (dramatic pacing when flagged); `show file` reads
     `<hp_dir>/work/<path>` and renders it (paged when large); `exec` runs the §6 handler
     under `/hp` and renders its stdout. System replies use the configured type-mode.
+
+    The `show file` path comes from the trusted recipe author (§5 — the student is the
+    threat, not the author); it is not confined to `work/`, so an absolute or `..` path
+    reads where it points. Authors use relative paths under the hidden work dir.
     """
     if isinstance(action, SayAction):
         render.render(action.text, mode="dramatic" if action.dramatic else None)
