@@ -1760,7 +1760,9 @@ def test_e2e_dsl_hint_fires_and_renders(tmp_path, base_tar):
         assert res.advanced is False
         assert res.hint is not None
         assert "add -i" in res.hint
-        assert any("add -i" in c for c in chunks)
+        # type-mode normal types char-by-char, so the hint spans many sink chunks;
+        # the rendered STREAM (joined) carries it.
+        assert "add -i" in "".join(chunks)
         # the reference solution (case-insensitive) is accepted
         ok = session.feed("grep -rih ERROR /var/log/app > /errors.txt",
                           ts="2026-08-31T00:00:05")
