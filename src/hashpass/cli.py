@@ -183,3 +183,19 @@ def interact(session: object, *, read: Callable[[str], str | None],
             write(f"✓ stage passed  {res.local_key}\n")
             if current_stage(session.progress) is None:
                 write("✓ all stages passed — task complete\n")
+
+
+def cmd_build(env: Home, taskfile: str) -> int:
+    """Build an image or a task from a Taskfile (auto-exporting the base rootfs on first use)."""
+    recipe = load_recipe(Path(taskfile))
+    ensure_base_tar(env.base_tar)
+    store = ImageStore(env.images)
+    ref = image_ref(recipe)
+    if is_task(recipe):
+        build_task(recipe, store, base_tar=env.base_tar, workdir=env.work / "build")
+        kind = "task"
+    else:
+        build(recipe, store, base_tar=env.base_tar, workdir=env.work / "build")
+        kind = "image"
+    sys.stdout.write(f"built {kind} {ref}\n")
+    return 0
