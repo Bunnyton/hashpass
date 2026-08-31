@@ -28,3 +28,26 @@ def test_nspawn_run_and_persist(tmp_path, base_tar):
         assert (r.rootfs_upper / "var/tmp/p.txt").read_text(encoding="utf-8").strip() == "persisted"
     finally:
         r.teardown()
+
+
+@pytest.mark.tier3
+def test_nspawn_bind_and_setenv_are_per_run(tmp_path, base_tar):
+    hp = tmp_path / "hp"
+    hp.mkdir()
+    (hp / "token.txt").write_text("SECRET", encoding="utf-8")
+    r = NspawnRunner(tmp_path / "run", base_tar=base_tar)
+    r.prepare([])
+    try:
+        # A run WITH the bind + env sees the file and the variable.
+        res = r.run(
+            ["sh", "-c", "cat /hp/token.txt; printf ':'; printf '%s' \"$HP_TRIES\""],
+            binds=[(str(hp), "/hp")],
+            setenv={"HP_TRIES": "3"},
+        )
+        assert res.exit_code == 0
+        assert res.stdout.strip() == "SECRET:3"
+        # A plain run right after does NOT see /hp (fresh mount-ns, no bind).
+        res2 = r.run(["sh", "-c", "test -e /hp; echo $?"])
+        assert res2.stdout.strip() == "1"
+    finally:
+        r.teardown()

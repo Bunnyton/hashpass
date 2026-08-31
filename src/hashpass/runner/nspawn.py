@@ -59,19 +59,26 @@ class NspawnRunner:
         stack = [Path(p) for p in lowers] + [self._lower]  # first = top
         overlay_mount(stack, self._upper, self._work, self._mnt, sudo=True)
 
-    def run(self, argv: list[str]) -> RunResult:
+    def run(self, argv: list[str], *, binds: list[tuple[str, str]] | None = None,
+            setenv: dict[str, str] | None = None) -> RunResult:
         """
         Run a single command inside the container via systemd-nspawn.
 
         Args:
             argv: Command and arguments to run.
+            binds: Optional (host, dst) pairs bound rw into THIS run's mount-ns only
+                (e.g. the hidden `/hp` layer). A run with `binds=None` sees no `/hp`.
+            setenv: Optional environment variables set inside the container.
 
         Returns:
             RunResult with stdout, stderr, and exit code.
 
         """
+        extra = [f"--bind={host}:{dst}" for host, dst in binds or []]
+        extra += [f"--setenv={key}={val}" for key, val in (setenv or {}).items()]
         p = subprocess.run(
-            ["sudo", "systemd-nspawn", "-q", "--register=no", "-D", str(self._mnt), *argv],
+            ["sudo", "systemd-nspawn", "-q", "--register=no",
+             *extra, "-D", str(self._mnt), *argv],
             capture_output=True,
             text=True,
             encoding="utf-8",
