@@ -2,6 +2,7 @@ import subprocess
 from pathlib import Path
 
 _RUNTIME = Path(__file__).resolve().parents[3] / "runtime"
+_SYSTEMD_INSTALL = "apt-get update && apt-get install -y systemd systemd-sysv dbus procps"
 
 
 def build_base(dest: Path, *, from_tar: Path) -> Path:
@@ -20,6 +21,13 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["sudo", "tar", "-xpf", str(from_tar), "-C", str(dest)],
+        check=True,
+    )
+    # Make the base BOOTABLE: install systemd (PID 1), dbus (machinectl), procps (ps/pgrep).
+    # Non-boot install; run once per base build (Phase 7 — every task runs in a booted machine).
+    subprocess.run(
+        ["sudo", "systemd-nspawn", "-q", "--register=no", "-D", str(dest),
+         "sh", "-c", _SYSTEMD_INSTALL],
         check=True,
     )
     # Runtime layer (usr/bin/hash + .hash) in a single rsync -- only granted-sudo commands.
