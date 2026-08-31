@@ -2,14 +2,31 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from hashpass.recipe.model import CopyStep, ExecAction, Recipe, RunStep, StageSpec
+from hashpass.recipe.model import (
+    Action,
+    CmdCond,
+    Condition,
+    CopyStep,
+    ExecAction,
+    HintRule,
+    IdleCond,
+    OutputCond,
+    Recipe,
+    RunStep,
+    SayAction,
+    Settings,
+    ShowFileAction,
+    StageSpec,
+    TriesCond,
+    Voice,
+)
 
-_RESERVED_PHASE3 = ("voice", "hint", "say", "show", "settings", "react")
 _COPY_ARGC = 2
 _DEFAULT_VERSION = "latest"
-_EXEC_PREFIX = "exec "
 _STAGE_EVENTS = ("enter", "pass")
 _QUOTE_MIN = 2
+_ACTION_VERBS = ("exec", "say", "show")
+_TYPE_MODES = ("instant", "normal", "dramatic")
 
 
 @dataclass
@@ -23,6 +40,10 @@ class _Acc:
     stages: list[StageSpec] = field(default_factory=list)
     hidden: str | None = None
     readme: str | None = None
+    hello: list[Action] = field(default_factory=list)
+    bye: list[Action] = field(default_factory=list)
+    react: list[Action] = field(default_factory=list)
+    settings: Settings | None = None
 
 
 @dataclass
@@ -35,8 +56,9 @@ class _StageAcc:
     exclude: list[str] = field(default_factory=list)
     neutral: list[str] = field(default_factory=list)
     check: ExecAction | None = None
-    on_enter: list[ExecAction] = field(default_factory=list)
-    on_pass: list[ExecAction] = field(default_factory=list)
+    on_enter: list[Action] = field(default_factory=list)
+    on_pass: list[Action] = field(default_factory=list)
+    hints: list[HintRule] = field(default_factory=list)
 
 
 def _significant(text: str) -> list[tuple[int, str]]:
@@ -63,20 +85,127 @@ def _unquote(value: str) -> str:
     return value
 
 
-def _parse_action(value: str) -> ExecAction:
-    """Parse a `<verb> …` action value. Phase 2 supports only `exec <file-or-command>`."""
-    if value.startswith(_EXEC_PREFIX):
-        body = value[len(_EXEC_PREFIX):].strip()
-        if not body:
-            msg = "exec requires a file or command"
+def _parse_say(rest: str) -> SayAction:
+    """Parse a `say [dramatic] "<text>"` action body (`dramatic` marks a slow, paused reply)."""
+    dramatic = False
+    head, _, tail = rest.partition(" ")
+    if head == "dramatic":
+        if not tail.strip():
+            msg = "say dramatic requires text"
             raise ValueError(msg)
-        return ExecAction(body)
-    verb = value.split(maxsplit=1)[0] if value else ""
-    if verb in _RESERVED_PHASE3:
-        msg = f"action {verb!r} is reserved for a later phase (phase 3 interactivity)"
+        dramatic = True
+        rest = tail.strip()
+    if not rest:
+        msg = "say requires text"
         raise ValueError(msg)
-    msg = f"expected an 'exec …' action, got: {value!r}"
+    return SayAction(text=_unquote(rest), dramatic=dramatic)
+
+
+def _parse_exec(rest: str) -> ExecAction:
+    """Parse the body of an `exec <file-or-command>` action."""
+    if not rest:
+        msg = "exec requires a file or command"
+        raise ValueError(msg)
+    return ExecAction(rest)
+
+
+def _parse_action(value: str) -> Action:
+    """Parse an action value into ExecAction/SayAction/ShowFileAction (explicit verbs, §3.0)."""
+    verb, _, rest = value.partition(" ")
+    rest = rest.strip()
+    if verb == "exec":
+        return _parse_exec(rest)
+    if verb == "say":
+        return _parse_say(rest)
+    if verb == "show":
+        kind, _, path = rest.partition(" ")
+        if kind != "file" or not path.strip():
+            msg = f"only 'show file <path>' is supported, got: {value!r}"
+            raise ValueError(msg)
+        return ShowFileAction(path.strip())
+    msg = f"expected an 'exec'/'say'/'show file' action, got: {value!r}"
     raise ValueError(msg)
+
+
+def _positive_int(tok: str, kind: str) -> int:
+    try:
+        n = int(tok)
+    except ValueError as exc:
+        msg = f"{kind} condition needs an integer, got {tok!r}"
+        raise ValueError(msg) from exc
+    if n < 0:
+        msg = f"{kind} condition needs a non-negative integer, got {tok!r}"
+        raise ValueError(msg)
+    return n
+
+
+def _take_quoted(rest: str) -> tuple[str, str]:
+    """Take a leading `"..."` literal (or one bare token); return (value, remaining)."""
+    if rest.startswith('"'):
+        end = rest.find('"', 1)
+        if end == -1:
+            msg = "output condition: unterminated quoted substring"
+            raise ValueError(msg)
+        return rest[1:end], rest[end + 1:].strip()
+    tok, _, tail = rest.partition(" ")
+    return tok, tail.strip()
+
+
+def _parse_cmd_cond(rest: str) -> tuple[CmdCond, str]:
+    """Parse `<base> [has <f...>] [missing <f...>]` up to the action verb; return (cond, action)."""
+    toks = rest.split()
+    if not toks:
+        msg = "cmd condition requires a base command"
+        raise ValueError(msg)
+    base = toks[0]
+    has: list[str] = []
+    missing: list[str] = []
+    bucket: list[str] | None = None
+    i = 1
+    while i < len(toks) and toks[i] not in _ACTION_VERBS:
+        tok = toks[i]
+        if tok == "has":
+            bucket = has
+        elif tok == "missing":
+            bucket = missing
+        elif bucket is None:
+            msg = f"cmd condition: expected 'has'/'missing' before flags, got {tok!r}"
+            raise ValueError(msg)
+        else:
+            bucket.append(tok)
+        i += 1
+    if i >= len(toks):
+        msg = "cmd condition: hint needs an action (exec/say/show)"
+        raise ValueError(msg)
+    return CmdCond(base, tuple(has), tuple(missing)), " ".join(toks[i:])
+
+
+def _parse_condition(value: str) -> tuple[Condition, str]:
+    """Parse one explicit hint condition atom; return (Condition, remaining-action-text)."""
+    kind, _, rest = value.partition(" ")
+    rest = rest.strip()
+    if kind == "tries":
+        tok, _, tail = rest.partition(" ")
+        return TriesCond(_positive_int(tok, "tries")), tail.strip()
+    if kind == "idle":
+        tok, _, tail = rest.partition(" ")
+        return IdleCond(float(_positive_int(tok, "idle"))), tail.strip()
+    if kind == "output":
+        substr, tail = _take_quoted(rest)
+        return OutputCond(substr), tail
+    if kind == "cmd":
+        return _parse_cmd_cond(rest)
+    msg = f"unknown hint condition: {kind!r} (expected tries/idle/cmd/output)"
+    raise ValueError(msg)
+
+
+def _parse_hint(value: str) -> HintRule:
+    """Parse a `hint <condition> <action>` line into a HintRule."""
+    condition, action_text = _parse_condition(value)
+    if not action_text:
+        msg = f"hint requires an action after the condition: {value!r}"
+        raise ValueError(msg)
+    return HintRule(condition=condition, action=_parse_action(action_text))
 
 
 def _do_image(value: str, acc: _Acc) -> None:
@@ -126,6 +255,14 @@ def _do_readme(value: str, acc: _Acc) -> None:
     acc.readme = fields[0]
 
 
+def _do_react(value: str, acc: _Acc) -> None:
+    head = "on command "
+    if not value.startswith(head):
+        msg = f"react must be 'react on command <action>': {value!r}"
+        raise ValueError(msg)
+    acc.react.append(_parse_action(value[len(head):].strip()))
+
+
 _TOP_HANDLERS = {
     "image": _do_image,
     "from": _do_from,
@@ -133,13 +270,11 @@ _TOP_HANDLERS = {
     "run": _do_run,
     "hidden": _do_hidden,
     "readme": _do_readme,
+    "react": _do_react,
 }
 
 
 def _reject(keyword: str) -> None:
-    if keyword in _RESERVED_PHASE3:
-        msg = f"directive {keyword!r} is reserved for a later phase (phase 3 interactivity)"
-        raise ValueError(msg)
     msg = f"unknown directive: {keyword!r}"
     raise ValueError(msg)
 
@@ -158,13 +293,24 @@ def _consume_solve_block(lines: list[tuple[int, str]], start: int, base_indent: 
 
 
 def _apply_on(value: str, sacc: _StageAcc) -> None:
-    """Apply an `on <event> <action>` stage directive."""
+    """Apply an `on <event> <action>` stage directive (enter/pass; exec/say/show actions)."""
     event, _, action = value.partition(" ")
     if event not in _STAGE_EVENTS:
         msg = f"unknown stage event: {event!r} (expected enter/pass)"
         raise ValueError(msg)
     target = sacc.on_enter if event == "enter" else sacc.on_pass
     target.append(_parse_action(action.strip()))
+
+
+def _apply_check(value: str, sacc: _StageAcc) -> None:
+    if sacc.check is not None:
+        msg = "duplicate 'check' directive"
+        raise ValueError(msg)
+    verb, _, rest = value.partition(" ")
+    if verb != "exec":
+        msg = f"check requires an 'exec' action, got: {value!r} (expected an 'exec' predicate)"
+        raise ValueError(msg)
+    sacc.check = _parse_exec(rest.strip())
 
 
 def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
@@ -181,10 +327,9 @@ def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
     elif kw == "neutral":
         sacc.neutral.extend(value.split())
     elif kw == "check":
-        if sacc.check is not None:
-            msg = "duplicate 'check' directive"
-            raise ValueError(msg)
-        sacc.check = _parse_action(value)
+        _apply_check(value, sacc)
+    elif kw == "hint":
+        sacc.hints.append(_parse_hint(value))
     elif kw == "on":
         _apply_on(value, sacc)
     else:
@@ -204,6 +349,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         check=sacc.check,
         on_enter=tuple(sacc.on_enter),
         on_pass=tuple(sacc.on_pass),
+        hints=tuple(sacc.hints),
     )
 
 
@@ -229,20 +375,71 @@ def _parse_stage_block(header_value: str, lines: list[tuple[int, str]],
     return _finalize_stage(sacc), i
 
 
+def _parse_voice_block(lines: list[tuple[int, str]], start: int,
+                       acc: _Acc) -> int:
+    """Parse a `voice` block of `hello`/`bye <action>` lines; return next top-index."""
+    i = start
+    while i < len(lines) and lines[i][0] > 0:
+        _, content = lines[i]
+        kw, value = _kw_value(content)
+        if kw == "hello":
+            acc.hello.append(_parse_action(value))
+        elif kw == "bye":
+            acc.bye.append(_parse_action(value))
+        else:
+            msg = f"unknown voice directive: {kw!r} (expected hello/bye)"
+            raise ValueError(msg)
+        i += 1
+    return i
+
+
+def _parse_settings_block(lines: list[tuple[int, str]], start: int,
+                          acc: _Acc) -> int:
+    """Parse a `settings` block (type-mode/type-speed/pager); return next top-index."""
+    if acc.settings is not None:
+        msg = "duplicate 'settings' block"
+        raise ValueError(msg)
+    mode = "normal"
+    speed = 45
+    pager = False
+    i = start
+    while i < len(lines) and lines[i][0] > 0:
+        _, content = lines[i]
+        kw, value = _kw_value(content)
+        if kw == "type-mode":
+            if value not in _TYPE_MODES:
+                msg = f"type-mode must be one of {_TYPE_MODES}, got {value!r}"
+                raise ValueError(msg)
+            mode = value
+        elif kw == "type-speed":
+            speed = _positive_int(value.strip(), "type-speed")
+        elif kw == "pager":
+            pager = value.strip() == "on"
+        else:
+            msg = f"unknown settings directive: {kw!r} (type-mode/type-speed/pager)"
+            raise ValueError(msg)
+        i += 1
+    acc.settings = Settings(type_mode=mode, type_speed=speed, pager=pager)
+    return i
+
+
+_BLOCK_PARSERS = {"voice": _parse_voice_block, "settings": _parse_settings_block}
+
+
 def parse_recipe(text: str) -> Recipe:
     """
-    Parse Imagefile/Taskfile text into a Recipe (image directives + optional stage blocks).
+    Parse Imagefile/Taskfile text into a Recipe (image directives + task + interactivity).
 
     Top-level (column 0): `image <name>:<ver>` (required, once), `from`, `copy`, `run`,
-    `hidden <src>`, `readme <file>`, and `stage "<message>"` (opens an indented block of
-    `solve`/`observe`/`exclude`/`neutral`/`check`/`on enter`/`on pass`). A `solve:` line
-    opens a verbatim command block (deeper-indented lines). Blank and full-line `#` lines
-    are ignored; inline `#` is preserved. Phase-3 interactivity directives
-    (voice/hint/say/show/settings/react) and unknown directives raise ValueError.
+    `hidden <src>`, `readme <file>`, `react on command <action>`, the `settings`/`voice`
+    blocks, and `stage "<message>"` blocks. A stage body holds
+    `solve`/`observe`/`exclude`/`neutral`/`check`/`on enter|pass`/`hint <cond> <action>`.
+    Blank and full-line `#` lines are ignored; inline `#` is preserved. Unknown directives
+    raise ValueError.
 
     Raises:
-        ValueError: missing/duplicate `image`, malformed directive, a stage without
-            `solve`, an unexpected indent, or a reserved/unknown directive.
+        ValueError: missing/duplicate `image`, malformed directive/condition/action, a stage
+            without `solve`, an unexpected indent, or an unknown directive.
 
     """
     acc = _Acc()
@@ -251,12 +448,16 @@ def parse_recipe(text: str) -> Recipe:
     while i < len(lines):
         indent, content = lines[i]
         if indent != 0:
-            msg = f"unexpected indentation (no open stage): {content!r}"
+            msg = f"unexpected indentation (no open block): {content!r}"
             raise ValueError(msg)
         kw, value = _kw_value(content)
         if kw == "stage":
             stage, i = _parse_stage_block(value, lines, i + 1)
             acc.stages.append(stage)
+            continue
+        block = _BLOCK_PARSERS.get(kw)
+        if block is not None:
+            i = block(lines, i + 1, acc)
             continue
         handler = _TOP_HANDLERS.get(kw)
         if handler is None:
@@ -267,8 +468,10 @@ def parse_recipe(text: str) -> Recipe:
     if not acc.name:
         msg = "recipe is missing a required 'image <name>:<ver>' directive"
         raise ValueError(msg)
+    voice = Voice(hello=tuple(acc.hello), bye=tuple(acc.bye))
     return Recipe(acc.name, acc.version, tuple(acc.parents), tuple(acc.steps),
-                  tuple(acc.stages), acc.hidden, acc.readme)
+                  tuple(acc.stages), acc.hidden, acc.readme,
+                  voice=voice, settings=acc.settings or Settings(), react=tuple(acc.react))
 
 
 def load_recipe(path: Path) -> Recipe:
