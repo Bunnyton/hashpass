@@ -19,6 +19,7 @@ from hashpass.play import capture_candidate
 from hashpass.progress import current_stage, mark_passed_local, new_progress
 from hashpass.recipe.model import Action, ExecAction, SayAction, ShowFileAction
 from hashpass.render import Renderer
+from hashpass.runner.booted import BootedNspawnRunner
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import load_bundle
 from hashpass.taskstore import StageMeta, StoredTask, load_task
@@ -217,7 +218,7 @@ def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
     stored = load_task(ref, store)
     lowers = resolve_lowers((ref,), store)
     base = build_base(workdir / "base", from_tar=base_tar)
-    student = NspawnRunner(workdir / "student", base_dir=base)
+    student = BootedNspawnRunner(workdir / "student", base_dir=base)
     student.prepare(lowers)
     try:
         hp_dir = workdir / "hp"

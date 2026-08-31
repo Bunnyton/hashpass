@@ -232,11 +232,10 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
 
 
 def _run_image(env: Home, ref: str, store: ImageStore) -> int:
-    """Open an interactive `/bin/sh` in a bare image (inherited stdio), then tear down."""
+    """Open an interactive `/bin/sh` in the booted image machine (inherited stdio), then tear down."""
     runner = run_image(ref, store, env.work / "run", base_tar=env.base_tar)
     try:
-        subprocess.run(["sudo", "systemd-nspawn", "-q", "--register=no",
-                        "-D", str(runner.rootfs), "/bin/sh"], check=False)
+        subprocess.run(["sudo", "machinectl", "shell", runner.machine, "/bin/sh"], check=False)
     finally:
         runner.teardown()
     return 0

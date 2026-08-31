@@ -12,6 +12,7 @@ from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore
 from hashpass.recipe.model import Recipe, StageSpec, image_ref
 from hashpass.recipe.taskbridge import recipe_to_taskcode
+from hashpass.runner.booted import BootedNspawnRunner
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import Bundle, dump_bundle
 from hashpass.taskcode.derive import DerivedChecks, StageChecks
@@ -181,8 +182,8 @@ def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PL
     base = build_base(workdir / "base", from_tar=base_tar)
     counter = itertools.count()
 
-    def factory() -> NspawnRunner:
-        runner = NspawnRunner(workdir / f"derive{next(counter)}", base_dir=base)
+    def factory() -> BootedNspawnRunner:
+        runner = BootedNspawnRunner(workdir / f"derive{next(counter)}", base_dir=base)
         runner.prepare(lowers)
         return runner
 
