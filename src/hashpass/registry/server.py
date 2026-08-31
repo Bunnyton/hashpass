@@ -6,9 +6,11 @@ password hashes — like sync.LocalSyncClient it is a dev/test model of the serv
 NEVER deployed (no 185.x) and NEVER used to push to a real remote.
 """
 import json
+import tarfile
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.blob import pack_image, unpack_image
@@ -18,6 +20,7 @@ from hashpass.registry.token import issue_token, verify_token
 
 _BEARER = "Bearer "
 _IMAGE_PARTS = 3
+_MAX_BODY = 512 * 1024 * 1024  # cap request bodies (localhost test server) to avoid memory blowup
 
 
 class RegistryServer(ThreadingHTTPServer):
@@ -59,7 +62,12 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(blob)
 
     def _read_body(self) -> bytes:
-        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return b""  # malformed header -> empty body -> caller returns 400
+        if length <= 0 or length > _MAX_BODY:
+            return b""  # absent/oversized -> don't buffer a huge/garbage body; caller 400s
         return self.rfile.read(length)
 
     def _token_user(self) -> str | None:
@@ -69,13 +77,13 @@ class _Handler(BaseHTTPRequestHandler):
         return verify_token(self.server.secret, auth[len(_BEARER):], now=time.time())
 
     def _image_parts(self) -> tuple[str, str] | None:
-        parts = self.path.strip("/").split("/")
+        parts = urlsplit(self.path).path.strip("/").split("/")
         if len(parts) == _IMAGE_PARTS and parts[0] == "image":
             return parts[1], parts[2]
         return None
 
     def do_POST(self) -> None:
-        if self.path != "/login":
+        if urlsplit(self.path).path != "/login":
             self._empty(HTTPStatus.NOT_FOUND)
             return
         try:
@@ -91,7 +99,7 @@ class _Handler(BaseHTTPRequestHandler):
         self._json(HTTPStatus.OK, {"token": token})
 
     def do_GET(self) -> None:
-        parts = self.path.strip("/").split("/")
+        parts = urlsplit(self.path).path.strip("/").split("/")
         if len(parts) == _IMAGE_PARTS and parts[0] == "closure":
             self._serve_closure(f"{parts[1]}:{parts[2]}")
         elif (target := self._image_parts()) is not None:
@@ -111,7 +119,12 @@ class _Handler(BaseHTTPRequestHandler):
         if self._token_user() is None:
             self._empty(HTTPStatus.UNAUTHORIZED)
             return
-        unpack_image(self._read_body(), self.server.store)
+        try:
+            unpack_image(self._read_body(), self.server.store)
+        except (ValueError, KeyError, OSError, tarfile.TarError):
+            # ValueError also covers an unsafe (traversing) name/version from the blob (§5).
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
         self._empty(HTTPStatus.CREATED)
 
     def _serve_closure(self, ref: str) -> None:

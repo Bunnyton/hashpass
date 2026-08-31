@@ -1,5 +1,7 @@
 """Tier2: drive the localhost registry server's HTTP contract directly via urllib."""
+import io
 import json
+import tarfile
 import urllib.error
 import urllib.request
 from http import HTTPStatus
@@ -80,3 +82,23 @@ def test_put_then_get_and_closure(registry, tmp_path):
     assert json.loads(body)["refs"] == ["base:1", "app:1"]
     assert _http("GET", f"{registry.base_url}/image/app/1")[0] == HTTPStatus.OK
     assert _http("GET", f"{registry.base_url}/closure/ghost/1")[0] == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.tier2
+def test_put_rejects_traversing_blob(registry, tmp_path):
+    registry.users.add("alice", "pw-correct")
+    token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    layer = tmp_path / "layer"
+    layer.mkdir()
+    (layer / "f").write_text("x", encoding="utf-8")
+    buf = io.BytesIO()
+    meta = json.dumps({"name": "../evil", "version": "1", "parents": []}).encode("utf-8")
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        info = tarfile.TarInfo("meta.json")
+        info.size = len(meta)
+        tar.addfile(info, io.BytesIO(meta))
+        tar.add(layer, arcname="layer")
+    # a VALID token, but the blob's traversing name is rejected cleanly (400, not 500 or 201)
+    status = _http("PUT", f"{registry.base_url}/image/evil/1", data=buf.getvalue(), headers=auth)[0]
+    assert status == HTTPStatus.BAD_REQUEST

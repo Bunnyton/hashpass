@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import secrets
+from functools import cache
 from pathlib import Path
 
 _PW_SCHEME = "pbkdf2_sha256"
@@ -37,6 +38,12 @@ def verify_password(password: str, encoded: str) -> bool:
     return hmac.compare_digest(digest, expected)
 
 
+@cache
+def _decoy_record() -> str:
+    """Return a fixed PBKDF2 record so an unknown-user login still runs one hash (constant-time)."""
+    return hash_password("\x00decoy\x00")
+
+
 class UserStore:
     """User -> PBKDF2 password record, persisted as JSON. Dev/test only, never shipped."""
 
@@ -55,10 +62,12 @@ class UserStore:
         users[user] = hash_password(password)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(users, indent=2), encoding="utf-8")
+        self._path.chmod(0o600)  # PBKDF2 hashes: not world-readable
 
     def verify(self, user: str, password: str) -> bool:
         """Return whether password matches the stored hash for user (False if unknown)."""
         encoded = self._load().get(user)
         if encoded is None:
+            verify_password(password, _decoy_record())  # run one PBKDF2 anyway: no timing leak
             return False
         return verify_password(password, encoded)

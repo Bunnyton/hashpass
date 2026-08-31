@@ -1,9 +1,19 @@
+import stat
+
 import pytest
 
 from hashpass.registry.creds import CredentialCache
 
 _NOW = 1000.0
 _EXPIRY = 2000
+
+
+@pytest.mark.tier1
+def test_cache_file_is_owner_only(tmp_path):
+    # The cache holds a live 7-day bearer token — it must not be world-readable (§5).
+    cache = CredentialCache(tmp_path / "creds.json")
+    cache.save("http://reg", "tok-123", _EXPIRY)
+    assert stat.S_IMODE((tmp_path / "creds.json").stat().st_mode) == 0o600  # noqa: PLR2004
 
 
 @pytest.mark.tier1

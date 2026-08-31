@@ -21,6 +21,7 @@ class CredentialCache:
         data[registry] = {"token": token, "expiry": expiry}
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        self._path.chmod(0o600)  # holds a live bearer token: not world-readable
 
     def cached_token(self, registry: str, *, now: float) -> str | None:
         """Return a still-valid cached token for registry, or None if absent/expired."""

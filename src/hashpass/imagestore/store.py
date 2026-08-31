@@ -1,11 +1,23 @@
 """Local image store: images/<name>/<version>/{layer/,meta.json}."""
 import json
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 _DEFAULT_VERSION = "latest"
+# A name/version must be ONE safe path component: no "/", "\", "..", leading ".", NUL, or
+# absolute path. This blocks a traversal write when name/version come from an untrusted blob
+# (registry push on the server, or anonymous registry pull on the client). See §5.
+_COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def _check_component(kind: str, value: str) -> None:
+    """Reject a name/version that is not a single safe path component (traversal guard)."""
+    if not _COMPONENT.fullmatch(value):
+        msg = f"unsafe image {kind}: {value!r}"
+        raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -62,6 +74,8 @@ class ImageStore:
             The StoredImage describing the saved entry.
 
         """
+        _check_component("name", name)
+        _check_component("version", version)
         dest = self._dir(name, version)
         layer = dest / "layer"
         dest.mkdir(parents=True, exist_ok=True)
