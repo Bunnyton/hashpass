@@ -1,7 +1,11 @@
+from pathlib import Path
+
 import pytest
 
-from hashpass.handler import HandlerContext, HandlerResult, build_invocation
+from hashpass.handler import HandlerContext, HandlerResult, build_invocation, run_handler
+from hashpass.image.base import build_base
 from hashpass.recipe.model import ExecAction
+from hashpass.runner.nspawn import NspawnRunner
 
 
 @pytest.fixture
@@ -54,3 +58,47 @@ def test_empty_action_raises(work):
 @pytest.mark.tier1
 def test_handler_result_is_a_value():
     assert HandlerResult(stdout="hi", exit_code=0).exit_code == 0
+
+
+def _hp(tmp_path, script_name, script_body) -> Path:
+    hp = tmp_path / "hp"
+    (hp / "work").mkdir(parents=True)
+    s = hp / "work" / script_name
+    s.write_text(script_body, encoding="utf-8")
+    s.chmod(0o755)
+    (hp / "state.json").write_text("{}", encoding="utf-8")
+    return hp
+
+
+@pytest.mark.tier3
+def test_run_handler_file_echoes_argv_and_env(tmp_path, base_tar):
+    hp = _hp(tmp_path, "say.sh", '#!/bin/sh\necho "cmd=$1 tries=$HP_TRIES"\n')
+    base = build_base(tmp_path / "base", from_tar=base_tar)
+    r = NspawnRunner(tmp_path / "run", base_dir=base)
+    r.prepare([])
+    try:
+        ctx = HandlerContext(student_cmd="grep -i err log", tries=4, last_out="", stage=0)
+        res = run_handler(r, ExecAction("say.sh"), ctx, hp_dir=hp)
+        assert res.exit_code == 0
+        assert res.stdout.strip() == "cmd=grep -i err log tries=4"
+    finally:
+        r.teardown()
+
+
+@pytest.mark.tier3
+def test_run_handler_command_predicate_exit_code(tmp_path, base_tar):
+    hp = tmp_path / "hp"
+    (hp / "work").mkdir(parents=True)
+    (hp / "state.json").write_text("{}", encoding="utf-8")
+    base = build_base(tmp_path / "base", from_tar=base_tar)
+    r = NspawnRunner(tmp_path / "run", base_dir=base)
+    r.prepare([])
+    try:
+        r.run(["sh", "-c", "printf 'ERROR here\\n' > /errors.txt"])
+        ctx = HandlerContext(student_cmd="", tries=0, last_out="", stage=0)
+        ok = run_handler(r, ExecAction("grep -q ERROR /errors.txt"), ctx, hp_dir=hp)
+        assert ok.exit_code == 0
+        no = run_handler(r, ExecAction("grep -q NOPE /errors.txt"), ctx, hp_dir=hp)
+        assert no.exit_code != 0
+    finally:
+        r.teardown()
