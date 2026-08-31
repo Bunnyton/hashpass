@@ -120,3 +120,15 @@ class ImageStore:
         """Return whether an image is stored under the reference."""
         name, version = _split_ref(ref)
         return (self._dir(name, version) / "meta.json").exists()
+
+    def list(self) -> list[str]:
+        """Return sorted `name:version` refs for every stored image (walks the images root)."""
+        if not self._root.exists():
+            return []
+        return sorted(
+            f"{name_dir.name}:{ver_dir.name}"
+            for name_dir in self._root.iterdir()
+            if name_dir.is_dir()
+            for ver_dir in name_dir.iterdir()
+            if (ver_dir / "meta.json").exists()
+        )
