@@ -1,10 +1,18 @@
 import pytest
 
 from hashpass.imagestore.store import ImageStore
+from hashpass.recipe.model import (
+    ExecAction,
+    SayAction,
+    Settings,
+    ShowFileAction,
+    TriesCond,
+    Voice,
+)
 from hashpass.recipe.parse import parse_recipe
-from hashpass.taskbuild import build_task
+from hashpass.taskbuild import _build_meta, build_task
 from hashpass.taskcode.bundle import load_bundle
-from hashpass.taskstore import load_task
+from hashpass.taskstore import load_task, meta_from_dict, meta_to_dict
 
 _DERIVED = """\
 image logtask:1
@@ -50,3 +58,32 @@ def test_build_task_rejects_passes_below_two(tmp_path):
     # guard fires before any build/nspawn, so the (absent) base_tar is never read
     with pytest.raises(ValueError, match="passes must be >= 2"):
         build_task(recipe, store, base_tar=tmp_path / "none.tar", workdir=tmp_path / "b", passes=1)
+
+
+_RECIPE = (
+    'image demo:1\n'
+    'settings\n  type-mode dramatic\n  type-speed 30\n'
+    'voice\n  hello say "hi"\n  bye exec bye.sh\n'
+    'react on command exec watch.sh\n'
+    'stage "one"\n'
+    '  solve echo hi\n  observe o\n'
+    '  on enter exec seed.sh\n'
+    '  on pass say "nice"\n'
+    '  on pass show file art/ok.txt\n'
+    '  hint tries 3 say "try -r"\n'
+)
+
+
+@pytest.mark.tier1
+def test_build_meta_carries_actions_hints_voice_settings_react():
+    meta = _build_meta("demo:1", parse_recipe(_RECIPE), ["derived"])
+    s = meta.stages[0]
+    assert s.on_enter == (ExecAction("seed.sh"),)
+    assert s.on_pass == (SayAction("nice"), ShowFileAction("art/ok.txt"))
+    assert s.hints[0].condition == TriesCond(3)
+    assert s.hints[0].action == SayAction("try -r")
+    assert meta.voice == Voice(hello=(SayAction("hi"),), bye=(ExecAction("bye.sh"),))
+    assert meta.settings == Settings(type_mode="dramatic", type_speed=30)
+    assert meta.react == (ExecAction("watch.sh"),)
+    # and the whole thing survives the JSON round-trip
+    assert meta_from_dict(meta_to_dict(meta)) == meta

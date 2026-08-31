@@ -116,13 +116,15 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
             message=s.message,
             neutral=s.neutral,
             check=s.check.value if s.check is not None else None,
-            on_enter=tuple(a.value for a in s.on_enter),
-            on_pass=tuple(a.value for a in s.on_pass),
+            on_enter=s.on_enter,
+            on_pass=s.on_pass,
             acceptance=acceptance[i],
+            hints=s.hints,
         )
         for i, s in enumerate(recipe.stages)
     )
-    return TaskMeta(image_ref=ref, stages=stages, readme=recipe.readme)
+    return TaskMeta(image_ref=ref, stages=stages, readme=recipe.readme,
+                    voice=recipe.voice, settings=recipe.settings, react=recipe.react)
 
 
 def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PLR0913
