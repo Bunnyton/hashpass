@@ -173,3 +173,12 @@ def test_interact_stops_on_stop_word_and_eof(stopper):
     cli.interact(session, read=lambda _p: stopper, write=writes.append, clock=lambda: "t")
     assert session.entered == 1
     assert writes == []
+
+
+@pytest.mark.tier1
+def test_cmd_run_unknown_ref_reports_and_exits_1(tmp_path):
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    out = []
+    io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "t")
+    assert cli.cmd_run(env, "ghost:1", io) == 1
+    assert out == ["no such image: ghost:1\n"]

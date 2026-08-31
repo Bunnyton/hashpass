@@ -199,3 +199,40 @@ def cmd_build(env: Home, taskfile: str) -> int:
         kind = "image"
     sys.stdout.write(f"built {kind} {ref}\n")
     return 0
+
+
+def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
+    """Open a live task session and drive it through the interactive REPL, then tear down."""
+    session = run_task(ref, store, env.work / "run", base_tar=env.base_tar,
+                       student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
+                       sink=io.write, sleep=time.sleep)
+    try:
+        interact(session, read=io.read, write=io.write, clock=io.clock)
+    finally:
+        session.teardown()
+    return 0
+
+
+def _run_image(env: Home, ref: str, store: ImageStore) -> int:
+    """Open an interactive `/bin/sh` in a bare image (inherited stdio), then tear down."""
+    runner = run_image(ref, store, env.work / "run", base_tar=env.base_tar)
+    try:
+        subprocess.run(["sudo", "systemd-nspawn", "-q", "--register=no",
+                        "-D", str(runner.rootfs), "/bin/sh"], check=False)
+    finally:
+        runner.teardown()
+    return 0
+
+
+def cmd_run(env: Home, ref: str, io: Io | None = None) -> int:
+    """Run a task (interactive student session) or a bare image (interactive shell)."""
+    io = io or _default_io()
+    store = ImageStore(env.images)
+    try:
+        stored = store.get(ref)
+    except KeyError:
+        io.write(f"no such image: {ref}\n")
+        return 1
+    if (stored.layer.parent / "task").exists():
+        return _run_task(env, ref, store, io)
+    return _run_image(env, ref, store)
