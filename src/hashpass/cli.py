@@ -267,3 +267,66 @@ def cmd_pull(env: Home, ref: str, registry: str) -> int:
     copied = RemoteRegistry(registry).pull(ref, store)
     sys.stdout.write(f"pulled {ref} ({len(copied)} layer(s))\n")
     return 0
+
+
+def task_mode(env: Home, io: Io | None = None) -> int:
+    """No-arg mode: list the built tasks, let the user pick one by number, and run it."""
+    io = io or _default_io()
+    store = ImageStore(env.images)
+    tasks = [ref for ref in store.list() if _kind(store, ref) == "task"]
+    if not tasks:
+        io.write("no tasks built yet — `hashpass build <Taskfile>` first\n")
+        return 0
+    for i, ref in enumerate(tasks, 1):
+        io.write(f"{i}. {ref}\n")
+    idx = select_index(io.read("pick a task # (blank to quit): "), len(tasks))
+    if idx is None:
+        return 0
+    return cmd_run(env, tasks[idx], io)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Construct the top-level argument parser with one sub-parser per command."""
+    parser = argparse.ArgumentParser(prog="hashpass",
+                                     description="Author, build, and run hashpass tasks.")
+    sub = parser.add_subparsers(dest="command")
+    p_build = sub.add_parser("build", help="build an image/task from a Taskfile")
+    p_build.add_argument("taskfile")
+    p_run = sub.add_parser("run", help="run a task (interactive) or a bare image (shell)")
+    p_run.add_argument("ref")
+    sub.add_parser("images", help="list built images and tasks")
+    p_login = sub.add_parser("login", help="log in to a registry (caches a token)")
+    p_login.add_argument("registry")
+    p_login.add_argument("-u", "--user")
+    p_push = sub.add_parser("push", help="push an image/task to a registry")
+    p_push.add_argument("ref")
+    p_push.add_argument("registry")
+    p_pull = sub.add_parser("pull", help="pull an image/task from a registry")
+    p_pull.add_argument("ref")
+    p_pull.add_argument("registry")
+    return parser
+
+
+def _dispatch(env: Home, args: argparse.Namespace) -> int:
+    """Route a parsed (non-empty) sub-command to its handler."""
+    command = args.command
+    if command == "build":
+        return cmd_build(env, args.taskfile)
+    if command == "run":
+        return cmd_run(env, args.ref)
+    if command == "images":
+        return cmd_images(env)
+    if command == "login":
+        return cmd_login(env, args.registry, args.user)
+    if command == "push":
+        return cmd_push(env, args.ref, args.registry)
+    return cmd_pull(env, args.ref, args.registry)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Parse args and dispatch; no sub-command drops into interactive task mode."""
+    args = build_parser().parse_args(argv)
+    env = build_env()
+    if args.command is None:
+        return task_mode(env)
+    return _dispatch(env, args)

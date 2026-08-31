@@ -7,6 +7,8 @@ from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage, mark_passed_local, new_progress
 from hashpass.taskrun import FeedResult
 
+_FAKE_RUN_EXIT = 7
+
 
 @pytest.mark.tier1
 def test_resolve_root_prefers_env_then_default_home(tmp_path):
@@ -182,3 +184,56 @@ def test_cmd_run_unknown_ref_reports_and_exits_1(tmp_path):
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "t")
     assert cli.cmd_run(env, "ghost:1", io) == 1
     assert out == ["no such image: ghost:1\n"]
+
+
+@pytest.mark.tier1
+def test_build_parser_namespaces():
+    p = cli.build_parser()
+    assert p.parse_args(["build", "T"]).taskfile == "T"
+    assert p.parse_args(["run", "x:1"]).ref == "x:1"
+    assert p.parse_args(["images"]).command == "images"
+    a = p.parse_args(["login", "http://h", "-u", "alice"])
+    assert (a.registry, a.user) == ("http://h", "alice")
+    a = p.parse_args(["push", "x:1", "http://h"])
+    assert (a.ref, a.registry) == ("x:1", "http://h")
+    assert p.parse_args(["pull", "x:1", "http://h"]).command == "pull"
+    assert p.parse_args([]).command is None
+
+
+@pytest.mark.tier1
+def test_main_images_dispatch(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HASHPASS_HOME", str(home))
+    store = ImageStore(home / "images")
+    _seed_image(store, tmp_path, "base")
+    _seed_image(store, tmp_path, "lab", task=True)
+    assert cli.main(["images"]) == 0
+    assert capsys.readouterr().out == cli.format_image_rows([("base:1", "image"), ("lab:1", "task")])
+
+
+@pytest.mark.tier1
+def test_main_no_args_empty_task_mode(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))
+    assert cli.main([]) == 0
+    assert "no tasks built yet" in capsys.readouterr().out
+
+
+@pytest.mark.tier1
+def test_task_mode_lists_and_dispatches_pick(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    store = ImageStore(home / "images")
+    _seed_image(store, tmp_path, "alpha", task=True)
+    _seed_image(store, tmp_path, "beta", task=True)
+    env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
+    chosen = {}
+
+    def fake_run(_env, ref, _io) -> int:
+        chosen["ref"] = ref
+        return _FAKE_RUN_EXIT
+
+    monkeypatch.setattr(cli, "cmd_run", fake_run)
+    listed = []
+    io = cli.Io(read=lambda _p: "2", write=listed.append, clock=lambda: "t")
+    assert cli.task_mode(env, io) == _FAKE_RUN_EXIT
+    assert chosen["ref"] == "beta:1"                 # #2 of sorted [alpha, beta]
+    assert listed == ["1. alpha:1\n", "2. beta:1\n"]
