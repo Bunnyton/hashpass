@@ -37,7 +37,8 @@ _MACHINE_HEX = 12         # hex chars of uuid entropy per machine name
 _RUN_DIR = ".hp-run"      # overlay-root dot-dir for per-run out/err/rc (hidden from a plain `ls /`)
 _BOOT_TIMEOUT = 30        # seconds to wait for machined registration (~2s typical)
 _READY_TIMEOUT = 30       # seconds to wait for machinectl-shell/session readiness after boot
-_READY_MARKER = ".hp-boot-ready"  # a shell-executed marker file proving commands run
+_READY_MARKER = ".hp-boot-ready"  # overlay marker for the boot-readiness probe result
+_READY_STABLE = 2         # consecutive is-system-running hits required (avoid a mid-boot race)
 _KILL_TIMEOUT = 10        # seconds to wait after terminating a wedged nspawn process
 
 
@@ -98,19 +99,34 @@ class BootedNspawnRunner(NspawnRunner):
         self._await_shell_ready()
 
     def _await_shell_ready(self) -> None:
-        """Wait until `machinectl shell` actually runs a command (session ready after boot)."""
+        """
+        Wait for FULL boot (systemd is-system-running running/degraded).
+
+        machined registers the machine within ~1-2s, but until systemd finishes booting
+        (logind + the session infra up) `machinectl shell` runs commands only flakily --
+        the student would type and see nothing. Poll is-system-running (written to an
+        overlay marker so we can read the result host-side) until it reaches a terminal
+        state, and require it twice in a row so we do not race a mid-boot success.
+        """
         marker = self._mnt / _READY_MARKER
+        stable = 0
         for _ in range(_READY_TIMEOUT):
+            marker.unlink(missing_ok=True)
             subprocess.run(
                 ["sudo", "machinectl", "shell", self._machine, "/bin/sh", "-c",
-                 f"printf 1 > /{_READY_MARKER}"],
+                 f"systemctl is-system-running > /{_READY_MARKER} 2>&1"],
                 capture_output=True, text=True, encoding="utf-8", check=False,
             )
-            if marker.exists():
-                marker.unlink()
-                return
+            state = marker.read_text(encoding="utf-8").strip() if marker.exists() else ""
+            if state in {"running", "degraded"}:
+                stable += 1
+                if stable >= _READY_STABLE:
+                    marker.unlink(missing_ok=True)
+                    return
+            else:
+                stable = 0
             time.sleep(1)
-        msg = f"booted machine {self._machine!r} not shell-ready within {_READY_TIMEOUT}s"
+        msg = f"booted machine {self._machine!r} did not finish booting within {_READY_TIMEOUT}s"
         raise RuntimeError(msg)
 
     def run(self, argv: list[str], *, binds: list[tuple[str, str]] | None = None,
