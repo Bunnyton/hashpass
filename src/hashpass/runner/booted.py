@@ -38,7 +38,8 @@ _RUN_DIR = ".hp-run"      # overlay-root dot-dir for per-run out/err/rc (hidden 
 _BOOT_TIMEOUT = 30        # seconds to wait for machined registration (~2s typical)
 _READY_TIMEOUT = 30       # seconds to wait for machinectl-shell/session readiness after boot
 _READY_MARKER = ".hp-boot-ready"  # overlay marker for the boot-readiness probe result
-_READY_STABLE = 2         # consecutive is-system-running hits required (avoid a mid-boot race)
+_READY_STABLE = 2         # consecutive readiness hits required (avoid a mid-boot race)
+_RUN_RETRIES = 8          # machinectl-shell session setup is flaky; retry until the cmd runs
 _KILL_TIMEOUT = 10        # seconds to wait after terminating a wedged nspawn process
 
 
@@ -99,34 +100,22 @@ class BootedNspawnRunner(NspawnRunner):
         self._await_shell_ready()
 
     def _await_shell_ready(self) -> None:
-        """
-        Wait for FULL boot (systemd is-system-running running/degraded).
-
-        machined registers the machine within ~1-2s, but until systemd finishes booting
-        (logind + the session infra up) `machinectl shell` runs commands only flakily --
-        the student would type and see nothing. Poll is-system-running (written to an
-        overlay marker so we can read the result host-side) until it reaches a terminal
-        state, and require it twice in a row so we do not race a mid-boot success.
-        """
+        """Wait until `machinectl shell` reliably runs a command (session infra up post-boot)."""
         marker = self._mnt / _READY_MARKER
         stable = 0
         for _ in range(_READY_TIMEOUT):
             marker.unlink(missing_ok=True)
             subprocess.run(
                 ["sudo", "machinectl", "shell", self._machine, "/bin/sh", "-c",
-                 f"systemctl is-system-running > /{_READY_MARKER} 2>&1"],
+                 f"printf 1 > /{_READY_MARKER}"],
                 capture_output=True, text=True, encoding="utf-8", check=False,
             )
-            state = marker.read_text(encoding="utf-8").strip() if marker.exists() else ""
-            if state in {"running", "degraded"}:
-                stable += 1
-                if stable >= _READY_STABLE:
-                    marker.unlink(missing_ok=True)
-                    return
-            else:
-                stable = 0
+            stable = stable + 1 if marker.exists() else 0
+            if stable >= _READY_STABLE:
+                marker.unlink(missing_ok=True)
+                return
             time.sleep(1)
-        msg = f"booted machine {self._machine!r} did not finish booting within {_READY_TIMEOUT}s"
+        msg = f"booted machine {self._machine!r} not shell-ready within {_READY_TIMEOUT}s"
         raise RuntimeError(msg)
 
     def run(self, argv: list[str], *, binds: list[tuple[str, str]] | None = None,
@@ -134,21 +123,26 @@ class BootedNspawnRunner(NspawnRunner):
         """Run in the booted machine (no binds, §3) or on a fresh /hp-bound overlay (binds, §4)."""
         if binds:
             return self._run_handler(argv, binds, setenv or {})
-        token = uuid4().hex
         rundir = f"/{_RUN_DIR}"
-        # machinectl's PTY does not pipe stdout: redirect out/err/rc to overlay-backed files, then
-        # read them host-side. `cd /` keeps cwd == '/' (parity with non-boot nspawn: relative writes).
-        wrapped = (f"mkdir -p {rundir}; cd /; {shlex.join(argv)} "
-                   f">{rundir}/{token}.out 2>{rundir}/{token}.err; "
-                   f"printf %s $? >{rundir}/{token}.rc")
-        subprocess.run(
-            ["sudo", "machinectl", "shell", self._machine, "/bin/sh", "-c", wrapped],
-            capture_output=True, text=True, encoding="utf-8", check=False,
-        )  # blocks until the command finishes
         host = self._mnt / _RUN_DIR
-        return _capture_files(_read(host / f"{token}.out"),
-                              _read(host / f"{token}.err"),
-                              _read(host / f"{token}.rc"))
+        # machinectl's PTY does not pipe stdout: the wrapped command redirects out/err/rc to
+        # overlay-backed files read host-side. `cd /` keeps cwd == '/' (non-boot parity). A new
+        # machinectl session is flaky, so retry (fresh token) until the wrapper actually runs --
+        # a missing rc file means it never executed (no side effect), so retrying is safe.
+        for _ in range(_RUN_RETRIES):
+            token = uuid4().hex
+            wrapped = (f"mkdir -p {rundir}; cd /; {shlex.join(argv)} "
+                       f">{rundir}/{token}.out 2>{rundir}/{token}.err; "
+                       f"printf %s $? >{rundir}/{token}.rc")
+            subprocess.run(
+                ["sudo", "machinectl", "shell", self._machine, "/bin/sh", "-c", wrapped],
+                capture_output=True, text=True, encoding="utf-8", check=False,
+            )  # blocks until the command finishes
+            if (host / f"{token}.rc").exists():
+                return _capture_files(_read(host / f"{token}.out"),
+                                      _read(host / f"{token}.err"),
+                                      _read(host / f"{token}.rc"))
+        return _capture_files("", "", "")   # never executed after retries -> sentinel rc
 
     def _run_handler(self, argv: list[str], binds: list[tuple[str, str]],
                      setenv: dict[str, str]) -> RunResult:
