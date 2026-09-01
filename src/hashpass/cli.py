@@ -286,17 +286,26 @@ def _grade_loop(session: object, io: Io, stop: threading.Event) -> None:
 
 
 def _interactive_shell(machine: str) -> None:
-    """Attach the terminal to a live fish shell in the booted machine (highlighting + a TTY)."""
-    # Ignore terminal signals while the interactive shell runs so Ctrl+C / Ctrl+\\ interrupt the
-    # command INSIDE the machine (delivered via the shared process group) instead of raising in
-    # Python -> tearing down the session and killing the shell.
-    saved = {sig: signal.signal(sig, signal.SIG_IGN)
-             for sig in (signal.SIGINT, signal.SIGQUIT)}
+    """Hand the terminal to a live fish shell in the booted machine as its foreground pgrp."""
+    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/fish"]
     try:
-        subprocess.run(["sudo", "machinectl", "shell", machine, "/usr/bin/fish"], check=False)
+        fd = sys.stdin.fileno()
+        old_pgrp = os.tcgetpgrp(fd)
+    except (OSError, ValueError):
+        subprocess.run(argv, check=False)   # not a real terminal (piped): just run it
+        return
+    # Give the shell its OWN process group and make it the terminal's FOREGROUND group, so
+    # `machinectl shell` puts the terminal in raw mode: Ctrl+C is then relayed to the command
+    # inside the machine (not delivered as SIGINT that kills the session) and every keystroke
+    # reaches the shell directly instead of being line-buffered by the outer canonical mode.
+    prev_ttou = signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+    proc = subprocess.Popen(argv, process_group=0)  # own pgrp (pgid == pid), same session
+    try:
+        os.tcsetpgrp(fd, proc.pid)
+        proc.wait()
     finally:
-        for sig, handler in saved.items():
-            signal.signal(sig, handler)
+        os.tcsetpgrp(fd, old_pgrp)
+        signal.signal(signal.SIGTTOU, prev_ttou)
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
