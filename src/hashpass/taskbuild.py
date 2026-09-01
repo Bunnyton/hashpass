@@ -12,7 +12,6 @@ from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore
 from hashpass.recipe.model import Recipe, StageSpec, image_ref
 from hashpass.recipe.taskbridge import recipe_to_taskcode
-from hashpass.runner.booted import BootedNspawnRunner
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import Bundle, dump_bundle
 from hashpass.taskcode.derive import DerivedChecks, StageChecks
@@ -185,8 +184,12 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
     base = base or build_base(workdir / "base", from_tar=base_tar)
     counter = itertools.count()
 
-    def factory() -> BootedNspawnRunner:
-        runner = BootedNspawnRunner(workdir / f"derive{next(counter)}", base_dir=base)
+    def factory() -> NspawnRunner:
+        # Derivation is INTERNAL (never seen by the student): a fast, reliable NON-boot nspawn
+        # runs the solve + captures the FS. Avoids booting a machine per stage/pass (~6 boots a
+        # build) -- much faster and it does not stress the host's machined. The student runtime
+        # (run_task/run_image) still boots for a real, live system.
+        runner = NspawnRunner(workdir / f"derive{next(counter)}", base_dir=base)
         runner.prepare(lowers)
         return runner
 

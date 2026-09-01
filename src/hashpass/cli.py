@@ -3,6 +3,7 @@ import argparse
 import getpass
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -286,7 +287,16 @@ def _grade_loop(session: object, io: Io, stop: threading.Event) -> None:
 
 def _interactive_shell(machine: str) -> None:
     """Attach the terminal to a live fish shell in the booted machine (highlighting + a TTY)."""
-    subprocess.run(["sudo", "machinectl", "shell", machine, "/usr/bin/fish"], check=False)
+    # Ignore terminal signals while the interactive shell runs so Ctrl+C / Ctrl+\\ interrupt the
+    # command INSIDE the machine (delivered via the shared process group) instead of raising in
+    # Python -> tearing down the session and killing the shell.
+    saved = {sig: signal.signal(sig, signal.SIG_IGN)
+             for sig in (signal.SIGINT, signal.SIGQUIT)}
+    try:
+        subprocess.run(["sudo", "machinectl", "shell", machine, "/usr/bin/fish"], check=False)
+    finally:
+        for sig, handler in saved.items():
+            signal.signal(sig, handler)
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
