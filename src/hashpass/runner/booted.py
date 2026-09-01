@@ -36,6 +36,8 @@ _MACHINE_PREFIX = "hp-"   # systemd machine-name prefix (hostname-valid)
 _MACHINE_HEX = 12         # hex chars of uuid entropy per machine name
 _RUN_DIR = ".hp-run"      # overlay-root dot-dir for per-run out/err/rc (hidden from a plain `ls /`)
 _BOOT_TIMEOUT = 30        # seconds to wait for machined registration (~2s typical)
+_READY_TIMEOUT = 30       # seconds to wait for machinectl-shell/session readiness after boot
+_READY_MARKER = ".hp-boot-ready"  # a shell-executed marker file proving commands run
 _KILL_TIMEOUT = 10        # seconds to wait after terminating a wedged nspawn process
 
 
@@ -88,9 +90,27 @@ class BootedNspawnRunner(NspawnRunner):
         for _ in range(_BOOT_TIMEOUT):
             if subprocess.run(["sudo", "machinectl", "status", self._machine],
                               capture_output=True, check=False).returncode == 0:
+                break
+            time.sleep(1)
+        else:
+            msg = f"booted machine {self._machine!r} did not register within {_BOOT_TIMEOUT}s"
+            raise RuntimeError(msg)
+        self._await_shell_ready()
+
+    def _await_shell_ready(self) -> None:
+        """Wait until `machinectl shell` actually runs a command (session ready after boot)."""
+        marker = self._mnt / _READY_MARKER
+        for _ in range(_READY_TIMEOUT):
+            subprocess.run(
+                ["sudo", "machinectl", "shell", self._machine, "/bin/sh", "-c",
+                 f"printf 1 > /{_READY_MARKER}"],
+                capture_output=True, text=True, encoding="utf-8", check=False,
+            )
+            if marker.exists():
+                marker.unlink()
                 return
             time.sleep(1)
-        msg = f"booted machine {self._machine!r} did not register within {_BOOT_TIMEOUT}s"
+        msg = f"booted machine {self._machine!r} not shell-ready within {_READY_TIMEOUT}s"
         raise RuntimeError(msg)
 
     def run(self, argv: list[str], *, binds: list[tuple[str, str]] | None = None,
