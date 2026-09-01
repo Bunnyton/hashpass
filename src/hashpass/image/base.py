@@ -10,6 +10,19 @@ _SYSTEMD_INSTALL = (
 )
 
 
+def _wipe_tree(path: Path) -> None:
+    """Empty a possibly root-owned dir tree using only granted-sudo commands (no sudo rm)."""
+    empty = path.parent / f".empty-{path.name}"
+    empty.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run(
+            ["sudo", "rsync", "-a", "--delete", str(empty) + "/", str(path) + "/"],
+            check=True,
+        )
+    finally:
+        empty.rmdir()
+
+
 def build_base(dest: Path, *, from_tar: Path) -> Path:
     """
     Build a base rootfs: extract a Debian rootfs, then overlay the runtime tree.
@@ -23,12 +36,15 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
 
     """
     dest = Path(dest)
-    if (dest / "usr/bin/hash").exists():
-        # Already fully built (idempotent): a caller may reuse one workdir for several
-        # builds, and re-extracting the tar over an already apt-configured tree corrupts
-        # it (dpkg aborts). The base (trixie-slim + systemd + runtime) is invariant, so
-        # reuse it -- this also avoids rebuilding the base on every build/build_task/run.
+    if (dest / "lib/systemd/systemd").exists() and (dest / "usr/bin/hash").exists():
+        # Already a COMPLETE bootable base (systemd from apt + runtime from rsync): reuse it.
+        # Rebuilding would re-extract the tar over an apt-configured tree and corrupt dpkg,
+        # and it avoids rebuilding the invariant base on every build/build_task/run. BOTH
+        # markers are required, so a stale pre-systemd base or a half-built one is rebuilt
+        # (the usr/bin/hash marker alone is present in legacy non-bootable bases too).
         return dest
+    if dest.exists():
+        _wipe_tree(dest)  # stale/partial tree -> clear it so the fresh tar extracts clean
     dest.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["sudo", "tar", "-xpf", str(from_tar), "-C", str(dest)],
