@@ -7,7 +7,7 @@ _SYSTEMD_INSTALL = (
     # its extracted contents are root-owned; systemd's postinst tmpfiles refuses that "unsafe
     # path transition" (/ owned by 1000 -> /etc owned by root) and aborts dpkg. Root-own / to fix.
     "chown 0:0 / && apt-get update "
-    "&& apt-get install -y systemd systemd-sysv dbus procps fish"
+    "&& apt-get install -y systemd systemd-sysv dbus fish"
 )
 
 
@@ -51,8 +51,9 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
         ["sudo", "tar", "-xpf", str(from_tar), "-C", str(dest)],
         check=True,
     )
-    # Make the base BOOTABLE: install systemd (PID 1), dbus (machinectl), procps (ps/pgrep).
-    # Non-boot install; run once per base build (Phase 7 — every task runs in a booted machine).
+    # Make the base BOOTABLE + interactive: systemd (PID 1), dbus (machinectl), fish (the shell).
+    # Deliberately MINIMAL — task tools like procps/ps are installed by tasks, never baked in
+    # (else a stage that checks for them passes before the student has done anything).
     subprocess.run(
         ["sudo", "systemd-nspawn", "-q", "--register=no", "-D", str(dest),
          "sh", "-c", _SYSTEMD_INSTALL],

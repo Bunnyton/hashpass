@@ -15,8 +15,6 @@ def test_build_base_is_bootable(tmp_path, base_tar):
     base = build_base(tmp_path / "base", from_tar=base_tar)
     # systemd installed -> base can be booted with `systemd-nspawn -b`
     assert (base / "lib/systemd/systemd").exists()
-    # procps installed -> process tasks have ps/pgrep
-    assert (base / "usr/bin/pgrep").exists()
     # fish installed -> the interactive shell is available
     assert (base / "usr/bin/fish").exists()
 
@@ -40,4 +38,4 @@ def test_build_base_rebuilds_a_stale_base(tmp_path, base_tar):
     (dest / "usr/bin/hash").write_text("x", encoding="utf-8")
     build_base(dest, from_tar=base_tar)
     assert (dest / "lib/systemd/systemd").exists()
-    assert (dest / "usr/bin/pgrep").exists()
+    assert (dest / "usr/bin/fish").exists()
