@@ -33,7 +33,8 @@ _BASE_TARNAME = "rootfs.tar"
 _CREDS_NAME = "creds.json"
 _WORK_DIRNAME = "work"
 _DOCKER = "docker"
-_BASE_IMAGE = "debian:trixie"
+_BASE_IMAGE = "debian:trixie-slim"  # slim boots + runs machinectl-shell commands reliably;
+# full debian:trixie breaks command execution in the booted machine (and adds no ps/systemd).
 _BASE_NAME = "debian"
 _BASE_VERSION = "trixie"
 _DEFAULT_STUDENT = "local"

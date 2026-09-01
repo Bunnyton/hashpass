@@ -64,7 +64,7 @@ def test_ensure_base_tar_export_argv(tmp_path):
         return _Completed()
 
     cli.ensure_base_tar(dest, run=fake_run, which=lambda _n: "/usr/bin/docker")
-    assert calls[0] == ["docker", "create", "debian:trixie"]
+    assert calls[0] == ["docker", "create", "debian:trixie-slim"]
     assert calls[1] == ["docker", "export", "cid123", "-o", str(dest)]
     assert calls[2] == ["docker", "rm", "cid123"]
     assert dest.parent.exists()
