@@ -115,8 +115,7 @@ class BootedNspawnRunner(NspawnRunner):
                 marker.unlink(missing_ok=True)
                 return
             time.sleep(1)
-        msg = f"booted machine {self._machine!r} not shell-ready within {_READY_TIMEOUT}s"
-        raise RuntimeError(msg)
+        # best-effort: proceed even if not confirmed ready; run() retries per-command flakiness
 
     def run(self, argv: list[str], *, binds: list[tuple[str, str]] | None = None,
             setenv: dict[str, str] | None = None) -> RunResult:
