@@ -143,15 +143,22 @@ class NspawnRunner:
 
     def poweroff(self) -> None:
         """
-        Power off the booted machine and wait for the nspawn process to exit.
+        Terminate the booted machine (clean machined deregistration) and reap the process.
 
         No-op if the machine was never booted.
 
         """
         if self._proc is None:
             return
-        subprocess.run(["sudo", "machinectl", "poweroff", self._machine], check=False)
-        self._proc.wait(timeout=30)
+        # terminate (not poweroff): immediate kill + clean deregistration from machined. A
+        # graceful poweroff often hangs on container shutdown, and killing it then leaks the
+        # machine scope -- machined degrades after many machines and new boots fail to register.
+        subprocess.run(["sudo", "machinectl", "terminate", self._machine], check=False)
+        try:
+            self._proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            self._proc.terminate()
+            self._proc.wait(timeout=5)
         self._proc = None
         self._machine = None
 
