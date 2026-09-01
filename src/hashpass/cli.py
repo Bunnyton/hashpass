@@ -3,7 +3,6 @@ import argparse
 import getpass
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import threading
@@ -286,26 +285,8 @@ def _grade_loop(session: object, io: Io, stop: threading.Event) -> None:
 
 
 def _interactive_shell(machine: str) -> None:
-    """Hand the terminal to a live fish shell in the booted machine as its foreground pgrp."""
-    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/fish"]
-    try:
-        fd = sys.stdin.fileno()
-        old_pgrp = os.tcgetpgrp(fd)
-    except (OSError, ValueError):
-        subprocess.run(argv, check=False)   # not a real terminal (piped): just run it
-        return
-    # Give the shell its OWN process group and make it the terminal's FOREGROUND group, so
-    # `machinectl shell` puts the terminal in raw mode: Ctrl+C is then relayed to the command
-    # inside the machine (not delivered as SIGINT that kills the session) and every keystroke
-    # reaches the shell directly instead of being line-buffered by the outer canonical mode.
-    prev_ttou = signal.signal(signal.SIGTTOU, signal.SIG_IGN)
-    proc = subprocess.Popen(argv, process_group=0)  # own pgrp (pgid == pid), same session
-    try:
-        os.tcsetpgrp(fd, proc.pid)
-        proc.wait()
-    finally:
-        os.tcsetpgrp(fd, old_pgrp)
-        signal.signal(signal.SIGTTOU, prev_ttou)
+    """Open a live fish shell in the booted machine (inherited terminal), then return."""
+    subprocess.run(["sudo", "machinectl", "shell", machine, "/usr/bin/fish"], check=False)
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
