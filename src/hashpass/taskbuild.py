@@ -141,7 +141,8 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
                     voice=recipe.voice, settings=recipe.settings, react=recipe.react)
 
 
-def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PLR0913
+def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
+               base_tar: Path | None = None, base: Path | None = None,
                workdir: Path, passes: int = 3, sudo: bool = True,
                progress: Callable[[str], None] | None = None) -> StoredTask:
     """
@@ -157,7 +158,9 @@ def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PL
     Args:
         recipe: A task recipe (must declare stages).
         store: Image store to build into and resolve the chain from.
-        base_tar: Rootfs tarball for the bottom base layer.
+        base_tar: Rootfs tarball for the bottom base layer (fallback when `base` is None).
+        base: Prebuilt base rootfs layer (the `debian:trixie` image); when given it is
+            used directly and `base_tar` is ignored (built once in the store, reused).
         workdir: Scratch dir for the image build, base, and per-pass runners.
         passes: Derivation passes per observed stage (>= 2).
         sudo: Whether overlay mounts use sudo (True for real nspawn).
@@ -173,13 +176,13 @@ def build_task(recipe: Recipe, store: ImageStore, *, base_tar: Path,  # noqa: PL
         raise ValueError(msg)
     ref = image_ref(recipe)
     _report(progress, f"building image {ref}: {len(recipe.steps)} build step(s)")
-    image = build(recipe, store, base_tar=base_tar, workdir=workdir / "img",
+    image = build(recipe, store, base_tar=base_tar, base=base, workdir=workdir / "img",
                   sudo=sudo, progress=progress)
     task = recipe_to_taskcode(recipe)
 
     _report(progress, f"deriving acceptance: {len(recipe.stages)} stage(s) x {passes} pass(es)")
     lowers = resolve_lowers((ref,), store)
-    base = build_base(workdir / "base", from_tar=base_tar)
+    base = base or build_base(workdir / "base", from_tar=base_tar)
     counter = itertools.count()
 
     def factory() -> BootedNspawnRunner:

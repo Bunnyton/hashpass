@@ -17,6 +17,8 @@ def test_build_base_is_bootable(tmp_path, base_tar):
     assert (base / "lib/systemd/systemd").exists()
     # procps installed -> process tasks have ps/pgrep
     assert (base / "usr/bin/pgrep").exists()
+    # fish installed -> the interactive shell is available
+    assert (base / "usr/bin/fish").exists()
 
 
 @pytest.mark.tier3

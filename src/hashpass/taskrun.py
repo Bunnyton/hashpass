@@ -184,13 +184,31 @@ class TaskSession:
                                       runner=self.student, hp_dir=self.hp_dir)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
 
+    def check_current(self, *, ts: str) -> FeedResult:
+        """
+        Passively grade the current stage against the student's live FS (no command).
+
+        For background grading while the student works in a real shell: captures the
+        current stage's acceptance from the live student rootfs and, on a pass, fires
+        `on_pass` + advances (speaking `voice bye` once every stage is done).
+        """
+        stage = current_stage(self.progress)
+        if stage is None:
+            return FeedResult(advanced=False, stage=None, local_key=None)
+        sm = self.meta.stages[stage]
+        accepted, key = self._accept(stage, sm, "", "", ts)
+        if accepted:
+            self._on_pass(stage, self._ctx("", self.tries[stage], stage), ts)
+        return FeedResult(advanced=accepted, stage=stage, local_key=key)
+
     def teardown(self) -> None:
         """Tear down the student container (unmount overlay). The /hp copy is scratch."""
         self.student.teardown()
 
 
 def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
-             base_tar: Path, student_id: str, nonce: str,
+             base_tar: Path | None = None, base: Path | None = None,
+             student_id: str, nonce: str,
              sink: Callable[[str], None] = _stdout,
              sleep: Callable[[float], None] = time.sleep) -> TaskSession:
     """
@@ -204,7 +222,9 @@ def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
         ref: Task/image reference (`name` or `name:version`).
         store: Image store holding the task and its image chain.
         workdir: Scratch dir for the base, the student runner tree, and the /hp copy.
-        base_tar: Rootfs tarball for the bottom base layer.
+        base_tar: Rootfs tarball for the bottom base layer (fallback when `base` is None).
+        base: Prebuilt base rootfs layer (the `debian:trixie` image); when given it is
+            used directly and `base_tar` is ignored (built once in the store, reused).
         student_id: Student identity (folded into evidence for derived stages).
         nonce: Per-session nonce for local keys.
         sink: Where rendered text is emitted (default stdout write).
@@ -217,7 +237,7 @@ def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
     workdir = Path(workdir)
     stored = load_task(ref, store)
     lowers = resolve_lowers((ref,), store)
-    base = build_base(workdir / "base", from_tar=base_tar)
+    base = base or build_base(workdir / "base", from_tar=base_tar)
     student = BootedNspawnRunner(workdir / "student", base_dir=base)
     student.prepare(lowers)
     try:

@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import uuid
@@ -14,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from hashpass.build import build, run_image
+from hashpass.image.base import build_base
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage
 from hashpass.recipe.model import Recipe, image_ref, is_task
@@ -31,9 +33,12 @@ _BASE_TARNAME = "rootfs.tar"
 _CREDS_NAME = "creds.json"
 _WORK_DIRNAME = "work"
 _DOCKER = "docker"
-_BASE_IMAGE = "debian:trixie-slim"
+_BASE_IMAGE = "debian:trixie"
+_BASE_NAME = "debian"
+_BASE_VERSION = "trixie"
 _DEFAULT_STUDENT = "local"
 _STOP_WORDS = frozenset({"exit", "quit"})
+_GRADE_POLL = 2.5  # seconds between background stage-acceptance polls
 _COL_GAP = "  "
 _HEADER = ("REF", "KIND")
 
@@ -121,6 +126,27 @@ def ensure_base_tar(dest: Path, *, run: Callable[..., subprocess.CompletedProces
     return dest
 
 
+def ensure_base_image(env: Home, store: ImageStore, *,
+                      run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+                      which: Callable[[str], str | None] = shutil.which) -> Path:
+    """
+    Ensure the single base image `debian:trixie` exists in the store; build it once.
+
+    Exports the Debian rootfs (once), bakes it bootable + interactive (systemd, procps,
+    fish, runtime) via build_base, and stores it as the parentless `debian:trixie` image
+    that every build/run stacks on. Returns the stored base layer directory.
+    """
+    ref = f"{_BASE_NAME}:{_BASE_VERSION}"
+    try:
+        return store.get(ref).layer
+    except KeyError:
+        pass
+    ensure_base_tar(env.base_tar, run=run, which=which)
+    built = build_base(env.work / "base-build", from_tar=env.base_tar)
+    store.save(_BASE_NAME, _BASE_VERSION, built, (), sudo=True)  # root-owned rootfs -> sudo rsync
+    return store.get(ref).layer
+
+
 def _kind(store: ImageStore, ref: str) -> str:
     """Classify a stored ref as a task (has a task/ artifacts dir) or a bare image."""
     return "task" if (store.get(ref).layer.parent / "task").exists() else "image"
@@ -206,36 +232,88 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None) -> int:
     recipe = load_recipe(Path(taskfile))
     name, version = resolve_ref(recipe, tag, Path(taskfile))
     recipe = replace(recipe, name=name, version=version)
-    ensure_base_tar(env.base_tar)
     store = ImageStore(env.images)
+    base = ensure_base_image(env, store)
     ref = image_ref(recipe)
     if is_task(recipe):
-        build_task(recipe, store, base_tar=env.base_tar, workdir=env.work / "build", progress=_progress)
+        build_task(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
         kind = "task"
     else:
-        build(recipe, store, base_tar=env.base_tar, workdir=env.work / "build", progress=_progress)
+        build(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
         kind = "image"
     sys.stdout.write(f"✓ built {kind} {ref}\n")
     return 0
 
 
+def _announce_stage(session: object, io: Io) -> None:
+    """Print the current stage number and its goal (the system talking to the student)."""
+    stage = current_stage(session.progress)
+    if stage is None:
+        return
+    total = len(session.meta.stages)
+    io.write(f"\n\u2500\u2500 stage {stage + 1}/{total} \u2500\u2500  "
+             f"{session.meta.stages[stage].message}\n")
+
+
+def _advance_and_announce(session: object, io: Io) -> bool:
+    """
+    Grade the current stage against the live FS once; announce a pass + next goal.
+
+    Returns whether a stage advanced (so callers can drain multiple completed stages).
+    """
+    try:
+        res = session.check_current(ts=io.clock())
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError):
+        return False
+    if not res.advanced:
+        return False
+    io.write(f"\n\u2713 stage passed  {res.local_key}\n")
+    if current_stage(session.progress) is None:
+        io.write("\u2713 all stages passed \u2014 task complete\n")
+    else:
+        session.enter()
+        _announce_stage(session, io)
+    return True
+
+
+def _grade_loop(session: object, io: Io, stop: threading.Event) -> None:
+    """Background: poll the live student FS; announce every stage the student completes."""
+    while not stop.wait(_GRADE_POLL):
+        while _advance_and_announce(session, io):
+            pass
+
+
+def _interactive_shell(machine: str) -> None:
+    """Attach the terminal to a live fish shell in the booted machine (highlighting + a TTY)."""
+    subprocess.run(["sudo", "machinectl", "shell", machine, "/usr/bin/fish"], check=False)
+
+
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
-    """Open a live task session and drive it through the interactive REPL, then tear down."""
-    session = run_task(ref, store, env.work / "run", base_tar=env.base_tar,
+    """Boot the task, show each stage goal, drop into a live fish shell; grade in the background."""
+    session = run_task(ref, store, env.work / "run", base=ensure_base_image(env, store),
                        student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
                        sink=io.write, sleep=time.sleep)
     try:
-        interact(session, read=io.read, write=io.write, clock=io.clock)
+        session.enter()                    # greet + fire the first stage on_enter
+        _announce_stage(session, io)
+        stop = threading.Event()
+        grader = threading.Thread(target=_grade_loop, args=(session, io, stop), daemon=True)
+        grader.start()
+        _interactive_shell(session.student.machine)
+        stop.set()
+        grader.join(timeout=_GRADE_POLL * 2)
+        while _advance_and_announce(session, io):   # final drain after the shell exits
+            pass
     finally:
         session.teardown()
     return 0
 
 
 def _run_image(env: Home, ref: str, store: ImageStore) -> int:
-    """Open an interactive `/bin/sh` in the booted image machine (inherited stdio), then tear down."""
-    runner = run_image(ref, store, env.work / "run", base_tar=env.base_tar)
+    """Open a live fish shell in the booted image machine (inherited stdio), then tear down."""
+    runner = run_image(ref, store, env.work / "run", base=ensure_base_image(env, store))
     try:
-        subprocess.run(["sudo", "machinectl", "shell", runner.machine, "/bin/sh"], check=False)
+        _interactive_shell(runner.machine)
     finally:
         runner.teardown()
     return 0
@@ -250,7 +328,6 @@ def cmd_run(env: Home, ref: str, io: Io | None = None) -> int:
     except KeyError:
         io.write(f"no such image: {ref}\n")
         return 1
-    ensure_base_tar(env.base_tar)  # run needs the base rootfs too — a pull doesn't transfer it
     if (stored.layer.parent / "task").exists():
         return _run_task(env, ref, store, io)
     return _run_image(env, ref, store)

@@ -218,3 +218,21 @@ def test_e2e_dsl_hint_fires_and_renders(tmp_path, base_tar):
         assert ok.local_key is not None
     finally:
         session.teardown()
+
+
+@pytest.mark.tier3
+def test_check_current_grades_passively(tmp_path, base_tar):
+    # Background grading: check_current advances a stage from the live FS, with no command.
+    store = ImageStore(tmp_path / "images")
+    build_task(parse_recipe(_DERIVED), store, base_tar=base_tar, workdir=tmp_path / "bt", passes=2)
+    ts = "2026-08-31T00:00:00"
+    session = run_task("logtask:1", store, tmp_path / "run", base_tar=base_tar,
+                       student_id="s1", nonce="n1")
+    try:
+        assert session.check_current(ts=ts).advanced is False       # artifact absent yet
+        session.student.run(["sh", "-c", "grep -rh ERROR /var/log/app > /errors.txt"])
+        res = session.check_current(ts=ts)                          # now the live FS satisfies it
+        assert res.advanced is True
+        assert res.local_key is not None
+    finally:
+        session.teardown()

@@ -6,7 +6,8 @@ _SYSTEMD_INSTALL = (
     # chown 0:0 / first: the base dir is created by the unprivileged builder (uid 1000) while
     # its extracted contents are root-owned; systemd's postinst tmpfiles refuses that "unsafe
     # path transition" (/ owned by 1000 -> /etc owned by root) and aborts dpkg. Root-own / to fix.
-    "chown 0:0 / && apt-get update && apt-get install -y systemd systemd-sysv dbus procps"
+    "chown 0:0 / && apt-get update "
+    "&& apt-get install -y systemd systemd-sysv dbus procps fish"
 )
 
 

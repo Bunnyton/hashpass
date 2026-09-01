@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -63,7 +64,7 @@ def test_ensure_base_tar_export_argv(tmp_path):
         return _Completed()
 
     cli.ensure_base_tar(dest, run=fake_run, which=lambda _n: "/usr/bin/docker")
-    assert calls[0] == ["docker", "create", "debian:trixie-slim"]
+    assert calls[0] == ["docker", "create", "debian:trixie"]
     assert calls[1] == ["docker", "export", "cid123", "-o", str(dest)]
     assert calls[2] == ["docker", "rm", "cid123"]
     assert dest.parent.exists()
@@ -251,18 +252,20 @@ def test_main_reports_user_error_without_traceback(tmp_path, monkeypatch, capsys
 
 
 @pytest.mark.tier1
-def test_cmd_run_ensures_base_tar(tmp_path, monkeypatch):
-    # `run` must ensure the base rootfs too (a pull transfers layers, not the base tar).
+def test_run_image_ensures_base_image(tmp_path, monkeypatch):
+    # `run` must ensure the base IMAGE too (a pull transfers layers, not the base).
     home = tmp_path / "home"
     store = ImageStore(home / "images")
     _seed_image(store, tmp_path, "pulled")
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
     seen = {}
-    monkeypatch.setattr(cli, "ensure_base_tar", lambda dest: seen.setdefault("dest", dest))
-    monkeypatch.setattr(cli, "_run_image", lambda *_a: 0)
-    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "t")
-    assert cli.cmd_run(env, "pulled:1", io) == 0
-    assert seen["dest"] == env.base_tar
+    monkeypatch.setattr(cli, "ensure_base_image",
+                        lambda _e, _s: seen.setdefault("ensured", True) or tmp_path)
+    monkeypatch.setattr(cli, "run_image",
+                        lambda *_a, **_k: SimpleNamespace(machine="m", teardown=lambda: None))
+    monkeypatch.setattr(cli.subprocess, "run", lambda *_a, **_k: None)
+    assert cli._run_image(env, "pulled:1", store) == 0  # noqa: SLF001
+    assert seen["ensured"]
 
 
 @pytest.mark.tier1
@@ -276,3 +279,16 @@ def test_resolve_ref(tmp_path):
     assert cli.resolve_ref(named, "bar", tf) == ("bar", "latest")        # -t, default version
     assert cli.resolve_ref(named, None, tf) == ("foo", "2")              # recipe's own image name
     assert cli.resolve_ref(unnamed, None, tf) == ("myproj", "latest")    # else the Taskfile dir
+
+
+@pytest.mark.tier3
+def test_ensure_base_image_stores_debian_trixie(tmp_path):
+    # The single base image is built once, stored as `debian:trixie`, bootable + fish, reused.
+    home = tmp_path / "home"
+    env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
+    store = ImageStore(env.images)
+    layer = cli.ensure_base_image(env, store)
+    assert "debian:trixie" in store.list()
+    assert (layer / "lib/systemd/systemd").exists()
+    assert (layer / "usr/bin/fish").exists()
+    assert cli.ensure_base_image(env, store) == layer  # second call reuses, no rebuild

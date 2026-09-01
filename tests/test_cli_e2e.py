@@ -1,3 +1,5 @@
+import subprocess
+
 import pytest
 
 from hashpass import cli
@@ -27,10 +29,16 @@ def test_build_via_main_then_scripted_run(tmp_path, base_tar, monkeypatch, capsy
     assert cli.main(["images"]) == 0
     assert "e2e:1" in capsys.readouterr().out
 
-    # main(["run", ...]) uses stdin; drive the scripted run through cmd_run with an injected Io
+    # The interactive run drops into fish; simulate the student's solve in the booted
+    # machine and let the background grader complete the task.
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
+
+    def solve_in_machine(machine: str) -> None:
+        subprocess.run(["sudo", "machinectl", "shell", machine, "/bin/sh", "-c",
+                        "grep -rh ERROR /var/log/app > /errors.txt"], check=False)
+    monkeypatch.setattr(cli, "_interactive_shell", solve_in_machine)
+
     writes = []
-    lines = iter(["grep -rh ERROR /var/log/app > /errors.txt", "exit"])
-    io = cli.Io(read=lambda _p: next(lines, None), write=writes.append, clock=lambda: "t")
+    io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
     assert cli.cmd_run(env, "e2e:1", io) == 0
     assert "✓ all stages passed — task complete\n" in writes

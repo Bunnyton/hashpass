@@ -15,7 +15,8 @@ def build(  # noqa: PLR0913
     recipe: Recipe,
     store: ImageStore,
     *,
-    base_tar: Path,
+    base_tar: Path | None = None,
+    base: Path | None = None,
     workdir: Path,
     sudo: bool = True,
     progress: Callable[[str], None] | None = None,
@@ -29,7 +30,9 @@ def build(  # noqa: PLR0913
     Args:
         recipe: The parsed recipe to build.
         store: Image store to resolve parents from and save the result into.
-        base_tar: Rootfs tarball for the bottom base layer.
+        base_tar: Rootfs tarball for the bottom base layer (fallback when `base` is None).
+        base: Prebuilt base rootfs layer (the `debian:trixie` image); when given it is
+            used directly and `base_tar` is ignored (built once in the store, reused).
         workdir: Scratch directory for base/upper/work/mnt.
         sudo: Whether overlay mounts use sudo (True for real nspawn).
         progress: Optional sink for per-step build-progress lines.
@@ -40,7 +43,7 @@ def build(  # noqa: PLR0913
     """
     workdir = Path(workdir)
     lowers = resolve_lowers(recipe.parents, store)
-    base = build_base(workdir / "base", from_tar=base_tar)
+    base = base or build_base(workdir / "base", from_tar=base_tar)
     upper = workdir / "upper"
     work = workdir / "work"
     mnt = workdir / "mnt"
@@ -70,7 +73,8 @@ def build(  # noqa: PLR0913
     return store.save(recipe.name, recipe.version, upper, recipe.parents, sudo=sudo)
 
 
-def run_image(ref: str, store: ImageStore, workdir: Path, *, base_tar: Path) -> BootedNspawnRunner:
+def run_image(ref: str, store: ImageStore, workdir: Path, *,
+              base_tar: Path | None = None, base: Path | None = None) -> BootedNspawnRunner:
     """
     Prepare a booted runner over a stored image's overlay closure (booted env).
 
@@ -82,7 +86,9 @@ def run_image(ref: str, store: ImageStore, workdir: Path, *, base_tar: Path) -> 
         ref: Image reference `name` or `name:version` to run.
         store: Image store holding the image and its ancestors.
         workdir: Scratch directory for base and the runner tree.
-        base_tar: Rootfs tarball for the bottom base layer.
+        base_tar: Rootfs tarball for the bottom base layer (fallback when `base` is None).
+        base: Prebuilt base rootfs layer (the `debian:trixie` image); when given it is
+            used directly and `base_tar` is ignored (built once in the store, reused).
 
     Returns:
         A prepared BootedNspawnRunner (no task; a booted image environment).
@@ -90,7 +96,7 @@ def run_image(ref: str, store: ImageStore, workdir: Path, *, base_tar: Path) -> 
     """
     workdir = Path(workdir)
     lowers = resolve_lowers((ref,), store)  # raises KeyError if ref is absent
-    base = build_base(workdir / "base", from_tar=base_tar)
+    base = base or build_base(workdir / "base", from_tar=base_tar)
     runner = BootedNspawnRunner(workdir / "run", base_dir=base)
     runner.prepare(lowers)
     return runner
