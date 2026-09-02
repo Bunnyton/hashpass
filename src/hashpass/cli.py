@@ -342,7 +342,10 @@ def _interactive_shell(machine: str) -> None:
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
     """Boot the task, show the goals, drop into a clean fish shell; grade the stages on exit."""
-    session = run_task(ref, store, env.work / "run", base=ensure_base_image(env, store),
+    # Unique workdir per run: a fresh overlay each session (no stale files -> no false
+    # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
+    workdir = env.work / "run" / uuid.uuid4().hex
+    session = run_task(ref, store, workdir, base=ensure_base_image(env, store),
                        student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
                        sink=io.write, sleep=time.sleep)
     try:
@@ -362,7 +365,8 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
 
 def _run_image(env: Home, ref: str, store: ImageStore) -> int:
     """Open a live fish shell in the booted image machine (inherited stdio), then tear down."""
-    runner = run_image(ref, store, env.work / "run", base=ensure_base_image(env, store))
+    runner = run_image(ref, store, env.work / "run" / uuid.uuid4().hex,   # unique per run
+                       base=ensure_base_image(env, store))
     try:
         _interactive_shell(runner.machine)
     finally:
