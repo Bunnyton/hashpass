@@ -1,10 +1,8 @@
 """hashpass CLI: a Docker-style command-line front end over build/run/registry."""
 import argparse
-import contextlib
 import getpass
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -278,30 +276,8 @@ def _advance_and_announce(session: object, io: Io) -> bool:
 
 
 def _interactive_shell(machine: str) -> None:
-    """
-    Hand the real terminal to a live fish shell in the booted machine (single relay).
-
-    Make machinectl the terminal's FOREGROUND process group so it owns the tty directly: one
-    relay, so cursor-query responses route back to fish and raw mode is set (keystrokes and
-    Ctrl+C reach the shell). Wrapping it in our own pty doubles the relay and mangles fish's
-    line-editor redraws (garbled keystrokes). A plain run is used when stdin is not a tty.
-    """
-    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/fish"]
-    try:
-        fd = sys.stdin.fileno()
-        old_pgrp = os.tcgetpgrp(fd)
-    except (OSError, ValueError):
-        subprocess.run(argv, check=False)
-        return
-    prev_ttou = signal.signal(signal.SIGTTOU, signal.SIG_IGN)
-    proc = subprocess.Popen(argv, process_group=0)   # own pgrp; inherits the real terminal
-    try:
-        os.tcsetpgrp(fd, proc.pid)   # foreground -> machinectl sets raw mode + relays Ctrl+C
-        proc.wait()
-    finally:
-        with contextlib.suppress(OSError):
-            os.tcsetpgrp(fd, old_pgrp)
-        signal.signal(signal.SIGTTOU, prev_ttou)
+    """Open a live fish shell in the booted machine (inherited terminal), then return."""
+    subprocess.run(["sudo", "machinectl", "shell", machine, "/usr/bin/fish"], check=False)
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
