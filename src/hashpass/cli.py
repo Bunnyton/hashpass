@@ -276,8 +276,21 @@ def _advance_and_announce(session: object, io: Io) -> bool:
 
 
 def _interactive_shell(machine: str) -> None:
-    """Open a live fish shell in the booted machine (inherited terminal), then return."""
-    subprocess.run(["sudo", "machinectl", "shell", machine, "/usr/bin/fish"], check=False)
+    """
+    Open a live fish shell in the booted machine (inherited terminal), then return.
+
+    `--features no-keyboard-protocols` turns off fish 4.0's kitty-keyboard and
+    xterm modifyOtherKeys input protocols. Those re-encode keys (notably Enter and
+    other special keys) as multi-byte escape sequences, and `machinectl shell`'s
+    pty relay fragments them -- so keystrokes drop and Enter goes unrecognized
+    ("type more to make it run"). Disabled, fish sends plain bytes, which the relay
+    carries intact; the prompt and syntax highlighting (output-side) are unaffected.
+    """
+    subprocess.run(
+        ["sudo", "machinectl", "shell", machine,
+         "/usr/bin/fish", "--features", "no-keyboard-protocols"],
+        check=False,
+    )
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
