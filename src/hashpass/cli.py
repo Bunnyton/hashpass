@@ -1,10 +1,12 @@
 """hashpass CLI: a Docker-style command-line front end over build/run/registry."""
 import argparse
+import contextlib
 import getpass
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import uuid
@@ -278,9 +280,53 @@ def _advance_and_announce(session: object, io: Io) -> bool:
 _MACHINE_PREFIX = "hp-"   # hostname-valid machine-name prefix for the interactive boot
 _MACHINE_HEX = 12         # hex chars of uuid entropy in the machine name
 _DEFAULT_TERM = "xterm-256color"
+_SIG_DST = "/.hp-sig"     # host signal dir bound here in the console: tick (in) <-> result (out)
+_TICK_POLL = 0.05         # how often the grader thread looks for the next command's tick
+_GRADER_JOIN = 3.0        # seconds to let the grader thread finish after the console closes
 
 
-def _interactive_console(runner: object) -> None:
+class _Router:
+    """A write sink whose destination can be swapped -- host stdout, or the in-console result file."""
+
+    def __init__(self, target: Callable[[str], object]) -> None:
+        self._target = target
+
+    def write(self, text: str) -> object:
+        return self._target(text)
+
+    def to(self, target: Callable[[str], object]) -> None:
+        self._target = target
+
+
+def _grade_ticks(session: object, sigdir: Path, router: _Router,
+                 clock: Callable[[], str], stop: threading.Event) -> None:
+    """
+    Grade after EACH student command and hand the result back into the console.
+
+    The console's fish_postexec hook drops a `tick` file after every command; we grade the
+    current stage from the filesystem (host-side -- the answers never enter the container),
+    collect any pass/next-goal text, and write it to `result` for the hook to print. An empty
+    result means nothing new passed. Runs in its own thread while the foreground boot blocks.
+    """
+    tick, result = sigdir / "tick", sigdir / "result"
+    announce_io = Io(read=lambda _p: None, write=router.write, clock=clock)
+    while not stop.wait(_TICK_POLL):
+        if not tick.exists():
+            continue
+        with contextlib.suppress(OSError):
+            tick.unlink()
+        lines: list[str] = []
+        router.to(lines.append)
+        try:
+            while _advance_and_announce(session, announce_io):
+                pass
+        finally:
+            router.to(lambda _s: None)
+        with contextlib.suppress(OSError):
+            result.write_text("".join(lines), encoding="utf-8")
+
+
+def _interactive_console(runner: object, binds: list[tuple[str, str]] | None = None) -> None:
     """
     Boot the student's machine in the FOREGROUND, on the real terminal; return once it powers off.
 
@@ -290,37 +336,49 @@ def _interactive_console(runner: object) -> None:
     the container's own console -- no `machinectl shell` dbus relay, which dropped fast
     keystrokes (its read of the terminal lags on a round-trip, so the tty input buffer
     overflows). The base image autologins the console straight into fish; typing `exit`
-    runs `systemctl poweroff`, so the container shuts down, this call returns, and the
-    stages are graded from the filesystem. TERM is propagated so colours match the caller.
+    powers the container off, so this call returns and grading proceeds. TERM is propagated
+    for colours; `binds` are host:container rw binds (the grading signal dir).
     """
     machine = f"{_MACHINE_PREFIX}{uuid.uuid4().hex[:_MACHINE_HEX]}"
     term = os.environ.get("TERM", _DEFAULT_TERM)
-    subprocess.run(
-        ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine,
-         f"--setenv=TERM={term}", "-D", str(runner.rootfs)],
-        check=False,
-    )
+    argv = ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, f"--setenv=TERM={term}"]
+    argv += [f"--bind={host}:{dst}" for host, dst in (binds or [])]
+    argv += ["-D", str(runner.rootfs)]
+    subprocess.run(argv, check=False)
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
-    """Boot the task, show the goals, drop into a live fish shell; grade the stages on exit."""
+    """Boot the task console; grade after every command (live) and once more on exit."""
     # Unique workdir per run: a fresh overlay each session (no stale files -> no false
     # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
     workdir = env.work / "run" / uuid.uuid4().hex
+    sigdir = workdir / "sig"
+    sigdir.mkdir(parents=True, exist_ok=True)
+    router = _Router(io.write)                         # narrative + announces start on host stdout
+    task_io = Io(read=io.read, write=router.write, clock=io.clock)
     session = run_task(ref, store, workdir, base=ensure_base_image(env, store),
                        student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
-                       sink=io.write, sleep=time.sleep)
+                       sink=router.write, sleep=time.sleep)
+    stop = threading.Event()
+    grader = threading.Thread(target=_grade_ticks,
+                              args=(session, sigdir, router, io.clock, stop), daemon=True)
     try:
-        session.enter()                    # greet + fire the first stage on_enter
-        _announce_stage(session, io)
-        io.write("(do the stages in the shell, then `exit` -- they are checked when you leave)\n")
-        _interactive_console(session.student)
-        graded = False
-        while _advance_and_announce(session, io):      # grade everything the student did
+        session.enter()                    # greet + fire the first stage on_enter (host stdout)
+        _announce_stage(session, task_io)
+        task_io.write("(work in the shell; each command is checked; type `exit` to finish)\n")
+        router.to(lambda _s: None)         # during the boot only the grader emits (into result files)
+        grader.start()
+        _interactive_console(session.student, binds=[(str(sigdir), _SIG_DST)])
+        stop.set()
+        grader.join(timeout=_GRADER_JOIN)
+        router.to(io.write)                # final sweep on host stdout (last command / handler stages)
+        graded = current_stage(session.progress) is None
+        while _advance_and_announce(session, task_io):
             graded = True
         if not graded and current_stage(session.progress) is not None:
             io.write("(no stage completed yet)\n")
     finally:
+        stop.set()
         session.teardown()
     return 0
 
