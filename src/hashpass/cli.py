@@ -1,18 +1,11 @@
 """hashpass CLI: a Docker-style command-line front end over build/run/registry."""
 import argparse
-import contextlib
-import fcntl
 import getpass
 import os
-import pty
-import select
 import shutil
-import signal
 import subprocess
 import sys
-import termios
 import time
-import tty
 import urllib.error
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -282,96 +275,31 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     return True
 
 
-_SHELL_ARGV_TAIL = ("/usr/bin/fish", "--features", "no-keyboard-protocols")
-# fish 4.0 turns on the kitty-keyboard and xterm modifyOtherKeys input protocols by
-# default; `machinectl shell`'s pty relay fragments their multi-byte key encodings, so
-# `no-keyboard-protocols` keeps keys as plain bytes (prompt/highlighting are output-side
-# and unaffected). See _interactive_shell for why a local pty proxy is also needed.
-_PUMP_BUF = 65536
-_DRAIN_TIMEOUT = 0.2   # tail-drain slice after the shell exits
+_MACHINE_PREFIX = "hp-"   # hostname-valid machine-name prefix for the interactive boot
+_MACHINE_HEX = 12         # hex chars of uuid entropy in the machine name
+_DEFAULT_TERM = "xterm-256color"
 
 
-def _copy_winsize(src_fd: int, dst_fd: int) -> None:
-    """Mirror src_fd's terminal window size onto dst_fd (best-effort)."""
-    with contextlib.suppress(OSError):
-        ws = fcntl.ioctl(src_fd, termios.TIOCGWINSZ, b"\0" * 8)
-        fcntl.ioctl(dst_fd, termios.TIOCSWINSZ, ws)
-
-
-def _read_chunk(fd: int) -> bytes | None:
-    """Read up to _PUMP_BUF bytes; b'' or None means the fd is closed/errored (stop)."""
-    try:
-        return os.read(fd, _PUMP_BUF)
-    except OSError:
-        return None
-
-
-def _drain(master: int, out_fd: int) -> None:
-    """Flush output the shell left buffered as it exited, until the pty goes quiet."""
-    while True:
-        readable, _, _ = select.select([master], [], [], _DRAIN_TIMEOUT)
-        if master not in readable:
-            return
-        data = _read_chunk(master)
-        if not data:
-            return
-        os.write(out_fd, data)
-
-
-def _pump(in_fd: int, out_fd: int, master: int, proc: subprocess.Popen) -> None:
-    """Relay bytes both ways between the real terminal and the shell's pty until it exits."""
-    while proc.poll() is None:
-        try:
-            readable, _, _ = select.select([in_fd, master], [], [], _DRAIN_TIMEOUT)
-        except InterruptedError:      # SIGWINCH woke select -- re-arm
-            continue
-        if master in readable:
-            data = _read_chunk(master)
-            if not data:
-                break
-            os.write(out_fd, data)
-        if in_fd in readable:
-            data = _read_chunk(in_fd)
-            if data:
-                os.write(master, data)   # into the pty buffer; machinectl drains at its pace
-    _drain(master, out_fd)
-
-
-def _interactive_shell(machine: str) -> None:
+def _interactive_console(runner: object) -> None:
     """
-    Open a live fish shell in the booted machine over a local pty proxy, then return.
+    Boot the student's machine in the FOREGROUND, on the real terminal; return once it powers off.
 
-    `machinectl shell` reads its controlling terminal on a dbus round-trip, so under
-    fast typing the real terminal's small input buffer overflows before machinectl
-    reads it and keystrokes are lost (reproduced: direct = lossy; a pty in between =
-    0 loss at any speed). So we own the real terminal in a tight read loop and buffer
-    into a pty that machinectl reads at its own pace -- the standard multiplexer trick.
-    Combined with `no-keyboard-protocols` (plain-byte keys) this carries input intact.
+    This is the documented way to get full, lossless console access to an nspawn
+    container (systemd-nspawn(1): "to interactively start a container with full access
+    to the container's console, invoke systemd-nspawn directly"). The terminal becomes
+    the container's own console -- no `machinectl shell` dbus relay, which dropped fast
+    keystrokes (its read of the terminal lags on a round-trip, so the tty input buffer
+    overflows). The base image autologins the console straight into fish; typing `exit`
+    runs `systemctl poweroff`, so the container shuts down, this call returns, and the
+    stages are graded from the filesystem. TERM is propagated so colours match the caller.
     """
-    argv = ["sudo", "machinectl", "shell", machine, *_SHELL_ARGV_TAIL]
-    try:
-        in_fd, out_fd = sys.stdin.fileno(), sys.stdout.fileno()
-        interactive = os.isatty(in_fd)
-    except (OSError, ValueError):
-        interactive = False
-    if not interactive:                  # not a real terminal (tests, pipes): run directly
-        subprocess.run(argv, check=False)
-        return
-    master, slave = pty.openpty()
-    _copy_winsize(in_fd, master)
-    proc = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave, close_fds=True)
-    os.close(slave)
-    old_attr = termios.tcgetattr(in_fd)
-    prev_winch = signal.signal(signal.SIGWINCH, lambda *_: _copy_winsize(in_fd, master))
-    try:
-        tty.setraw(in_fd)
-        _pump(in_fd, out_fd, master, proc)
-    finally:
-        termios.tcsetattr(in_fd, termios.TCSADRAIN, old_attr)
-        signal.signal(signal.SIGWINCH, prev_winch)
-        with contextlib.suppress(OSError):
-            os.close(master)
-        proc.wait()
+    machine = f"{_MACHINE_PREFIX}{uuid.uuid4().hex[:_MACHINE_HEX]}"
+    term = os.environ.get("TERM", _DEFAULT_TERM)
+    subprocess.run(
+        ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine,
+         f"--setenv=TERM={term}", "-D", str(runner.rootfs)],
+        check=False,
+    )
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
@@ -386,7 +314,7 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
         session.enter()                    # greet + fire the first stage on_enter
         _announce_stage(session, io)
         io.write("(do the stages in the shell, then `exit` -- they are checked when you leave)\n")
-        _interactive_shell(session.student.machine)
+        _interactive_console(session.student)
         graded = False
         while _advance_and_announce(session, io):      # grade everything the student did
             graded = True
@@ -402,7 +330,7 @@ def _run_image(env: Home, ref: str, store: ImageStore) -> int:
     runner = run_image(ref, store, env.work / "run" / uuid.uuid4().hex,   # unique per run
                        base=ensure_base_image(env, store))
     try:
-        _interactive_shell(runner.machine)
+        _interactive_console(runner)
     finally:
         runner.teardown()
     return 0

@@ -8,7 +8,7 @@ from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore, StoredImage
 from hashpass.overlay import overlay_mount, overlay_umount
 from hashpass.recipe.model import CopyStep, Recipe, RunStep
-from hashpass.runner.booted import BootedNspawnRunner
+from hashpass.runner.nspawn import NspawnRunner
 
 
 def build(  # noqa: PLR0913
@@ -74,7 +74,7 @@ def build(  # noqa: PLR0913
 
 
 def run_image(ref: str, store: ImageStore, workdir: Path, *,
-              base_tar: Path | None = None, base: Path | None = None) -> BootedNspawnRunner:
+              base_tar: Path | None = None, base: Path | None = None) -> NspawnRunner:
     """
     Prepare a booted runner over a stored image's overlay closure (booted env).
 
@@ -91,12 +91,12 @@ def run_image(ref: str, store: ImageStore, workdir: Path, *,
             used directly and `base_tar` is ignored (built once in the store, reused).
 
     Returns:
-        A prepared BootedNspawnRunner (no task; a booted image environment).
+        A prepared NspawnRunner (mounted image; the caller foreground-boots it).
 
     """
     workdir = Path(workdir)
     lowers = resolve_lowers((ref,), store)  # raises KeyError if ref is absent
     base = base or build_base(workdir / "base", from_tar=base_tar)
-    runner = BootedNspawnRunner(workdir / "run", base_dir=base)
+    runner = NspawnRunner(workdir / "run", base_dir=base)
     runner.prepare(lowers)
     return runner

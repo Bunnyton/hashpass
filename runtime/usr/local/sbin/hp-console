@@ -1,0 +1,9 @@
+#!/bin/sh
+# hashpass interactive console: bypass the getty login and drop straight into fish as
+# root (autologin). When fish exits, power the container off so the foreground
+# `systemd-nspawn -b` returns to hashpass and the stages get graded from the filesystem.
+# Root also has a known password (root:hashpass) for su/sudo inside the container.
+export HOME=/root USER=root LOGNAME=root
+cd /root 2>/dev/null || cd /
+/usr/bin/fish --features no-keyboard-protocols
+exec /usr/bin/systemctl poweroff

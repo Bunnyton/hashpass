@@ -1,4 +1,3 @@
-import subprocess
 
 import pytest
 
@@ -29,14 +28,13 @@ def test_build_via_main_then_scripted_run(tmp_path, base_tar, monkeypatch, capsy
     assert cli.main(["images"]) == 0
     assert "e2e:1" in capsys.readouterr().out
 
-    # The interactive run drops into fish; simulate the student's solve in the booted
-    # machine and let the background grader complete the task.
+    # The interactive run foreground-boots the console; simulate the student's solve in
+    # the student's mount and let grading on exit complete the task.
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
 
-    def solve_in_machine(machine: str) -> None:
-        subprocess.run(["sudo", "machinectl", "shell", machine, "/bin/sh", "-c",
-                        "grep -rh ERROR /var/log/app > /errors.txt"], check=False)
-    monkeypatch.setattr(cli, "_interactive_shell", solve_in_machine)
+    def solve_in_console(runner: object) -> None:
+        runner.run(["sh", "-c", "grep -rh ERROR /var/log/app > /errors.txt"])
+    monkeypatch.setattr(cli, "_interactive_console", solve_in_console)
 
     writes = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")

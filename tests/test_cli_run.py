@@ -1,4 +1,3 @@
-import subprocess
 
 import pytest
 
@@ -25,12 +24,11 @@ def test_run_task_grades_in_background(tmp_path, base_tar, monkeypatch):
     tf.write_text(_TASK, encoding="utf-8")
     cli.cmd_build(env, str(tf))
 
-    # In place of the interactive fish shell, simulate the student running the solve
-    # command inside the booted machine; the background grader must then advance.
-    def solve_in_machine(machine: str) -> None:
-        subprocess.run(["sudo", "machinectl", "shell", machine, "/bin/sh", "-c",
-                        "grep -rh ERROR /var/log/app > /errors.txt"], check=False)
-    monkeypatch.setattr(cli, "_interactive_shell", solve_in_machine)
+    # In place of the interactive foreground console, simulate the student running the
+    # solve command in the student's mount; grading on exit must then advance the stage.
+    def solve_in_console(runner: object) -> None:
+        runner.run(["sh", "-c", "grep -rh ERROR /var/log/app > /errors.txt"])
+    monkeypatch.setattr(cli, "_interactive_console", solve_in_console)
 
     writes = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "2026-08-31T00:00:00")

@@ -7,7 +7,10 @@ _SYSTEMD_INSTALL = (
     # its extracted contents are root-owned; systemd's postinst tmpfiles refuses that "unsafe
     # path transition" (/ owned by 1000 -> /etc owned by root) and aborts dpkg. Root-own / to fix.
     "chown 0:0 / && apt-get update "
-    "&& apt-get install -y systemd systemd-sysv dbus fish"
+    "&& apt-get install -y systemd systemd-sysv dbus fish "
+    # A known root password (root:hashpass) as a fallback for su/sudo inside the container;
+    # the console autologin (runtime drop-in) means it is not needed just to get a shell.
+    "&& echo 'root:hashpass' | chpasswd"
 )
 
 
@@ -37,12 +40,13 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
 
     """
     dest = Path(dest)
-    if (dest / "lib/systemd/systemd").exists() and (dest / "usr/bin/hash").exists():
-        # Already a COMPLETE bootable base (systemd from apt + runtime from rsync): reuse it.
-        # Rebuilding would re-extract the tar over an apt-configured tree and corrupt dpkg,
-        # and it avoids rebuilding the invariant base on every build/build_task/run. BOTH
-        # markers are required, so a stale pre-systemd base or a half-built one is rebuilt
-        # (the usr/bin/hash marker alone is present in legacy non-bootable bases too).
+    if ((dest / "lib/systemd/systemd").exists() and (dest / "usr/bin/hash").exists()
+            and (dest / "usr/local/sbin/hp-console").exists()):
+        # Already a COMPLETE bootable base (systemd from apt + runtime from rsync, including
+        # the console-autologin script): reuse it. Rebuilding would re-extract the tar over an
+        # apt-configured tree and corrupt dpkg, and it avoids rebuilding the invariant base on
+        # every build/build_task/run. ALL markers are required, so a stale pre-systemd base, a
+        # half-built one, or a pre-autologin base (no hp-console) is rebuilt from scratch.
         return dest
     if dest.exists():
         _wipe_tree(dest)  # stale/partial tree -> clear it so the fresh tar extracts clean
