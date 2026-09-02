@@ -306,7 +306,11 @@ def _interactive_shell(machine: str) -> None:
     it to machinectl as its controlling tty, put the real terminal in raw mode, and shuttle
     bytes both ways (with SIGWINCH resize). Every keystroke and Ctrl+C then reaches the shell.
     """
-    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/fish"]
+    # TERM=xterm: on xterm-256color fish 4 turns on the kitty-keyboard + bracketed-paste
+    # protocols, whose escapes get mangled through the machinectl pty relay -> broken input
+    # and blank-line spew. A plain xterm keeps fish's 16-colour syntax highlighting but drops
+    # those protocols, so keystrokes and Ctrl+C relay cleanly.
+    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/env", "TERM=xterm", "/usr/bin/fish"]
     if not sys.stdin.isatty():
         subprocess.run(argv, check=False)   # not a real terminal (piped / tests): plain run
         return
