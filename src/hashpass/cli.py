@@ -306,11 +306,11 @@ def _interactive_shell(machine: str) -> None:
     it to machinectl as its controlling tty, put the real terminal in raw mode, and shuttle
     bytes both ways (with SIGWINCH resize). Every keystroke and Ctrl+C then reaches the shell.
     """
-    # TERM=xterm: on xterm-256color fish 4 turns on the kitty-keyboard + bracketed-paste
-    # protocols, whose escapes get mangled through the machinectl pty relay -> broken input
-    # and blank-line spew. A plain xterm keeps fish's 16-colour syntax highlighting but drops
-    # those protocols, so keystrokes and Ctrl+C relay cleanly.
-    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/env", "TERM=xterm", "/usr/bin/fish"]
+    # Use bash, not fish: fish 4 drives the kitty-keyboard protocol + per-keystroke cursor
+    # queries that get mangled through the machinectl pty relay on some terminals (dropped
+    # keystrokes). bash relays cleanly (verified char-by-char via a pty harness). A colourful
+    # fish shell can come back once the relay is proven solid on the author's terminal.
+    argv = ["sudo", "machinectl", "shell", machine, "/bin/bash"]
     if not sys.stdin.isatty():
         subprocess.run(argv, check=False)   # not a real terminal (piped / tests): plain run
         return
@@ -368,7 +368,7 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
 
 
 def _run_image(env: Home, ref: str, store: ImageStore) -> int:
-    """Open a live fish shell in the booted image machine (inherited stdio), then tear down."""
+    """Open a live shell in the booted image machine (inherited stdio), then tear down."""
     runner = run_image(ref, store, env.work / "run" / uuid.uuid4().hex,   # unique per run
                        base=ensure_base_image(env, store))
     try:
