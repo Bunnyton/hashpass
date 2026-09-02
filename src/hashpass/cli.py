@@ -4,6 +4,7 @@ import contextlib
 import getpass
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -280,13 +281,17 @@ def _advance_and_announce(session: object, io: Io) -> bool:
 _MACHINE_PREFIX = "hp-"   # hostname-valid machine-name prefix for the interactive boot
 _MACHINE_HEX = 12         # hex chars of uuid entropy in the machine name
 _DEFAULT_TERM = "xterm-256color"
-_SIG_DST = "/.hp-sig"     # host signal dir bound here in the console: tick (in) <-> result (out)
-_TICK_POLL = 0.05         # how often the grader thread looks for the next command's tick
-_GRADER_JOIN = 3.0        # seconds to let the grader thread finish after the console closes
+_GRADE_HOST = "127.0.0.1"  # per-command grade server binds loopback (shared with the container)
+_ACCEPT_POLL = 0.3         # accept() timeout so the grade thread can notice `stop`
+_GRADER_JOIN = 3.0         # seconds to let the grade thread finish after the console closes
+
+
+def _sink_noop(_text: str) -> None:
+    """Swallow output -- a no-op sink used while nothing should reach the terminal."""
 
 
 class _Router:
-    """A write sink whose destination can be swapped -- host stdout, or the in-console result file."""
+    """A write sink whose destination can be swapped -- host stdout, or a per-command buffer."""
 
     def __init__(self, target: Callable[[str], object]) -> None:
         self._target = target
@@ -298,51 +303,69 @@ class _Router:
         self._target = target
 
 
-def _grade_ticks(session: object, sigdir: Path, router: _Router,
-                 clock: Callable[[], str], stop: threading.Event) -> None:
+def _grade_server(session: object, router: _Router, clock: Callable[[], str],
+                  stop: threading.Event) -> tuple[int, threading.Thread]:
     """
-    Grade after EACH student command and hand the result back into the console.
+    Start a loopback grade server; return its port and (unstarted) thread.
 
-    The console's fish_postexec hook drops a `tick` file after every command; we grade the
-    current stage from the filesystem (host-side -- the answers never enter the container),
-    collect any pass/next-goal text, and write it to `result` for the hook to print. An empty
-    result means nothing new passed. Runs in its own thread while the foreground boot blocks.
+    After each command the console's fish hook opens a TCP connection to this port over the
+    shared loopback -- no bind mount, nothing visible in the container. We grade the current
+    stage from the filesystem (the answers stay host-side; only pass/next-goal TEXT is sent
+    back for the hook to print). An empty reply means nothing new passed. The thread runs while
+    the foreground boot blocks the main thread.
     """
-    tick, result = sigdir / "tick", sigdir / "result"
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind((_GRADE_HOST, 0))
+    srv.listen(8)
+    srv.settimeout(_ACCEPT_POLL)
+    port = srv.getsockname()[1]
     announce_io = Io(read=lambda _p: None, write=router.write, clock=clock)
-    while not stop.wait(_TICK_POLL):
-        if not tick.exists():
-            continue
-        with contextlib.suppress(OSError):
-            tick.unlink()
-        lines: list[str] = []
-        router.to(lines.append)
-        try:
-            while _advance_and_announce(session, announce_io):
-                pass
-        finally:
-            router.to(lambda _s: None)
-        with contextlib.suppress(OSError):
-            result.write_text("".join(lines), encoding="utf-8")
+
+    def loop() -> None:
+        while not stop.is_set():
+            try:
+                conn, _ = srv.accept()
+            except TimeoutError:
+                continue
+            except OSError:
+                break
+            with conn, contextlib.suppress(OSError):
+                conn.recv(64)                     # the tick payload (ignored)
+                lines: list[str] = []
+                router.to(lines.append)
+                try:
+                    while _advance_and_announce(session, announce_io):
+                        pass
+                finally:
+                    router.to(_sink_noop)
+                conn.sendall("".join(lines).encode())
+        srv.close()
+
+    return port, threading.Thread(target=loop, daemon=True)
 
 
-def _interactive_console(runner: object, binds: list[tuple[str, str]] | None = None) -> None:
+def _interactive_console(runner: object, *, user: str | None = None, sudo: bool = True,
+                         grade_port: int | None = None) -> None:
     """
     Boot the student's machine in the FOREGROUND, on the real terminal; return once it powers off.
 
-    This is the documented way to get full, lossless console access to an nspawn
-    container (systemd-nspawn(1): "to interactively start a container with full access
-    to the container's console, invoke systemd-nspawn directly"). The terminal becomes
-    the container's own console -- no `machinectl shell` dbus relay, which dropped fast
-    keystrokes (its read of the terminal lags on a round-trip, so the tty input buffer
-    overflows). The base image autologins the console straight into fish; typing `exit`
-    powers the container off, so this call returns and grading proceeds. TERM is propagated
-    for colours; `binds` are host:container rw binds (the grading signal dir).
+    This is the documented way to get full, lossless console access to an nspawn container
+    (systemd-nspawn(1): "to interactively start a container with full access to the container's
+    console, invoke systemd-nspawn directly"). The terminal becomes the container's own console
+    -- no `machinectl shell` dbus relay, which dropped fast keystrokes. The base image logs the
+    console in (as HP_USER) to fish; typing `exit` powers the container off, so this returns and
+    grading proceeds. `user` is the console login user (a task's `settings user`, default
+    student); `grade_port` is the host loopback port the per-command grade hook connects to.
     """
     machine = f"{_MACHINE_PREFIX}{uuid.uuid4().hex[:_MACHINE_HEX]}"
     term = os.environ.get("TERM", _DEFAULT_TERM)
     argv = ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, f"--setenv=TERM={term}"]
-    argv += [f"--bind={host}:{dst}" for host, dst in (binds or [])]
+    if user:
+        argv.append(f"--setenv=HP_USER={user}")
+    argv.append(f"--setenv=HP_SUDO={'on' if sudo else 'off'}")
+    if grade_port is not None:
+        argv.append(f"--setenv=HP_PORT={grade_port}")
     argv += ["-D", str(runner.rootfs)]
     subprocess.run(argv, check=False)
 
@@ -352,23 +375,21 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
     # Unique workdir per run: a fresh overlay each session (no stale files -> no false
     # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
     workdir = env.work / "run" / uuid.uuid4().hex
-    sigdir = workdir / "sig"
-    sigdir.mkdir(parents=True, exist_ok=True)
     router = _Router(io.write)                         # narrative + announces start on host stdout
     task_io = Io(read=io.read, write=router.write, clock=io.clock)
     session = run_task(ref, store, workdir, base=ensure_base_image(env, store),
                        student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
                        sink=router.write, sleep=time.sleep)
     stop = threading.Event()
-    grader = threading.Thread(target=_grade_ticks,
-                              args=(session, sigdir, router, io.clock, stop), daemon=True)
+    port, grader = _grade_server(session, router, io.clock, stop)
     try:
         session.enter()                    # greet + fire the first stage on_enter (host stdout)
         _announce_stage(session, task_io)
         task_io.write("(work in the shell; each command is checked; type `exit` to finish)\n")
-        router.to(lambda _s: None)         # during the boot only the grader emits (into result files)
+        router.to(_sink_noop)              # during the boot only the grade thread emits (over the socket)
         grader.start()
-        _interactive_console(session.student, binds=[(str(sigdir), _SIG_DST)])
+        _interactive_console(session.student, user=session.meta.settings.user,
+                             sudo=session.meta.settings.sudo, grade_port=port)
         stop.set()
         grader.join(timeout=_GRADER_JOIN)
         router.to(io.write)                # final sweep on host stdout (last command / handler stages)
@@ -388,7 +409,7 @@ def _run_image(env: Home, ref: str, store: ImageStore) -> int:
     runner = run_image(ref, store, env.work / "run" / uuid.uuid4().hex,   # unique per run
                        base=ensure_base_image(env, store))
     try:
-        _interactive_console(runner)
+        _interactive_console(runner, user="root")   # a bare image is a raw root environment
     finally:
         runner.teardown()
     return 0

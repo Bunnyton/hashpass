@@ -32,7 +32,7 @@ def test_build_via_main_then_scripted_run(tmp_path, base_tar, monkeypatch, capsy
     # the student's mount and let grading on exit complete the task.
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
 
-    def solve_in_console(runner: object, _binds: object = None) -> None:
+    def solve_in_console(runner: object, **_kwargs: object) -> None:
         runner.run(["sh", "-c", "grep -rh ERROR /var/log/app > /errors.txt"])
     monkeypatch.setattr(cli, "_interactive_console", solve_in_console)
 

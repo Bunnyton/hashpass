@@ -26,7 +26,7 @@ def test_run_task_grades_in_background(tmp_path, base_tar, monkeypatch):
 
     # In place of the interactive foreground console, simulate the student running the
     # solve command in the student's mount; grading on exit must then advance the stage.
-    def solve_in_console(runner: object, _binds: object = None) -> None:
+    def solve_in_console(runner: object, **_kwargs: object) -> None:
         runner.run(["sh", "-c", "grep -rh ERROR /var/log/app > /errors.txt"])
     monkeypatch.setattr(cli, "_interactive_console", solve_in_console)
 

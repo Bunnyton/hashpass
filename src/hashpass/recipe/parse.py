@@ -402,6 +402,8 @@ def _parse_settings_block(lines: list[tuple[int, str]], start: int,
     mode = "normal"
     speed = 45
     pager = False
+    user = "student"
+    sudo = True
     i = start
     while i < len(lines) and lines[i][0] > 0:
         _, content = lines[i]
@@ -415,11 +417,15 @@ def _parse_settings_block(lines: list[tuple[int, str]], start: int,
             speed = _positive_int(value.strip(), "type-speed")
         elif kw == "pager":
             pager = value.strip() == "on"
+        elif kw == "user":
+            user = value.strip()
+        elif kw == "sudo":
+            sudo = value.strip() != "off"
         else:
-            msg = f"unknown settings directive: {kw!r} (type-mode/type-speed/pager)"
+            msg = f"unknown settings directive: {kw!r} (type-mode/type-speed/pager/user/sudo)"
             raise ValueError(msg)
         i += 1
-    acc.settings = Settings(type_mode=mode, type_speed=speed, pager=pager)
+    acc.settings = Settings(type_mode=mode, type_speed=speed, pager=pager, user=user, sudo=sudo)
     return i
 
 

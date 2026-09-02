@@ -1,11 +1,16 @@
 # proc-audit — a two-stage task: install a package (big FS change via apt), then audit processes.
-# Base debian:trixie-slim has apt but no ps/pgrep, so installing procps is a real, needed step
-# that also unlocks the process-search stage. Acceptance is derived from deterministic artifacts
-# (the dpkg install status; the sleep-process count), never the volatile process table itself.
+# The base is minimal (systemd + fish, no ps/pgrep), so installing procps is a real, needed step
+# that also unlocks the process-search stage. Acceptance observes DISTINCTIVE TEXT ARTIFACTS the
+# student PRODUCES (the dpkg install status; the sleep-process count) — never a bare binary's
+# presence or the volatile process table, so the tolerant grader has a strong signal to match.
 
 image proc-audit:1
 
-stage "Install the procps package with apt, then record its dpkg install status into /install-status.txt"
+# This task installs packages and writes to / -- it needs a root console.
+settings
+  user root
+
+stage "Install the procps package with apt, then record its dpkg status into /install-status.txt"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y procps >/dev/null 2>&1

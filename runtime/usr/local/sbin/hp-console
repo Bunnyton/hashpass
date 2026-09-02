@@ -1,9 +1,22 @@
 #!/bin/sh
-# hashpass interactive console: bypass the getty login and drop straight into fish as
-# root (autologin). When fish exits, power the container off so the foreground
-# `systemd-nspawn -b` returns to hashpass and the stages get graded from the filesystem.
-# Root also has a known password (root:hashpass) for su/sudo inside the container.
-export HOME=/root USER=root LOGNAME=root
-cd /root 2>/dev/null || cd /
-/usr/bin/fish --features no-keyboard-protocols
+# hashpass interactive console. Log the configured user (HP_USER, default student) into an
+# INTERACTIVE fish on the container console, then power the machine off when they leave -- which
+# returns control to hashpass on the host, where the stages are graded. `su - <user> -s hp-fish`
+# gives a real interactive login shell (unlike `runuser -c`/`su -c`, which run fish
+# non-interactively -> immediate EOF). Because hp-console runs as root, su needs no password and
+# poweroff stays a root action (no password to exit); the user's OWN privileged commands go
+# through classic sudo (they type their password: student:student by default). HP_SUDO on|off
+# toggles that user's membership of the sudo group for this run.
+user="${HP_USER:-student}"
+if id "$user" >/dev/null 2>&1; then
+    if [ "$user" != root ]; then
+        case "${HP_SUDO:-on}" in
+            off) gpasswd -d "$user" sudo >/dev/null 2>&1 ;;
+            *)   gpasswd -a "$user" sudo >/dev/null 2>&1 ;;
+        esac
+    fi
+    su --whitelist-environment=HP_PORT - "$user" -s /usr/local/sbin/hp-fish
+else
+    /usr/local/sbin/hp-fish   # unknown user: fall back to a root shell
+fi
 exec /usr/bin/systemctl poweroff

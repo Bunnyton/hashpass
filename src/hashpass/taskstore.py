@@ -133,11 +133,13 @@ def _voice_from_dict(data: dict) -> Voice:
 
 def _settings_to_dict(settings: Settings) -> dict:
     return {"type_mode": settings.type_mode, "type_speed": settings.type_speed,
-            "pager": settings.pager}
+            "pager": settings.pager, "user": settings.user, "sudo": settings.sudo}
 
 
 def _settings_from_dict(data: dict) -> Settings:
-    return Settings(type_mode=data.get("type_mode", "normal"),
+    return Settings(user=data.get("user", "student"),
+                    sudo=data.get("sudo", True),
+                    type_mode=data.get("type_mode", "normal"),
                     type_speed=data.get("type_speed", 45),
                     pager=data.get("pager", False))
 

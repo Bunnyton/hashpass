@@ -7,10 +7,14 @@ _SYSTEMD_INSTALL = (
     # its extracted contents are root-owned; systemd's postinst tmpfiles refuses that "unsafe
     # path transition" (/ owned by 1000 -> /etc owned by root) and aborts dpkg. Root-own / to fix.
     "chown 0:0 / && apt-get update "
-    "&& apt-get install -y systemd systemd-sysv dbus fish "
-    # A known root password (root:hashpass) as a fallback for su/sudo inside the container;
-    # the console autologin (runtime drop-in) means it is not needed just to get a shell.
-    "&& echo 'root:hashpass' | chpasswd"
+    "&& apt-get install -y systemd systemd-sysv dbus fish sudo "
+    # root:hashpass fallback; and a non-root `student` (password student, fish shell, classic
+    # sudoer) -- the default console user, so tasks run unprivileged and students use `sudo`
+    # (typing a password) for root work. A task can override via `settings user`/`sudo`.
+    "&& echo 'root:hashpass' | chpasswd "
+    "&& useradd -m -s /usr/bin/fish student "
+    "&& echo 'student:student' | chpasswd "
+    "&& gpasswd -a student sudo"
 )
 
 
@@ -41,7 +45,8 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
     """
     dest = Path(dest)
     if ((dest / "lib/systemd/systemd").exists() and (dest / "usr/bin/hash").exists()
-            and (dest / "usr/local/sbin/hp-console").exists()):
+            and (dest / "usr/local/sbin/hp-console").exists()
+            and (dest / "home/student").exists()):
         # Already a COMPLETE bootable base (systemd from apt + runtime from rsync, including
         # the console-autologin script): reuse it. Rebuilding would re-extract the tar over an
         # apt-configured tree and corrupt dpkg, and it avoids rebuilding the invariant base on

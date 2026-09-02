@@ -16,21 +16,13 @@ function fish_prompt
     set_color normal
 end
 
-# Per-command grading. When hashpass binds its signal dir at /.hp-sig (interactive task run),
-# ping the host after every command and print whatever it reports (a stage pass + the next
-# goal). The host does the grading and holds the answers -- only result TEXT crosses back in,
-# so nothing secret is ever exposed in the student's console.
-if test -d /.hp-sig
+# Per-command grading. When hashpass runs a task it sets HP_PORT to a host loopback port; after
+# every command, ping it (over the container's shared loopback, via bash's /dev/tcp -- no mount,
+# nothing visible in the container) and print whatever the host reports (a stage pass + the next
+# goal). The host does the grading and holds the answers -- only result TEXT crosses back in.
+if set -q HP_PORT
     function __hp_postexec --on-event fish_postexec
-        echo 1 > /.hp-sig/tick
-        for i in (seq 1 80)          # wait up to ~4s for the host to grade + answer
-            if test -f /.hp-sig/result
-                cat /.hp-sig/result   # a stage-pass message, or empty (nothing to report)
-                rm -f /.hp-sig/result
-                break
-            end
-            sleep 0.05
-        end
+        bash -c "exec 3<>/dev/tcp/127.0.0.1/$HP_PORT 2>/dev/null && echo tick >&3 && cat <&3" 2>/dev/null
     end
 end
 
@@ -40,6 +32,8 @@ end
 # ("There are still jobs active") and refuse to leave on the first try, which looks like the
 # task was ignored. The shutdown terminates this shell within a moment.
 function exit --description 'finish the task and close the machine (your work is graded on exit)'
-    systemctl poweroff 2>/dev/null
-    command sleep 3600  # block so no stray prompt flashes before the shutdown kills us
+    for pid in (jobs -p)
+        disown $pid 2>/dev/null   # release background jobs so fish leaves on the FIRST try
+    end
+    builtin exit $argv            # hp-console (root) powers the machine off once fish exits
 end

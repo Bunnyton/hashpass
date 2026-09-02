@@ -1,0 +1,4 @@
+#!/bin/sh
+# The interactive login shell for the hashpass console: fish with its keyboard protocols off
+# (kitty/modifyOtherKeys) so keys stay plain bytes. Used as `su -s /usr/local/sbin/hp-fish`.
+exec /usr/bin/fish --features no-keyboard-protocols
