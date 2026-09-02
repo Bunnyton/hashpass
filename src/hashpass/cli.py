@@ -1,11 +1,18 @@
 """hashpass CLI: a Docker-style command-line front end over build/run/registry."""
 import argparse
+import contextlib
+import fcntl
 import getpass
 import os
+import pty
+import select
 import shutil
+import signal
 import subprocess
 import sys
+import termios
 import time
+import tty
 import urllib.error
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -275,22 +282,96 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     return True
 
 
+_SHELL_ARGV_TAIL = ("/usr/bin/fish", "--features", "no-keyboard-protocols")
+# fish 4.0 turns on the kitty-keyboard and xterm modifyOtherKeys input protocols by
+# default; `machinectl shell`'s pty relay fragments their multi-byte key encodings, so
+# `no-keyboard-protocols` keeps keys as plain bytes (prompt/highlighting are output-side
+# and unaffected). See _interactive_shell for why a local pty proxy is also needed.
+_PUMP_BUF = 65536
+_DRAIN_TIMEOUT = 0.2   # tail-drain slice after the shell exits
+
+
+def _copy_winsize(src_fd: int, dst_fd: int) -> None:
+    """Mirror src_fd's terminal window size onto dst_fd (best-effort)."""
+    with contextlib.suppress(OSError):
+        ws = fcntl.ioctl(src_fd, termios.TIOCGWINSZ, b"\0" * 8)
+        fcntl.ioctl(dst_fd, termios.TIOCSWINSZ, ws)
+
+
+def _read_chunk(fd: int) -> bytes | None:
+    """Read up to _PUMP_BUF bytes; b'' or None means the fd is closed/errored (stop)."""
+    try:
+        return os.read(fd, _PUMP_BUF)
+    except OSError:
+        return None
+
+
+def _drain(master: int, out_fd: int) -> None:
+    """Flush output the shell left buffered as it exited, until the pty goes quiet."""
+    while True:
+        readable, _, _ = select.select([master], [], [], _DRAIN_TIMEOUT)
+        if master not in readable:
+            return
+        data = _read_chunk(master)
+        if not data:
+            return
+        os.write(out_fd, data)
+
+
+def _pump(in_fd: int, out_fd: int, master: int, proc: subprocess.Popen) -> None:
+    """Relay bytes both ways between the real terminal and the shell's pty until it exits."""
+    while proc.poll() is None:
+        try:
+            readable, _, _ = select.select([in_fd, master], [], [], _DRAIN_TIMEOUT)
+        except InterruptedError:      # SIGWINCH woke select -- re-arm
+            continue
+        if master in readable:
+            data = _read_chunk(master)
+            if not data:
+                break
+            os.write(out_fd, data)
+        if in_fd in readable:
+            data = _read_chunk(in_fd)
+            if data:
+                os.write(master, data)   # into the pty buffer; machinectl drains at its pace
+    _drain(master, out_fd)
+
+
 def _interactive_shell(machine: str) -> None:
     """
-    Open a live fish shell in the booted machine (inherited terminal), then return.
+    Open a live fish shell in the booted machine over a local pty proxy, then return.
 
-    `--features no-keyboard-protocols` turns off fish 4.0's kitty-keyboard and
-    xterm modifyOtherKeys input protocols. Those re-encode keys (notably Enter and
-    other special keys) as multi-byte escape sequences, and `machinectl shell`'s
-    pty relay fragments them -- so keystrokes drop and Enter goes unrecognized
-    ("type more to make it run"). Disabled, fish sends plain bytes, which the relay
-    carries intact; the prompt and syntax highlighting (output-side) are unaffected.
+    `machinectl shell` reads its controlling terminal on a dbus round-trip, so under
+    fast typing the real terminal's small input buffer overflows before machinectl
+    reads it and keystrokes are lost (reproduced: direct = lossy; a pty in between =
+    0 loss at any speed). So we own the real terminal in a tight read loop and buffer
+    into a pty that machinectl reads at its own pace -- the standard multiplexer trick.
+    Combined with `no-keyboard-protocols` (plain-byte keys) this carries input intact.
     """
-    subprocess.run(
-        ["sudo", "machinectl", "shell", machine,
-         "/usr/bin/fish", "--features", "no-keyboard-protocols"],
-        check=False,
-    )
+    argv = ["sudo", "machinectl", "shell", machine, *_SHELL_ARGV_TAIL]
+    try:
+        in_fd, out_fd = sys.stdin.fileno(), sys.stdout.fileno()
+        interactive = os.isatty(in_fd)
+    except (OSError, ValueError):
+        interactive = False
+    if not interactive:                  # not a real terminal (tests, pipes): run directly
+        subprocess.run(argv, check=False)
+        return
+    master, slave = pty.openpty()
+    _copy_winsize(in_fd, master)
+    proc = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave, close_fds=True)
+    os.close(slave)
+    old_attr = termios.tcgetattr(in_fd)
+    prev_winch = signal.signal(signal.SIGWINCH, lambda *_: _copy_winsize(in_fd, master))
+    try:
+        tty.setraw(in_fd)
+        _pump(in_fd, out_fd, master, proc)
+    finally:
+        termios.tcsetattr(in_fd, termios.TCSADRAIN, old_attr)
+        signal.signal(signal.SIGWINCH, prev_winch)
+        with contextlib.suppress(OSError):
+            os.close(master)
+        proc.wait()
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
