@@ -15,3 +15,13 @@ function fish_prompt
     echo -n ' ❯ '
     set_color normal
 end
+
+# `exit` finishes the task: it powers the machine off, which returns control to hashpass on
+# the host, where the stages are graded. Defined as a function (shadowing fish's builtin) so it
+# works in a SINGLE keystroke even with background jobs still running -- the builtin would warn
+# ("There are still jobs active") and refuse to leave on the first try, which looks like the
+# task was ignored. The shutdown terminates this shell within a moment.
+function exit --description 'finish the task and close the machine (your work is graded on exit)'
+    systemctl poweroff 2>/dev/null
+    command sleep 3600  # block so no stray prompt flashes before the shutdown kills us
+end
