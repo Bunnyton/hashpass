@@ -1,12 +1,18 @@
 """hashpass CLI: a Docker-style command-line front end over build/run/registry."""
 import argparse
+import contextlib
+import fcntl
 import getpass
 import os
+import pty
+import select
 import shutil
+import signal
 import subprocess
 import sys
-import threading
+import termios
 import time
+import tty
 import urllib.error
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -39,7 +45,6 @@ _BASE_NAME = "debian"
 _BASE_VERSION = "trixie"
 _DEFAULT_STUDENT = "local"
 _STOP_WORDS = frozenset({"exit", "quit"})
-_GRADE_POLL = 2.5  # seconds between background stage-acceptance polls
 _COL_GAP = "  "
 _HEADER = ("REF", "KIND")
 
@@ -277,34 +282,79 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     return True
 
 
-def _grade_loop(session: object, io: Io, stop: threading.Event) -> None:
-    """Background: poll the live student FS; announce every stage the student completes."""
-    while not stop.wait(_GRADE_POLL):
-        while _advance_and_announce(session, io):
-            pass
+def _set_winsize(dst_fd: int) -> None:
+    """Copy the real terminal's window size onto a pty fd so the shell wraps at the right width."""
+    with contextlib.suppress(OSError):
+        size = fcntl.ioctl(sys.stdin.fileno(), termios.TIOCGWINSZ, b"\x00" * 8)
+        fcntl.ioctl(dst_fd, termios.TIOCSWINSZ, size)
+
+
+def _child_setup() -> None:
+    """In the forked child: new session + make the pty slave (fd 0) its controlling terminal."""
+    os.setsid()
+    with contextlib.suppress(OSError):
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
 
 def _interactive_shell(machine: str) -> None:
-    """Open a live fish shell in the booted machine (inherited terminal), then return."""
-    subprocess.run(["sudo", "machinectl", "shell", machine, "/usr/bin/fish"], check=False)
+    """
+    Expose a real PTY to a live fish shell in the booted machine (direct typing + Ctrl+C).
+
+    machinectl shell run under plain subprocess never gets a proper controlling terminal, so
+    the outer terminal stays in cooked mode: keystrokes are line-buffered and Ctrl+C is a
+    SIGINT that kills the session. Here we allocate a pty, size it to the real terminal, give
+    it to machinectl as its controlling tty, put the real terminal in raw mode, and shuttle
+    bytes both ways (with SIGWINCH resize). Every keystroke and Ctrl+C then reaches the shell.
+    """
+    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/fish"]
+    if not sys.stdin.isatty():
+        subprocess.run(argv, check=False)   # not a real terminal (piped / tests): plain run
+        return
+    master, slave = pty.openpty()
+    _set_winsize(slave)
+    proc = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave,
+                            preexec_fn=_child_setup)  # noqa: PLW1509
+    os.close(slave)
+    old_attrs = termios.tcgetattr(sys.stdin)
+    prev_winch = signal.signal(signal.SIGWINCH, lambda *_: _set_winsize(master))
+    tty.setraw(sys.stdin.fileno())
+    try:
+        while proc.poll() is None:
+            readable, _, _ = select.select([sys.stdin, master], [], [], 0.2)
+            if sys.stdin in readable:
+                data = os.read(sys.stdin.fileno(), 1024)
+                if data:
+                    os.write(master, data)
+            if master in readable:
+                try:
+                    out = os.read(master, 65536)
+                except OSError:
+                    break
+                if not out:
+                    break
+                os.write(sys.stdout.fileno(), out)
+    finally:
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_attrs)
+        signal.signal(signal.SIGWINCH, prev_winch)
+        os.close(master)
+        proc.wait()
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
-    """Boot the task, show each stage goal, drop into a live fish shell; grade in the background."""
+    """Boot the task, show the goals, drop into a clean fish shell; grade the stages on exit."""
     session = run_task(ref, store, env.work / "run", base=ensure_base_image(env, store),
                        student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
                        sink=io.write, sleep=time.sleep)
     try:
         session.enter()                    # greet + fire the first stage on_enter
         _announce_stage(session, io)
-        stop = threading.Event()
-        grader = threading.Thread(target=_grade_loop, args=(session, io, stop), daemon=True)
-        grader.start()
-        _interactive_shell(session.student.machine)
-        stop.set()
-        grader.join(timeout=_GRADE_POLL * 2)
-        while _advance_and_announce(session, io):   # final drain after the shell exits
-            pass
+        io.write("(do the stages in the shell, then `exit` -- they are checked when you leave)\n")
+        _interactive_shell(session.student.machine)   # owns the terminal; no concurrent writes
+        graded = False
+        while _advance_and_announce(session, io):      # grade everything the student did
+            graded = True
+        if not graded and current_stage(session.progress) is not None:
+            io.write("(no stage completed yet)\n")
     finally:
         session.teardown()
     return 0
