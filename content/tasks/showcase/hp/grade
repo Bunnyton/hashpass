@@ -1,0 +1,5 @@
+#!/bin/sh
+# Hidden grader for stage 3. Runs with /hp bound and the student's filesystem at /.
+# Accept (exit 0) iff the secret holds the pass-phrase. The student never sees this.
+grep -qx open-sesame /home/student/secret 2>/dev/null && exit 0
+exit 1

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Hidden briefing for stage 2 (its stdout is rendered to the student).
+echo "[system] Stage $HP_STAGE needs elevated rights. sudo is classic here -- expect a password prompt."

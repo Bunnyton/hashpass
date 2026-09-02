@@ -1,0 +1,3 @@
+#!/bin/sh
+# Hidden celebration for stage 3 on pass.
+echo "[system] The vault opens. Stage $HP_STAGE cleared."

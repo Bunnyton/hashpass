@@ -1,0 +1,3 @@
+#!/bin/sh
+# Would run after every command if the console reported commands (see README).
+echo "[system] noted."

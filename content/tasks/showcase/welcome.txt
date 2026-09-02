@@ -1,0 +1,2 @@
+Welcome to the showcase image. This file was baked in at build time via `copy`,
+so you can `cat /opt/welcome.txt` inside the task.
