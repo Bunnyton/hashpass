@@ -34,6 +34,7 @@ class NspawnRunner:
         self._mnt = self._wd / "mnt"
         self._proc: subprocess.Popen | None = None
         self._machine: str | None = None
+        self._hp = 0                      # per-handler fresh-overlay counter
 
     def prepare(self, lowers: list[Path]) -> None:
         """
@@ -66,49 +67,59 @@ class NspawnRunner:
 
         Args:
             argv: Command and arguments to run.
-            binds: Optional (host, dst) pairs bound rw into THIS run's mount-ns only
-                (e.g. the hidden `/hp` layer). A run with `binds=None` sees no `/hp`,
-                and a bind leaves no trace: its mountpoint is cleaned up afterwards
-                so a later plain run cannot see it (§4.2 invisibility-by-namespace).
+            binds: Optional (host, dst) pairs bound rw into THIS run's mount-ns only (e.g.
+                the hidden `/hp` layer). A bind run executes on a FRESH throwaway overlay
+                stacked over the student's mount (see `_run_bound`) -- so `/hp` is visible
+                only to that handler (invisibility-by-namespace, §4.2) and it never contends
+                for `-D <student mnt>`, which a live foreground console holds. A `binds=None`
+                run has no `/hp` and executes on the student mount directly.
             setenv: Optional environment variables set inside the container.
 
         Returns:
             RunResult with stdout, stderr, and exit code.
 
         """
-        extra = [f"--bind={host}:{dst}" for host, dst in binds or []]
-        extra += [f"--setenv={key}={val}" for key, val in (setenv or {}).items()]
+        if binds:
+            return self._run_bound(argv, binds, setenv or {})
         p = subprocess.run(
-            ["sudo", "systemd-nspawn", "-q", "--register=no",
-             *extra, "-D", str(self._mnt), *argv],
+            ["sudo", "systemd-nspawn", "-q", "--register=no", "-D", str(self._mnt), *argv],
             capture_output=True,
             text=True,
             encoding="utf-8",
             check=False,
         )
-        for _host, dst in binds or []:
-            self._clean_mountpoint(dst)
         return RunResult(p.stdout, p.stderr, p.returncode)
 
-    def _clean_mountpoint(self, dst: str) -> None:
+    def _run_bound(self, argv: list[str], binds: list[tuple[str, str]],
+                   setenv: dict[str, str]) -> RunResult:
         """
-        Remove a bind mountpoint systemd-nspawn auto-created in the overlay upperdir.
+        Run a bind (/hp handler) on a FRESH throwaway overlay stacked over the student mount.
 
-        nspawn creates the bind destination inside the container root; on our overlay
-        that mkdir lands in the writable upperdir and outlives the (per-run) mount, so a
-        later plain run would see the empty dir — leaking that `/hp` exists (§4.2). It is
-        removed THROUGH the overlay with a throwaway nspawn `rmdir` (never by touching the
-        upperdir directly, which is illegal under a live overlay and corrupts its cache).
-        Best-effort: a non-empty or already-gone mountpoint leaves rmdir a no-op.
+        Stacking the student's merged mount as a read-only lower gives the handler the
+        student's CURRENT files while its own writes land in a throwaway upper (discarded);
+        `/hp` is bound only here, so the student never sees it, and there is no `-D <student
+        mnt>` contention -- which matters because the interactive console boots the student
+        mount and holds it. The per-handler mount is unmounted afterwards, leaving no trace.
         """
-        subprocess.run(
-            ["sudo", "systemd-nspawn", "-q", "--register=no",
-             "-D", str(self._mnt), "rmdir", dst],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-        )
+        self._hp += 1
+        hp = self._wd / f"hp{self._hp}"
+        upper, work, mnt = hp / "upper", hp / "work", hp / "mnt"
+        for d in (upper, work, mnt):
+            d.mkdir(parents=True, exist_ok=True)
+        overlay_mount([self._mnt], upper, work, mnt, sudo=True)
+        try:
+            extra = [f"--bind={host}:{dst}" for host, dst in binds]
+            extra += [f"--setenv={key}={val}" for key, val in setenv.items()]
+            p = subprocess.run(
+                ["sudo", "systemd-nspawn", "-q", "--register=no", *extra, "-D", str(mnt), *argv],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+        finally:
+            overlay_umount(mnt, sudo=True)
+        return RunResult(p.stdout, p.stderr, p.returncode)
 
     def boot(self, machine: str) -> None:
         """
