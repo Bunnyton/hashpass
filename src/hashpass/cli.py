@@ -282,6 +282,15 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     return True
 
 
+_FISH_HOOK = ("function __hp_tick --on-event fish_postexec; "
+              "command touch /.hp-tick 2>/dev/null; end")
+
+
+def _write_raw(text: str) -> None:
+    """Write to the terminal while it is in raw mode (translate newlines to CRLF)."""
+    os.write(sys.stdout.fileno(), text.replace("\n", "\r\n").encode())
+
+
 def _set_winsize(dst_fd: int) -> None:
     """Copy the real terminal's window size onto a pty fd so the shell wraps at the right width."""
     with contextlib.suppress(OSError):
@@ -296,7 +305,8 @@ def _child_setup() -> None:
         fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
 
-def _interactive_shell(machine: str) -> None:
+def _interactive_shell(machine: str, *, tick: Path | None = None,
+                       on_tick: Callable[[], None] | None = None) -> None:
     """
     Expose a real PTY to a live fish shell in the booted machine (direct typing + Ctrl+C).
 
@@ -306,11 +316,9 @@ def _interactive_shell(machine: str) -> None:
     it to machinectl as its controlling tty, put the real terminal in raw mode, and shuttle
     bytes both ways (with SIGWINCH resize). Every keystroke and Ctrl+C then reaches the shell.
     """
-    # Use bash, not fish: fish 4 drives the kitty-keyboard protocol + per-keystroke cursor
-    # queries that get mangled through the machinectl pty relay on some terminals (dropped
-    # keystrokes). bash relays cleanly (verified char-by-char via a pty harness). A colourful
-    # fish shell can come back once the relay is proven solid on the author's terminal.
-    argv = ["sudo", "machinectl", "shell", machine, "/bin/bash"]
+    # fish for the colourful shell; -C installs a fish_postexec hook that drops a tick file
+    # after every command so the host grades ONLY then (no background polling of the fs).
+    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/fish", "-C", _FISH_HOOK]
     if not sys.stdin.isatty():
         subprocess.run(argv, check=False)   # not a real terminal (piped / tests): plain run
         return
@@ -337,6 +345,11 @@ def _interactive_shell(machine: str) -> None:
                 if not out:
                     break
                 os.write(sys.stdout.fileno(), out)
+            if tick is not None and tick.exists():   # a command just finished -> grade it
+                with contextlib.suppress(OSError):
+                    tick.unlink()
+                if on_tick is not None:
+                    on_tick()
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_attrs)
         signal.signal(signal.SIGWINCH, prev_winch)
@@ -345,23 +358,37 @@ def _interactive_shell(machine: str) -> None:
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
-    """Boot the task, show the goals, drop into a clean fish shell; grade the stages on exit."""
+    """Boot the task, show the goals, drop into a live fish shell; grade after each command."""
     # Unique workdir per run: a fresh overlay each session (no stale files -> no false
     # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
     workdir = env.work / "run" / uuid.uuid4().hex
     session = run_task(ref, store, workdir, base=ensure_base_image(env, store),
                        student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
                        sink=io.write, sleep=time.sleep)
+    def on_tick() -> None:
+        # Fired after each command the student runs (fish_postexec -> tick file): grade the
+        # current stage against the live fs and announce progress. Raw terminal -> CRLF.
+        while True:
+            res = session.check_current(ts=io.clock())
+            if not res.advanced:
+                return
+            _write_raw(f"\n\u2713 stage passed  {res.local_key}\n")
+            stage = current_stage(session.progress)
+            if stage is None:
+                _write_raw("\u2713 all stages passed \u2014 task complete\n")
+                return
+            total = len(session.meta.stages)
+            _write_raw(f"\u2500\u2500 stage {stage + 1}/{total} \u2500\u2500  "
+                       f"{session.meta.stages[stage].message}\n")
+
     try:
         session.enter()                    # greet + fire the first stage on_enter
         _announce_stage(session, io)
-        io.write("(do the stages in the shell, then `exit` -- they are checked when you leave)\n")
-        _interactive_shell(session.student.machine)   # owns the terminal; no concurrent writes
-        graded = False
-        while _advance_and_announce(session, io):      # grade everything the student did
-            graded = True
-        if not graded and current_stage(session.progress) is not None:
-            io.write("(no stage completed yet)\n")
+        io.write("(work in the shell; each command is checked, `exit` when done)\n")
+        _interactive_shell(session.student.machine,
+                           tick=session.student.rootfs / ".hp-tick", on_tick=on_tick)
+        while _advance_and_announce(session, io):      # final catch-up after the shell exits
+            pass
     finally:
         session.teardown()
     return 0
