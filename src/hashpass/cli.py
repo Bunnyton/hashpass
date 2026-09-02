@@ -1,18 +1,13 @@
 """hashpass CLI: a Docker-style command-line front end over build/run/registry."""
 import argparse
 import contextlib
-import fcntl
 import getpass
 import os
-import pty
-import select
 import shutil
 import signal
 import subprocess
 import sys
-import termios
 import time
-import tty
 import urllib.error
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -282,113 +277,51 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     return True
 
 
-_FISH_HOOK = ("function __hp_tick --on-event fish_postexec; "
-              "command touch /.hp-tick 2>/dev/null; end")
-
-
-def _write_raw(text: str) -> None:
-    """Write to the terminal while it is in raw mode (translate newlines to CRLF)."""
-    os.write(sys.stdout.fileno(), text.replace("\n", "\r\n").encode())
-
-
-def _set_winsize(dst_fd: int) -> None:
-    """Copy the real terminal's window size onto a pty fd so the shell wraps at the right width."""
-    with contextlib.suppress(OSError):
-        size = fcntl.ioctl(sys.stdin.fileno(), termios.TIOCGWINSZ, b"\x00" * 8)
-        fcntl.ioctl(dst_fd, termios.TIOCSWINSZ, size)
-
-
-def _child_setup() -> None:
-    """In the forked child: new session + make the pty slave (fd 0) its controlling terminal."""
-    os.setsid()
-    with contextlib.suppress(OSError):
-        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
-
-
-def _interactive_shell(machine: str, *, tick: Path | None = None,
-                       on_tick: Callable[[], None] | None = None) -> None:
+def _interactive_shell(machine: str) -> None:
     """
-    Expose a real PTY to a live fish shell in the booted machine (direct typing + Ctrl+C).
+    Hand the real terminal to a live fish shell in the booted machine (single relay).
 
-    machinectl shell run under plain subprocess never gets a proper controlling terminal, so
-    the outer terminal stays in cooked mode: keystrokes are line-buffered and Ctrl+C is a
-    SIGINT that kills the session. Here we allocate a pty, size it to the real terminal, give
-    it to machinectl as its controlling tty, put the real terminal in raw mode, and shuttle
-    bytes both ways (with SIGWINCH resize). Every keystroke and Ctrl+C then reaches the shell.
+    Make machinectl the terminal's FOREGROUND process group so it owns the tty directly: one
+    relay, so cursor-query responses route back to fish and raw mode is set (keystrokes and
+    Ctrl+C reach the shell). Wrapping it in our own pty doubles the relay and mangles fish's
+    line-editor redraws (garbled keystrokes). A plain run is used when stdin is not a tty.
     """
-    # fish for the colourful shell; -C installs a fish_postexec hook that drops a tick file
-    # after every command so the host grades ONLY then (no background polling of the fs).
-    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/fish", "-C", _FISH_HOOK]
-    if not sys.stdin.isatty():
-        subprocess.run(argv, check=False)   # not a real terminal (piped / tests): plain run
-        return
-    master, slave = pty.openpty()
-    _set_winsize(slave)
-    proc = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave,
-                            preexec_fn=_child_setup)  # noqa: PLW1509
-    os.close(slave)
-    old_attrs = termios.tcgetattr(sys.stdin)
-    prev_winch = signal.signal(signal.SIGWINCH, lambda *_: _set_winsize(master))
-    tty.setraw(sys.stdin.fileno())
+    argv = ["sudo", "machinectl", "shell", machine, "/usr/bin/fish"]
     try:
-        while proc.poll() is None:
-            readable, _, _ = select.select([sys.stdin, master], [], [], 0.2)
-            if sys.stdin in readable:
-                data = os.read(sys.stdin.fileno(), 1024)
-                if data:
-                    os.write(master, data)
-            if master in readable:
-                try:
-                    out = os.read(master, 65536)
-                except OSError:
-                    break
-                if not out:
-                    break
-                os.write(sys.stdout.fileno(), out)
-            if tick is not None and tick.exists():   # a command just finished -> grade it
-                with contextlib.suppress(OSError):
-                    tick.unlink()
-                if on_tick is not None:
-                    on_tick()
-    finally:
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_attrs)
-        signal.signal(signal.SIGWINCH, prev_winch)
-        os.close(master)
+        fd = sys.stdin.fileno()
+        old_pgrp = os.tcgetpgrp(fd)
+    except (OSError, ValueError):
+        subprocess.run(argv, check=False)
+        return
+    prev_ttou = signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+    proc = subprocess.Popen(argv, process_group=0)   # own pgrp; inherits the real terminal
+    try:
+        os.tcsetpgrp(fd, proc.pid)   # foreground -> machinectl sets raw mode + relays Ctrl+C
         proc.wait()
+    finally:
+        with contextlib.suppress(OSError):
+            os.tcsetpgrp(fd, old_pgrp)
+        signal.signal(signal.SIGTTOU, prev_ttou)
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
-    """Boot the task, show the goals, drop into a live fish shell; grade after each command."""
+    """Boot the task, show the goals, drop into a live fish shell; grade the stages on exit."""
     # Unique workdir per run: a fresh overlay each session (no stale files -> no false
     # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
     workdir = env.work / "run" / uuid.uuid4().hex
     session = run_task(ref, store, workdir, base=ensure_base_image(env, store),
                        student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
                        sink=io.write, sleep=time.sleep)
-    def on_tick() -> None:
-        # Fired after each command the student runs (fish_postexec -> tick file): grade the
-        # current stage against the live fs and announce progress. Raw terminal -> CRLF.
-        while True:
-            res = session.check_current(ts=io.clock())
-            if not res.advanced:
-                return
-            _write_raw(f"\n\u2713 stage passed  {res.local_key}\n")
-            stage = current_stage(session.progress)
-            if stage is None:
-                _write_raw("\u2713 all stages passed \u2014 task complete\n")
-                return
-            total = len(session.meta.stages)
-            _write_raw(f"\u2500\u2500 stage {stage + 1}/{total} \u2500\u2500  "
-                       f"{session.meta.stages[stage].message}\n")
-
     try:
         session.enter()                    # greet + fire the first stage on_enter
         _announce_stage(session, io)
-        io.write("(work in the shell; each command is checked, `exit` when done)\n")
-        _interactive_shell(session.student.machine,
-                           tick=session.student.rootfs / ".hp-tick", on_tick=on_tick)
-        while _advance_and_announce(session, io):      # final catch-up after the shell exits
-            pass
+        io.write("(do the stages in the shell, then `exit` -- they are checked when you leave)\n")
+        _interactive_shell(session.student.machine)
+        graded = False
+        while _advance_and_announce(session, io):      # grade everything the student did
+            graded = True
+        if not graded and current_stage(session.progress) is not None:
+            io.write("(no stage completed yet)\n")
     finally:
         session.teardown()
     return 0
