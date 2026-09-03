@@ -2,7 +2,7 @@ import secrets
 
 import pytest
 
-from hashpass.registry.token import issue_token, token_expiry, verify_token
+from hashpass.registry.token import issue_token, token_expiry, token_user, verify_token
 
 _KEY = secrets.token_bytes(32)
 _NOW = 1000.0
@@ -15,6 +15,14 @@ def test_token_valid_within_ttl():
     token = issue_token(_KEY, "alice", now=_NOW)
     assert verify_token(_KEY, token, now=_NOW) == "alice"
     assert verify_token(_KEY, token, now=_NOW + 6 * _DAY) == "alice"
+
+
+@pytest.mark.tier1
+def test_token_user_reads_user_without_verifying():
+    # token_user recovers the login from a cached token so a namespace can reuse it, no re-login.
+    token = issue_token(_KEY, "ns/owner", now=_NOW)
+    assert token_user(token) == "ns/owner"
+    assert token_user("not-a-token") is None
 
 
 @pytest.mark.tier1

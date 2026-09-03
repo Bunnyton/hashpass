@@ -21,6 +21,15 @@ def test_verify_rejects_malformed_record():
 
 
 @pytest.mark.tier1
+def test_has_reports_registration(tmp_path):
+    # `has` drives auto-register-on-first-login: unknown users are added, known ones kept.
+    store = UserStore(tmp_path / "users.json")
+    assert store.has("dev") is False
+    store.add("dev", "pw")
+    assert store.has("dev") is True
+
+
+@pytest.mark.tier1
 def test_hash_uses_random_salt():
     assert hash_password("hunter2") != hash_password("hunter2")
 

@@ -64,6 +64,10 @@ class UserStore:
         self._path.write_text(json.dumps(users, indent=2), encoding="utf-8")
         self._path.chmod(0o600)  # PBKDF2 hashes: not world-readable
 
+    def has(self, user: str) -> bool:
+        """Return whether a user is registered (regardless of password)."""
+        return user in self._load()
+
     def verify(self, user: str, password: str) -> bool:
         """Return whether password matches the stored hash for user (False if unknown)."""
         encoded = self._load().get(user)

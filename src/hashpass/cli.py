@@ -4,6 +4,7 @@ import base64
 import contextlib
 import getpass
 import os
+import secrets
 import shutil
 import socket
 import subprocess
@@ -11,6 +12,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import uuid
 
 try:
@@ -29,7 +31,10 @@ from hashpass.progress import current_stage
 from hashpass.recipe.model import Recipe, image_ref, is_task
 from hashpass.recipe.parse import load_recipe
 from hashpass.registry.creds import CredentialCache
+from hashpass.registry.passwords import UserStore
 from hashpass.registry.remote import RemoteRegistry
+from hashpass.registry.server import make_server
+from hashpass.registry.token import token_user
 from hashpass.taskbuild import build_task
 from hashpass.taskrun import run_task
 
@@ -40,6 +45,12 @@ _BASE_DIRNAME = "base"
 _BASE_TARNAME = "rootfs.tar"
 _CREDS_NAME = "creds.json"
 _WORK_DIRNAME = "work"
+_REGISTRY_DIRNAME = "registry"     # local registry service data: store/, users.json, secret
+_ENV_REGISTRY = "HASHPASS_REGISTRY"
+# The local registry service. LOCALHOST ONLY -- images are pushed here, never to a real remote
+# (no 185.x). A fixed URL keeps the login token cache stable across invocations.
+_DEFAULT_REGISTRY = "http://127.0.0.1:8000"
+_REGISTRY_START_TRIES = 50   # poll the auto-started service ~5s (50 x 0.1s) before giving up
 _DOCKER = "docker"
 _BASE_IMAGE = "debian:trixie-slim"  # slim boots + runs machinectl-shell commands reliably;
 # full debian:trixie breaks command execution in the booted machine (and adds no ps/systemd).
@@ -72,6 +83,10 @@ class Home:
     @property
     def work(self) -> Path:
         return self.root / _WORK_DIRNAME
+
+    @property
+    def registry(self) -> Path:
+        return self.root / _REGISTRY_DIRNAME
 
 
 @dataclass(frozen=True)
@@ -542,6 +557,102 @@ def cmd_run(env: Home, ref: str, io: Io | None = None) -> int:
     return _run_image(env, ref, store, io)
 
 
+def _local_registry_url() -> str:
+    """Return the local registry service URL (localhost only; overridable via HASHPASS_REGISTRY)."""
+    return os.environ.get(_ENV_REGISTRY, _DEFAULT_REGISTRY)
+
+
+def _registry_host_port(url: str) -> tuple[str, int]:
+    """Split a registry URL into (host, port), defaulting the port to 80."""
+    parsed = urllib.parse.urlsplit(url)
+    return parsed.hostname or "127.0.0.1", parsed.port or 80
+
+
+def _registry_reachable(url: str) -> bool:
+    """Return whether the local registry service is accepting connections."""
+    host, port = _registry_host_port(url)
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def _registry_secret(env: Home) -> bytes:
+    """Load (or create once) the persistent HMAC secret for the local registry service."""
+    path = env.registry / "secret"
+    if path.exists():
+        return path.read_bytes()
+    env.registry.mkdir(parents=True, exist_ok=True)
+    secret = secrets.token_bytes(32)
+    path.write_bytes(secret)
+    path.chmod(0o600)
+    return secret
+
+
+def _ensure_registry(env: Home, io: Io) -> str:
+    """Return the local registry URL, auto-starting the service in the background if it is down."""
+    url = _local_registry_url()
+    if _registry_reachable(url):
+        return url
+    env.registry.mkdir(parents=True, exist_ok=True)
+    with (env.registry / "serve.log").open("ab") as log:
+        subprocess.Popen(  # detached: outlives this CLI process and keeps serving
+            [sys.executable, "-m", "hashpass", "serve"],
+            stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+            start_new_session=True, env={**os.environ, _ENV_HOME: str(env.root)},
+        )
+    for _ in range(_REGISTRY_START_TRIES):
+        if _registry_reachable(url):
+            io.write(f"\x1b[2m  запущен локальный реестр: {url}\x1b[0m\n")
+            return url
+        time.sleep(0.1)
+    msg = f"не удалось запустить локальный реестр ({url}); см. {env.registry / 'serve.log'}"
+    raise RuntimeError(msg)
+
+
+def _require_login(env: Home, io: Io) -> str:
+    """
+    Ensure a logged-in user for image creation and return the login (asked once, then cached).
+
+    A valid cached token -> its user, no prompt. Otherwise the service is started if needed, the
+    user is asked for a login + password (registered locally on first use), authenticated, and the
+    token is cached until it expires.
+    """
+    url = _local_registry_url()
+    cache = CredentialCache(env.creds)
+    token = cache.cached_token(url, now=time.time())
+    if token is not None and (user := token_user(token)):
+        return user
+    _ensure_registry(env, io)
+    user = (io.read("логин: ") or "").strip()
+    if not user:
+        msg = "логин обязателен для создания образа"
+        raise RuntimeError(msg)
+    password = getpass.getpass("пароль: ")
+    users = UserStore(env.registry / "users.json")
+    if not users.has(user):
+        users.add(user, password)  # first use of this login here -> register it on the local service
+    RemoteRegistry(url, cache=cache).login(user, password)
+    io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
+    return user
+
+
+def cmd_serve(env: Home) -> int:
+    """Run the local registry service (persistent store/users/secret under ~/.hashpass/registry)."""
+    host, port = _registry_host_port(_local_registry_url())
+    store = ImageStore(env.registry / "store")
+    users = UserStore(env.registry / "users.json")
+    server = make_server(store, users, _registry_secret(env), host=host, port=port)
+    bound_host, bound_port = server.server_address
+    sys.stdout.write(f"локальный реестр на http://{bound_host}:{bound_port} (Ctrl-C — остановить)\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        sys.stdout.write("\nостановлен\n")
+    return 0
+
+
 def cmd_login(env: Home, registry: str, user: str | None) -> int:
     """Prompt for credentials, authenticate to a registry, and cache the returned token."""
     user = user or input("Username: ")
@@ -600,6 +711,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="run a task (interactive) or a bare image (shell)")
     p_run.add_argument("ref")
     sub.add_parser("images", help="list built images and tasks")
+    sub.add_parser("serve", help="run the local registry service (127.0.0.1)")
     p_login = sub.add_parser("login", help="log in to a registry (caches a token)")
     p_login.add_argument("registry")
     p_login.add_argument("-u", "--user")
@@ -612,7 +724,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _dispatch(env: Home, args: argparse.Namespace) -> int:
+def _dispatch(env: Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
     """Route a parsed (non-empty) sub-command to its handler."""
     command = args.command
     if command == "build":
@@ -621,6 +733,8 @@ def _dispatch(env: Home, args: argparse.Namespace) -> int:
         return cmd_run(env, args.ref)
     if command == "images":
         return cmd_images(env)
+    if command == "serve":
+        return cmd_serve(env)
     if command == "login":
         return cmd_login(env, args.registry, args.user)
     if command == "push":

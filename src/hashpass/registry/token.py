@@ -67,3 +67,9 @@ def token_expiry(token: str) -> int | None:
     """Read the expiry (unix seconds) embedded in a token, WITHOUT verifying its signature."""
     decoded = _decode(token)
     return None if decoded is None else decoded[1]
+
+
+def token_user(token: str) -> str | None:
+    """Read the user embedded in a token, WITHOUT verifying its signature."""
+    decoded = _decode(token)
+    return None if decoded is None else decoded[0]
