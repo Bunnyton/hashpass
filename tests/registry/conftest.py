@@ -14,6 +14,20 @@ from hashpass.registry.server import make_server
 _SECRET = secrets.token_bytes(32)
 
 
+@pytest.fixture(autouse=True)
+def _no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Neutralize any ambient HTTP(S)_PROXY for the localhost registry tests.
+
+    A sandbox/corp proxy set in the environment intercepts even 127.0.0.1 and answers 500;
+    these tests (and the client) only ever talk to a localhost server, so proxying is wrong.
+    RemoteRegistry disables proxies itself; this covers the tests' own raw urllib helpers.
+    """
+    for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("no_proxy", "*")
+
+
 @dataclass
 class RunningRegistry:
     """A live localhost registry server plus its backing image store and user store."""

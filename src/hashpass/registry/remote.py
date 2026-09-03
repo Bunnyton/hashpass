@@ -20,6 +20,11 @@ from hashpass.registry.token import token_expiry
 _TIMEOUT = 30
 _ALLOWED_SCHEMES = ("http://", "https://")
 
+# This client only ever talks to a localhost registry (see the SECURITY BOUNDARY above), so it
+# must NOT route through an ambient HTTP(S)_PROXY -- a sandbox/corp proxy would intercept
+# 127.0.0.1 and answer 500. An empty ProxyHandler disables proxying for every request.
+_DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 
 @dataclass
 class RemoteRegistry:
@@ -36,7 +41,7 @@ class RemoteRegistry:
         return f"{self.base_url.rstrip('/')}{path}"
 
     def _open(self, req: urllib.request.Request) -> bytes:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:  # noqa: S310
+        with _DIRECT.open(req, timeout=_TIMEOUT) as resp:  # localhost only, no proxy
             return resp.read()
 
     def login(self, user: str, password: str) -> str:
