@@ -16,14 +16,16 @@ function fish_prompt
     set_color normal
 end
 
-# Per-command grading. When hashpass runs a task it sets HP_PORT to a host loopback port; after
-# every command, ping it (over the container's shared loopback, via bash's /dev/tcp -- no mount,
-# nothing visible in the container) and print whatever the host reports (a stage pass + the next
-# goal). The host does the grading and holds the answers -- only result TEXT crosses back in.
+# Live interaction with the host. When hashpass runs a task it sets HP_PORT to a host loopback
+# port; we talk to it over the container's shared loopback via bash's /dev/tcp (no mount, nothing
+# visible in the container). At startup we ask for the greeting ("hello"); after every command we
+# send it ("cmd <base64>") so the host can react/grade/hint and print the result live. The host
+# does all the work and holds the answers -- only text to display crosses back in.
 if set -q HP_PORT
     function __hp_postexec --on-event fish_postexec
-        bash -c "exec 3<>/dev/tcp/127.0.0.1/$HP_PORT 2>/dev/null && echo tick >&3 && cat <&3" 2>/dev/null
+        printf '%s' $argv[1] | bash -c 'c=$(base64 -w0); exec 3<>/dev/tcp/127.0.0.1/'$HP_PORT' 2>/dev/null || exit 0; printf "cmd %s\n" "$c" >&3; cat <&3' 2>/dev/null
     end
+    bash -c 'exec 3<>/dev/tcp/127.0.0.1/'$HP_PORT' 2>/dev/null || exit 0; printf "hello\n" >&3; cat <&3' 2>/dev/null
 end
 
 # `exit` finishes the task: it powers the machine off, which returns control to hashpass on

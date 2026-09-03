@@ -136,8 +136,18 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
         )
         for i, s in enumerate(recipe.stages)
     )
-    return TaskMeta(image_ref=ref, stages=stages, readme=recipe.readme,
+    return TaskMeta(image_ref=ref, stages=stages, readme=_read_readme(recipe.readme),
                     voice=recipe.voice, settings=recipe.settings, react=recipe.react)
+
+
+def _read_readme(path: str | None) -> str | None:
+    """Read the readme file's CONTENT at build (resolved from CWD, like hidden/copy)."""
+    if not path:
+        return None
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return None
 
 
 def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913

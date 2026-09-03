@@ -5,8 +5,8 @@ This task exercises: image build (run/copy), the hidden /hp layer, settings
 the say / show-file / exec actions, observe grading, hidden-handler grading,
 plus hints and react.
 
-Live-firing in the foreground console: voice, on_enter, on_pass, observe and
-hidden-handler grading (checked after every command). Parsed but NOT fired live:
-hints and react -- they depend on seeing each individual command/output, which
-the foreground console does not report to the host. They are included here to
-document the DSL.
+Everything runs LIVE in the console: this greeting (readme) and the session
+voice, on_enter/on_pass narrative, observe and hidden-handler grading, react
+(after every command) and hints (tries / idle / cmd). The one exception is
+OUTPUT-conditioned hints: the console does not report a command's output back
+to the host, so `hint output "..."` cannot match (tries/idle/cmd/react all do).

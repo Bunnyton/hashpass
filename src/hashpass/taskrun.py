@@ -183,6 +183,38 @@ class TaskSession:
                                       runner=self.student, hp_dir=self.hp_dir)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
 
+    def observe(self, command: str, *, ts: str) -> FeedResult:
+        """
+        React/grade/hint on a command the student ALREADY ran in the interactive console.
+
+        Same as feed() but does NOT re-run the command (the console executed it). The
+        command's own output is therefore unavailable, so `output`-conditioned hints cannot
+        match; `tries`/`idle`/`cmd` hints, `react`, acceptance and `on_pass` all fire.
+        """
+        stage = current_stage(self.progress)
+        if stage is None:
+            return FeedResult(advanced=False, stage=None, local_key=None)
+        if self._last_progress_ts is None:
+            self._last_progress_ts = ts
+        sm = self.meta.stages[stage]
+        out = ""                                          # console ran it; output not reported
+        if not _is_neutral(command, sm.neutral):
+            self.tries[stage] += 1
+        ctx = self._ctx(command, self.tries[stage], stage, out)
+        self._perform_all(self.meta.react, ctx)          # per-command catch-all handlers
+        accepted, key = self._accept(stage, sm, command, out, ts)
+        hint: str | None = None
+        if accepted:
+            self._on_pass(stage, ctx, ts)
+        else:
+            action = match_rule(sm.hints, tries=self.tries[stage],
+                                idle=_elapsed(self._last_progress_ts, ts),
+                                command=command, output=out)
+            if action is not None:
+                hint = perform_action(action, ctx, render=self.render,
+                                      runner=self.student, hp_dir=self.hp_dir)
+        return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
+
     def check_current(self, *, ts: str) -> FeedResult:
         """
         Passively grade the current stage against the student's live FS (no command).

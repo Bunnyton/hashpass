@@ -1,5 +1,6 @@
 """hashpass CLI: a Docker-style command-line front end over build/run/registry."""
 import argparse
+import base64
 import contextlib
 import getpass
 import os
@@ -284,6 +285,7 @@ _DEFAULT_TERM = "xterm-256color"
 _GRADE_HOST = "127.0.0.1"  # per-command grade server binds loopback (shared with the container)
 _ACCEPT_POLL = 0.3         # accept() timeout so the grade thread can notice `stop`
 _GRADER_JOIN = 3.0         # seconds to let the grade thread finish after the console closes
+_MAX_REQ = 1 << 20         # cap a console request (hello / cmd <base64>) at 1 MiB
 
 
 def _sink_noop(_text: str) -> None:
@@ -303,16 +305,49 @@ class _Router:
         self._target = target
 
 
+def _recv_request(conn: socket.socket) -> str:
+    """Read one newline-terminated console request line (`hello` or `cmd <base64>`)."""
+    buf = b""
+    while b"\n" not in buf and len(buf) < _MAX_REQ:
+        chunk = conn.recv(4096)
+        if not chunk:
+            break
+        buf += chunk
+    return buf.split(b"\n", 1)[0].decode("utf-8", "replace")
+
+
+def _render_intro(session: object, readme: str | None, io: Io) -> None:
+    """Greet the student INSIDE the console: session voice hello, the first goal, and the readme."""
+    session.enter()                          # voice hello (once) + stage 1 on_enter (via the sink)
+    if readme:
+        io.write("\n" + readme.strip() + "\n")
+    _announce_stage(session, io)
+    io.write("(work in the shell; each command is checked live; type `exit` to finish)\n")
+
+
+def _render_observe(session: object, command: str, io: Io) -> None:
+    """React/grade/hint on one console command, then announce a pass and the next goal."""
+    res = session.observe(command, ts=io.clock())    # react + grade + hints + on_pass (all rendered)
+    if not res.advanced:
+        return
+    io.write(f"\n✓ stage passed  {res.local_key}\n")
+    if current_stage(session.progress) is None:
+        io.write("✓ all stages passed — task complete\n")
+    else:
+        session.enter()                      # next stage's on_enter
+        _announce_stage(session, io)
+
+
 def _grade_server(session: object, router: _Router, clock: Callable[[], str],
-                  stop: threading.Event) -> tuple[int, threading.Thread]:
+                  stop: threading.Event, readme: str | None) -> tuple[int, threading.Thread]:
     """
     Start a loopback grade server; return its port and (unstarted) thread.
 
-    After each command the console's fish hook opens a TCP connection to this port over the
-    shared loopback -- no bind mount, nothing visible in the container. We grade the current
-    stage from the filesystem (the answers stay host-side; only pass/next-goal TEXT is sent
-    back for the hook to print). An empty reply means nothing new passed. The thread runs while
-    the foreground boot blocks the main thread.
+    The console (over the container's shared loopback, via bash's /dev/tcp -- no mount, nothing
+    visible) connects at startup (`hello`) and after every command (`cmd <base64>`). The whole
+    interaction runs HOST-side -- greet, react, grade the filesystem, fire hints and on_pass --
+    and only the TEXT to print is sent back, so answers/graders never enter the container. It all
+    renders live IN the console. The thread runs while the foreground boot blocks the main thread.
     """
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -320,7 +355,20 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
     srv.listen(8)
     srv.settimeout(_ACCEPT_POLL)
     port = srv.getsockname()[1]
-    announce_io = Io(read=lambda _p: None, write=router.write, clock=clock)
+    io = Io(read=lambda _p: None, write=router.write, clock=clock)
+
+    def handle(req: str) -> bytes:
+        lines: list[str] = []
+        router.to(lines.append)
+        try:
+            if req.startswith("hello"):
+                _render_intro(session, readme, io)
+            elif req.startswith("cmd "):
+                with contextlib.suppress(Exception):
+                    _render_observe(session, base64.b64decode(req[4:]).decode("utf-8", "replace"), io)
+        finally:
+            router.to(_sink_noop)
+        return "".join(lines).encode()
 
     def loop() -> None:
         while not stop.is_set():
@@ -331,15 +379,7 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
             except OSError:
                 break
             with conn, contextlib.suppress(OSError):
-                conn.recv(64)                     # the tick payload (ignored)
-                lines: list[str] = []
-                router.to(lines.append)
-                try:
-                    while _advance_and_announce(session, announce_io):
-                        pass
-                finally:
-                    router.to(_sink_noop)
-                conn.sendall("".join(lines).encode())
+                conn.sendall(handle(_recv_request(conn)))
         srv.close()
 
     return port, threading.Thread(target=loop, daemon=True)
@@ -381,23 +421,20 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
                        student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
                        sink=router.write, sleep=time.sleep)
     stop = threading.Event()
-    port, grader = _grade_server(session, router, io.clock, stop)
+    port, grader = _grade_server(session, router, io.clock, stop, session.meta.readme)
     try:
-        session.enter()                    # greet + fire the first stage on_enter (host stdout)
-        _announce_stage(session, task_io)
-        task_io.write("(work in the shell; each command is checked; type `exit` to finish)\n")
-        router.to(_sink_noop)              # during the boot only the grade thread emits (over the socket)
+        # The whole interaction (greeting, per-command react/grade/hints/on_pass) runs live IN
+        # the console over the grade socket -- so nothing is printed before the boot, where the
+        # container's own boot output would scroll it away.
+        router.to(_sink_noop)
         grader.start()
         _interactive_console(session.student, user=session.meta.settings.user,
                              sudo=session.meta.settings.sudo, grade_port=port)
         stop.set()
         grader.join(timeout=_GRADER_JOIN)
-        router.to(io.write)                # final sweep on host stdout (last command / handler stages)
-        graded = current_stage(session.progress) is None
+        router.to(io.write)                # final sweep on host stdout (any stage / voice bye at exit)
         while _advance_and_announce(session, task_io):
-            graded = True
-        if not graded and current_stage(session.progress) is not None:
-            io.write("(no stage completed yet)\n")
+            pass
     finally:
         stop.set()
         session.teardown()
