@@ -216,7 +216,7 @@ def interact(session: object, *, read: Callable[[str], str | None],
 
 def _progress(msg: str) -> None:
     """Print a live build-progress line (flushed so it shows as the build runs)."""
-    sys.stdout.write(msg + "\n")
+    sys.stdout.write("\x1b[2m  \u2502\x1b[0m " + msg.strip() + "\n")
     sys.stdout.flush()
 
 
@@ -238,24 +238,23 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None) -> int:
     store = ImageStore(env.images)
     base = ensure_base_image(env, store)
     ref = image_ref(recipe)
+    sys.stdout.write(f"\x1b[1m▸ Собираю {ref}\x1b[0m\n")
     if is_task(recipe):
         build_task(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
-        kind = "task"
+        kind = "задание"
     else:
         build(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
-        kind = "image"
-    sys.stdout.write(f"✓ built {kind} {ref}\n")
+        kind = "образ"
+    sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} ({kind})\n")
     return 0
 
 
 def _announce_stage(session: object, io: Io) -> None:
-    """Print the current stage number and its goal (the system talking to the student)."""
+    """Print the current stage goal (no number: the student does not know the count)."""
     stage = current_stage(session.progress)
     if stage is None:
         return
-    total = len(session.meta.stages)
-    io.write(f"\n\u2500\u2500 stage {stage + 1}/{total} \u2500\u2500  "
-             f"{session.meta.stages[stage].message}\n")
+    io.write(f"\n\u2500\u2500  {session.meta.stages[stage].message}\n")
 
 
 def _advance_and_announce(session: object, io: Io) -> bool:
@@ -270,9 +269,9 @@ def _advance_and_announce(session: object, io: Io) -> bool:
         return False
     if not res.advanced:
         return False
-    io.write(f"\n\u2713 stage passed  {res.local_key}\n")
+    io.write(f"\n\u2713 принято  {res.local_key}\n")
     if current_stage(session.progress) is None:
-        io.write("\u2713 all stages passed \u2014 task complete\n")
+        io.write("\u2713 всё выполнено \u2014 задание завершено\n")
     else:
         session.enter()
         _announce_stage(session, io)
@@ -327,7 +326,7 @@ def _render_intro(session: object, readme: str | None, io: Io) -> None:
     if readme:
         session.read_text(readme)            # markdown, paged (Enter), even reveal
     _announce_stage(session, io)
-    io.write("(work in the shell; each command is checked live; type `exit` to finish)\n")
+    io.write("(работайте в терминале — проверка после каждой команды; exit — завершить)\n")
 
 
 def _render_observe(session: object, command: str, io: Io) -> None:
@@ -461,12 +460,34 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
     return 0
 
 
-def _run_image(env: Home, ref: str, store: ImageStore) -> int:
-    """Open a live shell in the booted image machine (inherited stdio), then tear down."""
+def _commit_image_edits(runner: object, store: ImageStore, ref: str, io: Io) -> None:
+    """Save the console's edits back into the bare image (its layer merged with the overlay upper)."""
+    upper = runner.rootfs_upper
+    try:
+        changed = any(upper.iterdir())
+    except OSError:
+        changed = False
+    if not changed:
+        io.write("Изменений нет.\n")
+        return
+    stored = store.get(ref)
+    tmp = runner.rootfs.parent / "commit"
+    tmp.mkdir(parents=True, exist_ok=True)
+    # new layer = the image's current delta with the edited overlay upper applied on top
+    # (rsync preserves overlay whiteouts, so deletions carry over too).
+    subprocess.run(["sudo", "rsync", "-a", "--delete", str(stored.layer) + "/", str(tmp) + "/"], check=True)
+    subprocess.run(["sudo", "rsync", "-a", str(upper) + "/", str(tmp) + "/"], check=True)
+    store.save(stored.name, stored.version, tmp, stored.parents, sudo=True)
+    io.write(f"\x1b[32m✓ сохранено\x1b[0m: изменения записаны в образ {ref}\n")
+
+
+def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
+    """Edit a bare image live: open a root console, then commit any changes back to the image."""
     runner = run_image(ref, store, env.work / "run" / uuid.uuid4().hex,   # unique per run
                        base=ensure_base_image(env, store))
     try:
-        _interactive_console(runner, user="root")   # a bare image is a raw root environment
+        _interactive_console(runner, user="root")   # a raw root console -- edit the image freely
+        _commit_image_edits(runner, store, ref, io)
     finally:
         runner.teardown()
     return 0
@@ -483,7 +504,7 @@ def cmd_run(env: Home, ref: str, io: Io | None = None) -> int:
         return 1
     if (stored.layer.parent / "task").exists():
         return _run_task(env, ref, store, io)
-    return _run_image(env, ref, store)
+    return _run_image(env, ref, store, io)
 
 
 def cmd_login(env: Home, registry: str, user: str | None) -> int:

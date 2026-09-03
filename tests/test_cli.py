@@ -261,10 +261,14 @@ def test_run_image_ensures_base_image(tmp_path, monkeypatch):
     seen = {}
     monkeypatch.setattr(cli, "ensure_base_image",
                         lambda _e, _s: seen.setdefault("ensured", True) or tmp_path)
+    empty_upper = tmp_path / "empty-upper"
+    empty_upper.mkdir()
     monkeypatch.setattr(cli, "run_image",
-                        lambda *_a, **_k: SimpleNamespace(rootfs=tmp_path, teardown=lambda: None))
+                        lambda *_a, **_k: SimpleNamespace(rootfs=tmp_path, rootfs_upper=empty_upper,
+                                                          teardown=lambda: None))
     monkeypatch.setattr(cli.subprocess, "run", lambda *_a, **_k: None)
-    assert cli._run_image(env, "pulled:1", store) == 0  # noqa: SLF001
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "t")
+    assert cli._run_image(env, "pulled:1", store, io) == 0  # noqa: SLF001
     assert seen["ensured"]
 
 

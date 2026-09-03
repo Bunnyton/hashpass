@@ -26,12 +26,12 @@ def test_cmd_build_task_then_image(tmp_path, base_tar, capsys):
     tf = tmp_path / "Taskfile"
     tf.write_text(_TASK, encoding="utf-8")
     assert cli.cmd_build(env, str(tf)) == 0
-    assert "built task logtask:1" in capsys.readouterr().out
+    assert "собрано: logtask:1" in capsys.readouterr().out
 
     imf = tmp_path / "Imagefile"
     imf.write_text(_IMAGE, encoding="utf-8")
     assert cli.cmd_build(env, str(imf)) == 0
-    assert "built image tool:1" in capsys.readouterr().out
+    assert "собрано: tool:1" in capsys.readouterr().out
 
     store = ImageStore(env.images)
     assert store.list() == ["logtask:1", "tool:1"]

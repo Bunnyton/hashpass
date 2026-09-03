@@ -1,1 +1,1 @@
-*Clue:* a classic phrase that opens caves — two words, hyphenated. `Ali Baba` knew it.
+*Подсказка:* классическая фраза, открывающая пещеры — два слова через дефис. `Али-Баба` её знал.

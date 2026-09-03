@@ -1,24 +1,19 @@
 # ============================================================================
-# showcase — a reference task exercising (nearly) every hashpass feature, LIVE.
-#   Build:  cd content/tasks/showcase && hashpass build Taskfile
-#   Run:    hashpass run showcase:1
-# `hidden`/`copy`/`readme` paths resolve from the CWD, so build from this dir.
-# Comments must be on their OWN line (no trailing inline comments).
+# showcase — образцовое задание, демонстрирующее почти все возможности, вживую.
+#   Сборка:  cd content/tasks/showcase && hashpass build Taskfile
+#   Запуск:  hashpass run showcase:1
+# Пути hidden/copy/readme резолвятся от CWD — собирайте из этой папки.
+# Комментарии — только на отдельной строке.
 # ============================================================================
 
 image showcase:1
 
-# --- image build steps (baked in) ---
 run mkdir -p /srv
 copy welcome.txt /opt/welcome.txt
 
-# --- hidden /hp materials: graders + theory the student never sees directly ---
 hidden hp
-
-# --- author briefing (Markdown, paged, shown at the start) ---
 readme README.md
 
-# --- render + identity settings ---
 settings
   type-mode normal
   type-speed 90
@@ -26,49 +21,47 @@ settings
   user student
   sudo on
 
-# --- session voice ---
 voice
-  hello say dramatic "Welcome, operator -- I am watching."
+  hello say dramatic "Здравствуйте, оператор. Я наблюдаю."
 
-# --- a catch-all that reacts after EVERY command ---
 react on command exec react
 
-# --- top-level INTRO: fires live in the console before the stages ---
-say "Let me brief you before we begin."
+# --- ВСТУПЛЕНИЕ: печатается вживую в консоли до заданий ---
+say "Введу вас в курс дела, прежде чем начнём."
 read theory.md
 
-# --- Stage 1: observe an artifact you produce (no privileges) ---
-stage "Write the word DONE into /home/student/report.txt"
+# --- Задание 1: наблюдаемый артефакт (без привилегий) ---
+stage "Запишите слово ГОТОВО в файл /home/student/report.txt"
   solve:
-    echo DONE > /home/student/report.txt
+    echo ГОТОВО > /home/student/report.txt
   observe /home/student/report.txt
   neutral ls cat pwd
-  on enter say "Task 1: leave a one-word report."
+  on enter say "Задание 1: оставьте короткий отчёт."
   on enter read clue1.md
-  on pass say dramatic "Report received."
-  hint tries 2 say "Try:  echo DONE > /home/student/report.txt"
-  hint cmd echo missing DONE say "Your echo must contain the exact word DONE."
+  on pass say dramatic "Отчёт принят."
+  hint tries 2 say "Подсказка:  echo ГОТОВО > /home/student/report.txt"
+  hint cmd echo missing ГОТОВО say "В echo должно быть ровно слово ГОТОВО."
 
-# --- Stage 2: classic sudo ---
-stage "With sudo, install procps and save its dpkg status to /srv/status.txt"
+# --- Задание 2: классический sudo ---
+stage "Через sudo установите procps и сохраните его dpkg-статус в /srv/status.txt"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y procps >/dev/null 2>&1
     dpkg -s procps | grep '^Status:' > /srv/status.txt
   observe /srv/status.txt
-  on enter say "Task 2: this needs root. Use sudo -- your password is 'student'."
+  on enter say "Задание 2: нужны права root. Используйте sudo — пароль 'student'."
   on enter exec intro2
-  on pass say "Privileged and precise."
-  hint idle 30 say "sudo apt-get install -y procps ; then pipe status through: sudo tee /srv/status.txt"
+  on pass say "Привилегированно и точно."
+  hint idle 30 say "sudo apt-get install -y procps ; затем: dpkg -s procps | grep Status | sudo tee /srv/status.txt"
 
-# --- Stage 3: a HIDDEN grader in /hp judges your answer ---
-stage "Create /home/student/secret holding the pass-phrase the hidden grader expects"
+# --- Задание 3: скрытый грейдер в /hp судит ответ ---
+stage "Создайте /home/student/secret с секретной фразой, которую ждёт скрытый грейдер"
   solve:
     echo open-sesame > /home/student/secret
   check exec grade
-  on enter say "Task 3: a secret grader lives in /hp. Find its phrase."
+  on enter say "Задание 3: в /hp живёт секретный грейдер. Угадайте его фразу."
   on enter read clue3.md
   on pass exec celebrate
 
-# --- top-level OUTRO: fires when every stage passes ---
-say dramatic "That's everything. Excellent work, operator."
+# --- ФИНАЛ: печатается при полном зачёте ---
+say dramatic "Вот и всё. Отличная работа, оператор."

@@ -81,7 +81,7 @@ def _read_narrative(path: str, hp_dir: Path, rootfs: Path) -> str:
     try:
         return (Path(rootfs) / path.lstrip("/")).read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return f"(read: no such file: {path})"
+        return f"(read: файл не найден: {path})"
 
 
 def _paginate(text: str, height: int = _READ_PAGE_LINES) -> list[str]:

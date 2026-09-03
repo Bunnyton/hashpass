@@ -1,17 +1,17 @@
-# Field Manual
+# Полевой устав
 
-**Welcome, operator.** This console is a real Debian system. Notes before you start:
+**Здравствуйте, оператор.** Это настоящая система Debian. Пара заметок перед стартом:
 
-- Your login is `student`; use `sudo` (password `student`) for privileged work.
-- Files you create are graded automatically, live, after each command.
-- Type `exit` when you are done.
+- Ваш логин — `student`; для привилегированных действий используйте `sudo` (пароль `student`).
+- Файлы, которые вы создаёте, проверяются автоматически и вживую после каждой команды.
+- Наберите `exit`, когда закончите.
 
 ---
 
-## The three checks
+## Три проверки
 
-1. Leave a plain report file.
-2. Install a package with `sudo`.
-3. Satisfy a hidden grader with the right pass-phrase.
+1. Оставить файл-отчёт.
+2. Установить пакет через `sudo`.
+3. Удовлетворить скрытый грейдер правильной фразой.
 
-> The grader for check 3 lives in `/hp` and you cannot read it. Good luck.
+> Грейдер для проверки 3 живёт в `/hp`, и прочитать его нельзя. Удачи.

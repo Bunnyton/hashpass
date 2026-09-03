@@ -190,7 +190,7 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
                   sudo=sudo, progress=progress)
     task = recipe_to_taskcode(recipe)
 
-    _report(progress, f"deriving acceptance: {len(recipe.stages)} stage(s) x {passes} pass(es)")
+    _report(progress, "вывожу приёмку...")
     lowers = resolve_lowers((ref,), store)
     base = base or build_base(workdir / "base", from_tar=base_tar)
     counter = itertools.count()
@@ -213,10 +213,10 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
 
     hp_dir = tdir / "hp"
     work_src = Path(recipe.hidden) if recipe.hidden else None
-    _report(progress, "staging hidden /hp layer + acceptance bundle")
+    _report(progress, "готовлю скрытый /hp-слой и приёмку")
     stage_hidden_layer(hp_dir, work_src=work_src, bundle_dir=bundle_dir)
 
     meta = _build_meta(ref, recipe, acceptance)
     save_meta(meta, tdir)
-    _report(progress, f"stored task {ref}")
+    _report(progress, f"сохранил задание {ref}")
     return StoredTask(ref=ref, image=image, bundle_dir=bundle_dir, hp_src_dir=hp_dir, meta=meta)

@@ -54,7 +54,7 @@ def build(  # noqa: PLR0913
         for step in recipe.steps:
             if isinstance(step, CopyStep):
                 if progress is not None:
-                    progress(f"  copy {step.src} -> {step.dst}")
+                    progress(f"копирую {step.src} → {step.dst}")
                 dst = mnt / step.dst.lstrip("/")
                 subprocess.run(
                     ["sudo", "rsync", "-a", "--mkpath", step.src, str(dst)],
@@ -62,7 +62,7 @@ def build(  # noqa: PLR0913
                 )
             elif isinstance(step, RunStep):
                 if progress is not None:
-                    progress(f"  run: {step.cmd}")
+                    progress(f"выполняю: {step.cmd}")
                 subprocess.run(
                     ["sudo", "systemd-nspawn", "-q", "--register=no",
                      "-D", str(mnt), "sh", "-c", step.cmd],

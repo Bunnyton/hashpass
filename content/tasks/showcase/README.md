@@ -1,12 +1,12 @@
-# showcase — author's briefing
+# showcase — брифинг автора
 
-This task exercises **every** hashpass feature: image build, the hidden `/hp`
-layer, settings, voice, `on_enter`/`on_pass`, the `say` / `read` / `exec`
-actions, observe and hidden-handler grading, hints and react — plus top-level
-intro/outro actions.
+Это задание демонстрирует **почти все** возможности hashpass: сборку образа,
+скрытый слой `/hp`, настройки, voice, `on_enter`/`on_pass`, действия
+`say` / `read` / `exec`, приёмку по observe и по скрытому грейдеру, подсказки
+и react — плюс верхнеуровневые действия-вступление и действия-финал.
 
 ---
 
-Everything runs *live* in the console. The one exception is `hint output "..."`:
-the console does not report a command's **output** back to the host, so that one
-condition cannot match. Press Enter to continue.
+Всё идёт *вживую* в терминале. Единственное исключение — `hint output "..."`:
+консоль не сообщает хосту **вывод** команды, поэтому это условие не срабатывает.
+Нажмите Enter, чтобы продолжить.

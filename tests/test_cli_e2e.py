@@ -24,7 +24,7 @@ def test_build_via_main_then_scripted_run(tmp_path, base_tar, monkeypatch, capsy
     tf.write_text(_TASK, encoding="utf-8")
 
     assert cli.main(["build", str(tf)]) == 0
-    assert "built task e2e:1" in capsys.readouterr().out
+    assert "собрано: e2e:1" in capsys.readouterr().out
     assert cli.main(["images"]) == 0
     assert "e2e:1" in capsys.readouterr().out
 
@@ -39,4 +39,4 @@ def test_build_via_main_then_scripted_run(tmp_path, base_tar, monkeypatch, capsy
     writes = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
     assert cli.cmd_run(env, "e2e:1", io) == 0
-    assert "✓ all stages passed — task complete\n" in writes
+    assert "✓ всё выполнено — задание завершено\n" in writes

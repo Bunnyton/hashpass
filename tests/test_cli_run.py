@@ -33,5 +33,5 @@ def test_run_task_grades_in_background(tmp_path, base_tar, monkeypatch):
     writes = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "2026-08-31T00:00:00")
     assert cli.cmd_run(env, "logtask:1", io) == 0
-    assert any("✓ stage passed" in w for w in writes)
-    assert "✓ all stages passed — task complete\n" in writes
+    assert any("✓ принято" in w for w in writes)
+    assert "✓ всё выполнено — задание завершено\n" in writes

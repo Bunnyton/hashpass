@@ -8,7 +8,7 @@ exec 3<>"/dev/tcp/127.0.0.1/$HP_PORT" 2>/dev/null || exit 0
 printf '%s\n' "$1" >&3
 while LC_ALL=C IFS= read -r -N1 ch <&3; do
     if [ "$ch" = $'\x01' ]; then
-        printf '\x1b[2m  -- Enter --\x1b[0m' > /dev/tty
+        printf '\x1b[2m  — далее (Enter) —\x1b[0m' > /dev/tty
         IFS= read -r _ < /dev/tty
         printf '\r\x1b[K' > /dev/tty
         printf 'x' >&3
