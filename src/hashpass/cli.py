@@ -357,9 +357,14 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
     port = srv.getsockname()[1]
     io = Io(read=lambda _p: None, write=router.write, clock=clock)
 
-    def handle(req: str) -> bytes:
-        lines: list[str] = []
-        router.to(lines.append)
+    def handle(conn: socket.socket, req: str) -> None:
+        # Stream rendered output STRAIGHT to the socket so the typewriter (per-char writes with
+        # the Renderer's pacing sleeps) actually types out live in the console -- buffering it
+        # here and sending at once would lose the effect.
+        def sink(text: str) -> None:
+            with contextlib.suppress(OSError):
+                conn.sendall(text.encode())
+        router.to(sink)
         try:
             if req.startswith("hello"):
                 _render_intro(session, readme, io)
@@ -368,7 +373,6 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
                     _render_observe(session, base64.b64decode(req[4:]).decode("utf-8", "replace"), io)
         finally:
             router.to(_sink_noop)
-        return "".join(lines).encode()
 
     def loop() -> None:
         while not stop.is_set():
@@ -379,7 +383,8 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
             except OSError:
                 break
             with conn, contextlib.suppress(OSError):
-                conn.sendall(handle(_recv_request(conn)))
+                conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # per-char, no Nagle
+                handle(conn, _recv_request(conn))
         srv.close()
 
     return port, threading.Thread(target=loop, daemon=True)
