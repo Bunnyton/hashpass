@@ -22,6 +22,7 @@ def test_run_task_grades_in_background(tmp_path, base_tar, monkeypatch):
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
     tf = tmp_path / "Taskfile"
     tf.write_text(_TASK, encoding="utf-8")
+    monkeypatch.setattr(cli, "_require_login", lambda _env, _io: "dev")  # build under a login
     cli.cmd_build(env, str(tf))
 
     # In place of the interactive foreground console, simulate the student running the
@@ -32,6 +33,6 @@ def test_run_task_grades_in_background(tmp_path, base_tar, monkeypatch):
 
     writes = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "2026-08-31T00:00:00")
-    assert cli.cmd_run(env, "logtask:1", io) == 0
+    assert cli.cmd_run(env, "dev/logtask:1", io) == 0   # built under the "dev" namespace
     assert any("✓ принято" in w for w in writes)
     assert "✓ всё выполнено — задание завершено\n" in writes

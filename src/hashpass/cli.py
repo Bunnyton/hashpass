@@ -250,22 +250,30 @@ def resolve_ref(recipe: Recipe, tag: str | None, taskfile: Path) -> tuple[str, s
     return taskfile.resolve().parent.name, "latest"
 
 
-def cmd_build(env: Home, taskfile: str, tag: str | None = None) -> int:
-    """Build an image or a task from a Taskfile (auto-exporting the base rootfs on first use)."""
+def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = None) -> int:
+    """Build an image or a task from a Taskfile, under the owner's namespace (login required)."""
+    io = io or _default_io()
     recipe = load_recipe(Path(taskfile))
     name, version = resolve_ref(recipe, tag, Path(taskfile))
-    recipe = replace(recipe, name=name, version=version)
+    user = _require_login(env, io)                       # image creation requires a login
+    recipe = replace(recipe, name=_namespace_name(name, user), version=version)
     store = ImageStore(env.images)
     base = ensure_base_image(env, store)
     ref = image_ref(recipe)
+    task = is_task(recipe)
     sys.stdout.write(f"\x1b[1m▸ Собираю {ref}\x1b[0m\n")
-    if is_task(recipe):
+    if task:
         build_task(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
         kind = "задание"
     else:
         build(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
         kind = "образ"
     sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} ({kind})\n")
+    if task:
+        # The registry blob carries an image's layer, not a task's hidden grader -- keep tasks local.
+        io.write("\x1b[2m  задание сохранено локально (на сервис отправляются образы)\x1b[0m\n")
+    else:
+        _push_image(env, store, ref, io)
     return 0
 
 
@@ -504,8 +512,8 @@ def _prompt_save_as(default: str) -> str | None:
     return answer or None
 
 
-def _commit_image_edits(runner: object, store: ImageStore, ref: str, io: Io) -> None:
-    """Save the console's edits back into a bare image (its layer merged with the overlay upper)."""
+def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, io: Io) -> None:
+    """Save the console's edits back into an image (its layer + overlay upper), namespaced + pushed."""
     upper = runner.rootfs_upper
     try:
         changed = any(upper.iterdir())
@@ -514,7 +522,10 @@ def _commit_image_edits(runner: object, store: ImageStore, ref: str, io: Io) -> 
     if not changed:
         io.write("Изменений нет.\n")
         return
-    target = _prompt_save_as(ref)
+    user = _require_login(env, io)   # image creation requires a login (asked once, then cached)
+    rname, _, rversion = ref.partition(":")
+    default = f"{_namespace_name(rname, user)}:{rversion or 'latest'}"
+    target = _prompt_save_as(default)
     if not target:
         io.write("Изменения не сохранены.\n")
         return
@@ -529,6 +540,7 @@ def _commit_image_edits(runner: object, store: ImageStore, ref: str, io: Io) -> 
     subprocess.run(["sudo", "rsync", "-a", str(upper) + "/", str(tmp) + "/"], check=True)
     store.save(name, version, tmp, stored.parents, sudo=True)
     io.write(f"\x1b[32m✓ сохранено\x1b[0m: {name}:{version}\n")
+    _push_image(env, store, f"{name}:{version}", io)
 
 
 def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
@@ -537,7 +549,7 @@ def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
                        base=ensure_base_image(env, store))
     try:
         _interactive_console(runner, user="root")   # a raw root console -- edit the image freely
-        _commit_image_edits(runner, store, ref, io)
+        _commit_image_edits(env, runner, store, ref, io)
     finally:
         runner.teardown()
     return 0
@@ -636,6 +648,23 @@ def _require_login(env: Home, io: Io) -> str:
     RemoteRegistry(url, cache=cache).login(user, password)
     io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
     return user
+
+
+def _namespace_name(name: str, user: str) -> str:
+    """Prefix a name with the owner's login (idempotent: a leading owner segment is replaced)."""
+    return f"{user}/{name.rsplit('/', 1)[-1]}"
+
+
+def _push_image(env: Home, store: ImageStore, ref: str, io: Io) -> None:
+    """Push a saved image (and its `from` closure) to the local registry service; warn on failure."""
+    url = _ensure_registry(env, io)
+    cache = CredentialCache(env.creds)
+    try:
+        copied = RemoteRegistry(url, cache=cache).push(store, ref)
+    except (urllib.error.URLError, ValueError, OSError) as exc:
+        io.write(f"\x1b[33m⚠ не удалось отправить на сервис: {exc}\x1b[0m\n")
+        return
+    io.write(f"\x1b[36m↑ отправлено на сервис\x1b[0m: {ref} ({len(copied)} слой(ёв))\n")
 
 
 def cmd_serve(env: Home) -> int:
