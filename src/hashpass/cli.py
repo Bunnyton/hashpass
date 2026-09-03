@@ -12,6 +12,11 @@ import threading
 import time
 import urllib.error
 import uuid
+
+try:
+    import readline
+except ImportError:                       # pragma: no cover - readline is optional
+    readline = None
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -460,8 +465,32 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
     return 0
 
 
+def _prompt_save_as(default: str) -> str | None:
+    """
+    Ask where to save the edited image, with `default` (the current ref) pre-filled + editable.
+
+    Returns the chosen ref, or None to NOT save (an empty answer, EOF, or no terminal to ask on).
+    """
+    try:
+        is_tty = sys.stdin.isatty()
+    except (OSError, ValueError):
+        is_tty = False
+    if not is_tty:
+        return None
+    if readline is not None:
+        readline.set_startup_hook(lambda: readline.insert_text(default))
+    try:
+        answer = input("\nСохранить образ как (пусто — не сохранять): ").strip()
+    except EOFError:
+        answer = ""
+    finally:
+        if readline is not None:
+            readline.set_startup_hook()
+    return answer or None
+
+
 def _commit_image_edits(runner: object, store: ImageStore, ref: str, io: Io) -> None:
-    """Save the console's edits back into the bare image (its layer merged with the overlay upper)."""
+    """Save the console's edits back into a bare image (its layer merged with the overlay upper)."""
     upper = runner.rootfs_upper
     try:
         changed = any(upper.iterdir())
@@ -470,6 +499,12 @@ def _commit_image_edits(runner: object, store: ImageStore, ref: str, io: Io) -> 
     if not changed:
         io.write("Изменений нет.\n")
         return
+    target = _prompt_save_as(ref)
+    if not target:
+        io.write("Изменения не сохранены.\n")
+        return
+    name, _, version = target.partition(":")
+    version = version or "latest"
     stored = store.get(ref)
     tmp = runner.rootfs.parent / "commit"
     tmp.mkdir(parents=True, exist_ok=True)
@@ -477,8 +512,8 @@ def _commit_image_edits(runner: object, store: ImageStore, ref: str, io: Io) -> 
     # (rsync preserves overlay whiteouts, so deletions carry over too).
     subprocess.run(["sudo", "rsync", "-a", "--delete", str(stored.layer) + "/", str(tmp) + "/"], check=True)
     subprocess.run(["sudo", "rsync", "-a", str(upper) + "/", str(tmp) + "/"], check=True)
-    store.save(stored.name, stored.version, tmp, stored.parents, sudo=True)
-    io.write(f"\x1b[32m✓ сохранено\x1b[0m: изменения записаны в образ {ref}\n")
+    store.save(name, version, tmp, stored.parents, sudo=True)
+    io.write(f"\x1b[32m✓ сохранено\x1b[0m: {name}:{version}\n")
 
 
 def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
