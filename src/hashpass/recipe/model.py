@@ -39,7 +39,14 @@ class ShowFileAction:
     path: str
 
 
-Action = ExecAction | SayAction | ShowFileAction
+@dataclass(frozen=True)
+class ReadAction:
+    """A `read <file>` action: render a Markdown file as paged, streamed narrative (§7)."""
+
+    path: str
+
+
+Action = ExecAction | SayAction | ShowFileAction | ReadAction
 
 
 @dataclass(frozen=True)
@@ -131,6 +138,8 @@ class Recipe:
     voice: Voice = field(default_factory=Voice)
     settings: Settings = field(default_factory=Settings)
     react: tuple[Action, ...] = ()
+    intro: tuple[Action, ...] = ()     # top-level actions before the first stage (session opener)
+    outro: tuple[Action, ...] = ()     # top-level actions after the last stage (on all-passed)
 
 
 def image_ref(r: Recipe) -> str:

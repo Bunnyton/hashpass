@@ -1,42 +1,41 @@
 # ============================================================================
-# showcase — a reference task exercising (nearly) every hashpass feature.
+# showcase — a reference task exercising (nearly) every hashpass feature, LIVE.
 #   Build:  cd content/tasks/showcase && hashpass build Taskfile
 #   Run:    hashpass run showcase:1
-# Note: `hidden`/`copy` paths resolve from the CWD, so build from this directory.
-# Note: comments must be on their OWN line (no trailing inline comments).
+# `hidden`/`copy`/`readme` paths resolve from the CWD, so build from this dir.
+# Comments must be on their OWN line (no trailing inline comments).
 # ============================================================================
 
 image showcase:1
 
-# --- image build steps (baked into the image at build time) ---
+# --- image build steps (baked in) ---
 run mkdir -p /srv
 copy welcome.txt /opt/welcome.txt
 
-# --- the hidden /hp layer: graders/scripts the student NEVER sees ---
-# (this dir's CONTENTS are staged into /hp/work/)
+# --- hidden /hp materials: graders + theory the student never sees directly ---
 hidden hp
 
-# --- an author briefing file ---
-readme README.txt
+# --- author briefing (Markdown, paged, shown at the start) ---
+readme README.md
 
 # --- render + identity settings ---
-# type-mode: instant | normal | dramatic ; type-speed: chars/sec ; pager: on|off
-# user: console login user (default student) ; sudo: on|off (classic password sudoer)
 settings
   type-mode normal
-  type-speed 60
+  type-speed 90
   pager on
   user student
   sudo on
 
-# --- session voice: hello on first entry, bye once every stage passes ---
+# --- session voice ---
 voice
-  hello say dramatic "Welcome, operator. Three checks await -- I am watching."
-  bye say dramatic "All green. Stand down, and well done."
+  hello say dramatic "Welcome, operator -- I am watching."
 
 # --- a catch-all that reacts after EVERY command ---
-# (DSL-valid; see README about live firing in the foreground console)
 react on command exec react
+
+# --- top-level INTRO: fires live in the console before the stages ---
+say "Let me brief you before we begin."
+read theory.md
 
 # --- Stage 1: observe an artifact you produce (no privileges) ---
 stage "Write the word DONE into /home/student/report.txt"
@@ -44,13 +43,13 @@ stage "Write the word DONE into /home/student/report.txt"
     echo DONE > /home/student/report.txt
   observe /home/student/report.txt
   neutral ls cat pwd
-  on enter say "Task 1: leave a one-word report. A plain file will do."
-  on enter show file clue1.txt
+  on enter say "Task 1: leave a one-word report."
+  on enter read clue1.md
   on pass say dramatic "Report received."
   hint tries 2 say "Try:  echo DONE > /home/student/report.txt"
   hint cmd echo missing DONE say "Your echo must contain the exact word DONE."
 
-# --- Stage 2: classic sudo -- a privileged step (needs root via sudo) ---
+# --- Stage 2: classic sudo ---
 stage "With sudo, install procps and save its dpkg status to /srv/status.txt"
   solve:
     apt-get update >/dev/null 2>&1
@@ -60,14 +59,16 @@ stage "With sudo, install procps and save its dpkg status to /srv/status.txt"
   on enter say "Task 2: this needs root. Use sudo -- your password is 'student'."
   on enter exec intro2
   on pass say "Privileged and precise."
-  hint idle 30 say "sudo apt-get install -y procps ; then: dpkg -s procps | grep Status | sudo tee /srv/status.txt"
+  hint idle 30 say "sudo apt-get install -y procps ; then pipe status through: sudo tee /srv/status.txt"
 
 # --- Stage 3: a HIDDEN grader in /hp judges your answer ---
 stage "Create /home/student/secret holding the pass-phrase the hidden grader expects"
   solve:
     echo open-sesame > /home/student/secret
   check exec grade
-  on enter say "Task 3: a secret grader lives in /hp. You cannot read it. Find its phrase."
-  on enter show file clue3.txt
+  on enter say "Task 3: a secret grader lives in /hp. Find its phrase."
+  on enter read clue3.md
   on pass exec celebrate
-  hint tries 3 show file clue3.txt
+
+# --- top-level OUTRO: fires when every stage passes ---
+say dramatic "That's everything. Excellent work, operator."

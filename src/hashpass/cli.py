@@ -292,6 +292,10 @@ def _sink_noop(_text: str) -> None:
     """Swallow output -- a no-op sink used while nothing should reach the terminal."""
 
 
+def _no_pause() -> None:
+    """Pager pause used off a console request: do nothing."""
+
+
 class _Router:
     """A write sink whose destination can be swapped -- host stdout, or a per-command buffer."""
 
@@ -317,10 +321,11 @@ def _recv_request(conn: socket.socket) -> str:
 
 
 def _render_intro(session: object, readme: str | None, io: Io) -> None:
-    """Greet the student INSIDE the console: session voice hello, the first goal, and the readme."""
+    """Open the session INSIDE the console: voice hello, the top-level intro, readme, first goal."""
     session.enter()                          # voice hello (once) + stage 1 on_enter (via the sink)
+    session.fire_intro()                     # top-level `say`/`read`/`exec` before the stages
     if readme:
-        io.write("\n" + readme.strip() + "\n")
+        session.read_text(readme)            # markdown, paged (Enter), even reveal
     _announce_stage(session, io)
     io.write("(work in the shell; each command is checked live; type `exit` to finish)\n")
 
@@ -333,6 +338,7 @@ def _render_observe(session: object, command: str, io: Io) -> None:
     io.write(f"\n✓ stage passed  {res.local_key}\n")
     if current_stage(session.progress) is None:
         io.write("✓ all stages passed — task complete\n")
+        session.fire_outro()                 # top-level `say`/`read`/`exec` after the last stage
     else:
         session.enter()                      # next stage's on_enter
         _announce_stage(session, io)
@@ -364,7 +370,15 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
         def sink(text: str) -> None:
             with contextlib.suppress(OSError):
                 conn.sendall(text.encode())
+
+        def pause() -> None:
+            # page break: send the 0x01 control byte and block until the console (hp-io) reports
+            # the reader pressed Enter, so the next page types out fresh.
+            with contextlib.suppress(OSError):
+                conn.sendall(b"\x01")
+                conn.recv(16)
         router.to(sink)
+        session.pause = pause
         try:
             if req.startswith("hello"):
                 _render_intro(session, readme, io)
@@ -373,6 +387,7 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
                     _render_observe(session, base64.b64decode(req[4:]).decode("utf-8", "replace"), io)
         finally:
             router.to(_sink_noop)
+            session.pause = _no_pause
 
     def loop() -> None:
         while not stop.is_set():

@@ -1,4 +1,5 @@
 """Run a stored task: student container WITHOUT /hp; handlers/checks/hints in a bound-/hp run."""
+import re
 import shutil
 import sys
 import time
@@ -15,9 +16,10 @@ from hashpass.image.base import build_base
 from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore
 from hashpass.key import local_key
+from hashpass.markdown import render_markdown
 from hashpass.play import capture_candidate
 from hashpass.progress import current_stage, mark_passed_local, new_progress
-from hashpass.recipe.model import Action, ExecAction, SayAction, ShowFileAction
+from hashpass.recipe.model import Action, ExecAction, ReadAction, SayAction, ShowFileAction
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import load_bundle
@@ -64,8 +66,38 @@ def _elapsed(start_ts: str, now_ts: str) -> float:
         return 0.0
 
 
-def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,
-                   runner: NspawnRunner, hp_dir: Path) -> str:
+_READ_PAGE_LINES = 18   # auto page height for `read` when no `---` marker splits it sooner
+
+
+def _no_pause() -> None:
+    """Default pager pause: do nothing (used off the interactive socket, e.g. in tests)."""
+
+
+def _read_narrative(path: str, hp_dir: Path, rootfs: Path) -> str:
+    """Resolve a `read <file>` source: the hidden /hp layer first, else the image filesystem."""
+    hp_file = hp_dir / "work" / path
+    if hp_file.is_file():
+        return hp_file.read_text(encoding="utf-8", errors="replace")
+    try:
+        return (Path(rootfs) / path.lstrip("/")).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return f"(read: no such file: {path})"
+
+
+def _paginate(text: str, height: int = _READ_PAGE_LINES) -> list[str]:
+    """Split narrative into pages: first on `---` marker lines, then by screen height."""
+    pages: list[str] = []
+    for section in re.split(r"(?m)^---[ \t]*$", text):
+        lines = section.strip("\n").splitlines()
+        if not any(ln.strip() for ln in lines):
+            continue
+        pages.extend("\n".join(lines[i:i + height]) for i in range(0, len(lines), height))
+    return pages or [text]
+
+
+def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # noqa: PLR0913
+                   runner: NspawnRunner, hp_dir: Path,
+                   pause: Callable[[], None] = _no_pause) -> str:
     """
     Render one delegated action and return the text shown.
 
@@ -82,6 +114,14 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,
         return action.text
     if isinstance(action, ShowFileAction):
         return render.show_file(Path(hp_dir) / "work" / action.path)
+    if isinstance(action, ReadAction):
+        text = _read_narrative(action.path, Path(hp_dir), runner.rootfs)
+        pages = _paginate(render_markdown(text))
+        for idx, page in enumerate(pages):
+            render.render(page + "\n", mode="normal")   # even, streamed reveal
+            if idx < len(pages) - 1:
+                pause()                                   # wait for Enter between pages
+        return text
     res = run_handler(runner, ExecAction(action.value), ctx, hp_dir=Path(hp_dir))
     render.render(res.stdout)
     return res.stdout
@@ -109,6 +149,7 @@ class TaskSession:
         self._greeted = False
         self._said_bye = False
         self._last_progress_ts: str | None = None
+        self.pause: Callable[[], None] = _no_pause   # pager pause hook (set by the console driver)
 
     @staticmethod
     def _ctx(command: str, tries: int, stage: int, last_out: str = "") -> HandlerContext:
@@ -117,8 +158,8 @@ class TaskSession:
 
     def _perform_all(self, actions: tuple[Action, ...], ctx: HandlerContext) -> list[str]:
         """Render a list of delegated actions; collect the text each produced."""
-        return [perform_action(a, ctx, render=self.render, runner=self.student, hp_dir=self.hp_dir)
-                for a in actions]
+        return [perform_action(a, ctx, render=self.render, runner=self.student,
+                               hp_dir=self.hp_dir, pause=self.pause) for a in actions]
 
     def enter(self) -> list[str]:
         """Fire session `voice hello` (first call) then the current stage's `on_enter`; return their text."""
@@ -132,6 +173,22 @@ class TaskSession:
         sm = self.meta.stages[stage]
         outs.extend(self._perform_all(sm.on_enter, self._ctx("", self.tries[stage], stage)))
         return outs
+
+    def fire_intro(self) -> list[str]:
+        """Render the top-level `intro` actions (author opener, before the first stage)."""
+        return self._perform_all(self.meta.intro, self._ctx("", 0, current_stage(self.progress) or 0))
+
+    def fire_outro(self) -> list[str]:
+        """Render the top-level `outro` actions (author closer, after the last stage passes)."""
+        return self._perform_all(self.meta.outro, self._ctx("", 0, 0))
+
+    def read_text(self, text: str) -> None:
+        """Render a Markdown STRING as paged, streamed narrative (the readme briefing)."""
+        pages = _paginate(render_markdown(text))
+        for idx, page in enumerate(pages):
+            self.render.render(page + "\n", mode="normal")
+            if idx < len(pages) - 1:
+                self.pause()
 
     def _accept(self, stage: int, sm: StageMeta, command: str,
                 out: str, ts: str) -> tuple[bool, str | None]:

@@ -23,9 +23,9 @@ end
 # does all the work and holds the answers -- only text to display crosses back in.
 if set -q HP_PORT
     function __hp_postexec --on-event fish_postexec
-        printf '%s' $argv[1] | bash -c 'c=$(base64 -w0); exec 3<>/dev/tcp/127.0.0.1/'$HP_PORT' 2>/dev/null || exit 0; printf "cmd %s\n" "$c" >&3; cat <&3' 2>/dev/null
+        hp-io "cmd "(printf '%s' $argv[1] | base64 -w0) 2>/dev/null
     end
-    bash -c 'exec 3<>/dev/tcp/127.0.0.1/'$HP_PORT' 2>/dev/null || exit 0; printf "hello\n" >&3; cat <&3' 2>/dev/null
+    hp-io hello 2>/dev/null
 end
 
 # `exit` finishes the task: it powers the machine off, which returns control to hashpass on

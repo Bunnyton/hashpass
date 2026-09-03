@@ -46,7 +46,8 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
     dest = Path(dest)
     if ((dest / "lib/systemd/systemd").exists() and (dest / "usr/bin/hash").exists()
             and (dest / "usr/local/sbin/hp-console").exists()
-            and (dest / "home/student").exists()):
+            and (dest / "home/student").exists()
+            and (dest / "usr/local/bin/hp-io").exists()):
         # Already a COMPLETE bootable base (systemd from apt + runtime from rsync, including
         # the console-autologin script): reuse it. Rebuilding would re-extract the tar over an
         # apt-configured tree and corrupt dpkg, and it avoids rebuilding the invariant base on

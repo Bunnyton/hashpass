@@ -12,6 +12,7 @@ from hashpass.recipe.model import (
     HintRule,
     IdleCond,
     OutputCond,
+    ReadAction,
     SayAction,
     Settings,
     ShowFileAction,
@@ -43,6 +44,8 @@ class TaskMeta:
     voice: Voice = field(default_factory=Voice)
     settings: Settings = field(default_factory=Settings)
     react: tuple[Action, ...] = ()
+    intro: tuple[Action, ...] = ()
+    outro: tuple[Action, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,8 @@ def _action_to_dict(action: Action) -> dict:
         return {"kind": "say", "text": action.text, "dramatic": action.dramatic}
     if isinstance(action, ShowFileAction):
         return {"kind": "show", "path": action.path}
+    if isinstance(action, ReadAction):
+        return {"kind": "read", "path": action.path}
     msg = f"unknown action: {action!r}"
     raise TypeError(msg)
 
@@ -80,6 +85,8 @@ def _action_from_dict(data: dict) -> Action:
         return SayAction(data["text"], data.get("dramatic", False))
     if kind == "show":
         return ShowFileAction(data["path"])
+    if kind == "read":
+        return ReadAction(data["path"])
     msg = f"unknown action kind: {kind!r}"
     raise ValueError(msg)
 
@@ -177,6 +184,8 @@ def meta_to_dict(meta: TaskMeta) -> dict:
         "voice": _voice_to_dict(meta.voice),
         "settings": _settings_to_dict(meta.settings),
         "react": [_action_to_dict(a) for a in meta.react],
+        "intro": [_action_to_dict(a) for a in meta.intro],
+        "outro": [_action_to_dict(a) for a in meta.outro],
     }
 
 
@@ -189,6 +198,8 @@ def meta_from_dict(data: dict) -> TaskMeta:
         voice=_voice_from_dict(data.get("voice", {})),
         settings=_settings_from_dict(data.get("settings", {})),
         react=tuple(_action_from_dict(a) for a in data.get("react", [])),
+        intro=tuple(_action_from_dict(a) for a in data.get("intro", [])),
+        outro=tuple(_action_from_dict(a) for a in data.get("outro", [])),
     )
 
 

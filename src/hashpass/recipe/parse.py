@@ -11,6 +11,7 @@ from hashpass.recipe.model import (
     HintRule,
     IdleCond,
     OutputCond,
+    ReadAction,
     Recipe,
     RunStep,
     SayAction,
@@ -43,6 +44,8 @@ class _Acc:
     hello: list[Action] = field(default_factory=list)
     bye: list[Action] = field(default_factory=list)
     react: list[Action] = field(default_factory=list)
+    intro: list[Action] = field(default_factory=list)
+    pending: list[Action] = field(default_factory=list)   # top-level actions seen after a stage
     settings: Settings | None = None
 
 
@@ -123,7 +126,12 @@ def _parse_action(value: str) -> Action:
             msg = f"only 'show file <path>' is supported, got: {value!r}"
             raise ValueError(msg)
         return ShowFileAction(path.strip())
-    msg = f"expected an 'exec'/'say'/'show file' action, got: {value!r}"
+    if verb == "read":
+        if not rest:
+            msg = "read requires a file path"
+            raise ValueError(msg)
+        return ReadAction(rest.strip())
+    msg = f"expected an 'exec'/'say'/'show file'/'read' action, got: {value!r}"
     raise ValueError(msg)
 
 
@@ -263,8 +271,28 @@ def _do_react(value: str, acc: _Acc) -> None:
     acc.react.append(_parse_action(value[len(head):].strip()))
 
 
+def _add_toplevel(action: Action, acc: _Acc) -> None:
+    """Route a top-level say/read/exec action to the intro (pre-stage) or the post-stage list."""
+    (acc.intro if not acc.stages else acc.pending).append(action)
+
+
+def _do_say(value: str, acc: _Acc) -> None:
+    _add_toplevel(_parse_action("say " + value), acc)
+
+
+def _do_read(value: str, acc: _Acc) -> None:
+    _add_toplevel(_parse_action("read " + value), acc)
+
+
+def _do_exec(value: str, acc: _Acc) -> None:
+    _add_toplevel(_parse_action("exec " + value), acc)
+
+
 _TOP_HANDLERS = {
     "image": _do_image,
+    "say": _do_say,
+    "read": _do_read,
+    "exec": _do_exec,
     "from": _do_from,
     "copy": _do_copy,
     "run": _do_run,
@@ -458,6 +486,9 @@ def parse_recipe(text: str) -> Recipe:
             raise ValueError(msg)
         kw, value = _kw_value(content)
         if kw == "stage":
+            if acc.pending:
+                msg = "top-level actions between stages: put them before the first stage or after the last"
+                raise ValueError(msg)
             stage, i = _parse_stage_block(value, lines, i + 1)
             acc.stages.append(stage)
             continue
@@ -476,7 +507,8 @@ def parse_recipe(text: str) -> Recipe:
     voice = Voice(hello=tuple(acc.hello), bye=tuple(acc.bye))
     return Recipe(acc.name or "", acc.version, tuple(acc.parents), tuple(acc.steps),
                   tuple(acc.stages), acc.hidden, acc.readme,
-                  voice=voice, settings=acc.settings or Settings(), react=tuple(acc.react))
+                  voice=voice, settings=acc.settings or Settings(), react=tuple(acc.react),
+                  intro=tuple(acc.intro), outro=tuple(acc.pending))
 
 
 def load_recipe(path: Path) -> Recipe:

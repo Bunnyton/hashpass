@@ -1,0 +1,18 @@
+#!/bin/bash
+# hp-io <request>: talk to the host grade socket over the container's shared loopback. Send the
+# request line, then render the streamed reply byte-by-byte -- so the host's typewriter types out
+# live -- and on a 0x01 control byte pause for the reader to press Enter (that is how `read` pages
+# long theory). The host does all the work; this only streams the reply and handles the pause.
+[ -n "$HP_PORT" ] || exit 0
+exec 3<>"/dev/tcp/127.0.0.1/$HP_PORT" 2>/dev/null || exit 0
+printf '%s\n' "$1" >&3
+while LC_ALL=C IFS= read -r -N1 ch <&3; do
+    if [ "$ch" = $'\x01' ]; then
+        printf '\x1b[2m  -- Enter --\x1b[0m' > /dev/tty
+        IFS= read -r _ < /dev/tty
+        printf '\r\x1b[K' > /dev/tty
+        printf 'x' >&3
+    else
+        printf '%s' "$ch"
+    fi
+done
