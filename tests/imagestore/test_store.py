@@ -6,16 +6,31 @@ from hashpass.imagestore.store import ImageStore, StoredImage
 
 
 @pytest.mark.tier1
-@pytest.mark.parametrize("bad", ["../evil", "/etc/cron.d", "a/b", "..", "", "a\x00b", "."])
+@pytest.mark.parametrize("bad", ["../evil", "/etc/cron.d", "..", "", "a\x00b", ".", "a/../b"])
 def test_save_rejects_unsafe_component(tmp_path, bad):
     # A traversing/absolute name or version must be refused BEFORE any write (§5 traversal guard):
-    # an untrusted registry blob must never write outside the store.
+    # an untrusted registry blob must never write outside the store. A NAME may be multi-segment,
+    # but EVERY segment is checked, so a traversing segment (`a/../b`, `/etc/..`) is still refused.
     store = ImageStore(tmp_path / "images")
     src = _make_layer(tmp_path, "ok")
     with pytest.raises(ValueError, match="unsafe image"):
         store.save(bad, "1", src, ())
     with pytest.raises(ValueError, match="unsafe image"):
         store.save("ok", bad, src, ())
+
+
+@pytest.mark.tier1
+def test_namespaced_name_ok_but_slashed_version_rejected(tmp_path):
+    # Namespacing: a multi-segment NAME (`ns/app`) is a valid nested path and round-trips,
+    # but a VERSION must stay a single safe component ("/" in a version is refused).
+    store = ImageStore(tmp_path / "images")
+    src = _make_layer(tmp_path, "ok")
+    store.save("ns/app", "1", src, ("base",))
+    assert store.exists("ns/app:1")
+    assert store.get("ns/app:1").parents == ("base",)
+    assert store.list() == ["ns/app:1"]
+    with pytest.raises(ValueError, match="unsafe image"):
+        store.save("ok", "a/b", src, ())
 
 
 def _make_layer(tmp_path, name) -> Path:

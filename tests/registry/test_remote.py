@@ -13,9 +13,9 @@ from hashpass.registry.remote import RemoteRegistry
 
 def _seed(store: ImageStore, tmp_path: Path, name: str, parents: tuple[str, ...],
           marker: str) -> str:
-    src = tmp_path / f"src-{name}"
+    src = tmp_path / ("src-" + name.replace("/", "_"))
     src.mkdir(exist_ok=True)
-    (src / f"{name}.txt").write_text(marker, encoding="utf-8")
+    (src / "marker.txt").write_text(marker, encoding="utf-8")
     img = store.save(name, "1", src, parents)
     return f"{img.name}:{img.version}"
 
@@ -64,8 +64,26 @@ def test_push_and_pull_closure_via_client(registry, tmp_path):
     anon = RemoteRegistry(registry.base_url)  # anonymous pull
     assert anon.pull("app:1", dest) == ["base:1", "app:1"]
     assert anon.pull("app:1", dest) == []  # idempotent
-    assert (dest.get("app:1").layer / "app.txt").read_text(encoding="utf-8") == "APP"
+    assert (dest.get("app:1").layer / "marker.txt").read_text(encoding="utf-8") == "APP"
     assert dest.get("app:1").parents == ("base:1",)
+
+
+@pytest.mark.tier2
+def test_push_pull_namespaced_name(registry, tmp_path):
+    # A namespaced ref (`alice/app:1`) survives the multi-segment URL path on push and pull.
+    registry.users.add("alice", "pw-correct")
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "base", (), "BASE")
+    _seed(local, tmp_path, "alice/app", ("base:1",), "APP")
+
+    cache = CredentialCache(tmp_path / "creds.json")
+    pusher = RemoteRegistry(registry.base_url, cache=cache)
+    pusher.login("alice", "pw-correct")
+    assert pusher.push(local, "alice/app:1") == ["base:1", "alice/app:1"]
+
+    dest = ImageStore(tmp_path / "dest")
+    assert RemoteRegistry(registry.base_url).pull("alice/app:1", dest) == ["base:1", "alice/app:1"]
+    assert dest.list() == ["alice/app:1", "base:1"]
 
 
 @pytest.mark.tier2

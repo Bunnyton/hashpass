@@ -19,7 +19,7 @@ from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
 
 _BEARER = "Bearer "
-_IMAGE_PARTS = 3
+_MIN_IMAGE_PARTS = 3  # /<kind>/<name.../>/<version>: kind + >=1 name segment + version
 _MAX_BODY = 512 * 1024 * 1024  # cap request bodies (localhost test server) to avoid memory blowup
 
 
@@ -78,8 +78,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _image_parts(self) -> tuple[str, str] | None:
         parts = urlsplit(self.path).path.strip("/").split("/")
-        if len(parts) == _IMAGE_PARTS and parts[0] == "image":
-            return parts[1], parts[2]
+        if len(parts) >= _MIN_IMAGE_PARTS and parts[0] == "image":
+            # /image/<name.../>/<version>: name may be multi-segment (`ns/app`), version is last.
+            return "/".join(parts[1:-1]), parts[-1]
         return None
 
     def do_POST(self) -> None:
@@ -100,8 +101,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parts = urlsplit(self.path).path.strip("/").split("/")
-        if len(parts) == _IMAGE_PARTS and parts[0] == "closure":
-            self._serve_closure(f"{parts[1]}:{parts[2]}")
+        if len(parts) >= _MIN_IMAGE_PARTS and parts[0] == "closure":
+            # /closure/<name.../>/<version>: name may be multi-segment (`ns/app`).
+            self._serve_closure(f"{'/'.join(parts[1:-1])}:{parts[-1]}")
         elif (target := self._image_parts()) is not None:
             self._serve_image(f"{target[0]}:{target[1]}")
         else:

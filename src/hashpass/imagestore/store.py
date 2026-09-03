@@ -1,5 +1,6 @@
 """Local image store: images/<name>/<version>/{layer/,meta.json}."""
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -7,16 +8,26 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _DEFAULT_VERSION = "latest"
-# A name/version must be ONE safe path component: no "/", "\", "..", leading ".", NUL, or
-# absolute path. This blocks a traversal write when name/version come from an untrusted blob
-# (registry push on the server, or anonymous registry pull on the client). See §5.
+# A version, and each "/"-separated segment of a name, must be ONE safe path component: no "\",
+# no "..", no leading ".", no NUL, not absolute. This blocks a traversal write when name/version
+# come from an untrusted blob (registry push on the server, or anonymous pull on the client). A
+# NAME may be multi-segment (`ns/app`) for namespacing -- every segment is checked, so the joined
+# path still cannot escape the images root. See §5.
 _COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 def _check_component(kind: str, value: str) -> None:
-    """Reject a name/version that is not a single safe path component (traversal guard)."""
+    """Reject a version that is not a single safe path component (traversal guard)."""
     if not _COMPONENT.fullmatch(value):
         msg = f"unsafe image {kind}: {value!r}"
+        raise ValueError(msg)
+
+
+def _check_name(name: str) -> None:
+    """Reject a name whose "/"-segments are not each a safe path component (traversal guard)."""
+    segments = name.split("/")
+    if not all(_COMPONENT.fullmatch(seg) for seg in segments):
+        msg = f"unsafe image name: {name!r}"
         raise ValueError(msg)
 
 
@@ -74,7 +85,7 @@ class ImageStore:
             The StoredImage describing the saved entry.
 
         """
-        _check_component("name", name)
+        _check_name(name)
         _check_component("version", version)
         dest = self._dir(name, version)
         layer = dest / "layer"
@@ -122,13 +133,21 @@ class ImageStore:
         return (self._dir(name, version) / "meta.json").exists()
 
     def list(self) -> list[str]:
-        """Return sorted `name:version` refs for every stored image (walks the images root)."""
+        """
+        Return sorted `name:version` refs for every stored image (walks the images root).
+
+        A name may be multi-segment (`ns/app`), so an image dir sits at a variable depth: the
+        version dir is the one holding both `meta.json` and `layer/`, and the name is its path
+        relative to the root minus the trailing version. Descent is pruned at each such dir so
+        an image's own `layer/` tree (arbitrary files) is never scanned for more images.
+        """
         if not self._root.exists():
             return []
-        return sorted(
-            f"{name_dir.name}:{ver_dir.name}"
-            for name_dir in self._root.iterdir()
-            if name_dir.is_dir()
-            for ver_dir in name_dir.iterdir()
-            if (ver_dir / "meta.json").exists()
-        )
+        refs: list[str] = []
+        for dirpath, dirnames, filenames in os.walk(self._root):
+            if "meta.json" in filenames and "layer" in dirnames:
+                ver_dir = Path(dirpath)
+                name = ver_dir.parent.relative_to(self._root).as_posix()
+                refs.append(f"{name}:{ver_dir.name}")
+                dirnames[:] = []  # prune: don't descend into this image's layer/ (or below)
+        return sorted(refs)
