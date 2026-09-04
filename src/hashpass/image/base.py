@@ -7,7 +7,10 @@ _SYSTEMD_INSTALL = (
     # its extracted contents are root-owned; systemd's postinst tmpfiles refuses that "unsafe
     # path transition" (/ owned by 1000 -> /etc owned by root) and aborts dpkg. Root-own / to fix.
     "chown 0:0 / && apt-get update "
-    "&& apt-get install -y systemd systemd-sysv dbus fish sudo "
+    # libnss-myhostname: resolve the container's own (dynamic, per-run) hostname + localhost via
+    # NSS, so name lookups work regardless of the nspawn machine name. nsswitch (from runtime/)
+    # references it as `hosts: files myhostname dns`.
+    "&& apt-get install -y systemd systemd-sysv dbus fish sudo libnss-myhostname "
     # root:hashpass fallback; and a non-root `student` (password student, fish shell, classic
     # sudoer) -- the default console user, so tasks run unprivileged and students use `sudo`
     # (typing a password) for root work. A task can override via `settings user`/`sudo`.
