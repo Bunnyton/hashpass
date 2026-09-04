@@ -20,6 +20,7 @@ from hashpass.taskcode.model import StageCode, TaskCode
 from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, save_meta
 
 _MIN_PASSES = 2  # differential derivation needs >= 2 passes to cancel run noise
+_PERCENT = 100   # `settings similarity` is a percent; the comparator threshold is a 0-1 ratio
 
 
 def _excluded(key: str, patterns: tuple[str, ...]) -> bool:
@@ -57,8 +58,8 @@ def _acceptance_of(stage: StageSpec) -> str:
     """`check` -> handler; else observed -> derived; else `accept cmd` -> command; else error."""
     if stage.check is not None:
         return "handler"
-    if stage.observe:
-        return "derived"
+    if stage.observe or stage.match_output:
+        return "derived"       # FS paths and/or `observe output` (command stdout)
     if stage.accept_cmds:
         return "command"       # accepted purely by a matching student command (no FS grading)
     msg = f"stage {stage.message!r} has no `observe`, `check`, or `accept cmd`: cannot be accepted"
@@ -85,7 +86,8 @@ def _report(progress: Callable[[str], None] | None, msg: str) -> None:
 
 def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # noqa: PLR0913, PLR0917
                   stage_index: int, exclude: tuple[str, ...], passes: int,
-                  progress: Callable[[str], None] | None = None) -> StageChecks:
+                  progress: Callable[[str], None] | None = None,
+                  threshold: float = 1.0) -> StageChecks:
     """Run one observed stage `passes` times on FRESH runners, curate, canonicalize."""
     observations: list[Observation] = []
     for p in range(passes):
@@ -100,7 +102,7 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
     if not _has_signal(canonical):
         msg = f"stage {stage_index}: no stable discriminating signal (vacuous canonical)"
         raise ValueError(msg)
-    return StageChecks(canonical=canonical)
+    return StageChecks(canonical=canonical, threshold=threshold)
 
 
 def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task: TaskCode,
@@ -119,7 +121,11 @@ def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task:
             checks.append(StageChecks(canonical={}))       # sentinel; runtime uses handler/accept_cmds
         else:
             _report(progress, label)
-            checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes, progress))
+            # `observe output` grades stdout with the fuzzy `settings similarity` threshold;
+            # plain FS observation stays exact (threshold 1.0).
+            threshold = recipe.settings.similarity / _PERCENT if stage.match_output else 1.0
+            checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes,
+                                        progress, threshold))
         acceptance.append(mode)
     return checks, acceptance
 

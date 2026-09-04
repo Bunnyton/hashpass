@@ -124,6 +124,7 @@ class StageSpec:
     on_pass: tuple[Action, ...] = ()
     hints: tuple[HintRule, ...] = ()
     accept_cmds: tuple[str, ...] = ()   # `accept cmd "<substr>"`: a command that passes the stage
+    match_output: bool = False          # `observe output`: grade on command stdout (fuzzy, `similarity`)
 
 
 @dataclass(frozen=True)

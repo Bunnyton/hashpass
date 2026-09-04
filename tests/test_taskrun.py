@@ -63,6 +63,35 @@ def test_e2e_accept_cmd_stage_passes_on_matching_command(tmp_path, base_tar):
         session.teardown()
 
 
+_OUTPUT = """\
+image outtask:1
+run mkdir -p /var/log/app
+run printf 'ERROR one\\nERROR two\\n' > /var/log/app/a.log
+
+settings
+  similarity 60
+
+stage "count the errors"
+  solve grep -c ERROR /var/log/app/a.log
+  observe output
+"""
+
+
+@pytest.mark.tier3
+def test_e2e_observe_output_similarity(tmp_path, base_tar):
+    # `observe output`: the stage is graded on the command's stdout vs the reference (fuzzy,
+    # `settings similarity`). Reference output is "2"; a wrong count is rejected, the right one passes.
+    store = ImageStore(tmp_path / "images")
+    build_task(parse_recipe(_OUTPUT), store, base_tar=base_tar, workdir=tmp_path / "bt", passes=2)
+    session = run_task("outtask:1", store, tmp_path / "run", base_tar=base_tar,
+                       student_id="s1", nonce="n1")
+    try:
+        assert session.feed("echo 99", ts="t").advanced is False
+        assert session.feed("grep -c ERROR /var/log/app/a.log", ts="t").advanced is True
+    finally:
+        session.teardown()
+
+
 _CHECK = """\
 image verifytask:1
 hidden {hidden}

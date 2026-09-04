@@ -64,6 +64,7 @@ class _StageAcc:
     on_pass: list[Action] = field(default_factory=list)
     hints: list[HintRule] = field(default_factory=list)
     accept_cmds: list[str] = field(default_factory=list)
+    match_output: bool = False
 
 
 def _significant(text: str) -> list[tuple[int, str]]:
@@ -356,6 +357,15 @@ def _apply_accept(value: str, sacc: _StageAcc) -> None:
     sacc.accept_cmds.append(sub)
 
 
+def _apply_observe(value: str, sacc: _StageAcc) -> None:
+    """Apply `observe <path...>` / `observe output`: FS paths to snapshot, or grade on stdout."""
+    for tok in value.split():
+        if tok == "output":
+            sacc.match_output = True   # grade on command stdout (fuzzy, `settings similarity`)
+        else:
+            sacc.observe.append(tok)
+
+
 def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
     """Apply one single-line stage sub-directive (everything but the `solve:` block)."""
     if kw == "solve":
@@ -366,7 +376,7 @@ def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
     elif kw == "accept":
         _apply_accept(value, sacc)
     elif kw == "observe":
-        sacc.observe.extend(value.split())
+        _apply_observe(value, sacc)
     elif kw == "exclude":
         sacc.exclude.extend(value.split())
     elif kw == "neutral":
@@ -396,6 +406,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         on_pass=tuple(sacc.on_pass),
         hints=tuple(sacc.hints),
         accept_cmds=tuple(sacc.accept_cmds),
+        match_output=sacc.match_output,
     )
 
 

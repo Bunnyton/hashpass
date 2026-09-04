@@ -188,6 +188,16 @@ def test_accept_cmd_parsed_and_accepts_without_solve():
 
 
 @pytest.mark.tier1
+def test_observe_output_sets_match_flag():
+    r = parse_recipe('image t:1\nstage "x"\n  solve echo hi\n  observe output\n')
+    assert r.stages[0].match_output is True
+    assert r.stages[0].observe == ()             # `output` is not an FS path
+    mixed = parse_recipe('image t:1\nstage "x"\n  solve echo hi\n  observe /f output\n')
+    assert mixed.stages[0].match_output is True
+    assert mixed.stages[0].observe == ("/f",)
+
+
+@pytest.mark.tier1
 def test_solve_block_still_parses_after_inline_guard():
     r = parse_recipe('image t:1\nstage "x"\n  solve:\n    echo one\n    echo two\n  observe o\n')
     assert r.stages[0].solve == ("echo one", "echo two")
