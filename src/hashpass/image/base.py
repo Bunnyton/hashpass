@@ -47,12 +47,14 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
     if ((dest / "lib/systemd/systemd").exists() and (dest / "usr/bin/hash").exists()
             and (dest / "usr/local/sbin/hp-console").exists()
             and (dest / "home/student").exists()
-            and (dest / "usr/local/bin/hp-io").exists()):
+            and (dest / "usr/local/bin/hp-io").exists()
+            and (dest / "etc/hosts").exists() and (dest / "etc/hosts").stat().st_size > 0):
         # Already a COMPLETE bootable base (systemd from apt + runtime from rsync, including
         # the console-autologin script): reuse it. Rebuilding would re-extract the tar over an
         # apt-configured tree and corrupt dpkg, and it avoids rebuilding the invariant base on
         # every build/build_task/run. ALL markers are required, so a stale pre-systemd base, a
-        # half-built one, or a pre-autologin base (no hp-console) is rebuilt from scratch.
+        # half-built one, a pre-autologin base (no hp-console), or one whose /etc/hosts is still
+        # the empty 0-byte docker-export placeholder (no localhost resolution) is rebuilt fresh.
         return dest
     if dest.exists():
         _wipe_tree(dest)  # stale/partial tree -> clear it so the fresh tar extracts clean
