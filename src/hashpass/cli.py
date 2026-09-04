@@ -4,6 +4,7 @@ import base64
 import contextlib
 import getpass
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -160,14 +161,29 @@ def ensure_base_image(env: Home, store: ImageStore, *,
     that every build/run stacks on. Returns the stored base layer directory.
     """
     ref = f"{_BASE_NAME}:{_BASE_VERSION}"
-    try:
-        return store.get(ref).layer
-    except KeyError:
-        pass
+    with contextlib.suppress(KeyError):
+        layer = store.get(ref).layer
+        if _base_layer_current(layer):
+            return layer
+        # else: a STALE stored base (e.g. built before the runtime filled /etc/hosts) -- rebuild it.
     ensure_base_tar(env.base_tar, run=run, which=which)
     built = build_base(env.work / "base-build", from_tar=env.base_tar)
     store.save(_BASE_NAME, _BASE_VERSION, built, (), sudo=True)  # root-owned rootfs -> sudo rsync
     return store.get(ref).layer
+
+
+def _base_layer_current(layer: Path) -> bool:
+    """
+    Whether a stored base layer was built by the current runtime.
+
+    The runtime tree fills /etc/hosts (localhost resolution); a base built before that still
+    carries the empty 0-byte docker-export placeholder. A populated /etc/hosts is therefore the
+    marker that the stored base is current -- an empty/missing one triggers a one-time rebuild.
+    """
+    try:
+        return (layer / "etc" / "hosts").stat().st_size > 0
+    except OSError:
+        return False
 
 
 def _kind(store: ImageStore, ref: str) -> str:
@@ -357,9 +373,29 @@ def _render_intro(session: object, readme: str | None, io: Io) -> None:
     io.write("(работайте в терминале — проверка после каждой команды; exit — завершить)\n")
 
 
-def _render_observe(session: object, command: str, io: Io) -> None:
-    """React/grade/hint on one console command, then announce a pass and the next goal."""
-    res = session.observe(command, ts=io.clock())    # react + grade + hints + on_pass (all rendered)
+# CSI/escape sequences + non-newline/tab control bytes, for cleaning a recorded terminal delta.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _strip_terminal(text: str) -> str:
+    """Reduce a recorded-terminal (script(1)) delta to plain text so output substrings match."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return _ANSI_RE.sub("", text)
+
+
+def _parse_cmd_request(req: str) -> tuple[str, str]:
+    """Decode a `cmd <command-b64> [<output-b64>]` request into (command, cleaned output)."""
+    parts = req[4:].split(" ", 1)
+    command = base64.b64decode(parts[0]).decode("utf-8", "replace")
+    output = ""
+    if len(parts) > 1 and parts[1]:
+        output = _strip_terminal(base64.b64decode(parts[1]).decode("utf-8", "replace"))
+    return command, output
+
+
+def _render_observe(session: object, command: str, output: str, io: Io) -> None:
+    """React/grade/hint on one console command (+ its captured output), then announce a pass."""
+    res = session.observe(command, ts=io.clock(), output=output)  # react + grade + hints + on_pass
     if not res.advanced:
         return
     io.write(f"\n✓ stage passed  {res.local_key}\n")
@@ -411,7 +447,9 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
                 _render_intro(session, readme, io)
             elif req.startswith("cmd "):
                 with contextlib.suppress(Exception):
-                    _render_observe(session, base64.b64decode(req[4:]).decode("utf-8", "replace"), io)
+                    # `cmd <command-b64> [<output-b64>]`: the console ships the just-run command and
+                    # (from the recorded terminal) its output, so `output` hints/acceptance fire live.
+                    _render_observe(session, *_parse_cmd_request(req), io)
         finally:
             router.to(_sink_noop)
             session.pause = _no_pause

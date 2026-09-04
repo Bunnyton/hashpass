@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +11,23 @@ from hashpass.recipe.model import Recipe
 from hashpass.taskrun import FeedResult
 
 _FAKE_RUN_EXIT = 7
+
+
+@pytest.mark.tier1
+def test_strip_terminal_cleans_ansi_and_cr():
+    raw = "\x1b[32mERROR\x1b[0m one\r\nok\r\n\x1b[1mtwo\x1b[0m"
+    assert cli._strip_terminal(raw) == "ERROR one\nok\ntwo"  # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_parse_cmd_request_decodes_command_and_cleans_output():
+    cmd = base64.b64encode("grep ERROR log".encode()).decode()
+    out = base64.b64encode("\x1b[31mERROR here\x1b[0m\r\n".encode()).decode()
+    command, output = cli._parse_cmd_request(f"cmd {cmd} {out}")  # noqa: SLF001
+    assert command == "grep ERROR log"
+    assert "ERROR here" in output
+    assert "\x1b" not in output                                # ANSI stripped for matching
+    assert cli._parse_cmd_request(f"cmd {cmd}") == ("grep ERROR log", "")  # noqa: SLF001
 
 
 @pytest.mark.tier1

@@ -240,13 +240,13 @@ class TaskSession:
                                       runner=self.student, hp_dir=self.hp_dir)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
 
-    def observe(self, command: str, *, ts: str) -> FeedResult:
+    def observe(self, command: str, *, ts: str, output: str = "") -> FeedResult:
         """
         React/grade/hint on a command the student ALREADY ran in the interactive console.
 
-        Same as feed() but does NOT re-run the command (the console executed it). The
-        command's own output is therefore unavailable, so `output`-conditioned hints cannot
-        match; `tries`/`idle`/`cmd` hints, `react`, acceptance and `on_pass` all fire.
+        Same as feed() but does NOT re-run the command (the console executed it). `output` is the
+        command's captured stdout, streamed from the live console over the grade socket (empty when
+        unavailable), so `output`-conditioned hints and output-based acceptance fire live too.
         """
         stage = current_stage(self.progress)
         if stage is None:
@@ -254,7 +254,7 @@ class TaskSession:
         if self._last_progress_ts is None:
             self._last_progress_ts = ts
         sm = self.meta.stages[stage]
-        out = ""                                          # console ran it; output not reported
+        out = output                                      # the console's captured stdout (may be "")
         if not _is_neutral(command, sm.neutral):
             self.tries[stage] += 1
         ctx = self._ctx(command, self.tries[stage], stage, out)
