@@ -49,7 +49,7 @@ _REGISTRY_DIRNAME = "registry"     # local registry service data: store/, users.
 _ENV_REGISTRY = "HASHPASS_REGISTRY"
 # The local registry service. LOCALHOST ONLY -- images are pushed here, never to a real remote
 # (no 185.x). A fixed URL keeps the login token cache stable across invocations.
-_DEFAULT_REGISTRY = "http://127.0.0.1:8000"
+_DEFAULT_REGISTRY = "http://127.0.0.1:8080"
 _REGISTRY_START_TRIES = 50   # poll the auto-started service ~5s (50 x 0.1s) before giving up
 _DOCKER = "docker"
 _BASE_IMAGE = "debian:trixie-slim"  # slim boots + runs machinectl-shell commands reliably;
