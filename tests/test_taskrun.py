@@ -40,6 +40,29 @@ def test_e2e_derived_stage_accepts_and_rejects(tmp_path, base_tar):
         session.teardown()
 
 
+_ACCEPT_CMD = """\
+image acmdtask:1
+run mkdir -p /var/log/app
+
+stage "run the check yourself"
+  accept cmd "grep -r ERROR"
+"""
+
+
+@pytest.mark.tier3
+def test_e2e_accept_cmd_stage_passes_on_matching_command(tmp_path, base_tar):
+    # A stage accepted purely by `accept cmd`: a matching student command passes it, no FS grading.
+    store = ImageStore(tmp_path / "images")
+    build_task(parse_recipe(_ACCEPT_CMD), store, base_tar=base_tar, workdir=tmp_path / "bt")
+    session = run_task("acmdtask:1", store, tmp_path / "run", base_tar=base_tar,
+                       student_id="s1", nonce="n1")
+    try:
+        assert session.feed("ls /var/log/app", ts="t").advanced is False        # no match
+        assert session.feed("sudo grep -r ERROR /var/log", ts="t").advanced is True  # match -> pass
+    finally:
+        session.teardown()
+
+
 _CHECK = """\
 image verifytask:1
 hidden {hidden}

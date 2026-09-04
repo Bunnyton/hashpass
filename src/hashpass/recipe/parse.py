@@ -28,6 +28,7 @@ _STAGE_EVENTS = ("enter", "pass")
 _QUOTE_MIN = 2
 _ACTION_VERBS = ("exec", "say", "show")
 _TYPE_MODES = ("instant", "normal", "dramatic")
+_MAX_PERCENT = 100
 
 
 @dataclass
@@ -62,6 +63,7 @@ class _StageAcc:
     on_enter: list[Action] = field(default_factory=list)
     on_pass: list[Action] = field(default_factory=list)
     hints: list[HintRule] = field(default_factory=list)
+    accept_cmds: list[str] = field(default_factory=list)
 
 
 def _significant(text: str) -> list[tuple[int, str]]:
@@ -341,6 +343,19 @@ def _apply_check(value: str, sacc: _StageAcc) -> None:
     sacc.check = _parse_exec(rest.strip())
 
 
+def _apply_accept(value: str, sacc: _StageAcc) -> None:
+    """Apply `accept cmd "<substring>"`: a concrete command that passes the stage on its own."""
+    verb, _, rest = value.partition(" ")
+    if verb != "cmd":
+        msg = f"accept requires 'cmd \"<substring>\"', got: {value!r}"
+        raise ValueError(msg)
+    sub, tail = _take_quoted(rest.strip())
+    if not sub or tail:
+        msg = f"accept cmd takes one quoted command substring, got: {value!r}"
+        raise ValueError(msg)
+    sacc.accept_cmds.append(sub)
+
+
 def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
     """Apply one single-line stage sub-directive (everything but the `solve:` block)."""
     if kw == "solve":
@@ -348,6 +363,8 @@ def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
             msg = "solve requires an inline command or a 'solve:' block"
             raise ValueError(msg)
         sacc.solve.append(value)
+    elif kw == "accept":
+        _apply_accept(value, sacc)
     elif kw == "observe":
         sacc.observe.extend(value.split())
     elif kw == "exclude":
@@ -365,8 +382,8 @@ def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
 
 
 def _finalize_stage(sacc: _StageAcc) -> StageSpec:
-    if not sacc.solve:
-        msg = f"stage {sacc.message!r} has no 'solve' reference solution"
+    if not sacc.solve and not sacc.accept_cmds:
+        msg = f"stage {sacc.message!r} has no 'solve' reference solution (nor an 'accept cmd')"
         raise ValueError(msg)
     return StageSpec(
         message=sacc.message,
@@ -378,6 +395,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         on_enter=tuple(sacc.on_enter),
         on_pass=tuple(sacc.on_pass),
         hints=tuple(sacc.hints),
+        accept_cmds=tuple(sacc.accept_cmds),
     )
 
 
@@ -421,9 +439,9 @@ def _parse_voice_block(lines: list[tuple[int, str]], start: int,
     return i
 
 
-def _parse_settings_block(lines: list[tuple[int, str]], start: int,
+def _parse_settings_block(lines: list[tuple[int, str]], start: int,  # noqa: C901
                           acc: _Acc) -> int:
-    """Parse a `settings` block (type-mode/type-speed/pager); return next top-index."""
+    """Parse a `settings` block (type-mode/type-speed/pager/user/sudo/similarity); return next index."""
     if acc.settings is not None:
         msg = "duplicate 'settings' block"
         raise ValueError(msg)
@@ -432,6 +450,7 @@ def _parse_settings_block(lines: list[tuple[int, str]], start: int,
     pager = False
     user = "student"
     sudo = True
+    similarity = 90
     i = start
     while i < len(lines) and lines[i][0] > 0:
         _, content = lines[i]
@@ -449,11 +468,17 @@ def _parse_settings_block(lines: list[tuple[int, str]], start: int,
             user = value.strip()
         elif kw == "sudo":
             sudo = value.strip() != "off"
+        elif kw == "similarity":
+            similarity = _positive_int(value.strip(), "similarity")
+            if similarity > _MAX_PERCENT:
+                msg = f"similarity must be a percent 1-{_MAX_PERCENT}, got {similarity}"
+                raise ValueError(msg)
         else:
-            msg = f"unknown settings directive: {kw!r} (type-mode/type-speed/pager/user/sudo)"
+            msg = f"unknown settings directive: {kw!r} (type-mode/type-speed/pager/user/sudo/similarity)"
             raise ValueError(msg)
         i += 1
-    acc.settings = Settings(type_mode=mode, type_speed=speed, pager=pager, user=user, sudo=sudo)
+    acc.settings = Settings(type_mode=mode, type_speed=speed, pager=pager, user=user,
+                            sudo=sudo, similarity=similarity)
     return i
 
 

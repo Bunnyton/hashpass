@@ -41,10 +41,12 @@ def _meta() -> TaskMeta:
             ),
             StageMeta(message="verify", neutral=(), check="verify.sh",
                       on_enter=(), on_pass=(), acceptance="handler"),
+            StageMeta(message="run it", neutral=(), check=None, on_enter=(), on_pass=(),
+                      acceptance="command", accept_cmds=("grep -r ERROR", "rg ERROR")),
         ),
         readme="readme.txt",
         voice=Voice(hello=(SayAction("yo"), ExecAction("greet.sh")), bye=(SayAction("gg"),)),
-        settings=Settings(type_mode="dramatic", type_speed=60, pager=True),
+        settings=Settings(type_mode="dramatic", type_speed=60, pager=True, similarity=80),
         react=(ExecAction("watch.sh"),),
     )
 

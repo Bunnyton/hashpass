@@ -192,7 +192,11 @@ class TaskSession:
 
     def _accept(self, stage: int, sm: StageMeta, command: str,
                 out: str, ts: str) -> tuple[bool, str | None]:
-        """Decide acceptance: handler stages via a /hp check-run; derived stages host-side."""
+        """Decide acceptance: `accept cmd` match, else handler check-run, else derived host-side."""
+        if sm.accept_cmds and any(sub in command for sub in sm.accept_cmds):
+            return True, local_key(self.task_id, stage, self.nonce)  # a concrete solution command
+        if sm.acceptance == "command":
+            return False, None       # accepted ONLY by an `accept cmd` match (no FS grading)
         if sm.acceptance == "handler":
             ctx = self._ctx(command, self.tries[stage], stage, out)
             res = run_handler(self.student, ExecAction(sm.check), ctx, hp_dir=self.hp_dir)

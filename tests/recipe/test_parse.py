@@ -170,6 +170,24 @@ def test_task_parse_errors(text, match):
 
 
 @pytest.mark.tier1
+def test_settings_similarity_parsed_and_bounded():
+    custom, default = 80, 90
+    assert parse_recipe("image t:1\nsettings\n  similarity 80\n").settings.similarity == custom
+    assert parse_recipe("image t:1\n").settings.similarity == default
+    with pytest.raises(ValueError, match="similarity must be a percent"):
+        parse_recipe("image t:1\nsettings\n  similarity 150\n")
+
+
+@pytest.mark.tier1
+def test_accept_cmd_parsed_and_accepts_without_solve():
+    r = parse_recipe('image t:1\nstage "x"\n  accept cmd "grep -r ERROR"\n  accept cmd "rg ERROR"\n')
+    assert r.stages[0].accept_cmds == ("grep -r ERROR", "rg ERROR")
+    assert r.stages[0].solve == ()          # an accept-cmd-only stage needs no `solve`
+    with pytest.raises(ValueError, match="one quoted command substring"):
+        parse_recipe('image t:1\nstage "x"\n  accept cmd grep bare\n')
+
+
+@pytest.mark.tier1
 def test_solve_block_still_parses_after_inline_guard():
     r = parse_recipe('image t:1\nstage "x"\n  solve:\n    echo one\n    echo two\n  observe o\n')
     assert r.stages[0].solve == ("echo one", "echo two")

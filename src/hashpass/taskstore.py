@@ -30,8 +30,9 @@ class StageMeta:
     check: str | None                 # ExecAction.value, or None
     on_enter: tuple[Action, ...]      # exec/say/show actions
     on_pass: tuple[Action, ...]
-    acceptance: str                   # "derived" | "handler"
+    acceptance: str                   # "derived" | "handler" | "command"
     hints: tuple[HintRule, ...] = ()
+    accept_cmds: tuple[str, ...] = ()  # command substrings that pass the stage (`accept cmd`)
 
 
 @dataclass(frozen=True)
@@ -140,7 +141,8 @@ def _voice_from_dict(data: dict) -> Voice:
 
 def _settings_to_dict(settings: Settings) -> dict:
     return {"type_mode": settings.type_mode, "type_speed": settings.type_speed,
-            "pager": settings.pager, "user": settings.user, "sudo": settings.sudo}
+            "pager": settings.pager, "user": settings.user, "sudo": settings.sudo,
+            "similarity": settings.similarity}
 
 
 def _settings_from_dict(data: dict) -> Settings:
@@ -148,7 +150,8 @@ def _settings_from_dict(data: dict) -> Settings:
                     sudo=data.get("sudo", True),
                     type_mode=data.get("type_mode", "normal"),
                     type_speed=data.get("type_speed", 45),
-                    pager=data.get("pager", False))
+                    pager=data.get("pager", False),
+                    similarity=data.get("similarity", 90))
 
 
 def _stage_to_dict(stage: StageMeta) -> dict:
@@ -160,6 +163,7 @@ def _stage_to_dict(stage: StageMeta) -> dict:
         "on_pass": [_action_to_dict(a) for a in stage.on_pass],
         "acceptance": stage.acceptance,
         "hints": [_hint_to_dict(h) for h in stage.hints],
+        "accept_cmds": list(stage.accept_cmds),
     }
 
 
@@ -172,6 +176,7 @@ def _stage_from_dict(data: dict) -> StageMeta:
         on_pass=tuple(_action_from_dict(a) for a in data["on_pass"]),
         acceptance=data["acceptance"],
         hints=tuple(_hint_from_dict(h) for h in data.get("hints", [])),
+        accept_cmds=tuple(data.get("accept_cmds", [])),
     )
 
 

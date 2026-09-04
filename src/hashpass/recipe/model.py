@@ -107,6 +107,7 @@ class Settings:
     user: str = "student"   # console login user for `run` (non-root by default; `root` for privileged tasks)
     sudo: bool = True       # whether that user is a (classic, password) sudoer in the container
     pager: bool = False
+    similarity: int = 90    # percent (0-100): min output similarity to accept an `observe output` stage
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,7 @@ class StageSpec:
     on_enter: tuple[Action, ...] = ()
     on_pass: tuple[Action, ...] = ()
     hints: tuple[HintRule, ...] = ()
+    accept_cmds: tuple[str, ...] = ()   # `accept cmd "<substr>"`: a command that passes the stage
 
 
 @dataclass(frozen=True)

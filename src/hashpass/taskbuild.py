@@ -54,12 +54,14 @@ def _has_signal(canonical: Observation) -> bool:
 
 
 def _acceptance_of(stage: StageSpec) -> str:
-    """`check` present -> handler; else observed -> derived; else an authoring error."""
+    """`check` -> handler; else observed -> derived; else `accept cmd` -> command; else error."""
     if stage.check is not None:
         return "handler"
     if stage.observe:
         return "derived"
-    msg = f"stage {stage.message!r} has neither `observe` nor `check`: cannot be accepted"
+    if stage.accept_cmds:
+        return "command"       # accepted purely by a matching student command (no FS grading)
+    msg = f"stage {stage.message!r} has no `observe`, `check`, or `accept cmd`: cannot be accepted"
     raise ValueError(msg)
 
 
@@ -112,9 +114,9 @@ def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task:
     for i, stage in enumerate(recipe.stages):
         mode = _acceptance_of(stage)
         label = f"  stage {i + 1}/{total}: {stage.message[:56]}"
-        if mode == "handler":
-            _report(progress, f"{label} (check exec)")
-            checks.append(StageChecks(canonical={}))       # sentinel; runtime uses run_handler
+        if mode in ("handler", "command"):
+            _report(progress, f"{label} ({mode})")
+            checks.append(StageChecks(canonical={}))       # sentinel; runtime uses handler/accept_cmds
         else:
             _report(progress, label)
             checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes, progress))
@@ -133,6 +135,7 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
             on_pass=s.on_pass,
             acceptance=acceptance[i],
             hints=s.hints,
+            accept_cmds=s.accept_cmds,
         )
         for i, s in enumerate(recipe.stages)
     )
