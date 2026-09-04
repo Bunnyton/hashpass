@@ -1,4 +1,21 @@
 #!/bin/sh
 # The interactive login shell for the hashpass console: fish with its keyboard protocols off
 # (kitty/modifyOtherKeys) so keys stay plain bytes. Used as `su -s /usr/local/sbin/hp-fish`.
+#
+# GRADED task (HP_PORT set): run fish under script(1) so config.fish's per-command hook can ship
+# each command's OUTPUT to the host (the only way to see output when the container owns the
+# console). script is a transparent pty recorder -- input stays lossless; `-f` flushes so the hook
+# sees output at once. If script cannot start here (it exits near-instantly), we fall through to a
+# plain fish console -- the console is NEVER left broken, at worst it loses live output capture.
+# On a normal session (script ran a while) we exit so hp-console powers the machine off as usual.
+#
+# Image-edit console (no HP_PORT): plain fish, nothing extra in the I/O path.
+if [ -n "$HP_PORT" ] && command -v script >/dev/null 2>&1; then
+    log="$HOME/.hp-typescript"
+    : > "$log" 2>/dev/null || true
+    start=$(date +%s 2>/dev/null || echo 0)
+    script -q -e -f -c '/usr/bin/fish --features no-keyboard-protocols' "$log"
+    now=$(date +%s 2>/dev/null || echo 0)
+    [ "$((now - start))" -ge 2 ] && exit 0   # a real session -> let hp-console power off
+fi
 exec /usr/bin/fish --features no-keyboard-protocols
