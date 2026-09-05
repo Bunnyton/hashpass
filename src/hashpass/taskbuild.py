@@ -87,14 +87,27 @@ def _report(progress: Callable[[str], None] | None, msg: str) -> None:
 def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # noqa: PLR0913, PLR0917
                   stage_index: int, exclude: tuple[str, ...], passes: int,
                   progress: Callable[[str], None] | None = None,
-                  threshold: float = 1.0, keep_output: bool = False) -> StageChecks:  # noqa: FBT001, FBT002
-    """Run one observed stage `passes` times on FRESH runners, curate, canonicalize."""
+                  threshold: float = 1.0, keep_output: bool = False,  # noqa: FBT001, FBT002
+                  variants: tuple[tuple[str, ...], ...] = ()) -> StageChecks:
+    """
+    Derive one observed stage: run its solution(s) on FRESH runners, curate, canonicalize.
+
+    With no `variants`, the single `solve` runs `passes` times so RUN noise (timestamps, pids)
+    cancels. With `variants`, the reference is instead the state COMMON to several DIFFERENT
+    solutions -- `solve` and every `variant` run once, and canonicalize keeps only what they all
+    agree on. So COMMAND-specific chrome cancels the same way run noise does, leaving the output
+    that actually matters (`какой командой -- не важно`); if the solutions disagree, the canonical
+    goes vacuous and the build fails loudly.
+    """
+    # `None` runs the stage's own `solve`; each variant runs as an override. With variants, the
+    # solution set is `solve` + every variant (run once each); without, `solve` repeated `passes`x.
+    runs: list[tuple[str, ...] | None] = [None, *variants] if variants else [None] * passes
     observations: list[Observation] = []
-    for p in range(passes):
-        _report(progress, f"    pass {p + 1}/{passes}")
+    for p, override in enumerate(runs):
+        _report(progress, f"    solution {p + 1}/{len(runs)}")
         runner = factory()
         try:
-            obs = run_stage(runner, deriv_task, stage_index)
+            obs = run_stage(runner, deriv_task, stage_index, override=override)
         finally:
             runner.teardown()
         observations.append(_curate(obs, exclude))
@@ -130,7 +143,8 @@ def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task:
             # plain FS observation stays exact (threshold 1.0).
             threshold = recipe.settings.similarity / _PERCENT if stage.match_output else 1.0
             checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes,
-                                        progress, threshold, keep_output=stage.match_output))
+                                        progress, threshold, keep_output=stage.match_output,
+                                        variants=stage.variants))
         acceptance.append(mode)
     return checks, acceptance
 
@@ -148,6 +162,8 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
             hints=s.hints,
             accept_cmds=s.accept_cmds,
             match_output=s.match_output,
+            deny=s.deny,
+            allow=s.allow,
         )
         for i, s in enumerate(recipe.stages)
     )

@@ -57,6 +57,39 @@ def _is_neutral(command: str, neutral: tuple[str, ...]) -> bool:
         return False
 
 
+def _base_cmds(command: str) -> list[str]:
+    """Return the base command of every segment of a command line (split on `| && || ;`), no sudo."""
+    out: list[str] = []
+    for seg in re.split(r"\s*(?:\|\||&&|;|\|)\s*", command.strip()):
+        if not seg.strip():
+            continue
+        try:
+            base = Cmd(seg).basecmd
+        except ValueError:
+            continue
+        if base:
+            out.append(base)
+    return out
+
+
+def _policy_violation(sm: StageMeta, command: str) -> str | None:
+    """
+    Message if `command` breaks the stage's command policy, else None (used to GATE acceptance).
+
+    `deny`: the command may not use a forbidden base command (solve it another way). `allow`:
+    the accepting command must use one of the whitelisted base commands. Applied only to a command
+    that would otherwise pass, so navigation (`ls`, `cd`) never trips it.
+    """
+    bases = _base_cmds(command)
+    if sm.deny:
+        bad = next((b for b in bases if b in sm.deny), None)
+        if bad is not None:
+            return f"Команда «{bad}» здесь запрещена — решите задачу иначе."
+    if sm.allow and not any(b in sm.allow for b in bases):
+        return f"Засчитывается только через: {', '.join(sm.allow)}."
+    return None
+
+
 def _elapsed(start_ts: str, now_ts: str) -> float:
     """Seconds between two ISO timestamps; 0.0 if either is unparseable (idle stays neutral)."""
     try:
@@ -211,6 +244,22 @@ class TaskSession:
                             stage=stage, student_id=self.student_id, nonce=self.nonce, ts=ts)
         return grade.accepted, grade.local_key
 
+    def _apply_policy(self, sm: StageMeta, command: str, accepted: bool,  # noqa: FBT001
+                      key: str | None) -> tuple[bool, str | None, str | None]:
+        """
+        Gate a would-be pass by the stage's `deny`/`allow` command policy.
+
+        Returns (accepted, key, hint). Only a passing command is checked, so navigation is never
+        blocked; a violation cancels the pass and surfaces the policy message as the hint.
+        """
+        if not accepted:
+            return accepted, key, None
+        violation = _policy_violation(sm, command)
+        if violation is None:
+            return accepted, key, None
+        self.render.render(violation + "\n", mode="normal")
+        return False, None, violation
+
     def _on_pass(self, stage: int, ctx: HandlerContext, ts: str) -> None:
         """Fire `on_pass`, advance progress, and speak `voice bye` once all stages pass."""
         self._last_progress_ts = ts
@@ -235,10 +284,10 @@ class TaskSession:
         ctx = self._ctx(command, self.tries[stage], stage, out)
         self._perform_all(self.meta.react, ctx)          # per-command catch-all handlers
         accepted, key = self._accept(stage, sm, command, out, ts)
-        hint: str | None = None
+        accepted, key, hint = self._apply_policy(sm, command, accepted, key)
         if accepted:
             self._on_pass(stage, ctx, ts)
-        else:
+        elif hint is None:
             action = match_rule(sm.hints, tries=self.tries[stage],
                                 idle=_elapsed(self._last_progress_ts, ts),
                                 command=command, output=out)
@@ -267,10 +316,10 @@ class TaskSession:
         ctx = self._ctx(command, self.tries[stage], stage, out)
         self._perform_all(self.meta.react, ctx)          # per-command catch-all handlers
         accepted, key = self._accept(stage, sm, command, out, ts)
-        hint: str | None = None
+        accepted, key, hint = self._apply_policy(sm, command, accepted, key)
         if accepted:
             self._on_pass(stage, ctx, ts)
-        else:
+        elif hint is None:
             action = match_rule(sm.hints, tries=self.tries[stage],
                                 idle=_elapsed(self._last_progress_ts, ts),
                                 command=command, output=out)
@@ -291,6 +340,10 @@ class TaskSession:
         if stage is None:
             return FeedResult(advanced=False, stage=None, local_key=None)
         sm = self.meta.stages[stage]
+        if sm.deny or sm.allow:
+            # a command policy can only be judged on a real command; passive FS grading has none,
+            # so it must not auto-pass a policy stage (that would bypass `deny`/`allow`).
+            return FeedResult(advanced=False, stage=stage, local_key=None)
         accepted, key = self._accept(stage, sm, "", "", ts)
         if accepted:
             self._on_pass(stage, self._ctx("", self.tries[stage], stage), ts)

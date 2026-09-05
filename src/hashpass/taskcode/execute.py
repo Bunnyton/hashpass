@@ -21,15 +21,18 @@ def _target_script(commands: tuple[str, ...]) -> str:
 
 
 def run_stage(runner: Runner, task: TaskCode, stage_index: int,
-              *, noise: list[list[str]] | None = None) -> Observation:
+              *, noise: list[list[str]] | None = None,
+              override: tuple[str, ...] | None = None) -> Observation:
     prep: list[str] = list(task.setup)
     for stage in task.stages[:stage_index]:
         prep.extend(stage.commands)
     if prep:
         runner.run(["sh", "-c", _script(tuple(prep))])   # PREP: mutate rootfs, discard stdout
     target = task.stages[stage_index]
-    # TARGET: capture only the LAST command's stdout, same shell (matches runtime .cmd.out)
-    result = runner.run(["sh", "-c", _target_script(target.commands)])
+    # TARGET: capture only the LAST command's stdout, same shell (matches runtime .cmd.out).
+    # `override` runs an ALTERNATIVE solution (a `variant`) as the target; prep/observe unchanged.
+    commands = override if override is not None else target.commands
+    result = runner.run(["sh", "-c", _target_script(commands)])
     run_noise(runner, noise)
     obs = capture(runner.rootfs, list(target.observe))
     obs[OUTPUT_KEY] = FileState("file", result.stdout)

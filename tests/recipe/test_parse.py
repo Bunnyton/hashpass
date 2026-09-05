@@ -204,6 +204,36 @@ def test_solve_block_still_parses_after_inline_guard():
 
 
 @pytest.mark.tier1
+def test_variants_inline_and_block_parse_as_alternative_solutions():
+    text = ('image t:1\nstage "x"\n'
+            '  solve grep -c ERROR /f\n'
+            '  variant grep ERROR /f | wc -l\n'
+            '  variant:\n'
+            "    awk '/ERROR/{c++} END{print c}' /f\n"
+            '  observe output\n')
+    s = parse_recipe(text).stages[0]
+    assert s.solve == ("grep -c ERROR /f",)
+    assert s.variants == (("grep ERROR /f | wc -l",), ("awk '/ERROR/{c++} END{print c}' /f",))
+
+
+@pytest.mark.tier1
+def test_variant_without_observe_is_rejected():
+    with pytest.raises(ValueError, match="no 'observe' to derive"):
+        parse_recipe('image t:1\nstage "x"\n  solve echo hi\n  variant echo hi\n')
+
+
+@pytest.mark.tier1
+def test_deny_and_allow_command_policy_parse():
+    d = parse_recipe('image t:1\nstage "x"\n  solve echo hi\n  observe output\n  deny grep rg\n')
+    assert d.stages[0].deny == ("grep", "rg")
+    a = parse_recipe('image t:1\nstage "x"\n  solve echo hi\n  observe output\n  allow awk wc\n')
+    assert a.stages[0].allow == ("awk", "wc")
+    with pytest.raises(ValueError, match="both 'deny' and 'allow'"):
+        parse_recipe('image t:1\nstage "x"\n  solve echo hi\n  observe output\n'
+                     '  deny grep\n  allow awk\n')
+
+
+@pytest.mark.tier1
 def test_hint_conditions_and_actions():
     text = (
         'image t:1\nstage "x"\n  solve echo hi\n'

@@ -65,6 +65,9 @@ class _StageAcc:
     hints: list[HintRule] = field(default_factory=list)
     accept_cmds: list[str] = field(default_factory=list)
     match_output: bool = False
+    variants: list[list[str]] = field(default_factory=list)
+    deny: list[str] = field(default_factory=list)
+    allow: list[str] = field(default_factory=list)
 
 
 def _significant(text: str) -> list[tuple[int, str]]:
@@ -310,15 +313,16 @@ def _reject(keyword: str) -> None:
     raise ValueError(msg)
 
 
-def _consume_solve_block(lines: list[tuple[int, str]], start: int, base_indent: int,
-                         sacc: _StageAcc) -> int:
-    """Append every line indented deeper than `base_indent` as a verbatim command; return next index."""
+def _consume_block(lines: list[tuple[int, str]], start: int, base_indent: int,
+                   sink: list[str], label: str) -> int:
+    """Append every line indented deeper than `base_indent` to `sink`; return next index."""
     i = start
+    n0 = len(sink)
     while i < len(lines) and lines[i][0] > base_indent:
-        sacc.solve.append(lines[i][1])
+        sink.append(lines[i][1])
         i += 1
-    if not sacc.solve:
-        msg = "empty 'solve:' block"
+    if len(sink) == n0:
+        msg = f"empty '{label}:' block"
         raise ValueError(msg)
     return i
 
@@ -367,20 +371,21 @@ def _apply_observe(value: str, sacc: _StageAcc) -> None:
 
 
 def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
-    """Apply one single-line stage sub-directive (everything but the `solve:` block)."""
-    if kw == "solve":
+    """Apply one single-line stage sub-directive (everything but the `solve:`/`variant:` blocks)."""
+    tokenized = {"exclude": sacc.exclude, "deny": sacc.deny,
+                 "allow": sacc.allow, "neutral": sacc.neutral}
+    if kw in ("solve", "variant"):
         if not value:
-            msg = "solve requires an inline command or a 'solve:' block"
+            msg = f"{kw} requires an inline command or a '{kw}:' block"
             raise ValueError(msg)
-        sacc.solve.append(value)
+        target = sacc.solve if kw == "solve" else sacc.variants
+        target.append(value if kw == "solve" else [value])
+    elif kw in tokenized:
+        tokenized[kw].extend(value.split())
     elif kw == "accept":
         _apply_accept(value, sacc)
     elif kw == "observe":
         _apply_observe(value, sacc)
-    elif kw == "exclude":
-        sacc.exclude.extend(value.split())
-    elif kw == "neutral":
-        sacc.neutral.extend(value.split())
     elif kw == "check":
         _apply_check(value, sacc)
     elif kw == "hint":
@@ -395,6 +400,14 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
     if not sacc.solve and not sacc.accept_cmds:
         msg = f"stage {sacc.message!r} has no 'solve' reference solution (nor an 'accept cmd')"
         raise ValueError(msg)
+    if sacc.variants and not (sacc.observe or sacc.match_output):
+        # variants shape the DERIVED reference (the output/FS common to all solutions); they are
+        # meaningless without an `observe`/`observe output` stage to derive.
+        msg = f"stage {sacc.message!r} has 'variant' but no 'observe' to derive against"
+        raise ValueError(msg)
+    if sacc.deny and sacc.allow:
+        msg = f"stage {sacc.message!r} sets both 'deny' and 'allow' (use one command policy)"
+        raise ValueError(msg)
     return StageSpec(
         message=sacc.message,
         solve=tuple(sacc.solve),
@@ -407,6 +420,9 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         hints=tuple(sacc.hints),
         accept_cmds=tuple(sacc.accept_cmds),
         match_output=sacc.match_output,
+        variants=tuple(tuple(v) for v in sacc.variants),
+        deny=tuple(sacc.deny),
+        allow=tuple(sacc.allow),
     )
 
 
@@ -425,7 +441,14 @@ def _parse_stage_block(header_value: str, lines: list[tuple[int, str]],
             if value:
                 msg = f"'solve:' takes no inline content; put commands on indented lines: {value!r}"
                 raise ValueError(msg)
-            i = _consume_solve_block(lines, i + 1, indent, sacc)
+            i = _consume_block(lines, i + 1, indent, sacc.solve, "solve")
+        elif kw == "variant:":
+            if value:
+                msg = f"'variant:' takes no inline content; put commands on indented lines: {value!r}"
+                raise ValueError(msg)
+            block: list[str] = []
+            i = _consume_block(lines, i + 1, indent, block, "variant")
+            sacc.variants.append(block)
         else:
             _apply_simple_directive(kw, value, sacc)
             i += 1

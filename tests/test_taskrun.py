@@ -8,7 +8,15 @@ from hashpass.recipe.parse import parse_recipe
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import RunResult
 from hashpass.taskbuild import build_task
-from hashpass.taskrun import _elapsed, _is_neutral, perform_action, run_task
+from hashpass.taskrun import (
+    _base_cmds,
+    _elapsed,
+    _is_neutral,
+    _policy_violation,
+    perform_action,
+    run_task,
+)
+from hashpass.taskstore import StageMeta
 
 _DERIVED = """\
 image logtask:1
@@ -92,6 +100,70 @@ def test_e2e_observe_output_similarity(tmp_path, base_tar):
         session.teardown()
 
 
+_VARIANTS = """\
+image vartask:1
+run mkdir -p /var/log/app
+run printf 'ERROR one\\nok\\nERROR two\\n' > /var/log/app/a.log
+
+settings
+  similarity 100
+
+stage "count the errors, any way you like"
+  solve grep -c ERROR /var/log/app/a.log
+  variant grep ERROR /var/log/app/a.log | wc -l
+  variant awk '/ERROR/{c++} END{print c}' /var/log/app/a.log
+  observe output
+"""
+
+
+@pytest.mark.tier3
+def test_e2e_variants_derive_output_common_to_all_solutions(tmp_path, base_tar):
+    # Three DIFFERENT solutions all print "2": the reference is the output COMMON to them, so at
+    # strict similarity 100 the count passes regardless of the command used; a wrong count fails.
+    store = ImageStore(tmp_path / "images")
+    build_task(parse_recipe(_VARIANTS), store, base_tar=base_tar, workdir=tmp_path / "bt")
+    session = run_task("vartask:1", store, tmp_path / "run", base_tar=base_tar,
+                       student_id="s1", nonce="n1")
+    try:
+        assert session.feed("echo 99", ts="t").advanced is False
+        assert session.feed("awk '/ERROR/{c++} END{print c}' /var/log/app/a.log",
+                            ts="t").advanced is True
+    finally:
+        session.teardown()
+
+
+_ALLOW = """\
+image allowtask:1
+run mkdir -p /var/log/app
+run printf 'ERROR one\\nERROR two\\n' > /var/log/app/a.log
+
+settings
+  similarity 100
+
+stage "count the errors -- but actually compute it"
+  solve grep -c ERROR /var/log/app/a.log
+  observe output
+  allow grep awk wc
+"""
+
+
+@pytest.mark.tier3
+def test_e2e_allow_policy_blocks_uncomputed_answer(tmp_path, base_tar):
+    # `allow grep awk wc`: even the exactly-right output is rejected when hardcoded via `echo`
+    # (not a whitelisted command); a real computation with an allowed command passes.
+    store = ImageStore(tmp_path / "images")
+    build_task(parse_recipe(_ALLOW), store, base_tar=base_tar, workdir=tmp_path / "bt")
+    session = run_task("allowtask:1", store, tmp_path / "run", base_tar=base_tar,
+                       student_id="s1", nonce="n1")
+    try:
+        blocked = session.feed("echo 2", ts="t")             # right answer, forbidden command
+        assert blocked.advanced is False
+        assert blocked.hint is not None                      # policy message surfaced
+        assert session.feed("grep -c ERROR /var/log/app/a.log", ts="t").advanced is True
+    finally:
+        session.teardown()
+
+
 _CHECK = """\
 image verifytask:1
 hidden {hidden}
@@ -166,6 +238,35 @@ def test_is_neutral_and_unparseable_command_counts_as_try():
     assert _is_neutral("grep x f", ("ls", "cd")) is False
     # unbalanced quote makes shlex raise -> treated as a real try, never crashes feed
     assert _is_neutral('echo "oops', ("ls", "cd")) is False
+
+
+def _sm(**kw: object) -> StageMeta:
+    base = {"message": "", "neutral": (), "check": None, "on_enter": (), "on_pass": (),
+            "acceptance": "derived"}
+    return StageMeta(**{**base, **kw})
+
+
+@pytest.mark.tier1
+def test_base_cmds_splits_pipes_sequences_and_strips_sudo():
+    assert _base_cmds("sudo grep x f | wc -l && echo hi") == ["grep", "wc", "echo"]
+    assert _base_cmds("") == []
+
+
+@pytest.mark.tier1
+def test_policy_violation_deny_blocks_forbidden_command_anywhere():
+    sm = _sm(deny=("grep",))
+    assert _policy_violation(sm, "grep -c ERROR f") is not None      # forbidden base
+    assert _policy_violation(sm, "cat f | grep x") is not None       # forbidden in a pipe
+    assert _policy_violation(sm, "awk '/x/' f") is None              # allowed
+
+
+@pytest.mark.tier1
+def test_policy_violation_allow_requires_a_whitelisted_command():
+    sm = _sm(allow=("awk", "wc"))
+    assert _policy_violation(sm, "echo 3") is not None               # echo not whitelisted
+    assert _policy_violation(sm, "grep ERROR f | wc -l") is None     # wc is whitelisted
+    assert _policy_violation(sm, "awk '/x/' f") is None
+    assert _policy_violation(_sm(), "echo 3") is None                # no policy -> never blocks
 
 
 class _FakeRunner:

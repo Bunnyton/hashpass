@@ -125,6 +125,9 @@ class StageSpec:
     hints: tuple[HintRule, ...] = ()
     accept_cmds: tuple[str, ...] = ()   # `accept cmd "<substr>"`: a command that passes the stage
     match_output: bool = False          # `observe output`: grade on command stdout (fuzzy, `similarity`)
+    variants: tuple[tuple[str, ...], ...] = ()  # alt `variant` solutions; reference = output COMMON to all
+    deny: tuple[str, ...] = ()           # `deny <cmd...>`: base commands forbidden to pass the stage
+    allow: tuple[str, ...] = ()          # `allow <cmd...>`: ONLY these base commands may pass the stage
 
 
 @dataclass(frozen=True)
