@@ -14,7 +14,8 @@ if [ -n "$HP_PORT" ] && command -v script >/dev/null 2>&1; then
     log="$HOME/.hp-typescript"
     : > "$log" 2>/dev/null || true
     start=$(date +%s 2>/dev/null || echo 0)
-    script -q -e -f -c '/usr/bin/fish --features no-keyboard-protocols' "$log"
+    # 2>/dev/null: if script cannot get a pty it prints an ugly error; stay quiet and fall back.
+    script -q -e -f -c '/usr/bin/fish --features no-keyboard-protocols' "$log" 2>/dev/null
     now=$(date +%s 2>/dev/null || echo 0)
     [ "$((now - start))" -ge 2 ] && exit 0   # a real session -> let hp-console power off
 fi

@@ -33,6 +33,7 @@ class StageMeta:
     acceptance: str                   # "derived" | "handler" | "command"
     hints: tuple[HintRule, ...] = ()
     accept_cmds: tuple[str, ...] = ()  # command substrings that pass the stage (`accept cmd`)
+    match_output: bool = False         # `observe output`: accept by the command's stdout, not FS
 
 
 @dataclass(frozen=True)
@@ -164,6 +165,7 @@ def _stage_to_dict(stage: StageMeta) -> dict:
         "acceptance": stage.acceptance,
         "hints": [_hint_to_dict(h) for h in stage.hints],
         "accept_cmds": list(stage.accept_cmds),
+        "match_output": stage.match_output,
     }
 
 
@@ -177,6 +179,7 @@ def _stage_from_dict(data: dict) -> StageMeta:
         acceptance=data["acceptance"],
         hints=tuple(_hint_from_dict(h) for h in data.get("hints", [])),
         accept_cmds=tuple(data.get("accept_cmds", [])),
+        match_output=data.get("match_output", False),
     )
 
 

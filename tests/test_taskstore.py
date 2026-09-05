@@ -43,6 +43,8 @@ def _meta() -> TaskMeta:
                       on_enter=(), on_pass=(), acceptance="handler"),
             StageMeta(message="run it", neutral=(), check=None, on_enter=(), on_pass=(),
                       acceptance="command", accept_cmds=("grep -r ERROR", "rg ERROR")),
+            StageMeta(message="show output", neutral=(), check=None, on_enter=(), on_pass=(),
+                      acceptance="derived", match_output=True),
         ),
         readme="readme.txt",
         voice=Voice(hello=(SayAction("yo"), ExecAction("greet.sh")), bye=(SayAction("gg"),)),

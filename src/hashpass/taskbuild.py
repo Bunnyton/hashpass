@@ -142,6 +142,7 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
             acceptance=acceptance[i],
             hints=s.hints,
             accept_cmds=s.accept_cmds,
+            match_output=s.match_output,
         )
         for i, s in enumerate(recipe.stages)
     )

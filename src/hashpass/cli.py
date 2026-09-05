@@ -10,6 +10,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import termios
 import threading
 import time
 import urllib.error
@@ -467,6 +468,25 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
     return port, threading.Thread(target=loop, daemon=True)
 
 
+def _reap_stale_machines() -> None:
+    """
+    Terminate leftover hashpass containers (hp-*) from interrupted prior runs, reclaiming ptys.
+
+    A clean run powers its machine off; an interrupted one (Ctrl-C, a closed terminal) leaks it,
+    and every leaked machine holds ptys against kernel.pty.max. Enough of them and script(1) (live
+    output capture) -- or even a fresh boot -- fails with "No space left on device". Reaping our
+    OWN orphaned machines before a boot reclaims those ptys. Assumes one hashpass run at a time.
+    """
+    with contextlib.suppress(Exception):
+        out = subprocess.run(["machinectl", "list", "--no-legend"],
+                             capture_output=True, text=True, check=False).stdout
+        for line in out.splitlines():
+            parts = line.split()
+            if parts and parts[0].startswith(_MACHINE_PREFIX):
+                subprocess.run(["sudo", "machinectl", "terminate", parts[0]],
+                               check=False, capture_output=True)
+
+
 def _interactive_console(runner: object, *, user: str | None = None, sudo: bool = True,
                          grade_port: int | None = None) -> None:
     """
@@ -489,7 +509,23 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     if grade_port is not None:
         argv.append(f"--setenv=HP_PORT={grade_port}")
     argv += ["-D", str(runner.rootfs)]
-    subprocess.run(argv, check=False)
+    _reap_stale_machines()             # reclaim ptys from any interrupted prior runs
+    try:
+        saved_tty = termios.tcgetattr(sys.stdin.fileno())
+    except (termios.error, ValueError, OSError):
+        saved_tty = None
+    try:
+        subprocess.run(argv, check=False)
+    finally:
+        # SAFETY: nspawn leaves the terminal in raw mode and an interrupted/failed boot would
+        # otherwise leave the shell "hung"; always restore it. And terminate the machine -- a
+        # clean poweroff already removed it (no-op), but an interrupted boot would leak its ptys.
+        with contextlib.suppress(Exception):
+            subprocess.run(["sudo", "machinectl", "terminate", machine],
+                           check=False, capture_output=True)
+        if saved_tty is not None:
+            with contextlib.suppress(termios.error, ValueError, OSError):
+                termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved_tty)
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
