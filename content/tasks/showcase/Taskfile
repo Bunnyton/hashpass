@@ -8,7 +8,6 @@
 
 image showcase:1
 
-run mkdir -p /srv
 run mkdir -p /var/log/app
 run printf 'ERROR alpha\nok\nERROR beta\nERROR gamma\n' > /var/log/app/service.log
 copy welcome.txt /opt/welcome.txt
@@ -57,17 +56,16 @@ stage "Напечатайте, сколько строк содержат ERROR 
   hint output "0" say "Ноль? В журнале точно есть строки ERROR — присмотритесь к команде."
   on pass say dramatic "Вывод верный — принято."
 
-# --- Задание 3: классический sudo ---
-stage "Через sudo установите procps и сохраните его dpkg-статус в /srv/status.txt"
+# --- Задание 3: sudo + пакет, которого НЕТ в системе; принимает скрытый грейдер ---
+stage "Установите пакет sl (его нет в системе) через sudo и запустите поезд командой  sl"
   solve:
     apt-get update >/dev/null 2>&1
-    apt-get install -y procps >/dev/null 2>&1
-    dpkg -s procps | grep '^Status:' > /srv/status.txt
-  observe /srv/status.txt
-  on enter say "Задание 3: нужны права root. Используйте sudo — пароль 'student'."
+    apt-get install -y sl >/dev/null 2>&1
+  check exec grade-sl
+  on enter say "Задание 3: пакета sl в системе нет. Установите его (sudo, пароль student) и запустите — sl."
   on enter exec intro2
-  on pass say "Привилегированно и точно."
-  hint idle 30 say "sudo apt-get install -y procps ; затем: dpkg -s procps | grep Status | sudo tee /srv/status.txt"
+  on pass say dramatic "Поезд поехал. Привилегированно и точно."
+  hint idle 25 say "sudo apt-get install -y sl ; затем просто:  sl"
 
 # --- Задание 4: скрытый грейдер в /hp судит ответ ---
 stage "Создайте /home/student/secret с секретной фразой, которую ждёт скрытый грейдер"
@@ -78,5 +76,6 @@ stage "Создайте /home/student/secret с секретной фразой,
   on enter read clue3.md
   on pass exec celebrate
 
-# --- ФИНАЛ: печатается при полном зачёте ---
+# --- ФИНАЛ: печатается при полном зачёте (ASCII-арт живёт в скрытом слое /hp) ---
+exec finale
 say dramatic "Вот и всё. Отличная работа, оператор."
