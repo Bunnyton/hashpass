@@ -82,11 +82,17 @@ class NspawnRunner:
         if binds:
             return self._run_bound(argv, binds, setenv or {})
         p = subprocess.run(
-            ["sudo", "systemd-nspawn", "-q", "--register=no", "-D", str(self._mnt), *argv],
+            # --console=pipe: connect the command's stdio to our pipes directly. Without it nspawn
+            # defaults to --console=interactive and ALLOCATES A PTY per run; derivation does dozens
+            # of these per build, so the ptys pile up against the global kernel.pty.max and later
+            # starve the interactive console's script(1) ("No space left on device").
+            ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no",
+             "-D", str(self._mnt), *argv],
             capture_output=True,
             text=True,
             encoding="utf-8",
             check=False,
+            stdin=subprocess.DEVNULL,
         )
         return RunResult(p.stdout, p.stderr, p.returncode)
 
@@ -111,11 +117,15 @@ class NspawnRunner:
             extra = [f"--bind={host}:{dst}" for host, dst in binds]
             extra += [f"--setenv={key}={val}" for key, val in setenv.items()]
             p = subprocess.run(
-                ["sudo", "systemd-nspawn", "-q", "--register=no", *extra, "-D", str(mnt), *argv],
+                # --console=pipe: no per-run pty (see the note in run()); handlers run dozens of
+                # times too, so this keeps them off the kernel.pty.max budget.
+                ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no",
+                 *extra, "-D", str(mnt), *argv],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 check=False,
+                stdin=subprocess.DEVNULL,
             )
         finally:
             overlay_umount(mnt, sudo=True)

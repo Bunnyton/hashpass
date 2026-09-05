@@ -1,7 +1,22 @@
 # hashpass base image — a friendly, colourful interactive fish shell.
-# Syntax highlighting, autosuggestions and completions are fish defaults; this just
-# quiets the banner and sets a clean two-tone prompt (cwd + a red mark on error).
-set -g fish_greeting ''
+# Syntax highlighting, autosuggestions and completions are fish defaults; this sets a clean
+# two-tone prompt (cwd + a red mark on error), a welcome banner, and a few handy aliases.
+
+# Welcome banner: an ASCII "hashpass" for the plain image/edit console. A graded task (HP_PORT)
+# drives its own intro, so stay quiet there.
+function fish_greeting
+    set -q HP_PORT; and return
+    set_color brmagenta
+    cat /etc/hp-banner 2>/dev/null
+    set_color normal
+end
+
+# Handy aliases (ништячки) — coloured, human-friendly listings.
+if status is-interactive
+    alias ll 'ls -alh --color=auto'
+    alias la 'ls -A --color=auto'
+    alias l 'ls -CF --color=auto'
+end
 
 function fish_prompt
     set -l last $status

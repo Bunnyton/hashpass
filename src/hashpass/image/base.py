@@ -79,9 +79,13 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
     # Deliberately MINIMAL — task tools like procps/ps are installed by tasks, never baked in
     # (else a stage that checks for them passes before the student has done anything).
     subprocess.run(
-        ["sudo", "systemd-nspawn", "-q", "--register=no", "-D", str(dest),
+        # --console=pipe: no per-run pty. Without it nspawn defaults to an interactive console and
+        # allocates a pty; under pty pressure (a near-full kernel.pty.max) that allocation can fail
+        # and abort the base build. This command reads no stdin, so a pipe console is correct.
+        ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no", "-D", str(dest),
          "sh", "-c", _SYSTEMD_INSTALL],
         check=True,
+        stdin=subprocess.DEVNULL,
     )
     # Runtime layer (usr/bin/hash + .hash) in a single rsync -- only granted-sudo commands.
     subprocess.run(
