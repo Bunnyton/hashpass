@@ -2,25 +2,24 @@
 # The interactive login shell for the hashpass console: fish with its keyboard protocols off
 # (kitty/modifyOtherKeys) so keys stay plain bytes. Used as `su -s /usr/local/sbin/hp-fish`.
 #
-# GRADED task (HP_PORT set): run fish under script(1) so config.fish's per-command hook can ship
+# GRADED task (HP_PORT set): EXEC fish under script(1) so config.fish's per-command hook can ship
 # each command's OUTPUT to the host (the only way to see output when the container owns the
 # console). script is a transparent pty recorder -- input stays lossless; `-f` flushes so the hook
-# sees output at once. If script cannot start here (it exits near-instantly), we fall through to a
-# plain fish console -- the console is NEVER left broken, at worst it loses live output capture.
-# On a normal session (script ran a while) we exit so hp-console powers the machine off as usual.
+# sees output at once. We `exec` it (no wrapper process, no fallback): when the student's fish
+# exits, script exits, hp-fish is gone, `su` returns and hp-console powers the machine off -- one
+# clean path, so `exit` always ends the session (an earlier fallback re-ran fish, which re-showed
+# the intro and left the console looping instead of powering off).
+#
+# SHELL=/bin/sh is CRITICAL: script's -c runs the command via $SHELL, and `su -s hp-fish` set
+# $SHELL to hp-fish itself -- without this override script would re-invoke hp-fish (HP_PORT still
+# set) which re-runs script... an infinite fork bomb that exhausts ptys in seconds. /bin/sh runs
+# fish directly, once.
 #
 # Image-edit console (no HP_PORT): plain fish, nothing extra in the I/O path.
 if [ -n "$HP_PORT" ] && command -v script >/dev/null 2>&1; then
     log="$HOME/.hp-typescript"
     : > "$log" 2>/dev/null || true
-    start=$(date +%s 2>/dev/null || echo 0)
-    # SHELL=/bin/sh is CRITICAL: script's -c runs the command via $SHELL, and `su -s hp-fish` set
-    # $SHELL to hp-fish itself -- without this override script would re-invoke hp-fish (HP_PORT is
-    # still set) which re-runs script... an infinite fork bomb that exhausts ptys in seconds
-    # ("No space left on device"). /bin/sh runs fish directly, once.
-    # 2>/dev/null: if script still cannot get a pty it prints an ugly error; stay quiet + fall back.
-    SHELL=/bin/sh script -q -e -f -c '/usr/bin/fish --features no-keyboard-protocols' "$log" 2>/dev/null
-    now=$(date +%s 2>/dev/null || echo 0)
-    [ "$((now - start))" -ge 2 ] && exit 0   # a real session -> let hp-console power off
+    exec env SHELL=/bin/sh \
+        script -q -e -f -c '/usr/bin/fish --features no-keyboard-protocols' "$log"
 fi
 exec /usr/bin/fish --features no-keyboard-protocols
