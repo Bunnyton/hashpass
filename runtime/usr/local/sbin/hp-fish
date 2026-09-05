@@ -14,8 +14,12 @@ if [ -n "$HP_PORT" ] && command -v script >/dev/null 2>&1; then
     log="$HOME/.hp-typescript"
     : > "$log" 2>/dev/null || true
     start=$(date +%s 2>/dev/null || echo 0)
-    # 2>/dev/null: if script cannot get a pty it prints an ugly error; stay quiet and fall back.
-    script -q -e -f -c '/usr/bin/fish --features no-keyboard-protocols' "$log" 2>/dev/null
+    # SHELL=/bin/sh is CRITICAL: script's -c runs the command via $SHELL, and `su -s hp-fish` set
+    # $SHELL to hp-fish itself -- without this override script would re-invoke hp-fish (HP_PORT is
+    # still set) which re-runs script... an infinite fork bomb that exhausts ptys in seconds
+    # ("No space left on device"). /bin/sh runs fish directly, once.
+    # 2>/dev/null: if script still cannot get a pty it prints an ugly error; stay quiet + fall back.
+    SHELL=/bin/sh script -q -e -f -c '/usr/bin/fish --features no-keyboard-protocols' "$log" 2>/dev/null
     now=$(date +%s 2>/dev/null || echo 0)
     [ "$((now - start))" -ge 2 ] && exit 0   # a real session -> let hp-console power off
 fi
