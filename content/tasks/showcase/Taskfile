@@ -9,6 +9,8 @@
 image showcase:1
 
 run mkdir -p /srv
+run mkdir -p /var/log/app
+run printf 'ERROR alpha\nok\nERROR beta\nERROR gamma\n' > /var/log/app/service.log
 copy welcome.txt /opt/welcome.txt
 
 hidden hp
@@ -20,6 +22,7 @@ settings
   pager on
   user student
   sudo on
+  similarity 85
 
 voice
   hello say dramatic "Здравствуйте, оператор. Я наблюдаю."
@@ -42,24 +45,36 @@ stage "Запишите слово ГОТОВО в файл /home/student/report
   hint tries 2 say "Подсказка:  echo ГОТОВО > /home/student/report.txt"
   hint cmd echo missing ГОТОВО say "В echo должно быть ровно слово ГОТОВО."
 
-# --- Задание 2: классический sudo ---
+# --- Задание 2: приёмка по ВЫВОДУ команды (нечётко, по settings similarity) ---
+# Оценивается сам stdout команды против эталона, а не файл на диске. Живой захват вывода
+# делает это возможным в консоли; `hint output` тоже срабатывает по выводу вживую.
+stage "Напечатайте, сколько строк содержат ERROR в /var/log/app/service.log"
+  solve grep -c ERROR /var/log/app/service.log
+  observe output
+  neutral ls cat less
+  on enter say "Задание 2: проверка по ВЫВОДУ команды — важен сам вывод, а не файл."
+  hint tries 2 say "Подсказка:  grep -c ERROR /var/log/app/service.log"
+  hint output "0" say "Ноль? В журнале точно есть строки ERROR — присмотритесь к команде."
+  on pass say dramatic "Вывод верный — принято."
+
+# --- Задание 3: классический sudo ---
 stage "Через sudo установите procps и сохраните его dpkg-статус в /srv/status.txt"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y procps >/dev/null 2>&1
     dpkg -s procps | grep '^Status:' > /srv/status.txt
   observe /srv/status.txt
-  on enter say "Задание 2: нужны права root. Используйте sudo — пароль 'student'."
+  on enter say "Задание 3: нужны права root. Используйте sudo — пароль 'student'."
   on enter exec intro2
   on pass say "Привилегированно и точно."
   hint idle 30 say "sudo apt-get install -y procps ; затем: dpkg -s procps | grep Status | sudo tee /srv/status.txt"
 
-# --- Задание 3: скрытый грейдер в /hp судит ответ ---
+# --- Задание 4: скрытый грейдер в /hp судит ответ ---
 stage "Создайте /home/student/secret с секретной фразой, которую ждёт скрытый грейдер"
   solve:
     echo open-sesame > /home/student/secret
   check exec grade
-  on enter say "Задание 3: в /hp живёт секретный грейдер. Угадайте его фразу."
+  on enter say "Задание 4: в /hp живёт секретный грейдер. Угадайте его фразу."
   on enter read clue3.md
   on pass exec celebrate
 
