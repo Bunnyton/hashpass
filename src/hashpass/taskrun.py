@@ -80,7 +80,9 @@ def _output_contains(reference: str, produced: str, threshold: float) -> bool:
     reference, produced = reference.strip(), produced.strip()
     if not reference:
         return False
-    match = difflib.SequenceMatcher(None, reference, produced).find_longest_match(
+    # autojunk=False: difflib's default junks characters that recur in a long string, which would
+    # drop a short reference (e.g. a count) that appears amid the console noise -> a false miss.
+    match = difflib.SequenceMatcher(None, reference, produced, autojunk=False).find_longest_match(
         0, len(reference), 0, len(produced))
     return match.size / len(reference) >= threshold
 

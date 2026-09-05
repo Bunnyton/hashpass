@@ -371,8 +371,15 @@ def _render_intro(session: object, readme: str | None, io: Io) -> None:
     io.write("(работайте в терминале — проверка после каждой команды; exit — завершить)\n")
 
 
-# CSI/escape sequences + non-newline/tab control bytes, for cleaning a recorded terminal delta.
-_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+# Escape sequences + stray control bytes, for cleaning a recorded terminal (script(1)) delta.
+# OSC first (fish's semantic-prompt / title sequences, ESC ] ... BEL|ST) so the whole run goes,
+# not just its ESC prefix; then CSI; then other 2-char escapes; then stray controls (keep \n \t).
+_ANSI_RE = re.compile(
+    r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"      # OSC ... BEL or ST
+    r"|\x1b\[[0-9;?]*[ -/]*[@-~]"             # CSI
+    r"|\x1b[@-Z\\-_]"                          # other 2-char escapes
+    r"|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]",     # stray control bytes
+)
 
 
 def _strip_terminal(text: str) -> str:
