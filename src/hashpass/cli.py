@@ -394,18 +394,41 @@ _ANSI_RE = re.compile(
 
 
 def _strip_terminal(text: str) -> str:
-    """Reduce a recorded-terminal (script(1)) delta to plain text so output substrings match."""
+    """Reduce a recorded-terminal (script(1)) delta to plain text."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     return _ANSI_RE.sub("", text)
 
 
+# fish marks command output with OSC 133 semantic prompts: ;C = output starts, ;D = output done.
+_OSC133_C = re.compile(r"\x1b\]133;C[^\x07\x1b]*(?:\x07|\x1b\\)")
+_OSC133_D = re.compile(r"\x1b\]133;D")
+
+
+def _extract_output(delta: str) -> str:
+    """
+    Isolate a command's clean stdout from a recorded-terminal delta.
+
+    fish emits OSC 133 semantic marks around each command's output (;C when it starts running,
+    ;D when it finishes); the text between the LAST ;C and the next ;D is exactly that command's
+    output, with the prompt + echoed command line excluded. That makes output grading STRICT (the
+    student's actual output, not the surrounding console noise). If the marks are absent (older
+    shell), fall back to the whole cleaned delta.
+    """
+    starts = list(_OSC133_C.finditer(delta))
+    if not starts:
+        return _strip_terminal(delta)
+    begin = starts[-1].end()
+    end = _OSC133_D.search(delta, begin)
+    return _strip_terminal(delta[begin:end.start()] if end else delta[begin:])
+
+
 def _parse_cmd_request(req: str) -> tuple[str, str]:
-    """Decode a `cmd <command-b64> [<output-b64>]` request into (command, cleaned output)."""
+    """Decode a `cmd <command-b64> [<output-b64>]` request into (command, clean stdout)."""
     parts = req[4:].split(" ", 1)
     command = base64.b64decode(parts[0]).decode("utf-8", "replace")
     output = ""
     if len(parts) > 1 and parts[1]:
-        output = _strip_terminal(base64.b64decode(parts[1]).decode("utf-8", "replace"))
+        output = _extract_output(base64.b64decode(parts[1]).decode("utf-8", "replace"))
     return command, output
 
 

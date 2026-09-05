@@ -32,6 +32,16 @@ def test_strip_terminal_cleans_ansi_and_cr():
 
 
 @pytest.mark.tier1
+def test_extract_output_isolates_stdout_via_osc133():
+    # fish wraps a command's output in OSC 133 ;C (output starts) .. ;D (done); extraction returns
+    # just that stdout -- prompt + echoed command excluded -- so output grading is strict.
+    d = ("\x1b]133;A\x07~ > \x1b]133;B\x07grep -c ERROR f\n"
+         "\x1b]133;C;url\x07\x1b]0;title\x073\n\x1b]133;D;0\x07~ > ")
+    assert cli._extract_output(d) == "3\n"  # noqa: SLF001
+    assert cli._extract_output("plain out\n") == "plain out\n"  # no marks -> cleaned whole  # noqa: SLF001
+
+
+@pytest.mark.tier1
 def test_parse_cmd_request_decodes_command_and_cleans_output():
     cmd = base64.b64encode("grep ERROR log".encode()).decode()
     out = base64.b64encode("\x1b[31mERROR here\x1b[0m\r\n".encode()).decode()

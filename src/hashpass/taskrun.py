@@ -1,5 +1,4 @@
 """Run a stored task: student container WITHOUT /hp; handlers/checks/hints in a bound-/hp run."""
-import difflib
 import re
 import shutil
 import sys
@@ -24,7 +23,6 @@ from hashpass.recipe.model import Action, ExecAction, ReadAction, SayAction, Sho
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import load_bundle
-from hashpass.taskcode.execute import OUTPUT_KEY
 from hashpass.taskstore import StageMeta, StoredTask, load_task
 
 _ACCEPT_EXIT = 0
@@ -66,25 +64,6 @@ def _elapsed(start_ts: str, now_ts: str) -> float:
     except (ValueError, TypeError):
         # ValueError: unparseable ts; TypeError: mixed tz-aware/naive subtraction. Idle stays neutral.
         return 0.0
-
-
-def _output_contains(reference: str, produced: str, threshold: float) -> bool:
-    """
-    Whether the reference stdout appears (fuzzily) within the produced console output.
-
-    The live console ships a terminal recording -- the command echo and prompts wrap the actual
-    stdout -- so a whole-string ratio against the CLEAN reference captured at build undershoots.
-    Instead accept when the longest run the two share contiguously covers at least `threshold` of
-    the reference: the correct output is present, ignoring the surrounding console noise.
-    """
-    reference, produced = reference.strip(), produced.strip()
-    if not reference:
-        return False
-    # autojunk=False: difflib's default junks characters that recur in a long string, which would
-    # drop a short reference (e.g. a count) that appears amid the console noise -> a false miss.
-    match = difflib.SequenceMatcher(None, reference, produced, autojunk=False).find_longest_match(
-        0, len(reference), 0, len(produced))
-    return match.size / len(reference) >= threshold
 
 
 _READ_PAGE_LINES = 18   # auto page height for `read` when no `---` marker splits it sooner
@@ -211,7 +190,7 @@ class TaskSession:
             if idx < len(pages) - 1:
                 self.pause()
 
-    def _accept(self, stage: int, sm: StageMeta, command: str,  # noqa: PLR0911
+    def _accept(self, stage: int, sm: StageMeta, command: str,
                 out: str, ts: str) -> tuple[bool, str | None]:
         """Decide acceptance: `accept cmd` match, else handler check-run, else derived host-side."""
         if sm.accept_cmds and any(sub in command for sub in sm.accept_cmds):
@@ -224,15 +203,9 @@ class TaskSession:
             if res.exit_code == _ACCEPT_EXIT:
                 return True, local_key(self.task_id, stage, self.nonce)
             return False, None
-        if sm.match_output:
-            # `observe output`: accept when the reference stdout (clean, from build) appears in the
-            # live console output (which carries the command echo + prompts around it). Fuzzy by the
-            # derived threshold (`settings similarity`).
-            checks = self.checks.stages[stage]
-            ref = checks.canonical.get(OUTPUT_KEY)
-            if ref is not None and _output_contains(ref.text, out, checks.threshold):
-                return True, local_key(self.task_id, stage, self.nonce)
-            return False, None
+        # Derived: FS observation and/or `observe output`. `out` is the student's CLEAN stdout
+        # (extracted from the console's OSC-133 marks), so grade_stage compares it to the reference
+        # by the derived `settings similarity` threshold -- strict at 100, fuzzy below.
         cand = capture_candidate(self.student.rootfs, self.checks.stages[stage], out)
         grade = grade_stage(self.checks.stages[stage], cand, task_id=self.task_id,
                             stage=stage, student_id=self.student_id, nonce=self.nonce, ts=ts)

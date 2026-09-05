@@ -21,7 +21,7 @@ settings
   pager on
   user student
   sudo on
-  similarity 85
+  similarity 100
 
 voice
   hello say dramatic "Здравствуйте, оператор. Я наблюдаю."
@@ -44,9 +44,9 @@ stage "Запишите слово ГОТОВО в файл /home/student/report
   hint tries 2 say "Подсказка:  echo ГОТОВО > /home/student/report.txt"
   hint cmd echo missing ГОТОВО say "В echo должно быть ровно слово ГОТОВО."
 
-# --- Задание 2: приёмка по ВЫВОДУ команды (нечётко, по settings similarity) ---
-# Оценивается сам stdout команды против эталона, а не файл на диске. Живой захват вывода
-# делает это возможным в консоли; `hint output` тоже срабатывает по выводу вживую.
+# --- Задание 2: приёмка по ВЫВОДУ команды (СТРОГО: similarity 100) ---
+# Оценивается чистый stdout команды (вырезается по OSC-133-маркерам fish) против эталона.
+# Команда не важна — важен ровно нужный вывод; лишний вывод НЕ проходит. `hint output` — по выводу.
 stage "Напечатайте, сколько строк содержат ERROR в /var/log/app/service.log"
   solve grep -c ERROR /var/log/app/service.log
   observe output

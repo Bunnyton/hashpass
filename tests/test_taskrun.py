@@ -8,7 +8,7 @@ from hashpass.recipe.parse import parse_recipe
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import RunResult
 from hashpass.taskbuild import build_task
-from hashpass.taskrun import _elapsed, _is_neutral, _output_contains, perform_action, run_task
+from hashpass.taskrun import _elapsed, _is_neutral, perform_action, run_task
 
 _DERIVED = """\
 image logtask:1
@@ -190,16 +190,6 @@ def test_elapsed_seconds_and_bad_ts():
     assert _elapsed("not-a-ts", "2026-08-31T00:00:00") == 0.0
 
 
-@pytest.mark.tier1
-def test_output_contains_finds_reference_in_noisy_console_output():
-    # `observe output`: the reference stdout must appear in the live console delta (command echo +
-    # prompts wrap it), fuzzily by the threshold. Correct output passes; a wrong one does not.
-    ref = "3\n"
-    assert _output_contains(ref, "grep -c ERROR /log\n3\n~ > ", 0.7) is True
-    assert _output_contains(ref, "grep -c WARN /log\n0\n~ > ", 0.7) is False
-    assert _output_contains("Status: install ok installed\n",
-                            "dpkg -s procps\nStatus: install ok installed\n~ > ", 0.8) is True
-    assert _output_contains("anything", "", 0.5) is False   # no output -> never accepts
 
 
 @pytest.mark.tier1
