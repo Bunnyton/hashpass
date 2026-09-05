@@ -1,4 +1,5 @@
 import base64
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,9 +9,20 @@ from hashpass import cli
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage, mark_passed_local, new_progress
 from hashpass.recipe.model import Recipe
+from hashpass.recipe.parse import parse_recipe
 from hashpass.taskrun import FeedResult
 
 _FAKE_RUN_EXIT = 7
+
+
+@pytest.mark.tier1
+def test_rebase_paths_resolves_relative_to_taskfile_dir():
+    r = parse_recipe("image t:1\ncopy welcome.txt /opt/w\nhidden hp\nreadme README.md\nrun echo hi\n")
+    out = cli._rebase_paths(r, Path("/task/dir"))  # noqa: SLF001
+    assert [s.src for s in out.steps if hasattr(s, "src")] == ["/task/dir/welcome.txt"]
+    assert out.hidden == "/task/dir/hp"
+    assert out.readme == "/task/dir/README.md"
+    assert cli._rebase_paths(replace(r, hidden="/abs/hp"), Path("/task/dir")).hidden == "/abs/hp"  # noqa: SLF001
 
 
 @pytest.mark.tier1

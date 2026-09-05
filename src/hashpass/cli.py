@@ -30,7 +30,7 @@ from hashpass.build import build, run_image
 from hashpass.image.base import _base_version_current, build_base
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage
-from hashpass.recipe.model import Recipe, image_ref, is_task
+from hashpass.recipe.model import CopyStep, Recipe, image_ref, is_task
 from hashpass.recipe.parse import load_recipe
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.passwords import UserStore
@@ -264,11 +264,22 @@ def resolve_ref(recipe: Recipe, tag: str | None, taskfile: Path) -> tuple[str, s
     return taskfile.resolve().parent.name, "latest"
 
 
+def _rebase_paths(recipe: Recipe, base: Path) -> Recipe:
+    """Resolve a recipe's host paths (copy sources, hidden, readme) relative to the Taskfile's dir."""
+    def rel(p: str | None) -> str | None:
+        return str(base / p) if p and not Path(p).is_absolute() else p
+    steps = tuple(replace(s, src=rel(s.src)) if isinstance(s, CopyStep) else s
+                  for s in recipe.steps)
+    return replace(recipe, steps=steps, hidden=rel(recipe.hidden), readme=rel(recipe.readme))
+
+
 def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = None) -> int:
     """Build an image or a task from a Taskfile, under the owner's namespace (login required)."""
     io = io or _default_io()
-    recipe = load_recipe(Path(taskfile))
-    name, version = resolve_ref(recipe, tag, Path(taskfile))
+    taskfile_path = Path(taskfile)
+    recipe = load_recipe(taskfile_path)
+    recipe = _rebase_paths(recipe, taskfile_path.resolve().parent)   # paths relative to the Taskfile
+    name, version = resolve_ref(recipe, tag, taskfile_path)
     user = _require_login(env, io)                       # image creation requires a login
     recipe = replace(recipe, name=_namespace_name(name, user), version=version)
     store = ImageStore(env.images)
@@ -311,7 +322,7 @@ def _advance_and_announce(session: object, io: Io) -> bool:
         return False
     if not res.advanced:
         return False
-    io.write(f"\n\u2713 принято  {res.local_key}\n")
+    io.write("\n\u2713 принято\n")
     if current_stage(session.progress) is None:
         io.write("\u2713 всё выполнено \u2014 задание завершено\n")
     else:
@@ -403,9 +414,9 @@ def _render_observe(session: object, command: str, output: str, io: Io) -> None:
     res = session.observe(command, ts=io.clock(), output=output)  # react + grade + hints + on_pass
     if not res.advanced:
         return
-    io.write(f"\n✓ stage passed  {res.local_key}\n")
+    io.write("\n✓ принято\n")
     if current_stage(session.progress) is None:
-        io.write("✓ all stages passed — task complete\n")
+        io.write("✓ всё выполнено — задание завершено\n")
         session.fire_outro()                 # top-level `say`/`read`/`exec` after the last stage
     else:
         session.enter()                      # next stage's on_enter

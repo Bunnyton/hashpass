@@ -87,7 +87,7 @@ def _report(progress: Callable[[str], None] | None, msg: str) -> None:
 def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # noqa: PLR0913, PLR0917
                   stage_index: int, exclude: tuple[str, ...], passes: int,
                   progress: Callable[[str], None] | None = None,
-                  threshold: float = 1.0) -> StageChecks:
+                  threshold: float = 1.0, keep_output: bool = False) -> StageChecks:  # noqa: FBT001, FBT002
     """Run one observed stage `passes` times on FRESH runners, curate, canonicalize."""
     observations: list[Observation] = []
     for p in range(passes):
@@ -99,6 +99,11 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
             runner.teardown()
         observations.append(_curate(obs, exclude))
     canonical = canonicalize(observations)
+    if not keep_output:
+        # `observe <path>` grades FILES only. Drop the captured stdout: live grading compares
+        # against a noisy terminal recording, never the clean solve stdout, so keeping OUTPUT_KEY
+        # here would make every filesystem stage fail live. `observe output` keeps it (the signal).
+        canonical.pop(OUTPUT_KEY, None)
     if not _has_signal(canonical):
         msg = f"stage {stage_index}: no stable discriminating signal (vacuous canonical)"
         raise ValueError(msg)
@@ -125,7 +130,7 @@ def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task:
             # plain FS observation stays exact (threshold 1.0).
             threshold = recipe.settings.similarity / _PERCENT if stage.match_output else 1.0
             checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes,
-                                        progress, threshold))
+                                        progress, threshold, keep_output=stage.match_output))
         acceptance.append(mode)
     return checks, acceptance
 
@@ -152,7 +157,7 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
 
 
 def _read_readme(path: str | None) -> str | None:
-    """Read the readme file's CONTENT at build (resolved from CWD, like hidden/copy)."""
+    """Read the readme file's CONTENT at build (the CLI pre-resolves the path to the Taskfile dir)."""
     if not path:
         return None
     try:
