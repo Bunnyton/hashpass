@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 
 from hashpass.build import build, run_image
-from hashpass.image.base import build_base
+from hashpass.image.base import _base_version_current, build_base
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage
 from hashpass.recipe.model import Recipe, image_ref, is_task
@@ -174,16 +174,13 @@ def ensure_base_image(env: Home, store: ImageStore, *,
 
 def _base_layer_current(layer: Path) -> bool:
     """
-    Whether a stored base layer was built by the current runtime.
+    Whether a stored base layer was built by the CURRENT runtime (matching version stamp).
 
-    The runtime tree fills /etc/hosts (localhost resolution); a base built before that still
-    carries the empty 0-byte docker-export placeholder. A populated /etc/hosts is therefore the
-    marker that the stored base is current -- an empty/missing one triggers a one-time rebuild.
+    The runtime tree bakes an `/etc/hp-base-version` stamp; when the runtime changes (new base
+    fixes, e.g. the /dev/ptmx fix) the stamp is bumped, so a stored base with an older/missing
+    stamp is stale and rebuilt once on the next build/run.
     """
-    try:
-        return (layer / "etc" / "hosts").stat().st_size > 0
-    except OSError:
-        return False
+    return _base_version_current(layer)
 
 
 def _kind(store: ImageStore, ref: str) -> str:

@@ -21,6 +21,15 @@ _SYSTEMD_INSTALL = (
 )
 
 
+def _base_version_current(dest: Path) -> bool:
+    """Whether the base at `dest` was built from the CURRENT runtime (matching version stamp)."""
+    stamp = _RUNTIME / "etc" / "hp-base-version"
+    try:
+        return (dest / "etc" / "hp-base-version").read_text() == stamp.read_text()
+    except OSError:
+        return False
+
+
 def _wipe_tree(path: Path) -> None:
     """Empty a possibly root-owned dir tree using only granted-sudo commands (no sudo rm)."""
     empty = path.parent / f".empty-{path.name}"
@@ -51,13 +60,13 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
             and (dest / "usr/local/sbin/hp-console").exists()
             and (dest / "home/student").exists()
             and (dest / "usr/local/bin/hp-io").exists()
-            and (dest / "etc/hosts").exists() and (dest / "etc/hosts").stat().st_size > 0):
-        # Already a COMPLETE bootable base (systemd from apt + runtime from rsync, including
-        # the console-autologin script): reuse it. Rebuilding would re-extract the tar over an
-        # apt-configured tree and corrupt dpkg, and it avoids rebuilding the invariant base on
-        # every build/build_task/run. ALL markers are required, so a stale pre-systemd base, a
-        # half-built one, a pre-autologin base (no hp-console), or one whose /etc/hosts is still
-        # the empty 0-byte docker-export placeholder (no localhost resolution) is rebuilt fresh.
+            and _base_version_current(dest)):
+        # Already a COMPLETE bootable base at the CURRENT runtime version (systemd from apt +
+        # runtime from rsync): reuse it. Rebuilding would re-extract the tar over an apt-configured
+        # tree and corrupt dpkg, and it avoids rebuilding the invariant base on every
+        # build/build_task/run. ALL markers are required, so a stale pre-systemd base, a half-built
+        # one, a pre-autologin base (no hp-console), or one built from an older runtime (the
+        # hp-base-version stamp differs -- e.g. before the /dev/ptmx fix) is rebuilt fresh.
         return dest
     if dest.exists():
         _wipe_tree(dest)  # stale/partial tree -> clear it so the fresh tar extracts clean

@@ -7,6 +7,14 @@
 # poweroff stays a root action (no password to exit); the user's OWN privileged commands go
 # through classic sudo (they type their password: student:student by default). HP_SUDO on|off
 # toggles that user's membership of the sudo group for this run.
+# script(1) (used for live output capture) needs a working /dev/ptmx to allocate a pty. A
+# docker-exported base ships no /dev/ptmx, and on some hosts nspawn leaves it unbound to the
+# container's devpts, so openpty fails with ENOSPC ("No space left on device") and hp-fish falls
+# back to a plain (capture-less) console. Ensure the devpts exposes ptmx and /dev/ptmx points at
+# it. Best-effort + harmless where it is already correct; done as root before the login.
+[ -e /dev/pts/ptmx ] || mount -o remount,ptmxmode=0666 /dev/pts 2>/dev/null || true
+[ -e /dev/pts/ptmx ] && ln -sf pts/ptmx /dev/ptmx 2>/dev/null || true
+
 user="${HP_USER:-student}"
 if id "$user" >/dev/null 2>&1; then
     if [ "$user" != root ]; then
