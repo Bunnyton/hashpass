@@ -156,7 +156,7 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
                 pause()                                   # wait for Enter between pages
         return text
     res = run_handler(runner, ExecAction(action.value), ctx, hp_dir=Path(hp_dir))
-    render.render(res.stdout)
+    render.render(res.stdout, mode="instant")   # program output (e.g. ASCII art) appears at once, not typed
     return res.stdout
 
 

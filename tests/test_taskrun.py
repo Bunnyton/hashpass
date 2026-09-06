@@ -317,16 +317,18 @@ def test_perform_show_file_reads_hp_work(tmp_path):
 
 
 @pytest.mark.tier1
-def test_perform_exec_runs_handler_and_renders(tmp_path):
+def test_perform_exec_renders_program_output_instantly(tmp_path):
+    # Even under a typed mode, `exec` output (e.g. ASCII art) is emitted WHOLE, not typed slowly.
     chunks: list[str] = []
-    r = Renderer(Settings(type_mode="instant"), sink=chunks.append, sleep=lambda _s: None)
-    runner = _FakeRunner("HINT-OUT\n")
-    out = perform_action(ExecAction("echo hi"), _CTX, render=r, runner=runner, hp_dir=tmp_path)
-    assert out == "HINT-OUT\n"
-    assert chunks == ["HINT-OUT\n"]
+    r = Renderer(Settings(type_mode="normal"), sink=chunks.append, sleep=lambda _s: None)
+    art = "  ___\n |o o|\n  \\_/\n"
+    runner = _FakeRunner(art)
+    out = perform_action(ExecAction("draw"), _CTX, render=r, runner=runner, hp_dir=tmp_path)
+    assert out == art
+    assert chunks == [art]                          # one write -> instant, not a token stream
     argv, binds, _ = runner.calls[0]
-    assert argv == ["sh", "-c", "echo hi"]        # command action -> sh -c
-    assert binds == [(str(tmp_path), "/hp")]        # /hp bound for the handler run
+    assert argv == ["sh", "-c", "draw"]             # command action -> sh -c
+    assert binds == [(str(tmp_path), "/hp")]         # /hp bound for the handler run
 
 
 _HINT_TASK = """\

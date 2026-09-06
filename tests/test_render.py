@@ -21,24 +21,26 @@ def test_instant_never_sleeps_single_write():
 
 
 @pytest.mark.tier1
-def test_normal_flow_emits_whole_words_paced_by_length():
-    # Default `word` flow: each word is ONE sink write, paced by its length -> no per-char stutter.
+def test_normal_flow_streams_words_with_a_clamped_even_beat():
+    # Default `word` flow: each word carries its trailing space as ONE write (one beat per word),
+    # and the beat is clamped to a tight band -> even, fast rhythm, never length-scaled.
     chunks, sleeps = _cap()
     r = Renderer(Settings(type_mode="normal", type_speed=50), sink=chunks.append, sleep=sleeps.append)
     r.render("Hi there.")
-    assert chunks == ["Hi", " ", "there."]
+    assert chunks == ["Hi ", "there."]
     assert "".join(chunks) == "Hi there."
-    # "Hi"->2 chars, " "->1, "there."->6; sentence end '.' adds a fuller breath (2x normal pause).
-    assert sleeps == [2 / 50, 1 / 50, 6 / 50, 0.13 * 2]
+    # both words exceed the clamp ceiling (0.055); sentence end '.' adds a small breath (0.11).
+    assert sleeps == [0.055, 0.055, 0.11]
 
 
 @pytest.mark.tier1
-def test_word_flow_short_beat_at_comma():
+def test_word_flow_clamps_short_and_long_and_beats_at_comma():
     chunks, sleeps = _cap()
     r = Renderer(Settings(type_speed=50), sink=chunks.append, sleep=sleeps.append)
     r.render("a, b")
-    assert chunks == ["a,", " ", "b"]
-    assert sleeps == [2 / 50, 0.13, 1 / 50, 1 / 50]   # comma -> single (short) beat
+    assert chunks == ["a, ", "b"]
+    # "a, " (3 chars * .02 = .06 -> clamped to .055), comma beat .045, then "b" (1 char -> floor .02)
+    assert sleeps == [0.055, 0.045, 0.02]
 
 
 @pytest.mark.tier1

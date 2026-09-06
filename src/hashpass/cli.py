@@ -445,6 +445,8 @@ def _render_observe(session: object, command: str, output: str, io: Io) -> None:
     if current_stage(session.progress) is None:
         io.write("✓ всё выполнено — задание завершено\n")
         session.fire_outro()                 # top-level `say`/`read`/`exec` after the last stage
+        if res.local_key:                    # completion key: proof the student finished (submit this)
+            io.write(f"\n🔑 Ключ завершения: {res.local_key}\n")
     else:
         session.enter()                      # next stage's on_enter
         _announce_stage(session, io)

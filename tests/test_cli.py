@@ -347,3 +347,32 @@ def test_ensure_base_image_stores_debian_trixie(tmp_path):
     assert (layer / "lib/systemd/systemd").exists()
     assert (layer / "usr/bin/fish").exists()
     assert cli.ensure_base_image(env, store) == layer  # second call reuses, no rebuild
+
+
+@pytest.mark.tier1
+def test_render_observe_shows_completion_key_only_when_all_done(monkeypatch):
+    # On the FINAL pass the console prints the completion key (proof of finishing); on an
+    # intermediate pass it advances to the next stage and shows no key.
+    def run(stage_left: int | None, key: str) -> str:
+        writes: list[str] = []
+        io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
+        session = SimpleNamespace(
+            progress=object(),
+            meta=SimpleNamespace(stages=[SimpleNamespace(message=f"goal {i}") for i in range(4)]),
+            observe=lambda command, *, ts, output: FeedResult(  # noqa: ARG005
+                advanced=True, stage=3, local_key=key),
+            fire_outro=lambda: writes.append("<outro>"),
+            enter=lambda: writes.append("<enter>"),
+        )
+        monkeypatch.setattr(cli, "current_stage", lambda _p: stage_left)
+        cli._render_observe(session, "cmd", "out", io)  # noqa: SLF001
+        return "".join(writes)
+
+    done = run(None, "KEY-XYZ")
+    assert "✓ всё выполнено" in done
+    assert "🔑 Ключ завершения: KEY-XYZ" in done
+    assert "<outro>" in done and "<enter>" not in done
+
+    mid = run(2, "KEY-XYZ")
+    assert "Ключ завершения" not in mid          # no key mid-task
+    assert "<enter>" in mid and "<outro>" not in mid
