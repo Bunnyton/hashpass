@@ -47,16 +47,25 @@ def match_hint(hints_for_stage: list[dict], *, command: str, output: str,  # noq
     return None
 
 
+def _mentions(cmd: Cmd, token: str) -> bool:
+    """Return whether the command carries `token` -- a `-flag` matched as a flag, any word as an arg."""
+    # Without this a bare word (e.g. `missing ГОТОВО`) went through has_flag -- which only knows
+    # `-flags` -- so it was ALWAYS absent, making `cmd <base> missing <word>` fire on every command.
+    if token.startswith("-"):
+        return cmd.has_flag(token)
+    return token in cmd.args
+
+
 def _cmd_matches(cond: CmdCond, command: str) -> bool:
-    """Return True if the command has base `cond.base` with the required/forbidden flags."""
+    """Return True if the command has base `cond.base` with the required/forbidden flags-or-words."""
     try:
         cmd = Cmd(command)
     except ValueError:
         return False  # an unparseable typo never satisfies a cmd condition
     if cmd.basecmd != cond.base:
         return False
-    return (all(cmd.has_flag(f) for f in cond.has)
-            and not any(cmd.has_flag(f) for f in cond.missing))
+    return (all(_mentions(cmd, f) for f in cond.has)
+            and not any(_mentions(cmd, f) for f in cond.missing))
 
 
 def _cond_matches(cond: Condition, *, tries: int, idle: float,

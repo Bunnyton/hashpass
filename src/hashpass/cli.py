@@ -388,6 +388,7 @@ def _render_intro(session: object, readme: str | None, io: Io) -> None:
 _ANSI_RE = re.compile(
     r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"      # OSC ... BEL or ST
     r"|\x1b\[[0-9;?]*[ -/]*[@-~]"             # CSI
+    r"|\x1b[ -/]+[0-~]"                        # nF escapes incl. charset designation (ESC ( B) -- fish emits these
     r"|\x1b[@-Z\\-_]"                          # other 2-char escapes
     r"|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]",     # stray control bytes
 )
@@ -395,7 +396,10 @@ _ANSI_RE = re.compile(
 
 def _strip_terminal(text: str) -> str:
     """Reduce a recorded-terminal (script(1)) delta to plain text."""
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    # CRLF -> LF, then DROP a lone CR (cursor-return, not a newline): fish prints output as
+    # `\r3\r\n`, and turning the leading CR into a newline left "\n3\n" -- a spurious blank line
+    # that broke strict output grading. Dropping it yields the clean "3\n".
+    text = text.replace("\r\n", "\n").replace("\r", "")
     return _ANSI_RE.sub("", text)
 
 

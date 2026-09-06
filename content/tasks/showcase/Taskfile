@@ -13,22 +13,17 @@ run printf 'ERROR alpha\nok\nERROR beta\nERROR gamma\n' > /var/log/app/service.l
 copy welcome.txt /opt/welcome.txt
 
 hidden hp
-readme README.md
 
+# Хорошие умолчания — почти ничего настраивать не нужно (type-mode/speed/flow, user student, sudo on
+# по умолчанию). Переопределяем только осмысленное: пейджер для длинной теории и строгую приёмку вывода.
 settings
-  type-mode normal
-  type-speed 90
   pager on
-  user student
-  sudo on
   similarity 100
 
 voice
   hello say dramatic "Здравствуйте, оператор. Я наблюдаю."
 
-react on command exec react
-
-# --- ВСТУПЛЕНИЕ: печатается вживую в консоли до заданий ---
+# --- ВСТУПЛЕНИЕ: печатается вживую в консоли до заданий (theory.md — теория для студента) ---
 say "Введу вас в курс дела, прежде чем начнём."
 read theory.md
 

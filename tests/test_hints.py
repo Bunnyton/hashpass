@@ -86,6 +86,18 @@ def test_cmd_has_missing_and_output():
 
 
 @pytest.mark.tier1
+def test_cmd_missing_and_has_match_words_not_just_flags():
+    # `missing <word>` fires only when the word is truly absent (was always-firing when a bare word
+    # went through has_flag). `has <word>` requires the word to be present as an argument.
+    miss = (HintRule(CmdCond("echo", (), ("ГОТОВО",)), SayAction("m")),)
+    assert match_rule(miss, **{**_NO, "command": "echo ГОТОВО"}) is None          # word present
+    assert match_rule(miss, **{**_NO, "command": "echo nope"}) == SayAction("m")  # word absent
+    has = (HintRule(CmdCond("echo", ("ГОТОВО",), ()), SayAction("h")),)
+    assert match_rule(has, **{**_NO, "command": "echo ГОТОВО > f"}) == SayAction("h")
+    assert match_rule(has, **{**_NO, "command": "echo other"}) is None
+
+
+@pytest.mark.tier1
 def test_first_match_wins_and_unparseable_command():
     rules = (
         HintRule(TriesCond(2), SayAction("first")),
