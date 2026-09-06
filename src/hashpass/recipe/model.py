@@ -109,6 +109,7 @@ class Settings:
     sudo: bool = True       # whether that user is a (classic, password) sudoer in the container
     pager: bool = False
     similarity: int = 90    # percent (0-100): min output similarity to accept an `observe output` stage
+    workdir: str = "/home/student"  # base for `read`/`show file` lookups that fall through to the system FS
 
 
 @dataclass(frozen=True)

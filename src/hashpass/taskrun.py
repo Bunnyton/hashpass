@@ -106,15 +106,29 @@ def _no_pause() -> None:
     """Default pager pause: do nothing (used off the interactive socket, e.g. in tests)."""
 
 
-def _read_narrative(path: str, hp_dir: Path, rootfs: Path) -> str:
-    """Resolve a `read <file>` source: the hidden /hp layer first, else the image filesystem."""
-    hp_file = hp_dir / "work" / path
+def _resolve_asset(path: str, hp_dir: Path, rootfs: Path, workdir: str) -> Path | None:
+    """
+    Resolve a `read`/`show file` source: the hidden /hp layer first, else the system FS.
+
+    The hidden layer (`<hp_dir>/work/<path>`) wins. Otherwise the file is looked up on the
+    student's system: an absolute path from the container root, a relative path under `workdir`
+    (the `settings workdir`, default the student's home). Returns the file, or None if missing.
+    """
+    rel = path.lstrip("/")   # never let an absolute path reset the join off the intended root
+    hp_file = hp_dir / "work" / rel
     if hp_file.is_file():
-        return hp_file.read_text(encoding="utf-8", errors="replace")
-    try:
-        return (Path(rootfs) / path.lstrip("/")).read_text(encoding="utf-8", errors="replace")
-    except OSError:
+        return hp_file
+    root = Path(rootfs)
+    sys_file = root / rel if path.startswith("/") else root / workdir.lstrip("/") / rel
+    return sys_file if sys_file.is_file() else None
+
+
+def _read_narrative(path: str, hp_dir: Path, rootfs: Path, workdir: str) -> str:
+    """Read a `read <file>` source via `_resolve_asset` (hidden layer, else the system FS)."""
+    resolved = _resolve_asset(path, hp_dir, rootfs, workdir)
+    if resolved is None:
         return f"(read: файл не найден: {path})"
+    return resolved.read_text(encoding="utf-8", errors="replace")
 
 
 def _paginate(text: str, height: int = _READ_PAGE_LINES) -> list[str]:
@@ -129,26 +143,30 @@ def _paginate(text: str, height: int = _READ_PAGE_LINES) -> list[str]:
 
 
 def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # noqa: PLR0913
-                   runner: NspawnRunner, hp_dir: Path,
+                   runner: NspawnRunner, hp_dir: Path, workdir: str = "/",
                    pause: Callable[[], None] = _no_pause) -> str:
     """
     Render one delegated action and return the text shown.
 
-    `say` renders its literal text (dramatic pacing when flagged); `show file` reads
-    `<hp_dir>/work/<path>` and renders it (paged when large); `exec` runs the §6 handler
-    under `/hp` and renders its stdout. System replies use the configured type-mode.
+    `say` renders its literal text (dramatic pacing when flagged); `show file` and `read`
+    resolve their file in the hidden `/hp` layer first, else on the student's system FS
+    relative to `workdir` (see `_resolve_asset`); `exec` runs the §6 handler under `/hp` and
+    renders its stdout instantly. System replies use the configured type-mode.
 
-    The `show file` path comes from the trusted recipe author (§5 — the student is the
-    threat, not the author); it is not confined to `work/`, so an absolute or `..` path
-    reads where it points. Authors use relative paths under the hidden work dir.
+    Paths come from the trusted recipe author (§5 — the student is the threat, not the author).
     """
     if isinstance(action, SayAction):
         render.render(action.text, mode="dramatic" if action.dramatic else None)
         return action.text
     if isinstance(action, ShowFileAction):
-        return render.show_file(Path(hp_dir) / "work" / action.path)
+        resolved = _resolve_asset(action.path, Path(hp_dir), runner.rootfs, workdir)
+        if resolved is None:
+            msg = f"(show file: файл не найден: {action.path})"
+            render.render(msg, mode="instant")
+            return msg
+        return render.show_file(resolved)
     if isinstance(action, ReadAction):
-        text = _read_narrative(action.path, Path(hp_dir), runner.rootfs)
+        text = _read_narrative(action.path, Path(hp_dir), runner.rootfs, workdir)
         pages = _paginate(render_markdown(text))
         for idx, page in enumerate(pages):
             render.render(page + "\n", mode="normal")   # even, streamed reveal
@@ -192,7 +210,8 @@ class TaskSession:
     def _perform_all(self, actions: tuple[Action, ...], ctx: HandlerContext) -> list[str]:
         """Render a list of delegated actions; collect the text each produced."""
         return [perform_action(a, ctx, render=self.render, runner=self.student,
-                               hp_dir=self.hp_dir, pause=self.pause) for a in actions]
+                               hp_dir=self.hp_dir, workdir=self.meta.settings.workdir,
+                               pause=self.pause) for a in actions]
 
     def enter(self) -> list[str]:
         """Fire session `voice hello` (first call) then the current stage's `on_enter`; return their text."""
@@ -292,8 +311,8 @@ class TaskSession:
                                 idle=_elapsed(self._last_progress_ts, ts),
                                 command=command, output=out)
             if action is not None:
-                hint = perform_action(action, ctx, render=self.render,
-                                      runner=self.student, hp_dir=self.hp_dir)
+                hint = perform_action(action, ctx, render=self.render, runner=self.student,
+                                      hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
 
     def observe(self, command: str, *, ts: str, output: str = "") -> FeedResult:
@@ -324,8 +343,8 @@ class TaskSession:
                                 idle=_elapsed(self._last_progress_ts, ts),
                                 command=command, output=out)
             if action is not None:
-                hint = perform_action(action, ctx, render=self.render,
-                                      runner=self.student, hp_dir=self.hp_dir)
+                hint = perform_action(action, ctx, render=self.render, runner=self.student,
+                                      hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
 
     def check_current(self, *, ts: str) -> FeedResult:

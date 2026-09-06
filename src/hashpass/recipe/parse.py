@@ -475,7 +475,8 @@ def _parse_voice_block(lines: list[tuple[int, str]], start: int,
 
 
 _SETTING_FIELDS = {"type-mode": "type_mode", "type-speed": "type_speed", "type-flow": "type_flow",
-                   "pager": "pager", "user": "user", "sudo": "sudo", "similarity": "similarity"}
+                   "pager": "pager", "user": "user", "sudo": "sudo", "similarity": "similarity",
+                   "workdir": "workdir"}
 
 
 def _coerce_setting(kw: str, value: str) -> object:

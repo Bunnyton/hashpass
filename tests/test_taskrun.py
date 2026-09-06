@@ -13,6 +13,7 @@ from hashpass.taskrun import (
     _elapsed,
     _is_neutral,
     _policy_violation,
+    _resolve_asset,
     perform_action,
     run_task,
 )
@@ -247,6 +248,26 @@ def _sm(**kw: object) -> StageMeta:
 
 
 @pytest.mark.tier1
+def test_resolve_asset_prefers_hidden_layer_then_system_workdir(tmp_path):
+    hp = tmp_path / "hp"
+    (hp / "work").mkdir(parents=True)
+    (hp / "work" / "clue.md").write_text("hidden", encoding="utf-8")
+    rootfs = tmp_path / "root"
+    (rootfs / "home/student").mkdir(parents=True)
+    (rootfs / "home/student" / "notes.txt").write_text("sys", encoding="utf-8")
+    (rootfs / "etc").mkdir()
+    (rootfs / "etc" / "hostname").write_text("abs", encoding="utf-8")
+    # hidden layer wins
+    assert _resolve_asset("clue.md", hp, rootfs, "/home/student") == hp / "work" / "clue.md"
+    # relative miss -> system, under workdir
+    assert _resolve_asset("notes.txt", hp, rootfs, "/home/student") == rootfs / "home/student/notes.txt"
+    # absolute path -> from container root, ignoring workdir
+    assert _resolve_asset("/etc/hostname", hp, rootfs, "/home/student") == rootfs / "etc/hostname"
+    # genuinely missing -> None
+    assert _resolve_asset("nope.txt", hp, rootfs, "/home/student") is None
+
+
+@pytest.mark.tier1
 def test_base_cmds_splits_pipes_sequences_and_strips_sudo():
     assert _base_cmds("sudo grep x f | wc -l && echo hi") == ["grep", "wc", "echo"]
     assert _base_cmds("") == []
@@ -273,6 +294,7 @@ class _FakeRunner:
     def __init__(self, out: str) -> None:
         self._out = out
         self.calls: list = []
+        self.rootfs = "/nonexistent-rootfs"   # asset resolution falls back here (never hit in these tests)
 
     def run(self, argv: list[str], *, binds: object = None,
             setenv: object = None) -> RunResult:
