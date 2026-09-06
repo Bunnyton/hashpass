@@ -376,3 +376,17 @@ def test_render_observe_marks_completion_implicitly_without_exposing_key(monkeyp
     mid = run(2, "key{secret}")
     assert "key{secret}" not in mid
     assert "<enter>" in mid and "<outro>" not in mid
+
+
+@pytest.mark.tier1
+def test_policy_reply_serializes_current_stage_policy(monkeypatch):
+    session = SimpleNamespace(progress=object(), meta=SimpleNamespace(stages=[
+        SimpleNamespace(allow=("grep", "awk", "wc"), deny=(), neutral=("ls", "cat")),
+        SimpleNamespace(allow=(), deny=("rm",), neutral=()),
+    ]))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 0)
+    assert cli._policy_reply(session) == "grep,awk,wc;;ls,cat\n"  # noqa: SLF001
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 1)
+    assert cli._policy_reply(session) == ";rm;\n"                 # noqa: SLF001
+    monkeypatch.setattr(cli, "current_stage", lambda _p: None)
+    assert cli._policy_reply(session) == ""                       # noqa: SLF001

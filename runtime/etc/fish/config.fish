@@ -45,6 +45,49 @@ if set -q HP_PORT
     # no typescript exists (script did not start -- plain fish fallback), out is empty: the host
     # then just gets `cmd <command>`, i.e. the previous behaviour, and output hints simply do not fire.
     set -g __hp_off 0
+
+    # Command policy (allow/deny): BEFORE every command we ask the host for the current stage's
+    # policy and, if the command is not permitted, shadow its name with a function that refuses and
+    # returns non-zero -- so it does not run at all ("в принципе не выполняется"). A function defined
+    # in fish_preexec shadows the binary/builtin for THIS very run; __hp_unshadow erases it right
+    # after, so the next command is judged fresh against the (possibly changed) stage policy.
+    # `allow` = only these bases pass (plus neutral + cd/exit); `deny` = these bases are blocked.
+    set -g __hp_shadow
+    function __hp_guard --on-event fish_preexec
+        set -e __hp_shadow
+        set -l pol (hp-io policy 2>/dev/null)
+        test -n "$pol"; or return
+        set -l parts (string split ';' -- $pol)
+        set -l allow; test -n "$parts[1]"; and set allow (string split ',' -- $parts[1])
+        set -l deny; test -n "$parts[2]"; and set deny (string split ',' -- $parts[2])
+        set -l neutral; test -n "$parts[3]"; and set neutral (string split ',' -- $parts[3])
+        test (count $allow) -gt 0 -o (count $deny) -gt 0; or return   # no policy -> nothing to block
+        set -l flat (string replace -ra '(\|\||&&|;|\|)' \n -- $argv[1])
+        for seg in (string split \n -- $flat)
+            set -l toks (string split -n ' ' -- (string trim -- $seg))
+            test (count $toks) -gt 0; or continue
+            set -l b $toks[1]
+            test "$b" = sudo -a (count $toks) -ge 2; and set b $toks[2]
+            test -n "$b"; or continue
+            set -l block 0
+            if test (count $deny) -gt 0; and contains -- $b $deny
+                set block 1
+            else if test (count $allow) -gt 0; and not contains -- $b $allow $neutral cd exit
+                set block 1
+            end
+            if test $block -eq 1
+                function $b; echo "⛔ команда «"(status current-command)"» здесь недоступна."; return 1; end
+                set -g __hp_shadow $__hp_shadow $b
+            end
+        end
+    end
+    function __hp_unshadow --on-event fish_postexec
+        for f in $__hp_shadow
+            functions -e $f
+        end
+        set -e __hp_shadow
+    end
+
     function __hp_postexec --on-event fish_postexec
         set -l log "$HOME/.hp-typescript"
         set -l size (stat -c %s "$log" 2>/dev/null; or echo 0)

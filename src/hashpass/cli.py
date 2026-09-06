@@ -436,6 +436,15 @@ def _parse_cmd_request(req: str) -> tuple[str, str]:
     return command, output
 
 
+def _policy_reply(session: object) -> str:
+    """Return the current stage's command policy as `<allow>;<deny>;<neutral>` (comma-joined)."""
+    stage = current_stage(session.progress)
+    if stage is None:
+        return ""
+    sm = session.meta.stages[stage]
+    return f"{','.join(sm.allow)};{','.join(sm.deny)};{','.join(sm.neutral)}\n"
+
+
 def _render_observe(session: object, command: str, output: str, io: Io) -> None:
     """React/grade/hint on one console command (+ its captured output), then announce a pass."""
     res = session.observe(command, ts=io.clock(), output=output)  # react + grade + hints + on_pass
@@ -470,35 +479,6 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
     srv.listen(8)
     srv.settimeout(_ACCEPT_POLL)
     port = srv.getsockname()[1]
-    io = Io(read=lambda _p: None, write=router.write, clock=clock)
-
-    def handle(conn: socket.socket, req: str) -> None:
-        # Stream rendered output STRAIGHT to the socket so the typewriter (per-char writes with
-        # the Renderer's pacing sleeps) actually types out live in the console -- buffering it
-        # here and sending at once would lose the effect.
-        def sink(text: str) -> None:
-            with contextlib.suppress(OSError):
-                conn.sendall(text.encode())
-
-        def pause() -> None:
-            # page break: send the 0x01 control byte and block until the console (hp-io) reports
-            # the reader pressed Enter, so the next page types out fresh.
-            with contextlib.suppress(OSError):
-                conn.sendall(b"\x01")
-                conn.recv(16)
-        router.to(sink)
-        session.pause = pause
-        try:
-            if req.startswith("hello"):
-                _render_intro(session, readme, io)
-            elif req.startswith("cmd "):
-                with contextlib.suppress(Exception):
-                    # `cmd <command-b64> [<output-b64>]`: the console ships the just-run command and
-                    # (from the recorded terminal) its output, so `output` hints/acceptance fire live.
-                    _render_observe(session, *_parse_cmd_request(req), io)
-        finally:
-            router.to(_sink_noop)
-            session.pause = _no_pause
 
     def loop() -> None:
         while not stop.is_set():
@@ -510,10 +490,47 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
                 break
             with conn, contextlib.suppress(OSError):
                 conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # per-char, no Nagle
-                handle(conn, _recv_request(conn))
+                _handle_request(conn, _recv_request(conn),
+                                session=session, router=router, readme=readme, clock=clock)
         srv.close()
 
     return port, threading.Thread(target=loop, daemon=True)
+
+
+def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: PLR0913
+                    router: _Router, readme: str | None, clock: Callable[[], str]) -> None:
+    """Serve one console request: `policy` (raw reply), else `hello`/`cmd` rendered to the socket."""
+    if req.startswith("policy"):
+        # The console PULLS the current stage's command policy before running each command, so it
+        # can block a disallowed command locally (see runtime config.fish). Raw reply, no render.
+        with contextlib.suppress(OSError):
+            conn.sendall(_policy_reply(session).encode())
+        return
+
+    # Stream rendered output STRAIGHT to the socket so the typewriter's pacing types out live;
+    # buffering here and sending at once would lose the effect.
+    def sink(text: str) -> None:
+        with contextlib.suppress(OSError):
+            conn.sendall(text.encode())
+
+    def pause() -> None:
+        # page break: send the 0x01 control byte and block until the console reports Enter.
+        with contextlib.suppress(OSError):
+            conn.sendall(b"\x01")
+            conn.recv(16)
+
+    io = Io(read=lambda _p: None, write=router.write, clock=clock)
+    router.to(sink)
+    session.pause = pause
+    try:
+        if req.startswith("hello"):
+            _render_intro(session, readme, io)
+        elif req.startswith("cmd "):
+            with contextlib.suppress(Exception):
+                _render_observe(session, *_parse_cmd_request(req), io)
+    finally:
+        router.to(_sink_noop)
+        session.pause = _no_pause
 
 
 def _reap_stale_machines() -> None:
