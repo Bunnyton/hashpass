@@ -350,9 +350,9 @@ def test_ensure_base_image_stores_debian_trixie(tmp_path):
 
 
 @pytest.mark.tier1
-def test_render_observe_shows_completion_key_only_when_all_done(monkeypatch):
-    # On the FINAL pass the console prints the completion key (proof of finishing); on an
-    # intermediate pass it advances to the next stage and shows no key.
+def test_render_observe_marks_completion_implicitly_without_exposing_key(monkeypatch):
+    # Completion is announced implicitly ("задание завершено") and fires the outro; the host-side
+    # key is NEVER written to the console (nothing on-screen to copy/fake). Mid-task advances instead.
     def run(stage_left: int | None, key: str) -> str:
         writes: list[str] = []
         io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
@@ -368,11 +368,11 @@ def test_render_observe_shows_completion_key_only_when_all_done(monkeypatch):
         cli._render_observe(session, "cmd", "out", io)  # noqa: SLF001
         return "".join(writes)
 
-    done = run(None, "KEY-XYZ")
+    done = run(None, "key{secret}")
     assert "✓ всё выполнено" in done
-    assert "🔑 Ключ завершения: KEY-XYZ" in done
+    assert "key{secret}" not in done and "Ключ" not in done   # key stays under the hood
     assert "<outro>" in done and "<enter>" not in done
 
-    mid = run(2, "KEY-XYZ")
-    assert "Ключ завершения" not in mid          # no key mid-task
+    mid = run(2, "key{secret}")
+    assert "key{secret}" not in mid
     assert "<enter>" in mid and "<outro>" not in mid

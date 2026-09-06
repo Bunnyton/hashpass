@@ -443,10 +443,11 @@ def _render_observe(session: object, command: str, output: str, io: Io) -> None:
         return
     io.write("\n✓ принято\n")
     if current_stage(session.progress) is None:
+        # Completion is marked implicitly -- the student just sees "задание завершено". The keys
+        # live host-side (`res.local_key`) and are compared under the hood; the container never
+        # sees them, so there is nothing on-screen to copy, fake, or replay.
         io.write("✓ всё выполнено — задание завершено\n")
         session.fire_outro()                 # top-level `say`/`read`/`exec` after the last stage
-        if res.local_key:                    # completion key: proof the student finished (submit this)
-            io.write(f"\n🔑 Ключ завершения: {res.local_key}\n")
     else:
         session.enter()                      # next stage's on_enter
         _announce_stage(session, io)
