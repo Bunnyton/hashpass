@@ -28,6 +28,7 @@ _STAGE_EVENTS = ("enter", "pass")
 _QUOTE_MIN = 2
 _ACTION_VERBS = ("exec", "say", "show")
 _TYPE_MODES = ("instant", "normal", "dramatic")
+_TYPE_FLOWS = ("word", "char")
 _MAX_PERCENT = 100
 
 
@@ -473,46 +474,49 @@ def _parse_voice_block(lines: list[tuple[int, str]], start: int,
     return i
 
 
-def _parse_settings_block(lines: list[tuple[int, str]], start: int,  # noqa: C901
-                          acc: _Acc) -> int:
-    """Parse a `settings` block (type-mode/type-speed/pager/user/sudo/similarity); return next index."""
+_SETTING_FIELDS = {"type-mode": "type_mode", "type-speed": "type_speed", "type-flow": "type_flow",
+                   "pager": "pager", "user": "user", "sudo": "sudo", "similarity": "similarity"}
+
+
+def _coerce_setting(kw: str, value: str) -> object:
+    """Validate + coerce one `settings` value to its typed form (raises on a bad value)."""
+    v = value.strip()
+    if kw in ("type-mode", "type-flow"):
+        allowed = _TYPE_MODES if kw == "type-mode" else _TYPE_FLOWS
+        if v not in allowed:
+            msg = f"{kw} must be one of {allowed}, got {value!r}"
+            raise ValueError(msg)
+        return v
+    if kw == "type-speed":
+        return _positive_int(v, "type-speed")
+    if kw == "similarity":
+        pct = _positive_int(v, "similarity")
+        if pct > _MAX_PERCENT:
+            msg = f"similarity must be a percent 1-{_MAX_PERCENT}, got {pct}"
+            raise ValueError(msg)
+        return pct
+    if kw == "pager":
+        return v == "on"
+    if kw == "sudo":
+        return v != "off"
+    return v   # user: raw string
+
+
+def _parse_settings_block(lines: list[tuple[int, str]], start: int, acc: _Acc) -> int:
+    """Parse a `settings` block into a Settings (see `_SETTING_FIELDS`); return next index."""
     if acc.settings is not None:
         msg = "duplicate 'settings' block"
         raise ValueError(msg)
-    mode = "normal"
-    speed = 45
-    pager = False
-    user = "student"
-    sudo = True
-    similarity = 90
+    fields: dict[str, object] = {}
     i = start
     while i < len(lines) and lines[i][0] > 0:
-        _, content = lines[i]
-        kw, value = _kw_value(content)
-        if kw == "type-mode":
-            if value not in _TYPE_MODES:
-                msg = f"type-mode must be one of {_TYPE_MODES}, got {value!r}"
-                raise ValueError(msg)
-            mode = value
-        elif kw == "type-speed":
-            speed = _positive_int(value.strip(), "type-speed")
-        elif kw == "pager":
-            pager = value.strip() == "on"
-        elif kw == "user":
-            user = value.strip()
-        elif kw == "sudo":
-            sudo = value.strip() != "off"
-        elif kw == "similarity":
-            similarity = _positive_int(value.strip(), "similarity")
-            if similarity > _MAX_PERCENT:
-                msg = f"similarity must be a percent 1-{_MAX_PERCENT}, got {similarity}"
-                raise ValueError(msg)
-        else:
-            msg = f"unknown settings directive: {kw!r} (type-mode/type-speed/pager/user/sudo/similarity)"
+        kw, value = _kw_value(lines[i][1])
+        if kw not in _SETTING_FIELDS:
+            msg = f"unknown settings directive: {kw!r} ({'/'.join(_SETTING_FIELDS)})"
             raise ValueError(msg)
+        fields[_SETTING_FIELDS[kw]] = _coerce_setting(kw, value)
         i += 1
-    acc.settings = Settings(type_mode=mode, type_speed=speed, pager=pager, user=user,
-                            sudo=sudo, similarity=similarity)
+    acc.settings = Settings(**fields)
     return i
 
 

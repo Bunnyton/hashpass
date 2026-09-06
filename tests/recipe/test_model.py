@@ -80,5 +80,6 @@ def test_stage_spec_hints_default_and_actions_widened():
 @pytest.mark.tier1
 def test_settings_defaults():
     assert Settings().type_mode == "normal"
-    assert Settings().type_speed == 45  # noqa: PLR2004
+    assert Settings().type_speed == 55  # noqa: PLR2004
+    assert Settings().type_flow == "word"   # smooth word-flow by default (no per-char stutter)
     assert Settings().pager is False

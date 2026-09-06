@@ -144,17 +144,19 @@ def _voice_from_dict(data: dict) -> Voice:
 
 def _settings_to_dict(settings: Settings) -> dict:
     return {"type_mode": settings.type_mode, "type_speed": settings.type_speed,
-            "pager": settings.pager, "user": settings.user, "sudo": settings.sudo,
-            "similarity": settings.similarity}
+            "type_flow": settings.type_flow, "pager": settings.pager, "user": settings.user,
+            "sudo": settings.sudo, "similarity": settings.similarity}
 
 
 def _settings_from_dict(data: dict) -> Settings:
-    return Settings(user=data.get("user", "student"),
-                    sudo=data.get("sudo", True),
-                    type_mode=data.get("type_mode", "normal"),
-                    type_speed=data.get("type_speed", 45),
-                    pager=data.get("pager", False),
-                    similarity=data.get("similarity", 90))
+    d = Settings()
+    return Settings(user=data.get("user", d.user),
+                    sudo=data.get("sudo", d.sudo),
+                    type_mode=data.get("type_mode", d.type_mode),
+                    type_speed=data.get("type_speed", d.type_speed),
+                    type_flow=data.get("type_flow", d.type_flow),
+                    pager=data.get("pager", d.pager),
+                    similarity=data.get("similarity", d.similarity))
 
 
 def _stage_to_dict(stage: StageMeta) -> dict:
