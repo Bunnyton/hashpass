@@ -59,3 +59,29 @@ def test_build_then_run_image_roundtrips(tmp_path, base_tar):
         assert res.stdout.strip() == "OK"
     finally:
         runner.teardown()
+
+
+@pytest.mark.tier3
+def test_build_cache_skips_unchanged_rebuild(tmp_path, base_tar):
+    # A cold build runs the steps and records a build_key; an identical rebuild matches the key
+    # and reuses the stored image WITHOUT running any step; changing a step busts the key -> rebuild.
+    store = ImageStore(tmp_path / "images")
+    recipe = parse_recipe("image demo:1\nrun mkdir -p /a\nrun touch /a/one\n")
+
+    cold: list[str] = []
+    img = build(recipe, store, base_tar=base_tar, workdir=tmp_path / "b1", progress=cold.append)
+    assert sum("выполняю" in m for m in cold) == 2          # cold: both steps run  # noqa: PLR2004
+    assert img.build_key and (img.layer / "a/one").exists()
+
+    warm: list[str] = []
+    img2 = build(recipe, store, base_tar=base_tar, workdir=tmp_path / "b2", progress=warm.append)
+    assert not any("выполняю" in m for m in warm)           # warm: NOTHING re-runs
+    assert any("не изменился" in m for m in warm)
+    assert img2.build_key == img.build_key
+
+    changed = parse_recipe("image demo:1\nrun mkdir -p /a\nrun touch /a/two\n")
+    hot: list[str] = []
+    img3 = build(changed, store, base_tar=base_tar, workdir=tmp_path / "b3", progress=hot.append)
+    assert sum("выполняю" in m for m in hot) == 2           # changed key -> full rebuild  # noqa: PLR2004
+    assert img3.build_key != img.build_key
+    assert (img3.layer / "a/two").exists() and not (img3.layer / "a/one").exists()

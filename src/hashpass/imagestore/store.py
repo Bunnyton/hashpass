@@ -33,12 +33,13 @@ def _check_name(name: str) -> None:
 
 @dataclass(frozen=True)
 class StoredImage:
-    """A stored image: its name/version, on-disk layer dir, and parent refs."""
+    """A stored image: its name/version, on-disk layer dir, parent refs, and build-cache key."""
 
     name: str
     version: str
     layer: Path
     parents: tuple[str, ...]
+    build_key: str | None = None
 
 
 def _split_ref(ref: str) -> tuple[str, str]:
@@ -62,7 +63,7 @@ class ImageStore:
     def _dir(self, name: str, version: str) -> Path:
         return self._root / name / version
 
-    def save(
+    def save(  # noqa: PLR0913
         self,
         name: str,
         version: str,
@@ -70,9 +71,10 @@ class ImageStore:
         parents: tuple[str, ...],
         *,
         sudo: bool = False,
+        build_key: str | None = None,
     ) -> StoredImage:
         """
-        Copy a layer directory into the store and record its parents.
+        Copy a layer directory into the store and record its parents + build key.
 
         Args:
             name: Image name.
@@ -80,6 +82,8 @@ class ImageStore:
             layer_dir: Source rootfs-delta directory copied in as the layer.
             parents: Direct `from` refs, in declaration order.
             sudo: Whether to use sudo rsync for copying (handles root-owned files).
+            build_key: Content hash of the build inputs (base+parents+steps); reused to skip
+                an unchanged rebuild. None for layers with no recipe (e.g. the base image).
 
         Returns:
             The StoredImage describing the saved entry.
@@ -101,9 +105,10 @@ class ImageStore:
             if layer.exists():
                 shutil.rmtree(layer)
             shutil.copytree(layer_dir, layer)
-        meta = {"name": name, "version": version, "parents": list(parents)}
+        meta = {"name": name, "version": version, "parents": list(parents),
+                "build_key": build_key}
         (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-        return StoredImage(name, version, layer, parents)
+        return StoredImage(name, version, layer, parents, build_key)
 
     def get(self, ref: str) -> StoredImage:
         """
@@ -125,7 +130,8 @@ class ImageStore:
         if not meta_path.exists():
             raise KeyError(ref)
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        return StoredImage(name, version, dest / "layer", tuple(meta["parents"]))
+        return StoredImage(name, version, dest / "layer", tuple(meta["parents"]),
+                           meta.get("build_key"))
 
     def exists(self, ref: str) -> bool:
         """Return whether an image is stored under the reference."""

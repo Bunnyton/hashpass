@@ -1,6 +1,14 @@
 """Build reusable images from recipes (overlay + nspawn) and run bare images."""
+# Build cache (Docker-style, coarse): a build's inputs -- base identity, parents, and every
+# `run`/`copy` step (a COPY hashed by its source content) -- fold into one `build_key` stored in
+# the image meta. A rebuild whose key matches the stored image reuses it and does NOT re-run any
+# step. (Per-step layer reuse was tried but each nspawn step's delta carries container side effects
+# -- /dev nodes, machine-id, /run -- that overlayfs refuses to stack, so this whole-build key is
+# the robust form; change any step and the whole image rebuilds, same as `docker build` from that
+# point with no matching prefix cache.)
+import hashlib
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from hashpass.image.base import build_base
@@ -9,6 +17,51 @@ from hashpass.imagestore.store import ImageStore, StoredImage
 from hashpass.overlay import overlay_mount, overlay_umount
 from hashpass.recipe.model import CopyStep, Recipe, RunStep
 from hashpass.runner.nspawn import NspawnRunner
+
+_Step = CopyStep | RunStep
+
+
+def _hash_source(path: Path) -> str:
+    """Hash a COPY source so editing the copied file(s) busts the cache (like Docker's checksum)."""
+    p = Path(path)
+    h = hashlib.sha256()
+    if p.is_dir():
+        for f in sorted(p.rglob("*")):
+            h.update(str(f.relative_to(p)).encode())
+            h.update(b"\0")
+            if f.is_file():
+                h.update(f.read_bytes())
+            h.update(b"\0")
+    elif p.is_file():
+        h.update(p.read_bytes())
+    else:
+        h.update(b"<missing>")
+    return h.hexdigest()
+
+
+def _step_repr(step: _Step) -> str:
+    """Canonical cache-relevant text for a step (RUN command; COPY dest + source content hash)."""
+    if isinstance(step, RunStep):
+        return "run\0" + step.cmd
+    return "copy\0" + step.dst + "\0" + _hash_source(step.src)
+
+
+def _base_stamp(base: Path) -> str:
+    """Return a stable identity for the base layer (its runtime version stamp, else its path)."""
+    try:
+        return (Path(base) / "etc" / "hp-base-version").read_text(encoding="utf-8").strip()
+    except OSError:
+        return str(base)
+
+
+def _build_key(base: Path, parents: tuple[str, ...], steps: Sequence[_Step]) -> str:
+    """Fold base identity + parents + every step (COPY by source content) into one cache key."""
+    h = hashlib.sha256()
+    h.update(("base\0" + _base_stamp(base) + "\0parents\0" + ",".join(parents)).encode())
+    for step in steps:
+        h.update(b"\0")
+        h.update(_step_repr(step).encode())
+    return h.hexdigest()
 
 
 def build(  # noqa: PLR0913
@@ -22,10 +75,11 @@ def build(  # noqa: PLR0913
     progress: Callable[[str], None] | None = None,
 ) -> StoredImage:
     """
-    Build a recipe into a stored image layer (the overlay delta).
+    Build a recipe into a stored image layer (the overlay delta), with a build cache.
 
-    Mounts the resolved parent lowers over a fresh base, applies `copy` and
-    `run` steps, then stores the upperdir as the image's own layer (delta).
+    If a stored image with the same `build_key` (base + parents + all steps) already exists, it
+    is reused verbatim -- no step re-runs. Otherwise: mount the resolved parent lowers over a
+    fresh base, apply `copy`/`run` steps into one upperdir, and store it as the image layer.
 
     Args:
         recipe: The parsed recipe to build.
@@ -42,8 +96,16 @@ def build(  # noqa: PLR0913
 
     """
     workdir = Path(workdir)
+    ref = f"{recipe.name}:{recipe.version}"
     lowers = resolve_lowers(recipe.parents, store)
     base = base or build_base(workdir / "base", from_tar=base_tar)
+    key = _build_key(base, recipe.parents, recipe.steps)
+    if store.exists(ref):
+        cached = store.get(ref)
+        if cached.build_key == key:                   # identical inputs -> reuse, run nothing
+            if progress is not None:
+                progress(f"образ {ref} не изменился — беру из кэша (сборка пропущена)")
+            return cached
     upper = workdir / "upper"
     work = workdir / "work"
     mnt = workdir / "mnt"
@@ -51,26 +113,21 @@ def build(  # noqa: PLR0913
         d.mkdir(parents=True, exist_ok=True)
     overlay_mount([*lowers, base], upper, work, mnt, sudo=sudo)
     try:
-        for step in recipe.steps:
+        for i, step in enumerate(recipe.steps):
+            label = f"шаг {i + 1}/{len(recipe.steps)}"
             if isinstance(step, CopyStep):
                 if progress is not None:
-                    progress(f"копирую {step.src} → {step.dst}")
-                dst = mnt / step.dst.lstrip("/")
-                subprocess.run(
-                    ["sudo", "rsync", "-a", "--mkpath", step.src, str(dst)],
-                    check=True,
-                )
-            elif isinstance(step, RunStep):
+                    progress(f"{label}: копирую {step.src} → {step.dst}")
+                subprocess.run(["sudo", "rsync", "-a", "--mkpath", step.src,
+                                str(mnt / step.dst.lstrip("/"))], check=True)
+            else:
                 if progress is not None:
-                    progress(f"выполняю: {step.cmd}")
-                subprocess.run(
-                    ["sudo", "systemd-nspawn", "-q", "--register=no",
-                     "-D", str(mnt), "sh", "-c", step.cmd],
-                    check=True,
-                )
+                    progress(f"{label}: выполняю: {step.cmd}")
+                subprocess.run(["sudo", "systemd-nspawn", "-q", "--register=no",
+                                "-D", str(mnt), "sh", "-c", step.cmd], check=True)
     finally:
         overlay_umount(mnt, sudo=sudo)
-    return store.save(recipe.name, recipe.version, upper, recipe.parents, sudo=sudo)
+    return store.save(recipe.name, recipe.version, upper, recipe.parents, sudo=sudo, build_key=key)
 
 
 def run_image(ref: str, store: ImageStore, workdir: Path, *,
