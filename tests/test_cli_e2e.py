@@ -22,11 +22,12 @@ def test_build_via_main_then_scripted_run(tmp_path, base_tar, monkeypatch, capsy
     (home / "base").mkdir(parents=True)
     (home / "base" / "rootfs.tar").write_bytes(base_tar.read_bytes())
     monkeypatch.setenv("HASHPASS_HOME", str(home))
+    monkeypatch.setattr(cli, "_require_login", lambda _env, _io: "dev")   # build needs a login
     tf = tmp_path / "Taskfile"
     tf.write_text(_TASK, encoding="utf-8")
 
     assert cli.main(["build", str(tf)]) == 0
-    assert "собрано: e2e:1" in capsys.readouterr().out
+    assert "e2e:1" in capsys.readouterr().out            # built under the owner namespace (dev/e2e:1)
     assert cli.main(["images"]) == 0
     assert "e2e:1" in capsys.readouterr().out
 
@@ -40,6 +41,7 @@ def test_build_via_main_then_scripted_run(tmp_path, base_tar, monkeypatch, capsy
 
     writes = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
-    assert cli.cmd_run(env, "e2e:1", io) == 0
-    assert not any("принято" in w or "выполнено" in w for w in writes)   # no forced phrase
-    assert any("ЗАДАЧА-ГОТОВА" in w for w in writes)                       # completion fired the outro
+    assert cli.cmd_run(env, "dev/e2e:1", io) == 0        # run the namespaced task
+    joined = "".join(writes)                                             # outro types char-by-char
+    assert "принято" not in joined and "выполнено" not in joined         # no forced phrase
+    assert "ЗАДАЧА-ГОТОВА" in joined                                      # completion fired the outro

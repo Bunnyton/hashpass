@@ -36,5 +36,6 @@ def test_run_task_grades_in_background(tmp_path, base_tar, monkeypatch):
     writes = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "2026-08-31T00:00:00")
     assert cli.cmd_run(env, "dev/logtask:1", io) == 0   # built under the "dev" namespace
-    assert not any("принято" in w or "выполнено" in w for w in writes)   # no forced phrase
-    assert any("ЗАДАЧА-ГОТОВА" in w for w in writes)                       # completion fired the outro
+    joined = "".join(writes)                                             # outro types char-by-char
+    assert "принято" not in joined and "выполнено" not in joined         # no forced phrase
+    assert "ЗАДАЧА-ГОТОВА" in joined                                      # completion fired the outro
