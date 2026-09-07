@@ -76,14 +76,14 @@ Copied verbatim into the implementation plan; every task inherits these.
 
 ```
 src/
-  hashcore/     # shared library (renamed from most of today's hashpass.*)
-                #   recipe, canon, compare, render, imagestore, registry (client + blob + refs +
-                #   auth primitives), runner, taskrun, taskstore, key, evidence, sync, grade
-  hashpass/     # STUDENT cli only: register/login, pull (parallel), run, list-by-number, submit
-  hashengine/   # AUTHOR/SERVER cli: build, push --task N, serve (+web), login, images
-packaging/
-  hashpass/     # distribution "hashpass": ships hashcore + hashpass; entry point `hashpass`
-  hashengine/   # distribution "hashengine": depends on "hashpass"; adds hashengine; entry `hashengine`
+  hashpass/     # the STUDENT dist + shared core (import namespace stays `hashpass` — no rename):
+                #   cli.py command functions, canon, compare, recipe, render, imagestore,
+                #   registry client (remote/blob/refs/creds/token), runner, overlay, taskrun,
+                #   taskstore, play, progress, sync, grade, evidence, key, …
+                #   + student entry `student_cli.py` (run, list, pull, register/login)
+  hashengine/   # AUTHOR/SERVER code, NOT shipped to students:
+                #   cli.py (build, push --task N, serve+web, login, images); and — moved here in the
+                #   distribution-split step — build/image-base/taskbuild/registry-server/passwords/web
 ```
 
 - Two installable **distributions**: `hashpass` (student — includes `hashcore`, exposes only the
@@ -95,8 +95,11 @@ packaging/
   `hashcore` distribution (core lives inside the `hashpass` dist). Lighter than three dists; a
   student needs core to run tasks anyway. *(Alternative, if preferred: three dists with a standalone
   `hashcore`. More separation, more packaging surface.)*
-- The big mechanical cost is the import rename `hashpass.* → hashcore.*` across the tree; this is
-  Phase 1 and lands before any behavior change.
+- **No mass import rename.** The shared core keeps the `hashpass` namespace. Phase 1 only adds two
+  thin entry points over the existing `hashpass.cli` command functions. Engine-only modules
+  physically relocate into the `hashengine` package — and the two pip distributions are cut — in the
+  distribution-split step (with Phase 8), once Phases 2-7 have settled the module boundary. Until
+  then both commands ship in one distribution; the command split is real from Phase 1.
 
 ### 4.2 Homes on disk
 
@@ -296,9 +299,12 @@ bootstrap script, so the pool URL is implicit — it is whatever host the studen
 
 ## 14. Phased plan (detailed in the implementation plan)
 
-1. **Core split** — introduce `hashcore`; rename `hashpass.* → hashcore.*`; two thin CLIs
-   (`hashpass`, `hashengine`) wired to the existing commands; packaging for two distributions;
-   `make install` / `make install-student`. Behavior unchanged. (Largest, mechanical.)
+1. **CLI/command split** — two entry points (`hashpass` student, `hashengine` author) as thin
+   argparse front-ends over the existing `hashpass.cli` command functions; shared core keeps the
+   `hashpass` import namespace (no mass rename). One distribution for now; existing behavior
+   unchanged. `make install` installs both scripts; `make install-student` a local student check.
+   *(The two-pip-distribution cut + engine-module relocation lands with Phase 8, once the boundary
+   is settled.)*
 2. **Users & roles & registration** — `UserRecord` fields, `/register` (+required ФИО/group),
    roles, `/me`, registration toggle, admin seeding.
 3. **Task transfer & digest** — `pack_task`/`unpack_task`, `/task` GET/PUT, `task_digest`, store
