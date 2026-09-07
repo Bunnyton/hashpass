@@ -847,7 +847,7 @@ def task_mode(env: Home, io: Io | None = None) -> int:
     store = ImageStore(env.images)
     tasks = [ref for ref in store.list() if _kind(store, ref) == "task"]
     if not tasks:
-        io.write("no tasks built yet — `hashpass build <Taskfile>` first\n")
+        io.write("no tasks built yet — an author runs `hashengine build <Taskfile>` first\n")
         return 0
     for i, ref in enumerate(tasks, 1):
         io.write(f"{i}. {ref}\n")
