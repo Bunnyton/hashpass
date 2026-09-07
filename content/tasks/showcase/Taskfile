@@ -51,14 +51,14 @@ stage "Напечатайте, сколько строк содержат ERROR 
   hint tries 2 say "Подсказка:  grep -c ERROR /var/log/app/service.log"
   hint output "0" say "Ноль? В журнале точно есть строки ERROR — присмотритесь к команде."
 
-# --- Задание 3: sudo + пакет, которого НЕТ; проверка ПОЯВЛЕНИЯ бинаря через observe ---
-# Пакет sl кладёт бинарь в /usr/games/sl. Эталон выводится при СБОРКЕ — деривация ставит sl
-# (`solve`), поэтому образ собирается с реальным apt (для дорогих solve есть ещё `check exec`).
+# --- Задание 3: sudo + пакет, которого НЕТ; проверка ОДНОЙ inline-командой (без скрипта) ---
+# `check exec <команда>` запускает проверку прямо строкой (exit 0 = принято). Скрипт не нужен;
+# и это sentinel-стадия — `solve` при сборке НЕ выполняется (apt не гоняется во время build).
 stage "Установите пакет sl (его нет в системе) через sudo"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y sl >/dev/null 2>&1
-  observe /usr/games/sl
+  check exec command -v sl || test -x /usr/games/sl
   on enter say "Задание 3: пакета sl в системе нет. Установите его (sudo, пароль student)."
   on enter exec intro2
   hint idle 25 say "sudo apt-get update ; sudo apt-get install -y sl"
