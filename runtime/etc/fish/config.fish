@@ -52,6 +52,9 @@ if set -q HP_PORT
     # in fish_preexec shadows the binary/builtin for THIS very run; __hp_unshadow erases it right
     # after, so the next command is judged fresh against the (possibly changed) stage policy.
     # `allow` = only these bases pass (plus neutral + cd/exit); `deny` = these bases are blocked.
+    # The refusal body uses `builtin echo` (NOT `echo`) so shadowing `echo` itself does not recurse;
+    # and we blank fish_title, which otherwise runs `echo` mid-command and would hit that shadow.
+    function fish_title; end
     set -g __hp_shadow
     function __hp_guard --on-event fish_preexec
         set -e __hp_shadow
@@ -76,7 +79,7 @@ if set -q HP_PORT
                 set block 1
             end
             if test $block -eq 1
-                function $b; echo "⛔ команда «"(status current-command)"» здесь недоступна."; return 1; end
+                function $b --inherit-variable b; builtin echo "⛔ команда «$b» здесь недоступна."; return 1; end
                 set -g __hp_shadow $__hp_shadow $b
             end
         end
