@@ -1,6 +1,7 @@
 
 import pytest
 
+from hashengine import cli as engine_cli
 from hashpass import cli
 
 _TASK = """\
@@ -26,9 +27,9 @@ def test_build_via_main_then_scripted_run(tmp_path, base_tar, monkeypatch, capsy
     tf = tmp_path / "Taskfile"
     tf.write_text(_TASK, encoding="utf-8")
 
-    assert cli.main(["build", str(tf)]) == 0
+    assert engine_cli.main(["build", str(tf)]) == 0
     assert "e2e:1" in capsys.readouterr().out            # built under the owner namespace (dev/e2e:1)
-    assert cli.main(["images"]) == 0
+    assert engine_cli.main(["images"]) == 0
     assert "e2e:1" in capsys.readouterr().out
 
     # The interactive run foreground-boots the console; simulate the student's solve in

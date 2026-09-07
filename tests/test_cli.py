@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from hashpass import cli
+from hashengine import cli as engine_cli
+from hashpass import cli, student_cli
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage, mark_passed_local, new_progress
 from hashpass.recipe.model import Recipe
@@ -238,18 +239,27 @@ def test_cmd_run_unknown_ref_reports_and_exits_1(tmp_path):
 
 
 @pytest.mark.tier1
-def test_build_parser_namespaces():
-    p = cli.build_parser()
+def test_engine_parser_args():
+    p = engine_cli.build_parser()
     assert p.parse_args(["build", "T"]).taskfile == "T"
     assert p.parse_args(["build", "T", "-t", "n:1"]).tag == "n:1"
     assert p.parse_args(["build", "T"]).tag is None
-    assert p.parse_args(["run", "x:1"]).ref == "x:1"
     assert p.parse_args(["images"]).command == "images"
     a = p.parse_args(["login", "http://h", "-u", "alice"])
     assert (a.registry, a.user) == ("http://h", "alice")
     a = p.parse_args(["push", "x:1", "http://h"])
     assert (a.ref, a.registry) == ("x:1", "http://h")
+    assert p.parse_args([]).command is None
+
+
+@pytest.mark.tier1
+def test_student_parser_args():
+    p = student_cli.build_parser()
+    assert p.parse_args(["run", "x:1"]).ref == "x:1"
+    assert p.parse_args(["list"]).command == "list"
     assert p.parse_args(["pull", "x:1", "http://h"]).command == "pull"
+    a = p.parse_args(["login", "http://h", "-u", "alice"])
+    assert (a.registry, a.user) == ("http://h", "alice")
     assert p.parse_args([]).command is None
 
 
@@ -260,14 +270,14 @@ def test_main_images_dispatch(tmp_path, monkeypatch, capsys):
     store = ImageStore(home / "images")
     _seed_image(store, tmp_path, "base")
     _seed_image(store, tmp_path, "lab", task=True)
-    assert cli.main(["images"]) == 0
+    assert engine_cli.main(["images"]) == 0
     assert capsys.readouterr().out == cli.format_image_rows([("base:1", "image"), ("lab:1", "task")])
 
 
 @pytest.mark.tier1
 def test_main_no_args_empty_task_mode(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))
-    assert cli.main([]) == 0
+    assert student_cli.main([]) == 0
     assert "no tasks built yet" in capsys.readouterr().out
 
 
@@ -296,8 +306,8 @@ def test_task_mode_lists_and_dispatches_pick(tmp_path, monkeypatch):
 def test_main_reports_user_error_without_traceback(tmp_path, monkeypatch, capsys):
     # a missing/broken Taskfile must exit 1 with a clean message, never a traceback.
     monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))
-    assert cli.main(["build", str(tmp_path / "nope.Taskfile")]) == 1
-    assert capsys.readouterr().err.startswith("hashpass:")
+    assert engine_cli.main(["build", str(tmp_path / "nope.Taskfile")]) == 1
+    assert capsys.readouterr().err.startswith("hashengine:")
 
 
 @pytest.mark.tier1

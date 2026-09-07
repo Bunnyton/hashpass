@@ -4,11 +4,12 @@ PYTEST := $(PY) -m pytest
 TIER3_TMPDIR := /var/tmp/hp-pytest
 
 .DEFAULT_GOAL := help
-.PHONY: help install uninstall test test-tier3 lint clean
+.PHONY: help install install-student uninstall test test-tier3 lint clean
 
 help:
-	@echo "make install     — установить CLI (команда hashpass в PATH, editable)"
-	@echo "make uninstall   — удалить CLI"
+	@echo "make install         — установить обе команды (hashpass + hashengine), editable"
+	@echo "make install-student — установить (сейчас ставит обе; отдельная студ.-дистрибуция — фаза 8)"
+	@echo "make uninstall       — удалить"
 	@echo "make test        — тесты tier1/tier2 (без контейнеров)"
 	@echo "make test-tier3  — тесты tier3 (реальный systemd-nspawn + scoped sudo)"
 	@echo "make lint        — ruff"
@@ -18,6 +19,10 @@ help:
 # (Debian externally-managed). Внутри venv оба флага можно убрать.
 install:
 	$(PY) -m pip install --user -e . --break-system-packages
+
+# Placeholder: one distribution still ships both scripts; the real student-only pip
+# distribution (only the `hashpass` command, no engine code) lands with Phase 8.
+install-student: install
 
 uninstall:
 	-$(PY) -m pip uninstall -y hashpass --break-system-packages

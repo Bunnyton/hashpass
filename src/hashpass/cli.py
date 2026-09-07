@@ -857,65 +857,28 @@ def task_mode(env: Home, io: Io | None = None) -> int:
     return cmd_run(env, tasks[idx], io)
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Construct the top-level argument parser with one sub-parser per command."""
-    parser = argparse.ArgumentParser(prog="hashpass",
-                                     description="Author, build, and run hashpass tasks.")
-    sub = parser.add_subparsers(dest="command")
-    p_build = sub.add_parser("build", help="build an image/task from a Taskfile")
-    p_build.add_argument("taskfile")
-    p_build.add_argument("-t", "--tag", help="name[:version] (overrides the Taskfile's image line)")
-    p_run = sub.add_parser("run", help="run a task (interactive) or a bare image (shell)")
-    p_run.add_argument("ref")
-    sub.add_parser("images", help="list built images and tasks")
-    sub.add_parser("serve", help="run the local registry service (127.0.0.1)")
-    p_login = sub.add_parser("login", help="log in to a registry (caches a token)")
-    p_login.add_argument("registry")
-    p_login.add_argument("-u", "--user")
-    p_push = sub.add_parser("push", help="push an image/task to a registry")
-    p_push.add_argument("ref")
-    p_push.add_argument("registry")
-    p_pull = sub.add_parser("pull", help="pull an image/task from a registry")
-    p_pull.add_argument("ref")
-    p_pull.add_argument("registry")
-    return parser
-
-
-def _dispatch(env: Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
-    """Route a parsed (non-empty) sub-command to its handler."""
-    command = args.command
-    if command == "build":
-        return cmd_build(env, args.taskfile, args.tag)
-    if command == "run":
-        return cmd_run(env, args.ref)
-    if command == "images":
-        return cmd_images(env)
-    if command == "serve":
-        return cmd_serve(env)
-    if command == "login":
-        return cmd_login(env, args.registry, args.user)
-    if command == "push":
-        return cmd_push(env, args.ref, args.registry)
-    return cmd_pull(env, args.ref, args.registry)
-
-
 _EXIT_ABORTED = 130  # conventional shell exit code for Ctrl-C / EOF
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Parse args and dispatch; no sub-command drops into interactive task mode."""
-    args = build_parser().parse_args(argv)
+def run_main(parser: argparse.ArgumentParser,
+             dispatch: Callable[[Home, argparse.Namespace], int],
+             argv: Sequence[str] | None) -> int:
+    """
+    Parse argv, build the env, and route via `dispatch` under a common error boundary.
+
+    Never dumps a traceback on an ordinary user error. Shared by the `hashpass` (student)
+    and `hashengine` (author) front ends; each supplies its own parser and dispatch,
+    including how a missing sub-command is handled.
+    """
+    args = parser.parse_args(argv)
     try:
         env = build_env()
-        if args.command is None:
-            return task_mode(env)
-        return _dispatch(env, args)
+        return dispatch(env, args)
     except (KeyboardInterrupt, EOFError):
-        sys.stderr.write("\nhashpass: aborted\n")
+        sys.stderr.write(f"\n{parser.prog}: aborted\n")
         return _EXIT_ABORTED
     except (OSError, ValueError, RuntimeError, KeyError,
             urllib.error.URLError, subprocess.CalledProcessError) as exc:
-        # never dump a traceback on an ordinary user error (bad Taskfile, no docker,
-        # push-before-login, unknown ref, bad URL, a failed build step).
-        sys.stderr.write(f"hashpass: {exc}\n")
+        # bad Taskfile, no docker, push-before-login, unknown ref, bad URL, a failed build step.
+        sys.stderr.write(f"{parser.prog}: {exc}\n")
         return 1

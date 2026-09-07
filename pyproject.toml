@@ -8,7 +8,8 @@ dependencies = []
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
-hashpass = "hashpass.cli:main"
+hashpass = "hashpass.student_cli:main"
+hashengine = "hashengine.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
