@@ -13,8 +13,9 @@ dev-only local registry into a real network **pool** that hosts a numbered curri
 authenticates users, records per-student pass/fail progress, and exposes a web dashboard for
 teachers.
 
-- **`hashpass`** — the **student** command. Installed on student machines by a one-line `curl`
-  installer. First run forces registration/login against the pool. Running with no arguments
+- **`hashpass`** — the **student** command. Installed on student machines by a one-line installer
+  **served by the pool site** (so the pool URL is implicit). First run forces registration/login
+  against the pool. Running with no arguments
   pulls new task images (in parallel), lists tasks by number with pass status, and runs one.
 - **`hashengine`** — the **author/teacher** command. Adds image authoring (`build`), publishing
   (`push --task N`), the pool server (`serve`, with the web UI), and author login. **Not present
@@ -39,7 +40,8 @@ Both commands self-update from GitHub releases of the same repo.
   not a background daemon).
 - **Basic** task-integrity: the pool refuses to sign a completion for a task whose content hash
   does not match what was published.
-- One-command install (`curl … | bash`) and in-place auto-update from GitHub.
+- One-command install served by the pool site (`curl https://<pool>/install.sh | bash`) and
+  in-place auto-update from GitHub. No installer lives in the repo; `make install` stays for authors.
 - Author-tool install gated by web authorization (author role).
 
 **Non-goals**
@@ -129,6 +131,8 @@ loopback assertion; add a `--host/--port` and a security banner. All existing ro
 | `/task/<name…>/<version>` | GET/PUT | GET bearer / PUT author | task **bundle** transfer (checks + hp + task-meta); PUT also updates the catalog when `?number=N` |
 | `/submit` | POST | bearer | `{evidence, task_digest}` → verify + record progress + return `{status, global_key?}` |
 | `/progress` | GET | bearer (author sees all; student sees self) | JSON progress for the dashboard |
+| `/install.sh` | GET | none | student bootstrap installer, templated with **this pool's** URL |
+| `/install-engine.sh` | GET | session cookie (author/admin) | author-gated engine bootstrap installer |
 | `/web/*` | GET/POST | session cookie (author/admin) | web dashboard (§6) |
 | `/admin/registration` | POST | admin | open/close signup |
 | `/admin/role` | POST | admin | grant/revoke author role |
@@ -185,8 +189,9 @@ pack/unpack, moved by a `/task` PUT/GET. The server keeps each task's **referenc
   `catalog.json`.
 - **Users** (`/web/users`): list users; create a user (with full_name/group/comment); grant/revoke
   author role (admin only); open/close registration (admin only).
-- **Front page**: shows the one-line install command and a link to register (the "через сайтик"
-  entry point).
+- **Front page**: shows the one-line install command (`curl -fsSL https://<pool>/install.sh | bash`)
+  and a link to register. Authors, once logged in, additionally get the engine install command
+  (`/install-engine.sh`). This is the "через сайтик" entry point.
 - Theme-agnostic, minimal CSS; tables scroll horizontally; no external assets.
 
 ## 7. Task integrity (basic)
@@ -206,22 +211,29 @@ pack/unpack, moved by a `/task` PUT/GET. The server keeps each task's **referenc
   by the digest + HMAC signature. A student with local root can still cheat those; the goal is to
   stop casual tampering and copy-paste key sharing, not a determined attacker.
 
-## 8. Install (one command)
+## 8. Install (served by the pool site, not the repo)
 
-- `install.sh` at the repo root, served raw from GitHub. Student:
+There is **no** installer in the repo and **no** raw-GitHub one-liner. The pool serves its own
+bootstrap script, so the pool URL is implicit — it is whatever host the student downloaded from.
+
+- **Student** — the pool web serves a script at `GET /install.sh`, templated with that pool's own
+  base URL. One-liner (printed on the site front page):
   ```
-  curl -fsSL https://raw.githubusercontent.com/Bunnyton/hashpass/main/install.sh | bash
+  curl -fsSL https://<pool-host>/install.sh | bash
   ```
-  Steps: check Python 3.13 + pip; `pip install --user` the **`hashpass`** distribution from the
-  latest release tag; print next steps. Optionally accept `HASHPASS_POOL=<url>` to pre-seed the
-  pool URL into `~/.hashpass/pool.json`.
-- Engine: `curl -fsSL …/install.sh | bash -s -- --engine`.
-  Before installing the `hashengine` distribution, the script **authorizes against the pool**:
-  prompts for pool URL + login, calls `/me`, and proceeds **only if `role` is `author` or `admin`**
-  (else it explains how to request author access on the site). This is the "запросит авторизацию
-  на сайте" gate.
-- `make install` remains the author/dev editable path (installs `hashengine`).
-- `make install-student` installs the `hashpass` distribution locally for testing.
+  The script: checks Python 3.13 + pip; `pip install --user` the **`hashpass`** distribution from
+  the latest **GitHub release** tag; writes the serving pool's URL into `~/.hashpass/pool.json`
+  (so the student never types a URL); prints next steps. `HASHPASS_POOL` remains only as an
+  optional override.
+- **Engine/author** — two paths:
+  - `make install` from a clone — the canonical dev/author path (installs `hashengine` editable).
+  - The pool web serves an **author-gated** script at `GET /install-engine.sh`, reachable only
+    after an author/admin logs in on the site (the "запросит авторизацию на сайте" gate). It
+    installs the `hashengine` distribution and pre-seeds the pool URL. Non-authors are instead
+    shown how to request author access.
+- The package always installs from the **GitHub release** (one source of truth, consistent with
+  auto-update §9); the site serves only the thin bootstrap script, never the packages.
+- `make install-student` stays as a local-testing convenience (installs the `hashpass` dist).
 
 ## 9. Auto-update (both tools)
 
@@ -241,8 +253,8 @@ pack/unpack, moved by a `/task` PUT/GET. The server keeps each task's **referenc
 ## 10. Student `hashpass`
 
 - **First-run gate:** no valid cached pool token → interactive `register` (default, if signup
-  open) or `login`. Pool URL from `HASHPASS_POOL`, `~/.hashpass/pool.json`, or a build-time default
-  baked into the student distribution. Nothing else runs until identity is established.
+  open) or `login`. Pool URL comes from `~/.hashpass/pool.json` (written by the site installer),
+  with `HASHPASS_POOL` as an optional override. Nothing else runs until identity is established.
 - **`hashpass` (no args):** update check → parallel pull of catalog images that are new or whose
   version changed (thread pool over `RemoteRegistry.pull`, bounded workers) → print the numbered
   task list with pass status (from `/progress`) → interactive picker.
@@ -296,7 +308,9 @@ pack/unpack, moved by a `/task` PUT/GET. The server keeps each task's **referenc
 6. **Submit & progress** — `/submit` (verify + digest + principal binding), `progress/`, wire the
    run→submit path.
 7. **Web UI** — login, dashboard, users, registration toggle, front page.
-8. **Installer** — `install.sh` (student + `--engine` web-auth gate), dry-run, shellcheck.
+8. **Installer (pool-served)** — the pool serves `/install.sh` (student, self-templated URL) and an
+   author-gated `/install-engine.sh`; scripts pip-install the right dist from the GitHub release and
+   seed `pool.json`; dry-run + shellcheck. No repo-level installer.
 9. **Auto-update** — `__version__`, version compare, launch-time check + re-exec, escape hatches.
 
 Phases 1–6 are the functional spine; 7–9 layer on top and can ship incrementally.
@@ -313,5 +327,6 @@ Phases 1–6 are the functional spine; 7–9 layer on top and can ship increment
    answer).
 6. **Install gate:** identity enforced at **first run** of `hashpass`; `hashengine` install gated by
    web author-role authorization (per your answers).
-7. **Pool URL for students:** resolved from `HASHPASS_POOL` env, `pool.json`, or a build-time
-   default baked into the student distribution.
+7. **Install & pool URL:** no repo installer — the pool **site** serves the installer, so the pool
+   URL is implicit and written to `pool.json` (`HASHPASS_POOL` optional override). `make install`
+   stays for authors; the engine is also installable via an author-gated site installer.
