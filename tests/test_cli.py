@@ -215,9 +215,7 @@ def test_interact_solves_with_hint_and_completion():
                        "hashpass:demo [stage 2/2]$ "]
     assert "<hello>\n" in sinks
     assert "try grep\n" in sinks                       # hint reached the sink, not double-printed
-    assert writes == ["✓ stage passed  key0\n",
-                      "✓ stage passed  key1\n",
-                      "✓ all stages passed — task complete\n"]
+    assert writes == []                                # no forced pass/complete phrase; progress shows in the prompt
 
 
 @pytest.mark.tier1
@@ -350,9 +348,9 @@ def test_ensure_base_image_stores_debian_trixie(tmp_path):
 
 
 @pytest.mark.tier1
-def test_render_observe_marks_completion_implicitly_without_exposing_key(monkeypatch):
-    # Completion is announced implicitly ("задание завершено") and fires the outro; the host-side
-    # key is NEVER written to the console (nothing on-screen to copy/fake). Mid-task advances instead.
+def test_render_observe_no_forced_phrase_completion_fires_outro(monkeypatch):
+    # No forced "принято"/"завершено" text: completing fires the author's outro, advancing enters
+    # the next stage; the host-side key is NEVER written to the console (nothing to copy/fake).
     def run(stage_left: int | None, key: str) -> str:
         writes: list[str] = []
         io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
@@ -369,12 +367,12 @@ def test_render_observe_marks_completion_implicitly_without_exposing_key(monkeyp
         return "".join(writes)
 
     done = run(None, "key{secret}")
-    assert "✓ всё выполнено" in done
-    assert "key{secret}" not in done and "Ключ" not in done   # key stays under the hood
+    assert "принято" not in done and "выполнено" not in done   # no forced phrase
+    assert "key{secret}" not in done and "Ключ" not in done    # key stays under the hood
     assert "<outro>" in done and "<enter>" not in done
 
     mid = run(2, "key{secret}")
-    assert "key{secret}" not in mid
+    assert "принято" not in mid and "key{secret}" not in mid
     assert "<enter>" in mid and "<outro>" not in mid
 
 

@@ -54,6 +54,7 @@ if set -q HP_PORT
     # `allow` = only these bases pass (plus neutral + cd/exit); `deny` = these bases are blocked.
     # The refusal body uses `builtin echo` (NOT `echo`) so shadowing `echo` itself does not recurse;
     # and we blank fish_title, which otherwise runs `echo` mid-command and would hit that shadow.
+    # Message is plain text, no emoji.
     function fish_title; end
     set -g __hp_shadow
     function __hp_guard --on-event fish_preexec
@@ -79,7 +80,7 @@ if set -q HP_PORT
                 set block 1
             end
             if test $block -eq 1
-                function $b --inherit-variable b; builtin echo "⛔ команда «$b» здесь недоступна."; return 1; end
+                function $b --inherit-variable b; builtin echo "Команда «$b» запрещена."; return 1; end
                 set -g __hp_shadow $__hp_shadow $b
             end
         end

@@ -11,6 +11,8 @@ run printf 'ERROR one\\nok\\nERROR two\\n' > /var/log/app/a.log
 stage "collect ERROR lines"
   solve grep -rh ERROR /var/log/app > /errors.txt
   observe /errors.txt
+
+say "ЗАДАЧА-ГОТОВА"
 """
 
 
@@ -34,5 +36,5 @@ def test_run_task_grades_in_background(tmp_path, base_tar, monkeypatch):
     writes = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "2026-08-31T00:00:00")
     assert cli.cmd_run(env, "dev/logtask:1", io) == 0   # built under the "dev" namespace
-    assert any("✓ принято" in w for w in writes)
-    assert "✓ всё выполнено — задание завершено\n" in writes
+    assert not any("принято" in w or "выполнено" in w for w in writes)   # no forced phrase
+    assert any("ЗАДАЧА-ГОТОВА" in w for w in writes)                       # completion fired the outro

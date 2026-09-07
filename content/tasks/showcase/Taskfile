@@ -20,9 +20,6 @@ settings
   pager on
   similarity 100
 
-voice
-  hello say dramatic "Здравствуйте, оператор. Я наблюдаю."
-
 # --- ВСТУПЛЕНИЕ: печатается вживую в консоли до заданий (theory.md — теория для студента) ---
 say "Введу вас в курс дела, прежде чем начнём."
 read theory.md
@@ -35,7 +32,6 @@ stage "Запишите слово ГОТОВО в файл /home/student/report
   neutral ls cat pwd
   on enter say "Задание 1: оставьте короткий отчёт."
   on enter read clue1.md
-  on pass say dramatic "Отчёт принят."
   hint tries 2 say "Подсказка:  echo ГОТОВО > /home/student/report.txt"
   hint cmd echo missing ГОТОВО say "В echo должно быть ровно слово ГОТОВО."
 
@@ -54,7 +50,6 @@ stage "Напечатайте, сколько строк содержат ERROR 
   on enter say "Задание 2: важен ВЫВОД (ровно число), а посчитать надо по-настоящему — grep/awk/wc."
   hint tries 2 say "Подсказка:  grep -c ERROR /var/log/app/service.log"
   hint output "0" say "Ноль? В журнале точно есть строки ERROR — присмотритесь к команде."
-  on pass say dramatic "Вывод верный — принято."
 
 # --- Задание 3: sudo + пакет, которого НЕТ в системе; принимает скрытый грейдер ---
 stage "Установите пакет sl (его нет в системе) через sudo и запустите поезд командой  sl"
@@ -64,7 +59,6 @@ stage "Установите пакет sl (его нет в системе) че
   check exec grade-sl
   on enter say "Задание 3: пакета sl в системе нет. Установите его (sudo, пароль student) и запустите — sl."
   on enter exec intro2
-  on pass say dramatic "Поезд поехал. Привилегированно и точно."
   hint idle 25 say "sudo apt-get install -y sl ; затем просто:  sl"
 
 # --- Задание 4: скрытый грейдер в /hp судит ответ ---
@@ -76,6 +70,5 @@ stage "Создайте /home/student/secret с секретной фразой,
   on enter read clue3.md
   on pass exec celebrate
 
-# --- ФИНАЛ: печатается при полном зачёте (ASCII-арт живёт в скрытом слое /hp) ---
+# --- ФИНАЛ: ASCII-арт из скрытого /hp; он и отмечает полный зачёт (обязательных фраз нет) ---
 exec finale
-say dramatic "Вот и всё. Отличная работа, оператор."

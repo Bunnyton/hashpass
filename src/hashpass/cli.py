@@ -227,25 +227,21 @@ def _stage_prompt(session: object) -> str:
 
 
 def interact(session: object, *, read: Callable[[str], str | None],
-             write: Callable[[str], object], clock: Callable[[], str]) -> None:
+             write: Callable[[str], object], clock: Callable[[], str]) -> None:  # noqa: ARG001
     """
-    Drive one interactive task session: prompt, feed, and report stage progress.
+    Drive one interactive task session: prompt, feed, advance.
 
-    `read(prompt)` returns the next student line (None/EOF or a stop word ends the loop);
-    each line is fed with a `clock()` timestamp; `write` emits the structural pass/complete
-    lines. Narrative (say/show/voice/hint) is rendered by the session's own Renderer sink
-    (in the CLI, the same stdout `write`), so a fired hint is shown by feed, not re-printed.
+    `read(prompt)` returns the next student line (None/EOF or a stop word ends the loop); each
+    line is fed with a `clock()` timestamp. There are NO forced pass/complete phrases -- progress
+    shows in the prompt (`[stage N/M]`) and all narrative (say/show/voice/hint/on_pass) comes from
+    the session's own Renderer sink. `write` is kept for interface symmetry with the CLI wiring.
     """
     session.enter()
     while current_stage(session.progress) is not None:
         line = read(_stage_prompt(session))
         if line is None or line.strip() in _STOP_WORDS:
             break
-        res = session.feed(line, ts=clock())
-        if res.advanced:
-            write(f"✓ stage passed  {res.local_key}\n")
-            if current_stage(session.progress) is None:
-                write("✓ all stages passed — task complete\n")
+        session.feed(line, ts=clock())   # advancement shows as the next stage prompt; no forced phrase
 
 
 def _progress(msg: str) -> None:
@@ -322,9 +318,8 @@ def _advance_and_announce(session: object, io: Io) -> bool:
         return False
     if not res.advanced:
         return False
-    io.write("\n\u2713 принято\n")
     if current_stage(session.progress) is None:
-        io.write("\u2713 всё выполнено \u2014 задание завершено\n")
+        session.fire_outro()   # completion/acceptance wording is the author's (voice bye / outro)
     else:
         session.enter()
         _announce_stage(session, io)
@@ -450,12 +445,9 @@ def _render_observe(session: object, command: str, output: str, io: Io) -> None:
     res = session.observe(command, ts=io.clock(), output=output)  # react + grade + hints + on_pass
     if not res.advanced:
         return
-    io.write("\n✓ принято\n")
     if current_stage(session.progress) is None:
-        # Completion is marked implicitly -- the student just sees "задание завершено". The keys
-        # live host-side (`res.local_key`) and are compared under the hood; the container never
-        # sees them, so there is nothing on-screen to copy, fake, or replay.
-        io.write("✓ всё выполнено — задание завершено\n")
+        # Completion/acceptance wording is entirely the author's (`on pass`, `voice bye`, outro).
+        # Keys stay host-side (`res.local_key`), compared under the hood -- nothing on-screen.
         session.fire_outro()                 # top-level `say`/`read`/`exec` after the last stage
     else:
         session.enter()                      # next stage's on_enter
