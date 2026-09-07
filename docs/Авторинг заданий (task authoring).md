@@ -168,8 +168,7 @@ stage "Отсортируй и посчитай уникальные"
 ```
 settings
   type-mode  normal          # instant | normal | dramatic (по умолчанию normal)
-  type-speed 55              # символов/сек (умолчание; ровный поток, не дёргано)
-  type-flow  word            # word = плавно, словами (умолчание) | char = классическая машинка
+  type-speed 55              # символов/сек (умолчание; печать всегда посимвольная, ровно)
   pager on                   # большие show file → пейджер
   workdir /home/student      # база для read/show file, если файла нет в скрытом /hp (умолчание — дом студента)
 

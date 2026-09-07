@@ -144,7 +144,7 @@ def _voice_from_dict(data: dict) -> Voice:
 
 def _settings_to_dict(settings: Settings) -> dict:
     return {"type_mode": settings.type_mode, "type_speed": settings.type_speed,
-            "type_flow": settings.type_flow, "pager": settings.pager, "user": settings.user,
+            "pager": settings.pager, "user": settings.user,
             "sudo": settings.sudo, "similarity": settings.similarity, "workdir": settings.workdir}
 
 
@@ -154,7 +154,6 @@ def _settings_from_dict(data: dict) -> Settings:
                     sudo=data.get("sudo", d.sudo),
                     type_mode=data.get("type_mode", d.type_mode),
                     type_speed=data.get("type_speed", d.type_speed),
-                    type_flow=data.get("type_flow", d.type_flow),
                     pager=data.get("pager", d.pager),
                     similarity=data.get("similarity", d.similarity),
                     workdir=data.get("workdir", d.workdir))

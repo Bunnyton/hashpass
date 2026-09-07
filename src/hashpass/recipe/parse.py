@@ -28,7 +28,6 @@ _STAGE_EVENTS = ("enter", "pass")
 _QUOTE_MIN = 2
 _ACTION_VERBS = ("exec", "say", "show")
 _TYPE_MODES = ("instant", "normal", "dramatic")
-_TYPE_FLOWS = ("word", "char")
 _MAX_PERCENT = 100
 
 
@@ -474,7 +473,7 @@ def _parse_voice_block(lines: list[tuple[int, str]], start: int,
     return i
 
 
-_SETTING_FIELDS = {"type-mode": "type_mode", "type-speed": "type_speed", "type-flow": "type_flow",
+_SETTING_FIELDS = {"type-mode": "type_mode", "type-speed": "type_speed",
                    "pager": "pager", "user": "user", "sudo": "sudo", "similarity": "similarity",
                    "workdir": "workdir"}
 
@@ -482,10 +481,9 @@ _SETTING_FIELDS = {"type-mode": "type_mode", "type-speed": "type_speed", "type-f
 def _coerce_setting(kw: str, value: str) -> object:
     """Validate + coerce one `settings` value to its typed form (raises on a bad value)."""
     v = value.strip()
-    if kw in ("type-mode", "type-flow"):
-        allowed = _TYPE_MODES if kw == "type-mode" else _TYPE_FLOWS
-        if v not in allowed:
-            msg = f"{kw} must be one of {allowed}, got {value!r}"
+    if kw == "type-mode":
+        if v not in _TYPE_MODES:
+            msg = f"type-mode must be one of {_TYPE_MODES}, got {value!r}"
             raise ValueError(msg)
         return v
     if kw == "type-speed":

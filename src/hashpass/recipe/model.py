@@ -100,11 +100,10 @@ class Voice:
 
 @dataclass(frozen=True)
 class Settings:
-    """Render settings (§7.2): `type-mode`, `type-speed` chars/sec, `type-flow`, `pager`."""
+    """Render settings (§7.2): `type-mode`, `type-speed` chars/sec, `pager`, `workdir`."""
 
     type_mode: str = "normal"
-    type_speed: int = 55    # chars/sec; a calm, readable default nobody needs to change
-    type_flow: str = "word"  # "word" = emit whole words (smooth); "char" = classic typewriter
+    type_speed: int = 55    # chars/sec; a calm, readable default nobody needs to change (always char-by-char)
     user: str = "student"   # console login user for `run` (non-root by default; `root` for privileged tasks)
     sudo: bool = True       # whether that user is a (classic, password) sudoer in the container
     pager: bool = False
