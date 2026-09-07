@@ -118,6 +118,7 @@ class StageSpec:
     message: str
     solve: tuple[str, ...]
     observe: tuple[str, ...] = ()
+    observe_bool: tuple[str, ...] = ()   # `observe bool <path>`: existence/kind only, no content
     exclude: tuple[str, ...] = ()
     neutral: tuple[str, ...] = ()
     check: ExecAction | None = None

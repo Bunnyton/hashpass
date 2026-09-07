@@ -1,6 +1,6 @@
 import pytest
 
-from hashpass.canon import FileState
+from hashpass.canon import FileState, matches
 from hashpass.play import FeedResult, PlaySession, capture_candidate
 from hashpass.progress import StageStatus, new_progress
 from hashpass.sync import LocalSyncClient
@@ -96,3 +96,26 @@ def test_reverify_upgrades_local_pass_to_global(tmp_path):
     mismatches = session.reverify(sync)
     assert mismatches == []
     assert session.progress.statuses[0] is StageStatus.PASSED_GLOBAL
+
+
+@pytest.mark.tier1
+def test_capture_candidate_existence_key_matches_by_kind_only(tmp_path):
+    # An existence/kind-only canonical key (text=None) -- what `observe bool` (or a binary) yields.
+    checks = StageChecks(canonical={"opt/x": FileState("file", None)})
+    (tmp_path / "opt").mkdir()
+    (tmp_path / "opt" / "x").write_text("ANY CONTENT AT ALL", encoding="utf-8")
+    cand = capture_candidate(tmp_path, checks, "")
+    assert cand["opt/x"] == FileState("file", None)          # content dropped, not compared
+    assert matches(checks.canonical, cand)                   # exists as a file -> matches
+    (tmp_path / "opt" / "x").unlink()
+    assert not matches(checks.canonical, capture_candidate(tmp_path, checks, ""))  # gone -> no match
+
+
+@pytest.mark.tier1
+def test_capture_candidate_bool_dir_key_matches_without_recursion(tmp_path):
+    checks = StageChecks(canonical={"d": FileState("dir", None)})   # `observe bool /d`
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "junk").write_text("noise", encoding="utf-8")
+    cand = capture_candidate(tmp_path, checks, "")
+    assert cand["d"] == FileState("dir", None) and "d/junk" not in cand   # the dir, not its content
+    assert matches(checks.canonical, cand)

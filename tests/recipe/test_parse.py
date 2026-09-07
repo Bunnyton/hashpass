@@ -339,3 +339,11 @@ def test_backcompat_flipped_reserved_cases_now_parse():
 def test_parse_errors(text, match):
     with pytest.raises(ValueError, match=match):
         parse_recipe(text)
+
+
+@pytest.mark.tier1
+def test_observe_bool_parses_into_existence_paths():
+    r = parse_recipe('image t:1\nstage "x"\n  solve touch /f\n  observe bool /usr/games/sl /var/run\n')
+    s = r.stages[0]
+    assert s.observe_bool == ("/usr/games/sl", "/var/run")
+    assert s.observe == () and s.match_output is False

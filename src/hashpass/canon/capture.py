@@ -14,7 +14,7 @@ class FileState:
 Observation = dict[str, "FileState"]
 
 
-def _read(p: Path) -> FileState:
+def read_state(p: Path) -> FileState:
     if p.is_dir():
         return FileState("dir", None)
     if p.is_file():
@@ -25,7 +25,8 @@ def _read(p: Path) -> FileState:
     return FileState("absent", None)
 
 
-def capture(rootfs: Path, observe: list[str], *, output_path: str | None = None) -> Observation:
+def capture(rootfs: Path, observe: list[str], *, output_path: str | None = None,
+            bool_observe: list[str] | None = None) -> Observation:
     rootfs = Path(rootfs)
     obs: Observation = {}
     for rel in observe:
@@ -33,9 +34,11 @@ def capture(rootfs: Path, observe: list[str], *, output_path: str | None = None)
         if base.is_dir():
             for f in sorted(base.rglob("*")):
                 if f.is_file():
-                    obs[str(f.relative_to(rootfs))] = _read(f)
+                    obs[str(f.relative_to(rootfs))] = read_state(f)
         else:
-            obs[rel.lstrip("/")] = _read(base)
+            obs[rel.lstrip("/")] = read_state(base)
+    for rel in bool_observe or []:                       # existence/kind only -- no content, no recursion
+        obs[rel.lstrip("/")] = FileState(read_state(rootfs / rel.lstrip("/")).kind, None)
     if output_path is not None:
-        obs["<output>"] = _read(rootfs / output_path.lstrip("/"))
+        obs["<output>"] = read_state(rootfs / output_path.lstrip("/"))
     return obs

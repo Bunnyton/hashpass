@@ -34,7 +34,7 @@ def run_stage(runner: Runner, task: TaskCode, stage_index: int,
     commands = override if override is not None else target.commands
     result = runner.run(["sh", "-c", _target_script(commands)])
     run_noise(runner, noise)
-    obs = capture(runner.rootfs, list(target.observe))
+    obs = capture(runner.rootfs, list(target.observe), bool_observe=list(target.observe_bool))
     obs[OUTPUT_KEY] = FileState("file", result.stdout)
     for key in list(obs):
         if key != OUTPUT_KEY and any(key.startswith(prefix) for prefix in target.exclude):

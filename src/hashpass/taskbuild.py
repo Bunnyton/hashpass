@@ -58,7 +58,7 @@ def _acceptance_of(stage: StageSpec) -> str:
     """`check` -> handler; else observed -> derived; else `accept cmd` -> command; else error."""
     if stage.check is not None:
         return "handler"
-    if stage.observe or stage.match_output:
+    if stage.observe or stage.observe_bool or stage.match_output:
         return "derived"       # FS paths and/or `observe output` (command stdout)
     if stage.accept_cmds:
         return "command"       # accepted purely by a matching student command (no FS grading)
@@ -72,7 +72,8 @@ def _no_exclude(task: TaskCode) -> TaskCode:
         id=task.id,
         setup=task.setup,
         stages=tuple(
-            StageCode(commands=s.commands, observe=s.observe, exclude=(), message=s.message)
+            StageCode(commands=s.commands, observe=s.observe, observe_bool=s.observe_bool,
+                      exclude=(), message=s.message)
             for s in task.stages
         ),
     )

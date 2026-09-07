@@ -57,6 +57,7 @@ class _StageAcc:
     message: str
     solve: list[str] = field(default_factory=list)
     observe: list[str] = field(default_factory=list)
+    observe_bool: list[str] = field(default_factory=list)
     exclude: list[str] = field(default_factory=list)
     neutral: list[str] = field(default_factory=list)
     check: ExecAction | None = None
@@ -362,8 +363,12 @@ def _apply_accept(value: str, sacc: _StageAcc) -> None:
 
 
 def _apply_observe(value: str, sacc: _StageAcc) -> None:
-    """Apply `observe <path...>` / `observe output`: FS paths to snapshot, or grade on stdout."""
-    for tok in value.split():
+    """Apply `observe <path...>` / `observe output` / `observe bool <path...>`."""
+    toks = value.split()
+    if toks and toks[0] == "bool":
+        sacc.observe_bool.extend(toks[1:])   # existence/kind only -- no content compared
+        return
+    for tok in toks:
         if tok == "output":
             sacc.match_output = True   # grade on command stdout (fuzzy, `settings similarity`)
         else:
@@ -400,7 +405,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
     if not sacc.solve and not sacc.accept_cmds:
         msg = f"stage {sacc.message!r} has no 'solve' reference solution (nor an 'accept cmd')"
         raise ValueError(msg)
-    if sacc.variants and not (sacc.observe or sacc.match_output):
+    if sacc.variants and not (sacc.observe or sacc.observe_bool or sacc.match_output):
         # variants shape the DERIVED reference (the output/FS common to all solutions); they are
         # meaningless without an `observe`/`observe output` stage to derive.
         msg = f"stage {sacc.message!r} has 'variant' but no 'observe' to derive against"
@@ -412,6 +417,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         message=sacc.message,
         solve=tuple(sacc.solve),
         observe=tuple(sacc.observe),
+        observe_bool=tuple(sacc.observe_bool),
         exclude=tuple(sacc.exclude),
         neutral=tuple(sacc.neutral),
         check=sacc.check,

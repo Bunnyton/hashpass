@@ -25,6 +25,7 @@ def recipe_to_taskcode(recipe: Recipe) -> TaskCode:
             StageCode(
                 commands=s.solve,
                 observe=s.observe,
+                observe_bool=s.observe_bool,
                 exclude=s.exclude,
                 message=s.message,
             )

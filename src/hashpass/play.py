@@ -4,7 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hashpass.canon import FileState, Observation, capture
+from hashpass.canon import FileState, Observation
+from hashpass.canon.capture import read_state
 from hashpass.grade import grade_stage
 from hashpass.hints import StuckState, match_hint
 from hashpass.progress import TaskProgress, current_stage, mark_passed_local
@@ -26,11 +27,19 @@ def capture_candidate(rootfs: Path, checks: StageChecks, last_output: str) -> Ob
     """
     Rebuild a comparable candidate from the student's live rootfs + last command output.
 
-    Captures only the file-path keys of the canonical (OUTPUT_KEY excluded), then folds the
-    student's last stdout in under OUTPUT_KEY. `matches` reads only canonical keys.
+    Mirrors each canonical key exactly (no dir recursion): a content key (a real text file whose
+    reference has content) is read for content; every existence/kind-only key -- a directory, a
+    binary, or an `observe bool` path -- is captured as KIND ONLY (text=None), so it matches on
+    existence, not content. Then the student's last stdout folds in under OUTPUT_KEY.
     """
-    observe = [key for key in checks.canonical if key != OUTPUT_KEY]
-    candidate = capture(rootfs, observe)
+    rootfs = Path(rootfs)
+    candidate: Observation = {}
+    for key, want in checks.canonical.items():
+        if key == OUTPUT_KEY:
+            continue
+        state = read_state(rootfs / key)
+        content = want.kind == "file" and want.text is not None
+        candidate[key] = state if content else FileState(state.kind, None)
     candidate[OUTPUT_KEY] = FileState("file", last_output)
     return candidate
 

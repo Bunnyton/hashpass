@@ -10,6 +10,7 @@ class StageCode:
 
     commands: tuple[str, ...]
     observe: tuple[str, ...]
+    observe_bool: tuple[str, ...] = ()
     exclude: tuple[str, ...] = ()
     message: str = ""
 
@@ -43,6 +44,7 @@ def dump_task_code(task: TaskCode, path: Path) -> None:
         lines.append("[[stage]]")
         lines.append(f"commands = {toml_list(stage.commands)}")
         lines.append(f"observe = {toml_list(stage.observe)}")
+        lines.append(f"observe_bool = {toml_list(stage.observe_bool)}")
         lines.append(f"exclude = {toml_list(stage.exclude)}")
         lines.append(f"message = {toml_quote(stage.message)}")
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -55,6 +57,7 @@ def load_task_code(path: Path) -> TaskCode:
         StageCode(
             commands=tuple(s.get("commands", [])),
             observe=tuple(s.get("observe", [])),
+            observe_bool=tuple(s.get("observe_bool", [])),
             exclude=tuple(s.get("exclude", [])),
             message=s.get("message", ""),
         )
