@@ -1,0 +1,8 @@
+#!/bin/sh
+# $1 = the command the student just ran (the HP_* command channel for a file grader).
+# Accept (exit 0) iff they actually RAN `sl` -- base command is `sl` (bare or with args).
+# Shows how a grader can check a COMMAND was invoked, not just inspect the filesystem.
+case "$1" in
+  sl|"sl "*) exit 0 ;;
+esac
+exit 1

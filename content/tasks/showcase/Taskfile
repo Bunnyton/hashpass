@@ -51,24 +51,32 @@ stage "Напечатайте, сколько строк содержат ERROR 
   hint tries 2 say "Подсказка:  grep -c ERROR /var/log/app/service.log"
   hint output "0" say "Ноль? В журнале точно есть строки ERROR — присмотритесь к команде."
 
-# --- Задание 3: sudo + пакет, которого НЕТ в системе; принимает скрытый грейдер ---
-stage "Установите пакет sl (его нет в системе) через sudo и запустите поезд командой  sl"
+# --- Задание 3: sudo + пакет, которого НЕТ в системе; грейдер проверяет ПОЯВЛЕНИЕ бинаря ---
+stage "Установите пакет sl (его нет в системе) через sudo"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y sl >/dev/null 2>&1
+  # grade-sl: `command -v sl` — проверка, что БИНАРЬ появился
   check exec grade-sl
-  on enter say "Задание 3: пакета sl в системе нет. Установите его (sudo, пароль student) и запустите — sl."
+  on enter say "Задание 3: пакета sl в системе нет. Установите его (sudo, пароль student)."
   on enter exec intro2
-  hint idle 25 say "sudo apt-get install -y sl ; затем просто:  sl"
+  hint idle 25 say "sudo apt-get update ; sudo apt-get install -y sl"
 
-# --- Задание 4: скрытый грейдер в /hp судит ответ ---
+# --- Задание 4: проверяем, что команду ЗАПУСТИЛИ; грейдер смотрит саму команду студента ($1) ---
+stage "Запустите поезд командой  sl"
+  solve sl
+  # grade-sl-run: $1 — команда студента; засчитывается, когда это `sl`
+  check exec grade-sl-run
+  on enter say "Задание 4: теперь запустите — sl. Грейдер видит саму команду, а не только файлы."
+  hint idle 20 say "Просто наберите:  sl"
+
+# --- Задание 5: скрытый грейдер в /hp судит ответ ---
 stage "Создайте /home/student/secret с секретной фразой, которую ждёт скрытый грейдер"
   solve:
     echo open-sesame > /home/student/secret
   check exec grade
-  on enter say "Задание 4: в /hp живёт секретный грейдер. Угадайте его фразу."
+  on enter say "Задание 5: в /hp живёт секретный грейдер. Угадайте его фразу."
   on enter read clue3.md
-  on pass exec celebrate
 
 # --- ФИНАЛ: ASCII-арт из скрытого /hp; он и отмечает полный зачёт (обязательных фраз нет) ---
 exec finale
