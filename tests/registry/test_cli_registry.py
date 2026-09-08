@@ -60,7 +60,8 @@ def test_login_push_pull_through_localhost(registry, tmp_path, monkeypatch):
     _seed(local, tmp_path, "lab", ("base:1",), "L")
 
     monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
-    assert cli.cmd_login(env, registry.base_url, "dev") == 0
+    io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io) == 0
     assert env.creds.exists()                       # token cached
 
     assert cli.cmd_push(env, "lab:1", registry.base_url) == 0
@@ -93,7 +94,8 @@ def test_login_failure_returns_1(registry, tmp_path, monkeypatch):
     registry.users.add("dev", "s3cr3t")
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
     monkeypatch.setattr("getpass.getpass", lambda _p="": "wrong")
-    assert cli.cmd_login(env, registry.base_url, "dev") == 1
+    io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io) == 1
 
 
 @pytest.mark.tier2
@@ -106,8 +108,45 @@ def test_cmd_push_with_task_number_publishes_to_catalog(registry, tmp_path, monk
     tdir.mkdir()
     (tdir / "task-meta.json").write_text('{"image_ref":"lab:1"}', encoding="utf-8")
     monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
-    assert cli.cmd_login(env, registry.base_url, "dev") == 0
+    io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io) == 0
     assert cli.cmd_push(env, "lab:1", registry.base_url, task_number=2, title="Lab") == 0
     client = RemoteRegistry(registry.base_url)
     cat = client.catalog(token=client.login("dev", "s3cr3t"))
     assert [(e["number"], e["ref"], e["title"]) for e in cat] == [(2, "lab:1", "Lab")]
+
+
+@pytest.mark.tier2
+def test_pool_images_lists_stored_refs(registry, tmp_path):
+    registry.users.add("dev", "s3cr3t", role="author")
+    c = RemoteRegistry(registry.base_url)
+    tok = c.login("dev", "s3cr3t")
+    local = ImageStore(tmp_path / "loc")
+    _seed(local, tmp_path, "img", (), "I")
+    c.push(local, "img:1", token=tok)
+    rows = c.pool_images(token=tok)
+    assert {r["ref"] for r in rows} == {"img:1"}
+    assert rows[0]["kind"] == "image"
+
+
+@pytest.mark.tier2
+def test_cmd_push_prompts_login_when_no_token(registry, tmp_path, monkeypatch):
+    # no cached token -> cmd_push logs in inline (io supplies the login) instead of erroring
+    registry.users.add("dev", "s3cr3t", role="author")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    _seed(ImageStore(env.images), tmp_path, "img", (), "I")
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
+    io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_push(env, "img:1", registry.base_url, io=io) == 0
+    assert env.creds.exists()
+
+
+@pytest.mark.tier2
+def test_saved_registry_used_when_omitted(registry, tmp_path, monkeypatch):
+    registry.users.add("dev", "s3cr3t", role="author")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    _seed(ImageStore(env.images), tmp_path, "img", (), "I")
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
+    io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io) == 0     # saves the URL + token
+    assert cli.cmd_push(env, "img:1") == 0                    # registry omitted -> uses the saved one

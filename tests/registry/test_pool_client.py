@@ -73,7 +73,7 @@ def test_pull_new_fetches_catalog_tasks_and_is_idempotent(registry, tmp_path):
 
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud")}, default_home=tmp_path)
     sc = RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds))
-    stok = sc.register("stud", "pw", full_name="A", group="G")
+    stok = sc.register("stud", "pw", group="G")
 
     expected = 2
     layers, tasks = cli.pull_new(env, registry.base_url, stok)

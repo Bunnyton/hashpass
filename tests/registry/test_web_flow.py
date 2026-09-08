@@ -34,8 +34,8 @@ def _req(opener, method, url, *, cookie=None, data=None) -> tuple:
 
 @pytest.mark.tier2
 def test_login_sets_cookie_and_dashboard_lists_students(registry):
-    registry.users.add("teacher", "pw", role="admin", full_name="Teacher", group="")
-    registry.users.add("s1", "pw", role="student", full_name="Иван", group="ИУ7-31")
+    registry.users.add("teacher", "pw", role="admin", group="")
+    registry.users.add("s1", "pw", role="student", group="ИУ7-31", comment="Иван")
     opener = _opener()
 
     # anonymous dashboard -> redirect to login
@@ -58,7 +58,7 @@ def test_login_sets_cookie_and_dashboard_lists_students(registry):
 
 @pytest.mark.tier2
 def test_web_login_rejects_student(registry):
-    registry.users.add("s1", "pw", role="student", full_name="I", group="G")
+    registry.users.add("s1", "pw", role="student", group="G")
     status, _, body = _req(_opener(), "POST", f"{registry.base_url}/web/login",
                            data={"user": "s1", "password": "pw"})
     assert status == HTTPStatus.UNAUTHORIZED
@@ -79,7 +79,7 @@ def test_engine_install_requires_author(registry):
     status, headers, _ = _req(_opener(), "GET", f"{registry.base_url}/install-engine.sh")
     assert status == HTTPStatus.SEE_OTHER            # anonymous -> login
     assert headers["Location"] == "/web/login"
-    registry.users.add("admin", "pw", role="admin", full_name="A", group="")
+    registry.users.add("admin", "pw", role="admin", group="")
     opener = _opener()
     _, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
                          data={"user": "admin", "password": "pw"})
@@ -91,7 +91,7 @@ def test_engine_install_requires_author(registry):
 
 @pytest.mark.tier2
 def test_web_admin_can_toggle_registration(registry):
-    registry.users.add("admin", "pw", role="admin", full_name="A", group="")
+    registry.users.add("admin", "pw", role="admin", group="")
     opener = _opener()
     _, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
                          data={"user": "admin", "password": "pw"})

@@ -43,7 +43,7 @@ def _publish(registry, tmp_path) -> tuple:
 def test_submit_passed_records_progress_and_key(registry, tmp_path):
     td, _ = _publish(registry, tmp_path)
     sc = RemoteRegistry(registry.base_url)
-    stok = sc.register("stud", "pw", full_name="A", group="G")
+    stok = sc.register("stud", "pw", group="G")
     result = sc.submit("lab:1", task_digest(td), passed=True, token=stok)
     assert result["status"] == "passed"
     assert str(result["global_key"]).startswith("gkey{")
@@ -54,7 +54,7 @@ def test_submit_passed_records_progress_and_key(registry, tmp_path):
 def test_submit_digest_mismatch_fails_without_key(registry, tmp_path):
     _publish(registry, tmp_path)
     sc = RemoteRegistry(registry.base_url)
-    stok = sc.register("stud", "pw", full_name="A", group="G")
+    stok = sc.register("stud", "pw", group="G")
     result = sc.submit("lab:1", "deadbeef", passed=True, token=stok)
     assert result["status"] == "failed"
     assert result.get("reason") == "digest-mismatch"
@@ -65,7 +65,7 @@ def test_submit_digest_mismatch_fails_without_key(registry, tmp_path):
 @pytest.mark.tier2
 def test_submit_unknown_task_is_404(registry):
     sc = RemoteRegistry(registry.base_url)
-    stok = sc.register("stud", "pw", full_name="A", group="G")
+    stok = sc.register("stud", "pw", group="G")
     with pytest.raises(urllib.error.HTTPError) as exc:
         sc.submit("ghost:1", "d", passed=True, token=stok)
     assert exc.value.code == HTTPStatus.NOT_FOUND
@@ -75,9 +75,9 @@ def test_submit_unknown_task_is_404(registry):
 def test_progress_author_sees_all_student_sees_self(registry, tmp_path):
     td, atok = _publish(registry, tmp_path)
     s1 = RemoteRegistry(registry.base_url)
-    t1 = s1.register("s1", "pw", full_name="A", group="G")
+    t1 = s1.register("s1", "pw", group="G")
     s2 = RemoteRegistry(registry.base_url)
-    t2 = s2.register("s2", "pw", full_name="B", group="G")
+    t2 = s2.register("s2", "pw", group="G")
     s1.submit("lab:1", task_digest(td), passed=True, token=t1)
     s2.submit("lab:1", task_digest(td), passed=True, token=t2)
     assert set(s1.progress(token=t1)) == {"s1"}                 # student: only self
@@ -88,7 +88,7 @@ def test_progress_author_sees_all_student_sees_self(registry, tmp_path):
 def test_register_rejects_unsafe_username(registry):
     sc = RemoteRegistry(registry.base_url)
     with pytest.raises(urllib.error.HTTPError) as exc:
-        sc.register("../evil", "pw", full_name="A", group="G")
+        sc.register("../evil", "pw", group="G")
     assert exc.value.code == HTTPStatus.BAD_REQUEST
 
 
@@ -100,7 +100,7 @@ def test_cmd_pool_run_submits_on_completion(registry, tmp_path, monkeypatch):
     _publish(registry, tmp_path)
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud")}, default_home=tmp_path)
     RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds)).register(
-        "stud", "pw", full_name="A", group="G")
+        "stud", "pw", group="G")
 
     def fake_run(_env, _ref, _io, *, student_id, on_complete) -> int:  # noqa: ARG001
         on_complete(True)   # noqa: FBT003  (pretend every stage passed)

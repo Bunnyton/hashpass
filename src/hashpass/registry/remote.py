@@ -5,6 +5,8 @@ Point base_url at your pool (loopback in tests, or the self-hosted pool). It mus
 legacy server (no 185.x). Tokens are cached locally and reused until they expire.
 """
 import json
+import os
+import ssl
 import threading
 import urllib.error
 import urllib.parse
@@ -26,8 +28,19 @@ _ALLOWED_SCHEMES = ("http://", "https://")
 
 # The pool is reached directly (loopback in tests), so this client must NOT route through an
 # ambient HTTP(S)_PROXY -- a sandbox/corp proxy would intercept 127.0.0.1 and answer 500. An empty
-# ProxyHandler disables proxying for every request.
-_DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+# ProxyHandler disables proxying for every request. For an HTTPS pool: HASHPASS_TLS_CAFILE trusts a
+# CA (e.g. a self-signed cert), HASHPASS_TLS_INSECURE=1 skips verification entirely (self-signed dev).
+def _build_opener() -> urllib.request.OpenerDirector:
+    handlers: list[urllib.request.BaseHandler] = [urllib.request.ProxyHandler({})]
+    cafile = os.environ.get("HASHPASS_TLS_CAFILE")
+    if os.environ.get("HASHPASS_TLS_INSECURE"):
+        handlers.append(urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))  # noqa: S323, SLF001
+    elif cafile:
+        handlers.append(urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=cafile)))
+    return urllib.request.build_opener(*handlers)
+
+
+_DIRECT = _build_opener()
 
 
 @dataclass
@@ -88,12 +101,10 @@ class RemoteRegistry:
         self._cache_token(token)
         return token
 
-    def register(self, user: str, password: str, full_name: str, group: str,
-                 comment: str = "") -> str:
-        """Register a new student (ФИО + group required); cache and return the token."""
+    def register(self, user: str, password: str, group: str, comment: str = "") -> str:
+        """Register a new student (group required, comment free-form); cache and return the token."""
         token = str(self._post_json("/register", {
-            "user": user, "password": password, "full_name": full_name,
-            "group": group, "comment": comment})["token"])
+            "user": user, "password": password, "group": group, "comment": comment})["token"])
         self._cache_token(token)
         return token
 
@@ -183,6 +194,11 @@ class RemoteRegistry:
         """Return the ordered task catalog (requires a login token)."""
         result = self._get_json("/catalog", token=self._auth_token(token))
         return list(result.get("catalog", []))
+
+    def pool_images(self, *, token: str | None = None) -> list[dict[str, object]]:
+        """List images/tasks stored on the pool: each {ref, kind, number?} (requires a token)."""
+        result = self._get_json("/images", token=self._auth_token(token))
+        return list(result.get("images", []))
 
     def submit(self, task_ref: str, digest: str, *,
                passed: bool, token: str | None = None) -> dict[str, object]:

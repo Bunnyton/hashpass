@@ -25,6 +25,7 @@ from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime
+from http import HTTPStatus
 from pathlib import Path
 
 from hashpass.build import build, run_image
@@ -817,59 +818,155 @@ def _seed_admin(users: UserStore, io: Io) -> None:
     generated = admin_pw is None
     if generated:
         admin_pw = secrets.token_urlsafe(12)
-    users.add(admin_user, admin_pw, role="admin", full_name="Administrator")
+    users.add(admin_user, admin_pw, role="admin", comment="pool administrator")
     io.write(f"\x1b[36m✓ создан администратор пула: {admin_user}\x1b[0m\n")
     if generated:
         io.write(f"\x1b[33m  пароль (сохраните — покажется один раз): {admin_pw}\x1b[0m\n")
 
 
-def cmd_serve(env: Home, host: str | None = None, port: int | None = None) -> int:
+def _local_ips() -> list[str]:
+    """Best-effort non-loopback IPv4 addresses of this host (for the 0.0.0.0 entry hint)."""
+    ips: set[str] = set()
+    with contextlib.suppress(OSError):
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    with contextlib.suppress(OSError):
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.connect(("8.8.8.8", 80))   # sends nothing; just picks the outbound interface
+            ips.add(probe.getsockname()[0])
+        finally:
+            probe.close()
+    return sorted(ip for ip in ips if not ip.startswith("127."))
+
+
+def _resolve_tls(env: Home, certfile: str | None, keyfile: str | None,
+                 *, self_signed: bool) -> tuple[Path | None, Path | None]:
+    """Return (cert, key) for HTTPS: explicit pair, else a self-signed one (openssl), else (None, None)."""
+    if certfile and keyfile:
+        return Path(certfile), Path(keyfile)
+    if not self_signed:
+        return None, None
+    tls_dir = env.registry / "tls"
+    cert, key = tls_dir / "cert.pem", tls_dir / "key.pem"
+    if not (cert.exists() and key.exists()):
+        tls_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            subprocess.run(   # fixed args; one-time self-signed cert
+                ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(key),
+                 "-out", str(cert), "-days", "3650", "-subj", "/CN=hashpass"],
+                check=True, capture_output=True)
+        except FileNotFoundError as exc:
+            msg = "для --tls-self-signed нужен openssl (или задайте --tls-cert/--tls-key)"
+            raise RuntimeError(msg) from exc
+    return cert, key
+
+
+def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  # noqa: PLR0913
+              certfile: str | None = None, keyfile: str | None = None,
+              self_signed: bool = False) -> int:
     """
     Run the pool (registry + web); bind the port before seeding an admin.
 
     A busy port then fails cleanly without leaving a spurious admin. Host/port come from the args,
-    else $HASHPASS_REGISTRY, else 127.0.0.1:8080 (use --host 0.0.0.0 to expose the pool).
+    else $HASHPASS_REGISTRY, else 127.0.0.1:8080 (use --host 0.0.0.0 to expose the pool). With
+    --tls-cert/--tls-key or --tls-self-signed the pool speaks HTTPS.
     """
     default_host, default_port = _registry_host_port(_local_registry_url())
     bind_host = host if host is not None else default_host
     bind_port = port if port is not None else default_port
+    cert, key = _resolve_tls(env, certfile, keyfile, self_signed=self_signed)
     store = ImageStore(env.registry / "store")
     users = UserStore(env.registry / "users.json")
     config_path = env.registry / "config.json"
     server = make_server(store, users, _registry_secret(env), host=bind_host, port=bind_port,
                          config=load_config(config_path), config_path=config_path,
                          catalog_path=env.registry / "catalog.json",
-                         progress_path=env.registry / "progress")   # binds now; a busy port raises here
+                         progress_path=env.registry / "progress",
+                         certfile=cert, keyfile=key)   # binds now; a busy port raises here
     _seed_admin(users, _default_io())   # only after the port bound successfully
+    scheme = "https" if cert is not None else "http"
     bound_host, bound_port = server.server_address
-    sys.stdout.write(f"пул на http://{bound_host}:{bound_port} (Ctrl-C — остановить)\n")
+    if bound_host in ("0.0.0.0", "::"):   # noqa: S104  (operator explicitly exposed the pool)
+        sys.stdout.write(f"пул слушает все интерфейсы ({scheme}, порт {bound_port}). Входы:\n")
+        sys.stdout.write(f"  {scheme}://127.0.0.1:{bound_port}   (локально)\n")
+        for ip in _local_ips():
+            sys.stdout.write(f"  {scheme}://{ip}:{bound_port}\n")
+        sys.stdout.write("Ctrl-C — остановить\n")
+    else:
+        sys.stdout.write(f"пул на {scheme}://{bound_host}:{bound_port} (Ctrl-C — остановить)\n")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         sys.stdout.write("\nостановлен\n")
+    finally:
+        server.server_close()   # release the listening socket promptly on exit
     return 0
 
 
-def cmd_login(env: Home, registry: str, user: str | None) -> int:
-    """Prompt for credentials, authenticate to a registry, and cache the returned token."""
-    user = user or input("Username: ")
-    password = getpass.getpass("Password: ")
-    cache = CredentialCache(env.creds)
+def _prompt_registry(env: Home, registry: str | None, io: Io) -> str:
+    """Resolve the registry URL: explicit arg → saved (pool.json/$HASHPASS_POOL) → prompt once."""
+    url = _pool_url(env, registry) or (io.read("Адрес реестра/пула (URL): ") or "").strip()
+    if not url:
+        msg = "не задан адрес реестра (укажите URL или задайте один раз через login)"
+        raise RuntimeError(msg)
+    return url
+
+
+def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
+    """Resolve the registry and ensure a cached token, prompting for login inline if there is none."""
+    url = _prompt_registry(env, registry, io)
+    if _pool_token(env, url) is None:
+        user = (io.read("логин: ") or "").strip()
+        if not user:
+            msg = "логин обязателен"
+            raise RuntimeError(msg)
+        try:
+            RemoteRegistry(url, cache=CredentialCache(env.creds)).login(user, getpass.getpass("пароль: "))
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.UNAUTHORIZED:
+                msg = "неверный логин или пароль"
+                raise RuntimeError(msg) from exc
+            raise
+        save_pool(env, url, user)
+        io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
+    return url
+
+
+def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> int:
+    """Log in to a registry/pool: prompts login + password inline; caches the token, saves the URL."""
+    io = io or _default_io()
+    url = _prompt_registry(env, registry, io)
+    user = (io.read("логин: ") or "").strip()
+    if not user:
+        msg = "логин обязателен"
+        raise RuntimeError(msg)
     try:
-        RemoteRegistry(registry, cache=cache).login(user, password)
+        RemoteRegistry(url, cache=CredentialCache(env.creds)).login(user, getpass.getpass("пароль: "))
+    except urllib.error.HTTPError as exc:
+        if exc.code == HTTPStatus.UNAUTHORIZED:
+            io.write("неверный логин или пароль\n")
+            return 1
+        raise
     except urllib.error.URLError as exc:
-        sys.stdout.write(f"login failed: {exc}\n")
+        io.write(f"вход не выполнен: {exc}\n")
         return 1
-    sys.stdout.write(f"login succeeded — token cached for {registry}\n")
+    save_pool(env, url, user)
+    io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
     return 0
 
 
-def cmd_push(env: Home, ref: str, registry: str, *,
-             task_number: int | None = None, title: str = "") -> int:
-    """Push a ref (+ its `from` closure) to a registry; with a task number, publish it at that slot."""
+def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR0913
+             task_number: int | None = None, title: str = "", io: Io | None = None) -> int:
+    """
+    Push a ref (+ its `from` closure); with a task number, publish it at that catalog slot.
+
+    Resolves the registry (explicit → saved) and logs in inline if there is no cached token.
+    """
+    io = io or _default_io()
+    url = _ensure_registry_login(env, registry, io)
     store = ImageStore(env.images)
-    cache = CredentialCache(env.creds)
-    client = RemoteRegistry(registry, cache=cache)
+    client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     copied = client.push(store, ref)
     sys.stdout.write(f"pushed {ref} ({len(copied)} layer(s))\n")
     if task_number is not None:
@@ -883,11 +980,25 @@ def cmd_push(env: Home, ref: str, registry: str, *,
     return 0
 
 
-def cmd_pull(env: Home, ref: str, registry: str) -> int:
-    """Pull a ref and its `from` closure from a registry (anonymous)."""
+def cmd_pull(env: Home, ref: str, registry: str | None = None, io: Io | None = None) -> int:
+    """Pull a ref and its `from` closure from a registry (anonymous); registry saved/optional."""
+    io = io or _default_io()
+    url = _prompt_registry(env, registry, io)
     store = ImageStore(env.images)
-    copied = RemoteRegistry(registry).pull(ref, store)
+    copied = RemoteRegistry(url).pull(ref, store)
     sys.stdout.write(f"pulled {ref} ({len(copied)} layer(s))\n")
+    return 0
+
+
+def cmd_remote_images(env: Home, registry: str | None = None, io: Io | None = None) -> int:
+    """List the images/tasks the pool holds (ref, kind, catalog number); registry saved/optional."""
+    io = io or _default_io()
+    url = _ensure_registry_login(env, registry, io)
+    rows = RemoteRegistry(url, cache=CredentialCache(env.creds)).pool_images()
+    lines = [f"{'REF':<30}{_COL_GAP}{'KIND':<6}{_COL_GAP}#"]
+    lines += [f"{r['ref']!s:<30}{_COL_GAP}{r['kind']!s:<6}{_COL_GAP}"
+              f"{r['number'] if r.get('number') is not None else ''}" for r in rows]
+    sys.stdout.write("\n".join(lines) + "\n")
     return 0
 
 
@@ -924,21 +1035,33 @@ def _pool_token(env: Home, url: str) -> str | None:
     return CredentialCache(env.creds).cached_token(url, now=time.time())
 
 
+def _prompt_new_password(io: Io) -> str:
+    """Prompt for a new password twice, looping until the two entries match."""
+    while True:
+        pw = getpass.getpass("пароль: ")
+        if not pw:
+            io.write("пароль не может быть пустым\n")
+            continue
+        if getpass.getpass("повторите пароль: ") == pw:
+            return pw
+        io.write("пароли не совпадают, попробуйте снова\n")
+
+
 def cmd_register(env: Home, pool_url: str | None = None, io: Io | None = None) -> int:
-    """Register on the pool (ФИО + group required); cache the token and save the pool config."""
+    """Register on the pool (group required; comment free-form); cache the token and save pool config."""
     io = io or _default_io()
     url = _pool_url(env, pool_url) or (io.read("Адрес пула (URL): ") or "").strip()
     if not url:
         msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
         raise RuntimeError(msg)
     user = (io.read("логин: ") or "").strip()
-    full_name = (io.read("ФИО: ") or "").strip()
     group = (io.read("группа (например ИУ7-31): ") or "").strip()
-    if not user or not full_name or not group:
-        msg = "логин, ФИО и группа обязательны для регистрации"
+    comment = (io.read("комментарий (необязательно): ") or "").strip()
+    if not user or not group:
+        msg = "логин и группа обязательны для регистрации"
         raise RuntimeError(msg)
-    password = getpass.getpass("пароль: ")
-    RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, full_name, group)
+    password = _prompt_new_password(io)
+    RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, group, comment)
     save_pool(env, url, user)
     io.write(f"\x1b[32m✓ регистрация выполнена\x1b[0m: {user}\n")
     return 0
@@ -963,23 +1086,61 @@ def cmd_pool_login(env: Home, pool_url: str | None = None, io: Io | None = None)
     return 0
 
 
+def _register_interactive(client: RemoteRegistry, user: str, io: Io) -> None:
+    """Offer registration after a failed login: group + optional comment + confirmed password."""
+    io.write(f"Пользователь «{user}» не найден или пароль неверный.\n")
+    ans = (io.read("Зарегистрироваться с этим логином? [Enter — да, n — нет]: ") or "").strip().lower()
+    if ans in ("n", "no", "нет"):
+        msg = "вход отменён"
+        raise RuntimeError(msg)
+    group = (io.read("группа (например ИУ7-31): ") or "").strip()
+    comment = (io.read("комментарий (необязательно): ") or "").strip()
+    if not group:
+        msg = "группа обязательна для регистрации"
+        raise RuntimeError(msg)
+    password = _prompt_new_password(io)
+    try:
+        client.register(user, password, group, comment)
+    except urllib.error.HTTPError as exc:
+        if exc.code == HTTPStatus.CONFLICT:
+            msg = f"логин «{user}» уже занят — вход не удался из-за неверного пароля"
+            raise RuntimeError(msg) from exc
+        if exc.code == HTTPStatus.FORBIDDEN:
+            msg = "регистрация на пуле закрыта — обратитесь к преподавателю"
+            raise RuntimeError(msg) from exc
+        raise
+    io.write(f"\x1b[32m✓ регистрация выполнена\x1b[0m: {user}\n")
+
+
 def _require_pool_identity(env: Home, io: Io) -> tuple[str, str]:
-    """Return (url, user) for the pool, prompting for registration/login on first run."""
+    """
+    Return (url, user) for the pool.
+
+    With a valid cached token, returns it silently. Otherwise asks for a login + password directly;
+    if that login fails, offers registration in place (group + optional comment, password confirmed).
+    """
     url = _pool_url(env)
     if url and (token := _pool_token(env, url)) and (user := token_user(token)):
         return url, user
-    io.write("Вы ещё не вошли в пул.\n")
-    choice = (io.read("Регистрация (r) или вход (l)? [r]: ") or "r").strip().lower()
-    if choice.startswith("l"):
-        cmd_pool_login(env, url, io)
-    else:
-        cmd_register(env, url, io)
-    url = _pool_url(env)
-    token = _pool_token(env, url) if url else None
-    user = token_user(token) if token else None
-    if not url or not user:
-        msg = "не удалось войти в пул"
+    if not url:
+        url = (io.read("Адрес пула (URL): ") or "").strip()
+        if not url:
+            msg = "не задан адрес пула (HASHPASS_POOL)"
+            raise RuntimeError(msg)
+    user = (io.read("логин: ") or "").strip()
+    if not user:
+        msg = "логин обязателен"
         raise RuntimeError(msg)
+    client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+    try:
+        client.login(user, getpass.getpass("пароль: "))
+    except urllib.error.HTTPError as exc:
+        if exc.code != HTTPStatus.UNAUTHORIZED:
+            raise
+        _register_interactive(client, user, io)   # unknown login / bad password -> offer sign-up
+    else:
+        io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
+    save_pool(env, url, user)
     return url, user
 
 

@@ -223,10 +223,13 @@ def test_engine_parser_args():
     assert p.parse_args(["build", "T", "-t", "n:1"]).tag == "n:1"
     assert p.parse_args(["build", "T"]).tag is None
     assert p.parse_args(["images"]).command == "images"
-    a = p.parse_args(["login", "http://h", "-u", "alice"])
-    assert (a.registry, a.user) == ("http://h", "alice")
+    assert p.parse_args(["login", "http://h"]).registry == "http://h"
+    assert p.parse_args(["login"]).registry is None      # registry optional (uses the saved one)
+    assert p.parse_args(["remote"]).command == "remote"
+    assert p.parse_args(["pull", "x:1"]).ref == "x:1"
     a = p.parse_args(["push", "x:1", "http://h"])
     assert (a.ref, a.registry) == ("x:1", "http://h")
+    assert p.parse_args(["push", "x:1"]).registry is None
     serve_port = 9000
     s = p.parse_args(["serve", "--host", "0.0.0.0", "--port", str(serve_port)])  # noqa: S104
     assert (s.host, s.port) == ("0.0.0.0", serve_port)  # noqa: S104

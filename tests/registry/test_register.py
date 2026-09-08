@@ -10,30 +10,30 @@ from hashpass.registry.remote import RemoteRegistry
 @pytest.mark.tier2
 def test_register_creates_student_and_me(registry):
     c = RemoteRegistry(registry.base_url)
-    token = c.register("stud", "pw", full_name="Иван Петров", group="ИУ7-31", comment="hi")
+    token = c.register("stud", "pw", group="ИУ7-31", comment="hi")
     assert token
     assert registry.users.role("stud") == "student"
     me = c.me(token=token)
     assert me["user"] == "stud"
     assert me["role"] == "student"
-    assert me["full_name"] == "Иван Петров"
     assert me["group"] == "ИУ7-31"
+    assert me["comment"] == "hi"
 
 
 @pytest.mark.tier2
-def test_register_requires_full_name_and_group(registry):
+def test_register_requires_group(registry):
     c = RemoteRegistry(registry.base_url)
     with pytest.raises(urllib.error.HTTPError) as exc:
-        c.register("s2", "pw", full_name="", group="ИУ7")
+        c.register("s2", "pw", group="")
     assert exc.value.code == HTTPStatus.BAD_REQUEST
 
 
 @pytest.mark.tier2
 def test_register_duplicate_conflicts(registry):
     c = RemoteRegistry(registry.base_url)
-    c.register("dup", "pw", full_name="A", group="G")
+    c.register("dup", "pw", group="G")
     with pytest.raises(urllib.error.HTTPError) as exc:
-        c.register("dup", "pw2", full_name="A", group="G")
+        c.register("dup", "pw2", group="G")
     assert exc.value.code == HTTPStatus.CONFLICT
 
 
@@ -44,7 +44,7 @@ def test_register_closed_is_forbidden(registry):
     admin_token = c.login("admin", "pw")
     c.set_registration(open_=False, token=admin_token)
     with pytest.raises(urllib.error.HTTPError) as exc:
-        c.register("late", "pw", full_name="A", group="G")
+        c.register("late", "pw", group="G")
     assert exc.value.code == HTTPStatus.FORBIDDEN
 
 
@@ -61,12 +61,12 @@ def test_admin_endpoints_are_role_gated(registry):
     c = RemoteRegistry(registry.base_url)
     registry.users.add("admin", "pw", role="admin")
     admin_token = c.login("admin", "pw")
-    c.register("st", "pw", full_name="A", group="G")
+    c.register("st", "pw", group="G")
     # admin can grant a role
     c.set_role("st", "author", token=admin_token)
     assert registry.users.role("st") == "author"
     # a non-admin (student) token -> 403
-    student_token = c.register("st2", "pw", full_name="B", group="G")
+    student_token = c.register("st2", "pw", group="G")
     with pytest.raises(urllib.error.HTTPError) as exc:
         c.set_registration(open_=False, token=student_token)
     assert exc.value.code == HTTPStatus.FORBIDDEN

@@ -8,6 +8,7 @@ at or used to touch the legacy server (no 185.x).
 """
 import json
 import re
+import ssl
 import tarfile
 import time
 from http import HTTPStatus
@@ -29,6 +30,7 @@ from hashpass.registry.web import (
     render_dashboard,
     render_engine_install_script,
     render_front,
+    render_images,
     render_install_script,
     render_login,
     render_users,
@@ -38,9 +40,9 @@ from hashpass.taskdigest import task_digest
 _BEARER = "Bearer "
 _MIN_IMAGE_PARTS = 3  # /<kind>/<name.../>/<version>: kind + >=1 name segment + version
 _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
-_REQUIRED_PROFILE = ("full_name", "group")  # mandatory at registration (ФИО + учебная группа)
 _USER_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # safe as a login + a per-user progress filename
 _AUTHOR_ROLES = ("author", "admin")
+_MAX_COMMENT = 500
 
 
 def _now() -> str:
@@ -50,6 +52,9 @@ def _now() -> str:
 
 class RegistryServer(ThreadingHTTPServer):
     """A pool registry server holding the HMAC secret, user store, and runtime config."""
+
+    daemon_threads = True         # worker threads never block process exit (clean Ctrl-C)
+    allow_reuse_address = True    # rebind the port immediately after a restart
 
     def __init__(self, address: tuple[str, int], *, store: ImageStore,  # noqa: PLR0913
                  users: UserStore, secret: bytes, config: ServerConfig | None = None,
@@ -185,15 +190,15 @@ class _Handler(BaseHTTPRequestHandler):
             return
         user = str(data.get("user", "")).strip()
         password = str(data.get("password", ""))
-        profile = {field: str(data.get(field, "")).strip() for field in _REQUIRED_PROFILE}
-        if not _USER_RE.match(user) or not password or not all(profile.values()):
-            self._empty(HTTPStatus.BAD_REQUEST)  # safe login + password + ФИО + группа are mandatory
+        group = str(data.get("group", "")).strip()
+        comment = str(data.get("comment", "")).strip()[:_MAX_COMMENT]
+        if not _USER_RE.match(user) or not password or not group:
+            self._empty(HTTPStatus.BAD_REQUEST)  # safe login + password + group are mandatory
             return
         if self.server.users.has(user):
             self._empty(HTTPStatus.CONFLICT)
             return
-        self.server.users.add(user, password, role="student", comment=str(data.get("comment", "")),
-                              **profile)
+        self.server.users.add(user, password, role="student", group=group, comment=comment)
         self._json(HTTPStatus.CREATED,
                    {"token": issue_token(self.server.secret, user, now=time.time())})
 
@@ -256,6 +261,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == "/progress":
             self._progress()
+            return
+        if path == "/images":
+            self._images()
             return
         parts = path.strip("/").split("/")
         if len(parts) >= _MIN_IMAGE_PARTS and parts[0] == "closure":
@@ -320,6 +328,21 @@ class _Handler(BaseHTTPRequestHandler):
         payload = store.all() if self.server.users.role(user) in _AUTHOR_ROLES else {user: store.get(user)}
         self._json(HTTPStatus.OK, {"progress": payload})
 
+    def _pool_image_rows(self) -> list[dict[str, object]]:
+        catalog_no = {e.ref: e.number for e in self.server.catalog().entries()}
+        rows: list[dict[str, object]] = []
+        for ref in self.server.store.list():
+            is_task = (self.server.store.get(ref).layer.parent / "task").exists()
+            rows.append({"ref": ref, "kind": "task" if is_task else "image",
+                         "number": catalog_no.get(ref)})
+        return rows
+
+    def _images(self) -> None:
+        if self._token_user() is None:
+            self._empty(HTTPStatus.UNAUTHORIZED)
+            return
+        self._json(HTTPStatus.OK, {"images": self._pool_image_rows()})
+
     # -- web dashboard (server-rendered HTML, cookie session) --------------
 
     def _html(self, status: HTTPStatus, body: str, *, cookie: str | None = None) -> None:
@@ -382,6 +405,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_dashboard()
         elif path == "/web/users":
             self._web_users()
+        elif path == "/web/images":
+            self._web_images()
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -402,6 +427,12 @@ class _Handler(BaseHTTPRequestHandler):
         self._html(HTTPStatus.OK, render_users(
             self.server.users.all_users(),
             registration_open=self.server.config.registration_open))
+
+    def _web_images(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        self._html(HTTPStatus.OK, render_images(self._pool_image_rows()))
 
     def _web_login(self) -> None:
         form = self._form()
@@ -521,8 +552,18 @@ def make_server(store: ImageStore, users: UserStore, secret: bytes, *,  # noqa: 
                 config: ServerConfig | None = None,
                 config_path: Path | None = None,
                 catalog_path: Path | None = None,
-                progress_path: Path | None = None) -> RegistryServer:
-    """Create a pool registry server (port 0 = ephemeral). Default host is loopback."""
-    return RegistryServer((host, port), store=store, users=users, secret=secret,
-                          config=config, config_path=config_path, catalog_path=catalog_path,
-                          progress_path=progress_path)
+                progress_path: Path | None = None,
+                certfile: Path | None = None, keyfile: Path | None = None) -> RegistryServer:
+    """
+    Create a pool registry server (port 0 = ephemeral). Default host is loopback.
+
+    With `certfile`+`keyfile`, the listening socket is TLS-wrapped (HTTPS) via stdlib `ssl`.
+    """
+    server = RegistryServer((host, port), store=store, users=users, secret=secret,
+                            config=config, config_path=config_path, catalog_path=catalog_path,
+                            progress_path=progress_path)
+    if certfile is not None and keyfile is not None:
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(str(certfile), str(keyfile))
+        server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    return server

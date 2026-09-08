@@ -65,7 +65,8 @@ th,td{border-color:#30363d} .pill{background:#30363d}}
 
 def _page(title: str, body: str, *, nav: bool = True) -> str:
     header = ("<header><span class='brand'>hashpass</span>"
-              "<a href='/web'>Прогресс</a><a href='/web/users'>Пользователи</a>"
+              "<a href='/web'>Прогресс</a><a href='/web/images'>Образы</a>"
+              "<a href='/web/users'>Пользователи</a>"
               "<a href='/web/logout'>Выход</a></header>") if nav else ""
     return (f"<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
             f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -104,7 +105,7 @@ def _cell(status: str | None) -> str:
 
 def render_dashboard(profiles: list[dict], entries: list[dict],
                      progress: dict[str, dict], *, group: str | None = None) -> str:
-    """Progress matrix: students (ФИО/group) × task numbers, each cell passed/failed/none."""
+    """Progress matrix: students (login + group, comment on hover) × task numbers, cells passed/failed."""
     students = [p for p in profiles if p.get("role") == "student"]
     groups = sorted({str(p.get("group", "")) for p in students if p.get("group")})
     if group:
@@ -119,12 +120,24 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
         done = progress.get(user, {})
         cells = "".join(_cell((done.get(str(e["ref"])) or {}).get("status")) for e in entries)
         passed = sum(1 for e in entries if (done.get(str(e["ref"])) or {}).get("status") == "passed")
-        rows.append(f"<tr><td>{escape(str(p.get('full_name') or user))}</td>"
+        rows.append(f"<tr><td title='{escape(str(p.get('comment', '')))}'>{escape(user)}</td>"
                     f"<td>{escape(str(p.get('group', '')))}</td>"
                     f"<td class='c'>{passed}/{len(entries)}</td>{cells}</tr>")
-    table = (f"<table><tr><th>Студент</th><th>Группа</th><th>Σ</th>{head}</tr>"
+    table = (f"<table><tr><th>Логин</th><th>Группа</th><th>Σ</th>{head}</tr>"
              f"{''.join(rows) or '<tr><td colspan=99>нет студентов</td></tr>'}</table>")
     return _page("Прогресс — hashpass", f"<h1>Прогресс студентов</h1>{picker}{table}")
+
+
+def render_images(images: list[dict]) -> str:
+    """List the images/tasks the pool holds (ref, kind, catalog number for tasks)."""
+    rows = "".join(
+        f"<tr><td>{escape(str(i['ref']))}</td><td>{escape(str(i['kind']))}</td>"
+        f"<td class='c'>{i['number'] if i.get('number') is not None else ''}</td></tr>"
+        for i in images)
+    body = ("<h1>Образы и задания пула</h1>"
+            "<table><tr><th>Ref</th><th>Тип</th><th>№ задания</th></tr>"
+            f"{rows or '<tr><td colspan=3>пусто</td></tr>'}</table>")
+    return _page("Образы — hashpass", body)
 
 
 def render_users(profiles: list[dict], *, registration_open: bool) -> str:
@@ -133,9 +146,9 @@ def render_users(profiles: list[dict], *, registration_open: bool) -> str:
     toggle_to = "false" if registration_open else "true"
     toggle_label = "Закрыть регистрацию" if registration_open else "Открыть регистрацию"
     rows = "".join(
-        f"<tr><td>{escape(str(p['user']))}</td><td>{escape(str(p.get('full_name', '')))}</td>"
-        f"<td>{escape(str(p.get('group', '')))}</td><td><span class='pill'>{escape(str(p['role']))}"
-        f"</span></td><td>{escape(str(p.get('comment', '')))}</td></tr>" for p in profiles)
+        f"<tr><td>{escape(str(p['user']))}</td><td>{escape(str(p.get('group', '')))}</td>"
+        f"<td><span class='pill'>{escape(str(p['role']))}</span></td>"
+        f"<td>{escape(str(p.get('comment', '')))}</td></tr>" for p in profiles)
     body = (f"<h1>Пользователи</h1>"
             f"<div class='card'><p>Регистрация: <b>{reg}</b></p>"
             f"<form method='post' action='/web/users/registration'>"
@@ -146,6 +159,6 @@ def render_users(profiles: list[dict], *, registration_open: bool) -> str:
             f"<label>Логин<input name='user'></label>"
             f"<label>Роль<select name='role'><option>student</option><option>author</option>"
             f"<option>admin</option></select></label><button type='submit'>Применить</button></form>"
-            f"<h2>Все пользователи</h2><table><tr><th>Логин</th><th>ФИО</th><th>Группа</th>"
+            f"<h2>Все пользователи</h2><table><tr><th>Логин</th><th>Группа</th>"
             f"<th>Роль</th><th>Комментарий</th></tr>{rows}</table>")
     return _page("Пользователи — hashpass", body)

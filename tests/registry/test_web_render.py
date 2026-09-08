@@ -31,9 +31,9 @@ def test_login_form_and_error():
 @pytest.mark.tier1
 def test_dashboard_rows_cells_and_group_filter():
     profiles = [
-        {"user": "s1", "role": "student", "full_name": "Иван", "group": "ИУ7-31", "comment": ""},
-        {"user": "s2", "role": "student", "full_name": "Пётр", "group": "ИУ7-32", "comment": ""},
-        {"user": "adm", "role": "admin", "full_name": "Админ", "group": "", "comment": ""},
+        {"user": "s1", "role": "student", "group": "ИУ7-31", "comment": "Иван"},
+        {"user": "s2", "role": "student", "group": "ИУ7-32", "comment": "Пётр"},
+        {"user": "adm", "role": "admin", "group": "", "comment": "Админ"},
     ]
     entries = [{"number": 1, "ref": "lab:1", "title": "T1"},
                {"number": 2, "ref": "lab:2", "title": "T2"}]
@@ -51,7 +51,7 @@ def test_dashboard_rows_cells_and_group_filter():
 
 @pytest.mark.tier1
 def test_users_toggle_label_flips():
-    profiles = [{"user": "a", "role": "admin", "full_name": "Adm", "group": "", "comment": "c"}]
+    profiles = [{"user": "a", "role": "admin", "group": "", "comment": "c"}]
     assert "Закрыть регистрацию" in render_users(profiles, registration_open=True)
     assert "Открыть регистрацию" in render_users(profiles, registration_open=False)
 

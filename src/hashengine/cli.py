@@ -27,9 +27,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_build = sub.add_parser("build", help="build an image/task from a Taskfile")
     p_build.add_argument("taskfile")
     p_build.add_argument("-t", "--tag", help="name[:version] (overrides the Taskfile's image line)")
-    p_push = sub.add_parser("push", help="push an image/task to a registry")
+    p_push = sub.add_parser("push", help="push an image/task to the registry")
     p_push.add_argument("ref")
-    p_push.add_argument("registry")
+    p_push.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
     p_push.add_argument("--task", type=int, metavar="N",
                         help="publish this task at catalog slot N")
     p_push.add_argument("--title", default="", help="task title shown in the catalog")
@@ -37,14 +37,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--host", help="bind address (default 127.0.0.1 or $HASHPASS_REGISTRY; "
                          "use 0.0.0.0 to expose the pool)")
     p_serve.add_argument("--port", type=int, help="bind port (default 8080 or $HASHPASS_REGISTRY)")
-    p_login = sub.add_parser("login", help="log in to a registry (caches a token)")
-    p_login.add_argument("registry")
-    p_login.add_argument("-u", "--user")
-    sub.add_parser("images", help="list built images and tasks")
+    p_serve.add_argument("--tls-cert", help="TLS certificate (PEM) → serve HTTPS")
+    p_serve.add_argument("--tls-key", help="TLS private key (PEM), with --tls-cert")
+    p_serve.add_argument("--tls-self-signed", action="store_true",
+                         help="generate + use a self-signed cert (needs openssl)")
+    p_login = sub.add_parser("login", help="log in to the registry (prompts login + password)")
+    p_login.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
+    p_pull = sub.add_parser("pull", help="pull an image/task from the registry")
+    p_pull.add_argument("ref")
+    p_pull.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
+    sub.add_parser("images", help="list locally built images and tasks")
+    p_remote = sub.add_parser("remote", help="list images/tasks stored on the pool")
+    p_remote.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
     return parser
 
 
-def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:
+def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
     """Route a parsed engine sub-command (no sub-command prints help)."""
     command = args.command
     if command is None:
@@ -55,9 +63,14 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:
     if command == "push":
         return cli.cmd_push(env, args.ref, args.registry, task_number=args.task, title=args.title)
     if command == "serve":
-        return cli.cmd_serve(env, args.host, args.port)
+        return cli.cmd_serve(env, args.host, args.port, certfile=args.tls_cert,
+                             keyfile=args.tls_key, self_signed=args.tls_self_signed)
     if command == "login":
-        return cli.cmd_login(env, args.registry, args.user)
+        return cli.cmd_login(env, args.registry)
+    if command == "pull":
+        return cli.cmd_pull(env, args.ref, args.registry)
+    if command == "remote":
+        return cli.cmd_remote_images(env, args.registry)
     return cli.cmd_images(env)
 
 

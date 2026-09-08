@@ -47,24 +47,28 @@ def _decoy_record() -> str:
     return hash_password("\x00decoy\x00")
 
 
-def _record(pw_hash: str, role: str, full_name: str, group: str,  # noqa: PLR0913, PLR0917
-            comment: str, created_at: float) -> dict[str, object]:
-    return {"pw": pw_hash, "role": role, "full_name": full_name,
-            "group": group, "comment": comment, "created_at": created_at}
+def _record(pw_hash: str, role: str, group: str, comment: str,
+            created_at: float) -> dict[str, object]:
+    return {"pw": pw_hash, "role": role, "group": group,
+            "comment": comment, "created_at": created_at}
 
 
 def _normalize(value: object) -> dict[str, object]:
-    """Coerce a stored value (legacy bare-string hash, or a record dict) into a full record."""
+    """Coerce a stored value (legacy bare-string hash, or a record dict) into a current record."""
     if isinstance(value, str):
-        return _record(value, "student", "", "", "", 0.0)
-    v = value if isinstance(value, dict) else {}
+        return _record(value, "student", "", "", 0.0)
+    v = value if isinstance(value, dict) else {}   # older records may carry a dropped full_name
     return _record(str(v.get("pw", "")), str(v.get("role", "student")),
-                   str(v.get("full_name", "")), str(v.get("group", "")),
-                   str(v.get("comment", "")), float(v.get("created_at", 0.0)))
+                   str(v.get("group", "")), str(v.get("comment", "")),
+                   float(v.get("created_at", 0.0)))
 
 
 class UserStore:
-    """User -> {pw, role, full_name, group, comment, created_at}, persisted as JSON (chmod 0600)."""
+    """
+    User -> {pw, role, group, comment, created_at}, persisted as JSON (chmod 0600).
+
+    `group` is structured (for the dashboard filter); `comment` is free-form (the pool's policy).
+    """
 
     def __init__(self, path: Path) -> None:
         """Open (creating on write) the user store at path."""
@@ -81,14 +85,14 @@ class UserStore:
         self._path.write_text(json.dumps(users, indent=2), encoding="utf-8")
         self._path.chmod(0o600)  # PBKDF2 hashes + profiles: not world-readable
 
-    def add(self, user: str, password: str, *, role: str = "student",  # noqa: PLR0913
-            full_name: str = "", group: str = "", comment: str = "") -> None:
-        """Add or replace a user with a freshly salted password hash and a profile."""
+    def add(self, user: str, password: str, *, role: str = "student",
+            group: str = "", comment: str = "") -> None:
+        """Add or replace a user with a freshly salted password hash, a group, and a comment."""
         if role not in ROLES:
             msg = f"unknown role: {role!r}"
             raise ValueError(msg)
         users = self._load()
-        users[user] = _record(hash_password(password), role, full_name, group, comment, time.time())
+        users[user] = _record(hash_password(password), role, group, comment, time.time())
         self._save(users)
 
     def has(self, user: str) -> bool:
@@ -108,8 +112,8 @@ class UserStore:
         rec = self._load().get(user)
         if rec is None:
             return None
-        return {"user": user, "role": rec["role"], "full_name": rec["full_name"],
-                "group": rec["group"], "comment": rec["comment"], "created_at": rec["created_at"]}
+        return {"user": user, "role": rec["role"], "group": rec["group"],
+                "comment": rec["comment"], "created_at": rec["created_at"]}
 
     def role(self, user: str) -> str | None:
         """Return the user's role, or None if unknown."""
