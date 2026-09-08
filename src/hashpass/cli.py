@@ -823,17 +823,24 @@ def _seed_admin(users: UserStore, io: Io) -> None:
         io.write(f"\x1b[33m  пароль (сохраните — покажется один раз): {admin_pw}\x1b[0m\n")
 
 
-def cmd_serve(env: Home) -> int:
-    """Run the pool registry service (store/users/config/secret persisted under the registry dir)."""
-    host, port = _registry_host_port(_local_registry_url())
+def cmd_serve(env: Home, host: str | None = None, port: int | None = None) -> int:
+    """
+    Run the pool (registry + web); bind the port before seeding an admin.
+
+    A busy port then fails cleanly without leaving a spurious admin. Host/port come from the args,
+    else $HASHPASS_REGISTRY, else 127.0.0.1:8080 (use --host 0.0.0.0 to expose the pool).
+    """
+    default_host, default_port = _registry_host_port(_local_registry_url())
+    bind_host = host if host is not None else default_host
+    bind_port = port if port is not None else default_port
     store = ImageStore(env.registry / "store")
     users = UserStore(env.registry / "users.json")
     config_path = env.registry / "config.json"
-    _seed_admin(users, _default_io())
-    server = make_server(store, users, _registry_secret(env), host=host, port=port,
+    server = make_server(store, users, _registry_secret(env), host=bind_host, port=bind_port,
                          config=load_config(config_path), config_path=config_path,
                          catalog_path=env.registry / "catalog.json",
-                         progress_path=env.registry / "progress")
+                         progress_path=env.registry / "progress")   # binds now; a busy port raises here
+    _seed_admin(users, _default_io())   # only after the port bound successfully
     bound_host, bound_port = server.server_address
     sys.stdout.write(f"пул на http://{bound_host}:{bound_port} (Ctrl-C — остановить)\n")
     try:

@@ -71,6 +71,23 @@ def test_login_push_pull_through_localhost(registry, tmp_path, monkeypatch):
     assert ImageStore(dest_env.images).list() == ["base:1", "lab:1"]
 
 
+@pytest.mark.tier1
+def test_serve_checks_port_before_seeding_admin(tmp_path, monkeypatch):
+    # a busy bind port must fail BEFORE any admin is created (no spurious admin/password)
+    monkeypatch.delenv("HASHPASS_ADMIN_PASSWORD", raising=False)
+    port = _free_port()
+    blocker = socket.socket()
+    blocker.bind(("127.0.0.1", port))
+    blocker.listen(1)
+    try:
+        env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+        with pytest.raises(OSError):  # noqa: PT011  (bind failure: EADDRINUSE)
+            cli.cmd_serve(env, host="127.0.0.1", port=port)
+        assert UserStore(env.registry / "users.json").all_users() == []   # admin not seeded
+    finally:
+        blocker.close()
+
+
 @pytest.mark.tier2
 def test_login_failure_returns_1(registry, tmp_path, monkeypatch):
     registry.users.add("dev", "s3cr3t")

@@ -227,6 +227,10 @@ def test_engine_parser_args():
     assert (a.registry, a.user) == ("http://h", "alice")
     a = p.parse_args(["push", "x:1", "http://h"])
     assert (a.ref, a.registry) == ("x:1", "http://h")
+    serve_port = 9000
+    s = p.parse_args(["serve", "--host", "0.0.0.0", "--port", str(serve_port)])  # noqa: S104
+    assert (s.host, s.port) == ("0.0.0.0", serve_port)  # noqa: S104
+    assert p.parse_args(["serve"]).host is None    # defaults resolved in cmd_serve
     assert p.parse_args([]).command is None
 
 
