@@ -184,6 +184,17 @@ class RemoteRegistry:
         result = self._get_json("/catalog", token=self._auth_token(token))
         return list(result.get("catalog", []))
 
+    def submit(self, task_ref: str, digest: str, *,
+               passed: bool, token: str | None = None) -> dict[str, object]:
+        """Submit a task result; returns {status, global_key?} (digest-gated, principal-bound)."""
+        return self._post_json("/submit", {"task_ref": task_ref, "digest": digest, "passed": passed},
+                               token=self._auth_token(token))
+
+    def progress(self, *, token: str | None = None) -> dict[str, object]:
+        """Return progress: an author sees every student; a student sees only their own."""
+        result = self._get_json("/progress", token=self._auth_token(token))
+        return dict(result.get("progress", {}))
+
     def pull_task(self, ref: str, dest_task_dir: Path, *, token: str | None = None) -> None:
         """Pull a task's artifacts into dest_task_dir (requires a login token)."""
         unpack_task(self._get_task(ref, token=self._auth_token(token)), dest_task_dir)

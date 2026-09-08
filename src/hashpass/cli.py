@@ -593,18 +593,21 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
                 termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved_tty)
 
 
-def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
-    """Boot the task console; grade after every command (live) and once more on exit."""
+def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR0913
+              student_id: str = _DEFAULT_STUDENT,
+              on_complete: Callable[[bool], None] | None = None) -> int:
+    """Boot the task console; grade live, then report whether every stage passed via on_complete."""
     # Unique workdir per run: a fresh overlay each session (no stale files -> no false
     # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
     workdir = env.work / "run" / uuid.uuid4().hex
     router = _Router(io.write)                         # narrative + announces start on host stdout
     task_io = Io(read=io.read, write=router.write, clock=io.clock)
     session = run_task(ref, store, workdir, base=ensure_base_image(env, store),
-                       student_id=_DEFAULT_STUDENT, nonce=uuid.uuid4().hex,
+                       student_id=student_id, nonce=uuid.uuid4().hex,
                        sink=router.write, sleep=time.sleep)
     stop = threading.Event()
     port, grader = _grade_server(session, router, io.clock, stop, session.meta.readme)
+    completed = False
     try:
         # The whole interaction (greeting, per-command react/grade/hints/on_pass) runs live IN
         # the console over the grade socket -- so nothing is printed before the boot, where the
@@ -618,9 +621,12 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io) -> int:
         router.to(io.write)                # final sweep on host stdout (any stage / voice bye at exit)
         while _advance_and_announce(session, task_io):
             pass
+        completed = current_stage(session.progress) is None   # every stage passed
     finally:
         stop.set()
         session.teardown()
+    if on_complete is not None:
+        on_complete(completed)
     return 0
 
 
@@ -691,7 +697,9 @@ def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
     return 0
 
 
-def cmd_run(env: Home, ref: str, io: Io | None = None) -> int:
+def cmd_run(env: Home, ref: str, io: Io | None = None, *,
+            student_id: str = _DEFAULT_STUDENT,
+            on_complete: Callable[[bool], None] | None = None) -> int:
     """Run a task (interactive student session) or a bare image (interactive shell)."""
     io = io or _default_io()
     store = ImageStore(env.images)
@@ -701,7 +709,7 @@ def cmd_run(env: Home, ref: str, io: Io | None = None) -> int:
         io.write(f"no such image: {ref}\n")
         return 1
     if (stored.layer.parent / "task").exists():
-        return _run_task(env, ref, store, io)
+        return _run_task(env, ref, store, io, student_id=student_id, on_complete=on_complete)
     return _run_image(env, ref, store, io)
 
 
@@ -828,7 +836,8 @@ def cmd_serve(env: Home) -> int:
     _seed_admin(users, _default_io())
     server = make_server(store, users, _registry_secret(env), host=host, port=port,
                          config=load_config(config_path), config_path=config_path,
-                         catalog_path=env.registry / "catalog.json")
+                         catalog_path=env.registry / "catalog.json",
+                         progress_path=env.registry / "progress")
     bound_host, bound_port = server.server_address
     sys.stdout.write(f"пул на http://{bound_host}:{bound_port} (Ctrl-C — остановить)\n")
     try:
@@ -1021,26 +1030,47 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:
     layers, tasks = pull_new(env, url, token)
     if layers or tasks:
         io.write(f"\x1b[2m↓ подтянуто: слоёв {layers}, заданий {tasks}\x1b[0m\n")
-    entries = RemoteRegistry(url).catalog(token=token)
+    client = RemoteRegistry(url)
+    entries = client.catalog(token=token)
     if not entries:
         io.write("в пуле пока нет заданий\n")
         return 0
+    mine = client.progress(token=token).get(user, {})
     io.write(f"Задания ({user}):\n")
     for entry in entries:
-        io.write(f"  {entry['number']}. {entry['title'] or entry['ref']}\n")
+        passed = mine.get(str(entry["ref"]), {}).get("status") == "passed"
+        mark = "\x1b[32m✓\x1b[0m" if passed else " "
+        io.write(f"  {mark} {entry['number']}. {entry['title'] or entry['ref']}\n")
     io.write("Запуск:  hashpass run <номер>\n")
     return 0
 
 
 def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
-    """Student run: resolve a number/ref via the pool, ensure it's pulled, and run it."""
+    """Student run: resolve a number/ref, ensure it's pulled, run it, and submit on completion."""
     io = io or _default_io()
-    url, _user = _require_pool_identity(env, io)
+    url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
     ref = _resolve_pool_ref(RemoteRegistry(url), token, arg)
-    if not ImageStore(env.images).exists(ref):
+    store = ImageStore(env.images)
+    if not store.exists(ref):
         pull_new(env, url, token)
-    return cmd_run(env, ref, io)
+
+    def _submit(completed: bool) -> None:  # noqa: FBT001  (matches the on_complete callback)
+        if not completed:
+            return  # only report a real completion; the server digest-gates the credit
+        digest = task_digest(task_dir(ref, store))
+        try:
+            result = RemoteRegistry(url).submit(ref, digest, passed=True, token=token)
+        except (urllib.error.URLError, ValueError) as exc:
+            io.write(f"\x1b[33m⚠ результат не отправлен на сервер: {exc}\x1b[0m\n")
+            return
+        if result.get("status") == "passed":
+            io.write("\x1b[32m✓ задание зачтено на сервере\x1b[0m\n")
+        else:
+            io.write(f"\x1b[33mсервер не зачёл задание: {result.get('reason', result.get('status'))}"
+                     "\x1b[0m\n")
+
+    return cmd_run(env, ref, io, student_id=user, on_complete=_submit)
 
 
 def task_mode(env: Home, io: Io | None = None) -> int:

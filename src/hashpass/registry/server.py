@@ -7,6 +7,7 @@ endpoints check the caller's role. It may be self-hosted as the pool; it must st
 at or used to touch the legacy server (no 185.x).
 """
 import json
+import re
 import tarfile
 import time
 from http import HTTPStatus
@@ -15,10 +16,12 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from hashpass.imagestore.store import ImageStore
+from hashpass.key import global_key
 from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.passwords import ROLES, UserStore
+from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
 from hashpass.taskdigest import task_digest
@@ -27,6 +30,13 @@ _BEARER = "Bearer "
 _MIN_IMAGE_PARTS = 3  # /<kind>/<name.../>/<version>: kind + >=1 name segment + version
 _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
 _REQUIRED_PROFILE = ("full_name", "group")  # mandatory at registration (ФИО + учебная группа)
+_USER_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # safe as a login + a per-user progress filename
+_AUTHOR_ROLES = ("author", "admin")
+
+
+def _now() -> str:
+    """UTC timestamp (ISO-8601, second precision) for progress records."""
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
 class RegistryServer(ThreadingHTTPServer):
@@ -34,8 +44,9 @@ class RegistryServer(ThreadingHTTPServer):
 
     def __init__(self, address: tuple[str, int], *, store: ImageStore,  # noqa: PLR0913
                  users: UserStore, secret: bytes, config: ServerConfig | None = None,
-                 config_path: Path | None = None, catalog_path: Path | None = None) -> None:
-        """Bind the server with its image store, user store, HMAC secret, config, and catalog."""
+                 config_path: Path | None = None, catalog_path: Path | None = None,
+                 progress_path: Path | None = None) -> None:
+        """Bind the server with its stores, HMAC secret, config, catalog, and progress dir."""
         super().__init__(address, _Handler)
         self.store = store
         self.users = users
@@ -43,10 +54,15 @@ class RegistryServer(ThreadingHTTPServer):
         self.config = config or ServerConfig()
         self.config_path = config_path
         self.catalog_path = catalog_path
+        self.progress_path = progress_path
 
     def catalog(self) -> Catalog:
-        """Return a Catalog over this server's catalog file (a temp path if none was set)."""
+        """Return a Catalog over this server's catalog file (next to the store if none was set)."""
         return Catalog(self.catalog_path or (Path(self.store.root) / "catalog.json"))
+
+    def progress(self) -> ProgressStore:
+        """Return a ProgressStore over this server's progress dir (next to the store by default)."""
+        return ProgressStore(self.progress_path or (Path(self.store.root) / "progress"))
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -128,6 +144,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._admin_registration()
         elif path == "/admin/role":
             self._admin_role()
+        elif path == "/submit":
+            self._submit()
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -153,8 +171,8 @@ class _Handler(BaseHTTPRequestHandler):
         user = str(data.get("user", "")).strip()
         password = str(data.get("password", ""))
         profile = {field: str(data.get(field, "")).strip() for field in _REQUIRED_PROFILE}
-        if not user or not password or not all(profile.values()):
-            self._empty(HTTPStatus.BAD_REQUEST)  # login/password + ФИО + группа are mandatory
+        if not _USER_RE.match(user) or not password or not all(profile.values()):
+            self._empty(HTTPStatus.BAD_REQUEST)  # safe login + password + ФИО + группа are mandatory
             return
         if self.server.users.has(user):
             self._empty(HTTPStatus.CONFLICT)
@@ -209,6 +227,9 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/catalog":
             self._catalog()
             return
+        if path == "/progress":
+            self._progress()
+            return
         parts = path.strip("/").split("/")
         if len(parts) >= _MIN_IMAGE_PARTS and parts[0] == "closure":
             self._serve_closure(f"{'/'.join(parts[1:-1])}:{parts[-1]}")
@@ -233,6 +254,44 @@ class _Handler(BaseHTTPRequestHandler):
             return
         self._json(HTTPStatus.OK,
                    {"catalog": [e.as_dict() for e in self.server.catalog().entries()]})
+
+    def _submit(self) -> None:
+        user = self._token_user()
+        if user is None:
+            self._empty(HTTPStatus.UNAUTHORIZED)
+            return
+        data = self._json_body()
+        if data is None:
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        task_ref = str(data.get("task_ref", ""))
+        digest = str(data.get("digest", ""))
+        passed = bool(data.get("passed", False))
+        entry = self.server.catalog().find(task_ref)
+        if entry is None:
+            self._empty(HTTPStatus.NOT_FOUND)
+            return
+        prog = self.server.progress()
+        if digest != entry.digest:  # the task was altered locally -> no credit (basic integrity)
+            prog.record(user, task_ref, status="failed", ts=_now(), digest=digest)
+            self._json(HTTPStatus.OK, {"status": "failed", "reason": "digest-mismatch"})
+            return
+        if not passed:
+            prog.record(user, task_ref, status="failed", ts=_now(), digest=digest)
+            self._json(HTTPStatus.OK, {"status": "failed"})
+            return
+        gkey = global_key(self.server.secret, user, task_ref)  # bound to the authenticated principal
+        prog.record(user, task_ref, status="passed", ts=_now(), global_key=gkey, digest=digest)
+        self._json(HTTPStatus.OK, {"status": "passed", "global_key": gkey})
+
+    def _progress(self) -> None:
+        user = self._token_user()
+        if user is None:
+            self._empty(HTTPStatus.UNAUTHORIZED)
+            return
+        store = self.server.progress()
+        payload = store.all() if self.server.users.role(user) in _AUTHOR_ROLES else {user: store.get(user)}
+        self._json(HTTPStatus.OK, {"progress": payload})
 
     def do_HEAD(self) -> None:
         target = self._image_parts()
@@ -322,7 +381,9 @@ def make_server(store: ImageStore, users: UserStore, secret: bytes, *,  # noqa: 
                 host: str = "127.0.0.1", port: int = 0,
                 config: ServerConfig | None = None,
                 config_path: Path | None = None,
-                catalog_path: Path | None = None) -> RegistryServer:
+                catalog_path: Path | None = None,
+                progress_path: Path | None = None) -> RegistryServer:
     """Create a pool registry server (port 0 = ephemeral). Default host is loopback."""
     return RegistryServer((host, port), store=store, users=users, secret=secret,
-                          config=config, config_path=config_path, catalog_path=catalog_path)
+                          config=config, config_path=config_path, catalog_path=catalog_path,
+                          progress_path=progress_path)
