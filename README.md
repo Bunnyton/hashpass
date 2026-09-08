@@ -58,7 +58,9 @@ hashengine push <логин>/showcase:1 --task 1 --title "Первое зада�
 
 - Python 3.13.
 - `systemd-nspawn` (пакет `systemd-container`) + `overlayfs` — чтобы **запускать** задания.
-- Docker — только автору, для одноразового экспорта базового rootfs `debian:trixie-slim`.
+- Базовый rootfs Debian — файл `<home>/base/rootfs.tar`, готовится **один раз вручную** (например
+  `docker export debian:trixie-slim -o rootfs.tar` на любой машине, или debootstrap) и кладётся на
+  место. hashpass его сам не строит и docker в зависимостях не имеет.
 - Scoped passwordless sudo на: `mount`, `umount`, `systemd-nspawn`, `rsync`, `tar`, `machinectl`.
 - Пул (`hashengine serve`) — чистый stdlib, без зависимостей; за TLS/публичный адрес отвечает
   reverse-proxy оператора.

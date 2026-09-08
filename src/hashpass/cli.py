@@ -7,7 +7,6 @@ import json
 import os
 import re
 import secrets
-import shutil
 import socket
 import subprocess
 import sys
@@ -62,7 +61,6 @@ _POOL_NAME = "pool.json"             # student: saved {url, user}
 # (no 185.x). A fixed URL keeps the login token cache stable across invocations.
 _DEFAULT_REGISTRY = "http://127.0.0.1:8080"
 _REGISTRY_START_TRIES = 50   # poll the auto-started service ~5s (50 x 0.1s) before giving up
-_DOCKER = "docker"
 _BASE_IMAGE = "debian:trixie-slim"  # slim boots + runs machinectl-shell commands reliably;
 # full debian:trixie breaks command execution in the booted machine (and adds no ps/systemd).
 _BASE_NAME = "debian"
@@ -142,33 +140,30 @@ def _default_io() -> Io:
     return Io(read=_safe_input, write=sys.stdout.write, clock=_now_iso)
 
 
-def ensure_base_tar(dest: Path, *, run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
-                    which: Callable[[str], str | None] = shutil.which) -> Path:
-    """Ensure the base rootfs tarball exists; export it once via docker if missing."""
+def ensure_base_tar(dest: Path) -> Path:
+    """
+    Ensure the base rootfs tarball exists. It is provided out-of-band, not built by hashpass.
+
+    Preparing a Debian rootfs is a rare, one-time, manual step (e.g. `docker export
+    debian:trixie-slim -o rootfs.tar` on some machine, or debootstrap); hashpass itself has no
+    build-time dependency on docker. If the tarball is missing, explain how to supply it.
+    """
     if dest.exists():
         return dest
-    if which(_DOCKER) is None:
-        msg = "docker is required to export the base rootfs (install docker, or prepare <home>/base/rootfs.tar)"
-        raise RuntimeError(msg)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    cid = run([_DOCKER, "create", _BASE_IMAGE], capture_output=True, text=True,
-              encoding="utf-8", check=True).stdout.strip()
-    try:
-        run([_DOCKER, "export", cid, "-o", str(dest)], check=True)
-    finally:
-        run([_DOCKER, "rm", cid], check=True, capture_output=True)
-    return dest
+    msg = (f"базовый rootfs не найден: {dest}\n"
+           f"положите туда тарбол ФС Debian — готовится один раз вручную, например:\n"
+           f"  docker export {_BASE_IMAGE} -o {dest}\n"
+           f"(или debootstrap). hashpass его сам не строит.")
+    raise RuntimeError(msg)
 
 
-def ensure_base_image(env: Home, store: ImageStore, *,
-                      run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
-                      which: Callable[[str], str | None] = shutil.which) -> Path:
+def ensure_base_image(env: Home, store: ImageStore) -> Path:
     """
     Ensure the single base image `debian:trixie` exists in the store; build it once.
 
-    Exports the Debian rootfs (once), bakes it bootable + interactive (systemd, procps,
-    fish, runtime) via build_base, and stores it as the parentless `debian:trixie` image
-    that every build/run stacks on. Returns the stored base layer directory.
+    Takes the provided Debian rootfs tarball (see ensure_base_tar), bakes it bootable +
+    interactive (systemd, procps, fish, runtime) via build_base, and stores it as the parentless
+    `debian:trixie` image that every build/run stacks on. Returns the stored base layer directory.
     """
     ref = f"{_BASE_NAME}:{_BASE_VERSION}"
     with contextlib.suppress(KeyError):
@@ -176,7 +171,7 @@ def ensure_base_image(env: Home, store: ImageStore, *,
         if _base_layer_current(layer):
             return layer
         # else: a STALE stored base (e.g. built before the runtime filled /etc/hosts) -- rebuild it.
-    ensure_base_tar(env.base_tar, run=run, which=which)
+    ensure_base_tar(env.base_tar)
     built = build_base(env.work / "base-build", from_tar=env.base_tar)
     store.save(_BASE_NAME, _BASE_VERSION, built, (), sudo=True)  # root-owned rootfs -> sudo rsync
     return store.get(ref).layer
@@ -1116,6 +1111,6 @@ def run_main(parser: argparse.ArgumentParser,
         return _EXIT_ABORTED
     except (OSError, ValueError, RuntimeError, KeyError,
             urllib.error.URLError, subprocess.CalledProcessError) as exc:
-        # bad Taskfile, no docker, push-before-login, unknown ref, bad URL, a failed build step.
+        # bad Taskfile, missing base rootfs, push-before-login, unknown ref, bad URL, failed step.
         sys.stderr.write(f"{parser.prog}: {exc}\n")
         return 1

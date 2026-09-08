@@ -38,7 +38,8 @@ stage "Вытащи строку с TODO из /notes.txt в /found.txt"
   observe /found.txt
 ```
 
-**2. Собери и запусти** — авторская команда `hashengine` (нужен `systemd-nspawn` + scoped sudo + docker):
+**2. Собери и запусти** — авторская команда `hashengine` (нужен `systemd-nspawn` + scoped sudo; базовый
+rootfs `<home>/base/rootfs.tar` — готовится один раз вручную, docker в рантайме не нужен):
 
 ```bash
 hashengine build Taskfile        # собрать; base-rootfs Debian создастся сам при первом build
@@ -62,7 +63,7 @@ hashpass run <логин>/hello-grep:1  # запустить локально: �
 эталонное решение по всем стадиям**, печатая приём/ключ по каждой — проверить, что задание решается:
 
 ```bash
-# создаст base_tar при первом запуске; нужен docker + scoped sudo для nspawn
+# нужен готовый <home>/base/rootfs.tar + scoped sudo для nspawn (docker не требуется)
 TMPDIR=/var/tmp/hp-pytest python3 docs/examples/author_playground.py content/tasks/proc-audit/Taskfile
 ```
 
@@ -257,7 +258,7 @@ hashpass run <номер|name:ver>   # запустить задание; по �
 ```
 
 `hashengine` доступна после `make install`; иначе — `python3 -m hashengine …`. Ошибки пользователя
-(кривой Taskfile, нет docker, `push` без `login`, неизвестный ref) → чистое `hashpass: <причина>` в
+(кривой Taskfile, нет базового rootfs, `push` без `login`, неизвестный ref) → чистое `<cmd>: <причина>` в
 stderr, без трейсбека. `rmi` пока нет (удаление root-owned слоёв требует `sudo rm`, не выдан).
 
 ---

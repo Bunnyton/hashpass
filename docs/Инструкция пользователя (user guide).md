@@ -15,7 +15,8 @@ hashpass состоит из двух команд и общего пула:
 
 - Python 3.13;
 - `systemd-nspawn` (пакет `systemd-container`) и `overlayfs` — чтобы запускать задания в контейнере;
-- Docker — только автору, для одноразового экспорта базового rootfs `debian:trixie-slim`;
+- базовый rootfs Debian (`<home>/base/rootfs.tar`) — готовится один раз вручную (docker export или
+  debootstrap) и кладётся файлом; hashpass его не строит и docker не требует;
 - scoped passwordless sudo на `mount`, `umount`, `systemd-nspawn`, `rsync`, `tar`, `machinectl`;
 - пул (`hashengine serve`) — только стандартная библиотека Python, без зависимостей.
 
@@ -163,8 +164,8 @@ hashengine push <логин>/hello-report:1 --task 1 --title "Отчёт"
   install` или установщик с сайта пула (нужна роль автора).
 - **`hashpass run 1` не находит задание** — сначала `hashpass` (без аргументов) или `hashpass pull`,
   чтобы подтянуть каталог.
-- **Зачем Docker** — только автору и только один раз, для базового rootfs; дальше всё через
-  `systemd-nspawn`.
+- **Нужен ли Docker** — нет. Базовый rootfs готовится отдельно один раз (чем угодно: docker export,
+  debootstrap) и кладётся в `<home>/base/rootfs.tar`; сам hashpass работает через `systemd-nspawn`.
 - **Как отключить авто-обновление** — флаг `--no-update` или переменная `HASHPASS_NO_UPDATE=1`.
 - **Где данные** — студент: `~/.hashpass`; пул/автор: `~/.hashengine`. Переопределяются
   `HASHPASS_HOME` / `HASHENGINE_HOME`.

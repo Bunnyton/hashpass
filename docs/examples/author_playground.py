@@ -3,13 +3,14 @@ Playground: build a Taskfile and auto-solve every stage with the reference solut
 
 Usage:  TMPDIR=/var/tmp/hp-pytest python3 docs/examples/author_playground.py <Taskfile>
 
-Needs docker (to export the base rootfs once), systemd-nspawn, and scoped passwordless sudo (tier3).
+Needs systemd-nspawn and scoped passwordless sudo (tier3), plus a prepared base rootfs tarball
+(hashpass never builds it): set HASHPASS_BASE_TAR, else it reuses ~/.hashpass/base/rootfs.tar.
 Prints ADVANCED/key or REJECTED per stage. Edit the `command = ...` line to feed your OWN commands
 per stage instead of the reference `solve`.
 """
 # Standalone example (not a package); /var/tmp is the intended scratch dir.
 # ruff: noqa: INP001, S108
-import subprocess
+import os
 import sys
 from pathlib import Path
 
@@ -18,27 +19,22 @@ from hashpass.recipe.parse import load_recipe
 from hashpass.taskbuild import build_task
 from hashpass.taskrun import run_task
 
-_BASE = Path("/var/tmp/hp-base/rootfs.tar")
 _WORK = Path("/var/tmp/hp-playground")
 _PASSES = 2
 _ARGC = 2
 _MSG_WIDTH = 60
 
 
-def _ensure_base() -> Path:
-    """Export a debian:trixie-slim rootfs tarball once (cached), like the test base_tar fixture."""
-    if _BASE.exists():
-        return _BASE
-    _BASE.parent.mkdir(parents=True, exist_ok=True)
-    cid = subprocess.run(
-        ["docker", "create", "debian:trixie-slim"],
-        capture_output=True, text=True, encoding="utf-8", check=True,
-    ).stdout.strip()
-    try:
-        subprocess.run(["docker", "export", cid, "-o", str(_BASE)], check=True)
-    finally:
-        subprocess.run(["docker", "rm", cid], check=True, capture_output=True)
-    return _BASE
+def _base_tar() -> Path:
+    """Locate a prepared Debian rootfs tarball (HASHPASS_BASE_TAR, else ~/.hashpass/base/rootfs.tar)."""
+    explicit = os.environ.get("HASHPASS_BASE_TAR")
+    candidates = ([Path(explicit)] if explicit else []) + [Path.home() / ".hashpass" / "base" / "rootfs.tar"]
+    for tar in candidates:
+        if tar.exists():
+            return tar
+    msg = ("нет базового rootfs: задайте HASHPASS_BASE_TAR или положите ~/.hashpass/base/rootfs.tar "
+           "(готовится один раз вручную, напр. `docker export debian:trixie-slim -o rootfs.tar`)")
+    raise SystemExit(msg)
 
 
 def main() -> int:
@@ -47,7 +43,7 @@ def main() -> int:
         return 2
     recipe = load_recipe(sys.argv[1])
     ref = f"{recipe.name}:{recipe.version}"
-    base = _ensure_base()
+    base = _base_tar()
     store = ImageStore(_WORK / "images")
 
     print(f"building task {ref} ({len(recipe.stages)} stage(s)) — reference-solving each...")

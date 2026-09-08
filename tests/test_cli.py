@@ -86,40 +86,18 @@ def test_build_env_creates_images_dir(tmp_path):
     assert env.images.is_dir()
 
 
-class _Completed:
-    stdout = "cid123\n"
-
-
 @pytest.mark.tier1
-def test_ensure_base_tar_shortcircuits_when_present(tmp_path):
+def test_ensure_base_tar_returns_existing(tmp_path):
     dest = tmp_path / "rootfs.tar"
     dest.write_text("x", encoding="utf-8")
-    calls = []
-    cli.ensure_base_tar(dest, run=lambda *a, **_k: calls.append(a), which=lambda _n: "docker")
-    assert calls == []
+    assert cli.ensure_base_tar(dest) == dest       # present -> returned, no build
 
 
 @pytest.mark.tier1
-def test_ensure_base_tar_requires_docker(tmp_path):
-    with pytest.raises(RuntimeError, match="docker is required"):
-        cli.ensure_base_tar(tmp_path / "base" / "rootfs.tar",
-                            run=lambda *_a, **_k: _Completed(), which=lambda _n: None)
-
-
-@pytest.mark.tier1
-def test_ensure_base_tar_export_argv(tmp_path):
+def test_ensure_base_tar_missing_raises_with_hint(tmp_path):
     dest = tmp_path / "base" / "rootfs.tar"
-    calls = []
-
-    def fake_run(argv: list, **_kwargs: object) -> _Completed:
-        calls.append(argv)
-        return _Completed()
-
-    cli.ensure_base_tar(dest, run=fake_run, which=lambda _n: "/usr/bin/docker")
-    assert calls[0] == ["docker", "create", "debian:trixie-slim"]
-    assert calls[1] == ["docker", "export", "cid123", "-o", str(dest)]
-    assert calls[2] == ["docker", "rm", "cid123"]
-    assert dest.parent.exists()
+    with pytest.raises(RuntimeError, match="базовый rootfs не найден"):
+        cli.ensure_base_tar(dest)                  # absent -> clear error (hashpass never builds it)
 
 
 def _seed_image(store: ImageStore, tmp_path, name: str, *, task: bool = False) -> None:
@@ -345,10 +323,12 @@ def test_resolve_ref(tmp_path):
 
 
 @pytest.mark.tier3
-def test_ensure_base_image_stores_debian_trixie(tmp_path):
-    # The single base image is built once, stored as `debian:trixie`, bootable + fish, reused.
+def test_ensure_base_image_stores_debian_trixie(tmp_path, base_tar):
+    # The single base image is built once from the provided rootfs, stored as `debian:trixie`, reused.
     home = tmp_path / "home"
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
+    env.base_tar.parent.mkdir(parents=True, exist_ok=True)
+    env.base_tar.write_bytes(base_tar.read_bytes())     # rootfs provided out-of-band (no docker)
     store = ImageStore(env.images)
     layer = cli.ensure_base_image(env, store)
     assert "debian:trixie" in store.list()

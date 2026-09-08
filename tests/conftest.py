@@ -1,4 +1,4 @@
-import subprocess
+import os
 import sys
 from pathlib import Path
 
@@ -18,31 +18,17 @@ def _test_env(monkeypatch) -> None:
 
 
 @pytest.fixture(scope="session")
-def base_tar(tmp_path_factory):
+def base_tar() -> Path:
     """
-    Session-scoped Debian rootfs tarball, exported from a throwaway container.
+    Return a prepared Debian rootfs tarball for tier3 tests (nspawn runner, base image builder).
 
-    Shared across tier3 tests (nspawn runner, base image builder) so the
-    image is only pulled/exported once per test session.
-
-    Args:
-        tmp_path_factory: Pytest factory for session-scoped temp directories.
-
-    Returns:
-        Path to the exported rootfs tarball.
-
+    hashpass does not build the base rootfs (no docker dependency); it is prepared out-of-band.
+    This fixture reuses one: $HASHPASS_BASE_TAR, else ~/.hashpass/base/rootfs.tar, else skips.
     """
-    d = tmp_path_factory.mktemp("base")
-    tar = d / "rootfs.tar"
-    cid = subprocess.run(
-        ["docker", "create", "debian:trixie-slim"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-    ).stdout.strip()
-    try:
-        subprocess.run(["docker", "export", cid, "-o", str(tar)], check=True)
-    finally:
-        subprocess.run(["docker", "rm", cid], check=True, capture_output=True)
-    return tar
+    explicit = os.environ.get("HASHPASS_BASE_TAR")
+    candidates = ([Path(explicit)] if explicit else []) + [Path.home() / ".hashpass" / "base" / "rootfs.tar"]
+    for tar in candidates:
+        if tar.exists():
+            return tar
+    pytest.skip("no prepared base rootfs (set HASHPASS_BASE_TAR or place ~/.hashpass/base/rootfs.tar)")
+    return candidates[-1]  # unreachable (skip raises); keeps the return type honest
