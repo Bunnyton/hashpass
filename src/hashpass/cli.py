@@ -1212,7 +1212,7 @@ def pull_new(env: Home, url: str, token: str, *, workers: int = 8) -> tuple[int,
     """Pull catalog images (parallel) + changed task bundles; return (layers, tasks) fetched."""
     store = ImageStore(env.images)
     client = RemoteRegistry(url)
-    entries = client.catalog(token=token)
+    entries = [e for e in client.catalog(token=token) if e.get("available", True)]  # skip locked
     layers = client.pull_many([str(e["ref"]) for e in entries], store, workers=workers)
 
     def _task(entry: dict[str, object]) -> str | None:
@@ -1292,15 +1292,18 @@ def pool_status(env: Home, url: str, token: str, user: str) -> list[dict[str, ob
         ref = str(entry["ref"])
         server = mine.get(ref, {}).get("status") if isinstance(mine.get(ref), dict) else None
         rows.append({"number": entry["number"], "title": entry.get("title") or ref,
-                     "ref": ref, "local": ref in solved, "server": server})
+                     "ref": ref, "local": ref in solved, "server": server,
+                     "available": entry.get("available", True)})
     return rows
 
 
 def _status_badge(row: dict[str, object]) -> str:
+    if not row.get("available", True):
+        return "\x1b[2m🔒 недоступно\x1b[0m"          # visible, but locked right now
     if row.get("server") == "passed":
         return "\x1b[32m★ зачтено\x1b[0m"
     if row.get("local"):
-        return "\x1b[33m✓ решено локально (не зачтено)\x1b[0m"
+        return "\x1b[33m✓ решено\x1b[0m"
     return "\x1b[2m· не начато\x1b[0m"
 
 
@@ -1313,7 +1316,7 @@ def _render_pool_menu(rows: list[dict[str, object]], user: str) -> str:
 
 def _next_number(rows: list[dict[str, object]], after: int) -> int | None:
     """Return the next task worth doing after `after` (first uncredited ahead, else first)."""
-    todo = [r for r in rows if r.get("server") != "passed"]
+    todo = [r for r in rows if r.get("server") != "passed" and r.get("available", True)]
     ahead = [r for r in todo if int(r["number"]) > after]  # type: ignore[arg-type]
     pick = (ahead or todo)
     return int(pick[0]["number"]) if pick else None  # type: ignore[arg-type]
@@ -1336,7 +1339,7 @@ def _resync(env: Home, url: str, user: str, token: str, io: Io) -> None:
         except (urllib.error.URLError, RuntimeError, ValueError):
             continue
         sent += result.get("status") == "passed"
-    io.write(f"\x1b[36mсамопроверка: зачтено на сервере {sent}\x1b[0m\n")
+    io.write(f"\x1b[36mсамопроверка: зачтено {sent}\x1b[0m\n")
 
 
 def cmd_pool_home(env: Home, io: Io | None = None) -> int:
@@ -1363,8 +1366,12 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:
         if choice == "s":
             _resync(env, url, user, token, io)
             continue
-        if not (choice.isdigit() and any(str(r["number"]) == choice for r in rows)):
+        row = next((r for r in rows if str(r["number"]) == choice), None)
+        if not choice.isdigit() or row is None:
             io.write("нет такого номера\n")
+            continue
+        if not row.get("available", True):
+            io.write("\x1b[33mзадание сейчас недоступно\x1b[0m\n")
             continue
         _run_from_menu(env, url, user, token, int(choice), io)
 
@@ -1391,7 +1398,12 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     io = io or _default_io()
     url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
-    ref = _resolve_pool_ref(RemoteRegistry(url), token, arg)
+    client0 = RemoteRegistry(url)
+    ref = _resolve_pool_ref(client0, token, arg)
+    entry = next((e for e in client0.catalog(token=token) if str(e["ref"]) == ref), None)
+    if entry is not None and not entry.get("available", True):
+        io.write("\x1b[33mзадание сейчас недоступно\x1b[0m\n")   # visible in the list, but locked
+        return 0
     store = ImageStore(env.images)
     if not store.exists(ref):
         pull_new(env, url, token)
@@ -1399,19 +1411,19 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     def _submit(completed: bool) -> None:  # noqa: FBT001  (matches the on_complete callback)
         if not completed:
             return  # only report a real completion; the server digest-gates the credit
-        mark_solved(env, ref)   # решено локально — record it before the network, so a failed
-        io.write("\x1b[32m✓ решено локально\x1b[0m\n")   # submit still leaves a clear local status
+        mark_solved(env, ref)   # record «решено» before the network, so a failed submit still
+        io.write("\x1b[32m✓ решено\x1b[0m\n")   # leaves a clear local status
         digest = task_digest(task_dir(ref, store))
         try:
             result = RemoteRegistry(url).submit(ref, digest, passed=True, token=token)
         except (urllib.error.URLError, RuntimeError, ValueError) as exc:
-            io.write(f"\x1b[33m⚠ не зачтено на сервере (нет связи?): {exc}\x1b[0m\n"
-                     "\x1b[2m  позже запустите самопроверку (s в меню)\x1b[0m\n")
+            io.write(f"\x1b[33m⚠ не зачтено (нет связи?): {exc}\x1b[0m\n"
+                     "\x1b[2m  позже нажмите s в меню для самопроверки\x1b[0m\n")
             return
         if result.get("status") == "passed":
-            io.write("\x1b[32m★ задание зачтено на сервере\x1b[0m\n")
+            io.write("\x1b[32m★ зачтено\x1b[0m\n")
         else:
-            io.write(f"\x1b[33mсервер не зачёл задание: {result.get('reason', result.get('status'))}"
+            io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"
                      "\x1b[0m\n")
 
     return cmd_run(env, ref, io, student_id=user, on_complete=_submit)

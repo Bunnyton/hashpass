@@ -24,8 +24,9 @@ def test_solved_store_roundtrip(tmp_path):
 @pytest.mark.tier1
 def test_status_badge_and_menu_render():
     assert "зачтено" in cli._status_badge({"server": "passed"})            # noqa: SLF001
-    assert "локально" in cli._status_badge({"server": None, "local": True})  # noqa: SLF001
+    assert "решено" in cli._status_badge({"server": None, "local": True})  # noqa: SLF001
     assert "не начато" in cli._status_badge({"server": None, "local": False})  # noqa: SLF001
+    assert "недоступно" in cli._status_badge({"available": False, "server": "passed"})  # noqa: SLF001
     rows = [{"number": 1, "title": "Первое", "local": True, "server": None},
             {"number": 2, "title": "Второе", "local": False, "server": "passed"}]
     menu = cli._render_pool_menu(rows, "stud")   # noqa: SLF001

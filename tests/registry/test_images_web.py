@@ -115,16 +115,17 @@ def test_web_catalog_assign_toggle_remove(registry, tmp_path):
 
     _req(opener, "POST", f"{base}/web/catalog/assign", cookie=cookie,
          data={"ref": "lab:1", "number": "1", "title": "Первое"})
-    assert [e["number"] for e in sc.catalog(token=student)] == [1]        # visible to the student
+    assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, True)]
 
     _req(opener, "POST", f"{base}/web/catalog/available", cookie=cookie,
          data={"number": "1", "available": "0"})
-    assert sc.catalog(token=student) == []                                # hidden while unavailable
+    # still visible to the student, but locked (available=False) and no credit on submit
+    assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, False)]
     assert sc.submit("lab:1", "any", passed=True, token=student)["status"] == "unavailable"
 
     _req(opener, "POST", f"{base}/web/catalog/available", cookie=cookie,
          data={"number": "1", "available": "1"})
-    assert [e["number"] for e in sc.catalog(token=student)] == [1]        # visible again
+    assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, True)]
 
     _req(opener, "POST", f"{base}/web/catalog/remove", cookie=cookie, data={"number": "1"})
     assert sc.catalog(token=student) == []

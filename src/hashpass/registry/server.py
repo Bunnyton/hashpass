@@ -360,14 +360,13 @@ class _Handler(BaseHTTPRequestHandler):
         self._json(HTTPStatus.OK, profile)
 
     def _catalog(self) -> None:
-        user = self._token_user()
-        if user is None:
+        if self._token_user() is None:
             self._empty(HTTPStatus.UNAUTHORIZED)
             return
-        entries = self.server.catalog().entries()
-        if self.server.users.role(user) not in _AUTHOR_ROLES:
-            entries = [e for e in entries if e.available]   # students never see hidden tasks
-        self._json(HTTPStatus.OK, {"catalog": [e.as_dict() for e in entries]})
+        # Students see every task (each carries `available`); a closed one is shown but locked
+        # -- it is not pulled and its /submit is refused below.
+        self._json(HTTPStatus.OK,
+                   {"catalog": [e.as_dict() for e in self.server.catalog().entries()]})
 
     def _submit(self) -> None:
         user = self._token_user()
