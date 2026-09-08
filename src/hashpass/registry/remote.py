@@ -1,8 +1,8 @@
 """
-HTTP client to a registry server (stdlib urllib). Anonymous pull; push needs a login token.
+HTTP client to a pool registry server (stdlib urllib). Anonymous pull; mutations need a token.
 
-SECURITY BOUNDARY: point base_url at a localhost server for tests ONLY. Never push to a real
-remote (no 185.x). Tokens are cached locally and reused until they expire.
+Point base_url at your pool (loopback in tests, or the self-hosted pool). It must never be the
+legacy server (no 185.x). Tokens are cached locally and reused until they expire.
 """
 import json
 import urllib.error
@@ -44,28 +44,71 @@ class RemoteRegistry:
         with _DIRECT.open(req, timeout=_TIMEOUT) as resp:  # localhost only, no proxy
             return resp.read()
 
-    def login(self, user: str, password: str) -> str:
-        """Authenticate; cache and return a signed token. Server checks the PBKDF2 hash."""
-        body = json.dumps({"user": user, "password": password}).encode("utf-8")
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url("/login"), data=body, method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        token = json.loads(self._open(req).decode("utf-8"))["token"]
+    def _cache_token(self, token: str) -> None:
         expiry = token_expiry(token)
         if self.cache is not None and expiry is not None:
             self.cache.save(self.base_url, token, expiry)
-        return token
 
-    def _push_token(self, token: str | None) -> str:
+    def _auth_token(self, token: str | None) -> str:
         if token is not None:
             return token
         if self.cache is not None:
             cached = self.cache.cached_token(self.base_url, now=time())
             if cached is not None:
                 return cached
-        msg = "push requires a token; call login(user, password) first"
+        msg = "this action requires a token; call login(...)/register(...) first"
         raise ValueError(msg)
+
+    def _post_json(self, path: str, payload: dict[str, object],
+                   *, token: str | None = None) -> dict[str, object]:
+        headers = {"Content-Type": "application/json"}
+        if token is not None:
+            headers["Authorization"] = f"Bearer {token}"
+        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
+            self._url(path), data=json.dumps(payload).encode("utf-8"), method="POST",
+            headers=headers,
+        )
+        raw = self._open(req)
+        return json.loads(raw.decode("utf-8")) if raw else {}
+
+    def _get_json(self, path: str, *, token: str | None = None) -> dict[str, object]:
+        headers = {"Authorization": f"Bearer {token}"} if token is not None else {}
+        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
+            self._url(path), method="GET", headers=headers,
+        )
+        return json.loads(self._open(req).decode("utf-8"))
+
+    def login(self, user: str, password: str) -> str:
+        """Authenticate; cache and return a signed token. Server checks the PBKDF2 hash."""
+        token = str(self._post_json("/login", {"user": user, "password": password})["token"])
+        self._cache_token(token)
+        return token
+
+    def register(self, user: str, password: str, full_name: str, group: str,
+                 comment: str = "") -> str:
+        """Register a new student (ФИО + group required); cache and return the token."""
+        token = str(self._post_json("/register", {
+            "user": user, "password": password, "full_name": full_name,
+            "group": group, "comment": comment})["token"])
+        self._cache_token(token)
+        return token
+
+    def me(self, *, token: str | None = None) -> dict[str, object]:
+        """Return the authenticated user's profile {user, role, full_name, group, …}."""
+        return self._get_json("/me", token=self._auth_token(token))
+
+    def set_registration(self, *, open_: bool, token: str | None = None) -> dict[str, object]:
+        """Admin: open or close self-registration on the pool."""
+        return self._post_json("/admin/registration", {"open": open_},
+                               token=self._auth_token(token))
+
+    def set_role(self, user: str, role: str, *, token: str | None = None) -> dict[str, object]:
+        """Admin: set a user's role (student/author/admin)."""
+        return self._post_json("/admin/role", {"user": user, "role": role},
+                               token=self._auth_token(token))
+
+    def _push_token(self, token: str | None) -> str:
+        return self._auth_token(token)
 
     def push(self, store: ImageStore, ref: str, *, token: str | None = None) -> list[str]:
         """Push ref + its `from` closure (bottom-up), skipping refs the server already holds."""

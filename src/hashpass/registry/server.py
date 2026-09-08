@@ -1,45 +1,52 @@
 """
-Local registry HTTP server (stdlib http.server).
+Pool registry HTTP server (stdlib http.server): image/task blobs + auth + roles + registration.
 
-SECURITY BOUNDARY: run on localhost for tests ONLY. It holds the signing secret and the
-password hashes — like sync.LocalSyncClient it is a dev/test model of the server side and is
-NEVER deployed (no 185.x) and NEVER used to push to a real remote.
+Binds a configurable host (default loopback). It holds the signing secret and the password
+hashes, so every mutating or credit-granting request requires a valid bearer token, and role-gated
+endpoints check the caller's role. It may be self-hosted as the pool; it must still NEVER be pointed
+at or used to touch the legacy server (no 185.x).
 """
 import json
 import tarfile
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.blob import pack_image, unpack_image
-from hashpass.registry.passwords import UserStore
+from hashpass.registry.config import ServerConfig, save_config
+from hashpass.registry.passwords import ROLES, UserStore
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
 
 _BEARER = "Bearer "
 _MIN_IMAGE_PARTS = 3  # /<kind>/<name.../>/<version>: kind + >=1 name segment + version
-_MAX_BODY = 512 * 1024 * 1024  # cap request bodies (localhost test server) to avoid memory blowup
+_MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
+_REQUIRED_PROFILE = ("full_name", "group")  # mandatory at registration (ФИО + учебная группа)
 
 
 class RegistryServer(ThreadingHTTPServer):
-    """A localhost registry server holding the HMAC secret. Dev/test only, never shipped."""
+    """A pool registry server holding the HMAC secret, user store, and runtime config."""
 
-    def __init__(self, address: tuple[str, int], *, store: ImageStore, users: UserStore,
-                 secret: bytes) -> None:
-        """Bind the server with its backing image store, user store, and HMAC secret."""
+    def __init__(self, address: tuple[str, int], *, store: ImageStore,  # noqa: PLR0913
+                 users: UserStore, secret: bytes, config: ServerConfig | None = None,
+                 config_path: Path | None = None) -> None:
+        """Bind the server with its image store, user store, HMAC secret, and config."""
         super().__init__(address, _Handler)
         self.store = store
         self.users = users
         self.secret = secret
+        self.config = config or ServerConfig()
+        self.config_path = config_path
 
 
 class _Handler(BaseHTTPRequestHandler):
-    """Routes /login, /closure/<name>/<ver>, and /image/<name>/<ver> (GET/HEAD/PUT)."""
+    """Routes: POST /login /register /admin/registration /admin/role; GET /me /closure /image; PUT /image."""
 
     def log_message(self, fmt: str, *args: object) -> None:
-        """Silence per-request stderr logging during tests."""
+        """Silence per-request stderr logging."""
 
     def _empty(self, status: HTTPStatus) -> None:
         self.send_response(status)
@@ -70,11 +77,27 @@ class _Handler(BaseHTTPRequestHandler):
             return b""  # absent/oversized -> don't buffer a huge/garbage body; caller 400s
         return self.rfile.read(length)
 
+    def _json_body(self) -> dict[str, object] | None:
+        try:
+            data = json.loads(self._read_body().decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return None
+        return data if isinstance(data, dict) else None
+
     def _token_user(self) -> str | None:
         auth = self.headers.get("Authorization", "")
         if not auth.startswith(_BEARER):
             return None
         return verify_token(self.server.secret, auth[len(_BEARER):], now=time.time())
+
+    def _auth_role(self, roles: tuple[str, ...]) -> tuple[str | None, HTTPStatus | None]:
+        """Return (user, None) if the bearer token maps to a user in `roles`, else (None, 401/403)."""
+        user = self._token_user()
+        if user is None:
+            return None, HTTPStatus.UNAUTHORIZED
+        if self.server.users.role(user) not in roles:
+            return None, HTTPStatus.FORBIDDEN
+        return user, None
 
     def _image_parts(self) -> tuple[str, str] | None:
         parts = urlsplit(self.path).path.strip("/").split("/")
@@ -83,31 +106,111 @@ class _Handler(BaseHTTPRequestHandler):
             return "/".join(parts[1:-1]), parts[-1]
         return None
 
+    # -- POST --------------------------------------------------------------
+
     def do_POST(self) -> None:
-        if urlsplit(self.path).path != "/login":
+        path = urlsplit(self.path).path
+        if path == "/login":
+            self._login()
+        elif path == "/register":
+            self._register()
+        elif path == "/admin/registration":
+            self._admin_registration()
+        elif path == "/admin/role":
+            self._admin_role()
+        else:
             self._empty(HTTPStatus.NOT_FOUND)
-            return
-        try:
-            creds = json.loads(self._read_body().decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
+
+    def _login(self) -> None:
+        creds = self._json_body()
+        if creds is None:
             self._empty(HTTPStatus.BAD_REQUEST)
             return
         user = str(creds.get("user", ""))
         if not self.server.users.verify(user, str(creds.get("password", ""))):
             self._empty(HTTPStatus.UNAUTHORIZED)
             return
-        token = issue_token(self.server.secret, user, now=time.time())
-        self._json(HTTPStatus.OK, {"token": token})
+        self._json(HTTPStatus.OK, {"token": issue_token(self.server.secret, user, now=time.time())})
+
+    def _register(self) -> None:
+        if not self.server.config.registration_open:
+            self._empty(HTTPStatus.FORBIDDEN)
+            return
+        data = self._json_body()
+        if data is None:
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        user = str(data.get("user", "")).strip()
+        password = str(data.get("password", ""))
+        profile = {field: str(data.get(field, "")).strip() for field in _REQUIRED_PROFILE}
+        if not user or not password or not all(profile.values()):
+            self._empty(HTTPStatus.BAD_REQUEST)  # login/password + ФИО + группа are mandatory
+            return
+        if self.server.users.has(user):
+            self._empty(HTTPStatus.CONFLICT)
+            return
+        self.server.users.add(user, password, role="student", comment=str(data.get("comment", "")),
+                              **profile)
+        self._json(HTTPStatus.CREATED,
+                   {"token": issue_token(self.server.secret, user, now=time.time())})
+
+    def _admin_registration(self) -> None:
+        _user, err = self._auth_role(("admin",))
+        if err is not None:
+            self._empty(err)
+            return
+        data = self._json_body()
+        if data is None:
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        self.server.config.registration_open = bool(data.get("open", True))
+        if self.server.config_path is not None:
+            save_config(self.server.config_path, self.server.config)
+        self._json(HTTPStatus.OK, {"registration_open": self.server.config.registration_open})
+
+    def _admin_role(self) -> None:
+        _user, err = self._auth_role(("admin",))
+        if err is not None:
+            self._empty(err)
+            return
+        data = self._json_body()
+        if data is None:
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        target = str(data.get("user", ""))
+        role = str(data.get("role", ""))
+        if role not in ROLES:
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            self.server.users.set_role(target, role)
+        except KeyError:
+            self._empty(HTTPStatus.NOT_FOUND)
+            return
+        self._json(HTTPStatus.OK, {"user": target, "role": role})
+
+    # -- GET / HEAD / PUT --------------------------------------------------
 
     def do_GET(self) -> None:
-        parts = urlsplit(self.path).path.strip("/").split("/")
+        path = urlsplit(self.path).path
+        if path == "/me":
+            self._me()
+            return
+        parts = path.strip("/").split("/")
         if len(parts) >= _MIN_IMAGE_PARTS and parts[0] == "closure":
-            # /closure/<name.../>/<version>: name may be multi-segment (`ns/app`).
             self._serve_closure(f"{'/'.join(parts[1:-1])}:{parts[-1]}")
         elif (target := self._image_parts()) is not None:
             self._serve_image(f"{target[0]}:{target[1]}")
         else:
             self._empty(HTTPStatus.NOT_FOUND)
+
+    def _me(self) -> None:
+        user = self._token_user()
+        profile = self.server.users.get(user) if user is not None else None
+        if profile is None:
+            self._empty(HTTPStatus.UNAUTHORIZED)
+            return
+        self._json(HTTPStatus.OK, profile)
 
     def do_HEAD(self) -> None:
         target = self._image_parts()
@@ -146,7 +249,10 @@ class _Handler(BaseHTTPRequestHandler):
         self._blob(HTTPStatus.OK, pack_image(img))
 
 
-def make_server(store: ImageStore, users: UserStore, secret: bytes, *,
-                host: str = "127.0.0.1", port: int = 0) -> RegistryServer:
-    """Create a localhost registry server (port 0 = ephemeral). Binds localhost — test use ONLY."""
-    return RegistryServer((host, port), store=store, users=users, secret=secret)
+def make_server(store: ImageStore, users: UserStore, secret: bytes, *,  # noqa: PLR0913
+                host: str = "127.0.0.1", port: int = 0,
+                config: ServerConfig | None = None,
+                config_path: Path | None = None) -> RegistryServer:
+    """Create a pool registry server (port 0 = ephemeral). Default host is loopback."""
+    return RegistryServer((host, port), store=store, users=users, secret=secret,
+                          config=config, config_path=config_path)

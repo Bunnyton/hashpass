@@ -32,6 +32,7 @@ from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage
 from hashpass.recipe.model import CopyStep, Recipe, image_ref, is_task
 from hashpass.recipe.parse import load_recipe
+from hashpass.registry.config import load_config
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.passwords import UserStore
 from hashpass.registry.remote import RemoteRegistry
@@ -738,7 +739,7 @@ def _ensure_registry(env: Home, io: Io) -> str:
     env.registry.mkdir(parents=True, exist_ok=True)
     with (env.registry / "serve.log").open("ab") as log:
         subprocess.Popen(  # detached: outlives this CLI process and keeps serving
-            [sys.executable, "-m", "hashpass", "serve"],
+            [sys.executable, "-m", "hashengine", "serve"],
             stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             start_new_session=True, env={**os.environ, _ENV_HOME: str(env.root)},
         )
@@ -772,7 +773,8 @@ def _require_login(env: Home, io: Io) -> str:
     password = getpass.getpass("пароль: ")
     users = UserStore(env.registry / "users.json")
     if not users.has(user):
-        users.add(user, password)  # first use of this login here -> register it on the local service
+        # first use of this login here -> register it locally as the machine owner (admin)
+        users.add(user, password, role="admin")
     RemoteRegistry(url, cache=cache).login(user, password)
     io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
     return user
@@ -795,14 +797,32 @@ def _push_image(env: Home, store: ImageStore, ref: str, io: Io) -> None:
     io.write(f"\x1b[36m↑ отправлено на сервис\x1b[0m: {ref} ({len(copied)} слой(ёв))\n")
 
 
+def _seed_admin(users: UserStore, io: Io) -> None:
+    """On an empty pool, create an admin (from env, else a generated password printed once)."""
+    if users.all_users():
+        return
+    admin_user = os.environ.get("HASHPASS_ADMIN", "admin")
+    admin_pw = os.environ.get("HASHPASS_ADMIN_PASSWORD")
+    generated = admin_pw is None
+    if generated:
+        admin_pw = secrets.token_urlsafe(12)
+    users.add(admin_user, admin_pw, role="admin", full_name="Administrator")
+    io.write(f"\x1b[36m✓ создан администратор пула: {admin_user}\x1b[0m\n")
+    if generated:
+        io.write(f"\x1b[33m  пароль (сохраните — покажется один раз): {admin_pw}\x1b[0m\n")
+
+
 def cmd_serve(env: Home) -> int:
-    """Run the local registry service (persistent store/users/secret under ~/.hashpass/registry)."""
+    """Run the pool registry service (store/users/config/secret persisted under the registry dir)."""
     host, port = _registry_host_port(_local_registry_url())
     store = ImageStore(env.registry / "store")
     users = UserStore(env.registry / "users.json")
-    server = make_server(store, users, _registry_secret(env), host=host, port=port)
+    config_path = env.registry / "config.json"
+    _seed_admin(users, _default_io())
+    server = make_server(store, users, _registry_secret(env), host=host, port=port,
+                         config=load_config(config_path), config_path=config_path)
     bound_host, bound_port = server.server_address
-    sys.stdout.write(f"локальный реестр на http://{bound_host}:{bound_port} (Ctrl-C — остановить)\n")
+    sys.stdout.write(f"пул на http://{bound_host}:{bound_port} (Ctrl-C — остановить)\n")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
