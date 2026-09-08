@@ -25,7 +25,14 @@ from hashpass.registry.passwords import ROLES, UserStore
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
-from hashpass.registry.web import render_dashboard, render_front, render_login, render_users
+from hashpass.registry.web import (
+    render_dashboard,
+    render_engine_install_script,
+    render_front,
+    render_install_script,
+    render_login,
+    render_users,
+)
 from hashpass.taskdigest import task_digest
 
 _BEARER = "Bearer "
@@ -227,10 +234,19 @@ class _Handler(BaseHTTPRequestHandler):
 
     # -- GET / HEAD / PUT --------------------------------------------------
 
-    def do_GET(self) -> None:
+    def do_GET(self) -> None:  # noqa: PLR0911, C901  (a flat route dispatcher)
         path = urlsplit(self.path).path
         if path == "/" or path.startswith("/web"):
             self._web_get(path)
+            return
+        if path == "/install.sh":
+            self._serve_script(render_install_script(self._pool_url()))
+            return
+        if path == "/install-engine.sh":
+            if self._session_role(_AUTHOR_ROLES) is None:
+                self._redirect("/web/login")   # engine install is author-gated on the site
+                return
+            self._serve_script(render_engine_install_script(self._pool_url()))
             return
         if path == "/me":
             self._me()
@@ -313,6 +329,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         if cookie is not None:
             self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_script(self, body: str) -> None:
+        data = body.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/x-shellscript; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 

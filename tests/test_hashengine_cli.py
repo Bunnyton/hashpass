@@ -25,6 +25,15 @@ def test_unknown_command_exits_nonzero():
 
 
 @pytest.mark.tier1
+def test_refuses_when_not_activated(tmp_path, monkeypatch, capsys):
+    # a plain student install has no activation marker -> hashengine refuses to run
+    monkeypatch.delenv("HASHENGINE_ENABLE", raising=False)
+    monkeypatch.setenv("HASHENGINE_HOME", str(tmp_path / "eng"))  # empty -> no engine.enabled
+    assert engine_cli.main(["images"]) == 1
+    assert "не активирован" in capsys.readouterr().err
+
+
+@pytest.mark.tier1
 def test_build_error_boundary_uses_engine_prog(tmp_path, monkeypatch, capsys):
     # a broken Taskfile exits 1 with a clean `hashengine:` message, never a traceback.
     monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))

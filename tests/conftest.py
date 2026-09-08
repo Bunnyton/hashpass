@@ -11,9 +11,10 @@ if str(src_path) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
-def _no_auto_update(monkeypatch) -> None:
-    """Never let the launch-time self-update check hit the network during tests."""
+def _test_env(monkeypatch) -> None:
+    """No launch-time self-update network call, and the engine toolkit is active for tests."""
     monkeypatch.setenv("HASHPASS_NO_UPDATE", "1")
+    monkeypatch.setenv("HASHENGINE_ENABLE", "1")
 
 
 @pytest.fixture(scope="session")

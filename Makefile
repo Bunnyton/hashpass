@@ -19,6 +19,7 @@ help:
 # (Debian externally-managed). Внутри venv оба флага можно убрать.
 install:
 	$(PY) -m pip install --user -e . --break-system-packages
+	mkdir -p "$(HOME)/.hashengine" && touch "$(HOME)/.hashengine/engine.enabled"  # activate hashengine here
 
 # Placeholder: one distribution still ships both scripts; the real student-only pip
 # distribution (only the `hashpass` command, no engine code) lands with Phase 8.

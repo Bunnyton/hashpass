@@ -1,7 +1,17 @@
 """Tier1: web dashboard HTML rendering (pure functions)."""
+import shutil
+import subprocess
+
 import pytest
 
-from hashpass.registry.web import render_dashboard, render_front, render_login, render_users
+from hashpass.registry.web import (
+    render_dashboard,
+    render_engine_install_script,
+    render_front,
+    render_install_script,
+    render_login,
+    render_users,
+)
 
 
 @pytest.mark.tier1
@@ -44,3 +54,29 @@ def test_users_toggle_label_flips():
     profiles = [{"user": "a", "role": "admin", "full_name": "Adm", "group": "", "comment": "c"}]
     assert "Закрыть регистрацию" in render_users(profiles, registration_open=True)
     assert "Открыть регистрацию" in render_users(profiles, registration_open=False)
+
+
+@pytest.mark.tier1
+def test_install_script_targets_pool_and_pip():
+    script = render_install_script("http://pool.example/")
+    assert script.startswith("#!/usr/bin/env bash")
+    assert 'POOL="http://pool.example"' in script
+    assert "pip install --user" in script
+    assert "git+https://github.com/Bunnyton/hashpass@main" in script
+    assert "pool.json" in script
+
+
+@pytest.mark.tier1
+def test_engine_install_script_mentions_engine():
+    script = render_engine_install_script("http://p")
+    assert "engine" in script
+    assert "pip install" in script
+
+
+@pytest.mark.tier1
+@pytest.mark.skipif(shutil.which("shellcheck") is None, reason="shellcheck not installed")
+def test_install_script_passes_shellcheck():
+    script = render_install_script("http://pool.example")
+    proc = subprocess.run(["shellcheck", "-s", "bash", "-"], input=script,
+                          text=True, capture_output=True, check=False)
+    assert proc.returncode == 0, proc.stdout

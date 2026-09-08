@@ -1,6 +1,44 @@
 """Server-rendered web dashboard for the pool (stdlib only): front page, login, progress, users."""
 from html import escape
 
+_REPO = "Bunnyton/hashpass"
+
+_INSTALL_TEMPLATE = """\
+#!/usr/bin/env bash
+# hashpass __ROLE__ installer -- served by the pool at __POOL__
+set -euo pipefail
+POOL="__POOL__"
+echo "Установка hashpass (__ROLE__); пул: $POOL"
+command -v python3 >/dev/null 2>&1 || { echo "нужен python3"; exit 1; }
+python3 -m pip install --user --break-system-packages "git+https://github.com/__REPO__@main"
+mkdir -p "$HOME/.hashpass"
+printf '{"url": "%s", "user": ""}\\n' "$POOL" > "$HOME/.hashpass/pool.json"
+__EXTRA__
+echo "Готово. __NEXT__"
+"""
+
+_ENGINE_ACTIVATE = 'mkdir -p "$HOME/.hashengine" && touch "$HOME/.hashengine/engine.enabled"'
+
+
+def _install_script(pool_url: str, *, role: str, nxt: str, extra: str = ":") -> str:
+    return (_INSTALL_TEMPLATE
+            .replace("__POOL__", pool_url.rstrip("/"))
+            .replace("__REPO__", _REPO)
+            .replace("__ROLE__", role)
+            .replace("__EXTRA__", extra)
+            .replace("__NEXT__", nxt))
+
+
+def render_install_script(pool_url: str) -> str:
+    """Return the student install script (installs `hashpass`, seeds the pool URL into pool.json)."""
+    return _install_script(pool_url, role="student", nxt="Запустите:  hashpass")
+
+
+def render_engine_install_script(pool_url: str) -> str:
+    """Return the author-gated engine install script (installs + activates hashengine here)."""
+    return _install_script(pool_url, role="engine", nxt="hashengine установлен.",
+                           extra=_ENGINE_ACTIVATE)
+
 _STYLE = """
 :root{color-scheme:light dark}
 body{font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif;margin:0;background:#f6f7f9;color:#1a1c1f}

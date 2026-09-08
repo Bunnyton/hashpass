@@ -1,8 +1,22 @@
 """hashengine CLI: author/server front end (build, push, serve, login, images) over hashpass.cli."""
 import argparse
+import os
+import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from hashpass import cli
+
+_ENABLE_ENV = "HASHENGINE_ENABLE"
+_HOME_ENV = "HASHENGINE_HOME"
+
+
+def _engine_enabled() -> bool:
+    """Whether the author toolkit is activated here (only make install / the pool installer set it)."""
+    if os.environ.get(_ENABLE_ENV):
+        return True
+    home = Path(os.environ.get(_HOME_ENV, Path.home() / ".hashengine"))
+    return (home / "engine.enabled").exists()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,5 +59,12 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Parse args and dispatch under the shared error boundary."""
+    """Parse args and dispatch under the shared error boundary (author toolkit must be activated)."""
+    if not _engine_enabled():
+        sys.stderr.write(
+            "hashengine не активирован на этой машине.\n"
+            "Это авторский инструмент; поставьте его с сайта пула (нужна роль автора):\n"
+            "  curl -fsSL <pool>/install-engine.sh | bash\n"
+            "или локально из клона: make install\n")
+        return 1
     return cli.run_main(build_parser(), _dispatch, argv)
