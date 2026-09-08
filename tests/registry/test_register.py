@@ -49,6 +49,24 @@ def test_register_closed_is_forbidden(registry):
 
 
 @pytest.mark.tier2
+def test_admin_cannot_change_own_role_via_api(registry):
+    registry.users.add("admin", "pw", role="admin")
+    c = RemoteRegistry(registry.base_url)
+    tok = c.login("admin", "pw")
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        c.set_role("admin", "student", token=tok)
+    assert exc.value.code == HTTPStatus.FORBIDDEN
+    assert registry.users.role("admin") == "admin"
+
+
+@pytest.mark.tier1
+def test_open_wraps_connection_failure():
+    c = RemoteRegistry("http://127.0.0.1:1")   # nothing listening -> a clear error, not raw errno
+    with pytest.raises(RuntimeError, match="не удалось подключиться"):
+        c.catalog(token="x")  # noqa: S106
+
+
+@pytest.mark.tier2
 def test_me_rejects_bad_token(registry):
     c = RemoteRegistry(registry.base_url)
     with pytest.raises(urllib.error.HTTPError) as exc:

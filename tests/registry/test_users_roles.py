@@ -33,6 +33,15 @@ def test_set_role_and_validation(tmp_path):
 
 
 @pytest.mark.tier1
+def test_delete_user(tmp_path):
+    us = UserStore(tmp_path / "u.json")
+    us.add("bob", "pw", group="G")
+    assert us.delete("bob") is True
+    assert not us.has("bob")
+    assert us.delete("bob") is False
+
+
+@pytest.mark.tier1
 def test_set_password_preserves_profile(tmp_path):
     us = UserStore(tmp_path / "u.json")
     us.add("bob", "old", role="author", group="G", comment="c")

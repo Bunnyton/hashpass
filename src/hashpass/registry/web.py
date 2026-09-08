@@ -163,15 +163,6 @@ def render_reset_form(token: str, error: str = "") -> str:
     return _page("Восстановление — hashpass", body, nav=False)
 
 
-def render_generated_password(user: str, password: str) -> str:
-    """Show a freshly generated admin password once, after an admin regenerated it."""
-    body = (f"<h1>Новый пароль администратора</h1>"
-            f"<p class='sub'>Пользователь <b>{escape(user)}</b> — сохраните, больше не покажется:</p>"
-            f"<code class='code'>{escape(password)}</code>"
-            "<p style='margin-top:16px'><a class='btn ghost' href='/web/users'>← к пользователям</a></p>")
-    return _page("Пароль администратора — hashpass", body)
-
-
 def render_reset_link(user: str, link: str) -> str:
     """Show the admin the freshly generated reset link for a user, to send out-of-band."""
     body = (f"<h1>Ссылка для сброса пароля</h1>"
@@ -206,10 +197,11 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
         done = progress.get(user, {})
         cells = "".join(_cell((done.get(str(e["ref"])) or {}).get("status")) for e in entries)
         passed = sum(1 for e in entries if (done.get(str(e["ref"])) or {}).get("status") == "passed")
-        rows.append(f"<tr><td title='{escape(str(p.get('comment', '')))}'>{escape(user)}</td>"
+        rows.append(f"<tr><td class='mono'>{escape(user)}</td>"
                     f"<td>{escape(str(p.get('group', '')))}</td>"
+                    f"<td>{escape(str(p.get('comment', '')))}</td>"
                     f"<td class='c'>{passed}/{len(entries)}</td>{cells}</tr>")
-    table = (f"<table><tr><th>Логин</th><th>Группа</th><th>Σ</th>{head}</tr>"
+    table = (f"<table><tr><th>Логин</th><th>Группа</th><th>Комментарий</th><th>Σ</th>{head}</tr>"
              f"{''.join(rows) or '<tr><td colspan=99>нет студентов</td></tr>'}</table>")
     return _page("Прогресс — hashpass", f"<h1>Прогресс студентов</h1>{picker}{table}")
 
@@ -229,42 +221,49 @@ def render_images(images: list[dict]) -> str:
 _ROLES = ("student", "author", "admin")
 
 
-def _user_row(p: dict) -> str:
+def _user_row(p: dict, current_user: str) -> str:
     user = escape(str(p["user"]))
     role = str(p.get("role", "student"))
-    opts = "".join(f"<option value='{r}'{' selected' if r == role else ''}>{r}</option>"
-                   for r in _ROLES)
-    role_form = (f"<form class='inline row' method='post' action='/web/users/role'>"
-                 f"<input type='hidden' name='user' value='{user}'>"
-                 f"<select name='role'>{opts}</select>"
-                 f"<button class='sm' type='submit'>OK</button></form>")
+    is_self = str(p["user"]) == current_user
     reset_form = (f"<form class='inline' method='post' action='/web/users/reset'>"
                   f"<input type='hidden' name='user' value='{user}'>"
                   f"<button class='sm ghost' type='submit'>ссылка сброса</button></form>")
+    if is_self:                                    # no self role-change / self-delete (lockout guard)
+        role_cell, del_cell = "<span class='dim'>вы</span>", "<span class='dim'>—</span>"
+    else:
+        opts = "".join(f"<option value='{r}'{' selected' if r == role else ''}>{r}</option>"
+                       for r in _ROLES)
+        role_cell = (f"<form class='inline row' method='post' action='/web/users/role'>"
+                     f"<input type='hidden' name='user' value='{user}'>"
+                     f"<select name='role'>{opts}</select>"
+                     f"<button class='sm' type='submit'>OK</button></form>")
+        del_cell = (f"<form class='inline' method='post' action='/web/users/delete'>"
+                    f"<input type='hidden' name='user' value='{user}'>"
+                    f"<button class='sm ghost' type='submit'>удалить</button></form>")
     return (f"<tr><td class='mono'>{user}</td><td>{escape(str(p.get('group', '')))}</td>"
             f"<td><span class='pill {escape(role)}'>{escape(role)}</span></td>"
             f"<td>{escape(str(p.get('comment', '')))}</td>"
-            f"<td>{role_form}</td><td>{reset_form}</td></tr>")
+            f"<td>{role_cell}</td><td>{reset_form}</td><td>{del_cell}</td></tr>")
 
 
-def render_users(profiles: list[dict], *, registration_open: bool) -> str:
-    """User management: per-user role change + reset link, and the registration toggle."""
+def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "") -> str:
+    """User management: per-user role change / reset link / delete, delete-group, registration toggle."""
     reg = "открыта" if registration_open else "закрыта"
     toggle_to = "false" if registration_open else "true"
     toggle_label = "Закрыть регистрацию" if registration_open else "Открыть регистрацию"
-    rows = "".join(_user_row(p) for p in profiles)
+    rows = "".join(_user_row(p, current_user) for p in profiles)
     body = ("<h1>Пользователи</h1>"
             f"<div class='card'><div class='row' style='justify-content:space-between'>"
             f"<span>Самостоятельная регистрация: <b>{reg}</b></span>"
             f"<form class='inline' method='post' action='/web/users/registration'>"
             f"<input type='hidden' name='open' value='{toggle_to}'>"
             f"<button class='sm' type='submit'>{toggle_label}</button></form></div></div>"
-            "<div class='card'><div class='row' style='justify-content:space-between'>"
-            "<span>Пароль администратора</span>"
-            "<form class='inline' method='post' action='/web/admin/regenerate'>"
-            "<button class='sm' type='submit'>Перегенерировать</button></form></div></div>"
+            "<div class='card'><form class='inline row' method='post' action='/web/users/delete-group'>"
+            "<span>Удалить группу целиком:</span>"
+            "<input name='group' placeholder='ИУ7-31' style='width:auto'>"
+            "<button class='sm ghost' type='submit'>Удалить группу</button></form></div>"
             "<h2>Все пользователи</h2>"
             "<table class='wide'><tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th>"
-            "<th>Изменить роль</th><th>Пароль</th></tr>"
-            f"{rows or '<tr><td colspan=6 class=dim>нет пользователей</td></tr>'}</table>")
+            "<th>Изменить роль</th><th>Пароль</th><th>Удалить</th></tr>"
+            f"{rows or '<tr><td colspan=7 class=dim>нет пользователей</td></tr>'}</table>")
     return _page("Пользователи — hashpass", body)

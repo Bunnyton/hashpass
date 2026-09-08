@@ -8,7 +8,6 @@ from hashpass.registry.web import (
     render_dashboard,
     render_engine_install_script,
     render_front,
-    render_generated_password,
     render_install_script,
     render_login,
     render_password_form,
@@ -62,6 +61,16 @@ def test_users_toggle_and_inline_controls():
     assert "/web/users/role" in html          # inline per-user role change
     assert "/web/users/reset" in html         # per-user reset link
     assert "ссылка сброса" in html
+    assert "/web/users/delete-group" in html  # delete a whole group
+
+
+@pytest.mark.tier1
+def test_users_self_row_has_no_role_or_delete():
+    profiles = [{"user": "admin", "role": "admin", "group": "", "comment": ""},
+                {"user": "s1", "role": "student", "group": "G", "comment": ""}]
+    html = render_users(profiles, registration_open=True, current_user="admin")
+    assert "/web/users/delete" in html   # a delete control exists (for s1)
+    assert "вы" in html                  # the admin's own row shows "вы", not controls
 
 
 @pytest.mark.tier1
@@ -71,7 +80,6 @@ def test_password_and_reset_forms():
     assert "Пароль изменён" in render_password_form(done=True)
     assert "TOK" in render_reset_form("TOK")
     assert "http://p/web/reset" in render_reset_link("bob", "http://p/web/reset?token=x")
-    assert "SEKRET-123" in render_generated_password("admin", "SEKRET-123")
 
 
 @pytest.mark.tier1

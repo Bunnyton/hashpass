@@ -28,6 +28,10 @@ class ProgressStore:
         self._root.mkdir(parents=True, exist_ok=True)
         self._path(user).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
+    def delete(self, user: str) -> None:
+        """Remove a user's progress file (no-op if absent)."""
+        self._path(user).unlink(missing_ok=True)
+
     def all(self) -> dict[str, dict[str, dict[str, object]]]:
         """Return every user's progress map (for the teacher dashboard)."""
         result: dict[str, dict[str, dict[str, object]]] = {}

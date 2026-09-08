@@ -141,20 +141,35 @@ def test_admin_reset_link_flow(registry):
 
 
 @pytest.mark.tier2
-def test_admin_regenerate_password(registry):
-    opener, cookie = _admin_cookie(registry)   # admin/pw, logged in
-    status, _, body = _req(opener, "POST", f"{registry.base_url}/web/admin/regenerate", cookie=cookie)
-    assert status == HTTPStatus.OK
-    new = re.search(r"<code class='code'>([^<]+)</code>", body).group(1)
-    assert RemoteRegistry(registry.base_url).login("admin", new)   # new password works
-    assert _req(_opener(), "POST", f"{registry.base_url}/web/login",
-                data={"user": "admin", "password": "pw"})[0] == HTTPStatus.UNAUTHORIZED  # old fails
-
-
-@pytest.mark.tier2
 def test_inline_role_change(registry):
     registry.users.add("stud", "pw", role="student", group="G")
     opener, cookie = _admin_cookie(registry)
     _req(opener, "POST", f"{registry.base_url}/web/users/role", cookie=cookie,
          data={"user": "stud", "role": "author"})
     assert registry.users.role("stud") == "author"
+
+
+@pytest.mark.tier2
+def test_admin_cannot_change_or_delete_self(registry):
+    opener, cookie = _admin_cookie(registry)   # user "admin"
+    _req(opener, "POST", f"{registry.base_url}/web/users/role", cookie=cookie,
+         data={"user": "admin", "role": "student"})
+    assert registry.users.role("admin") == "admin"     # self role change ignored
+    _req(opener, "POST", f"{registry.base_url}/web/users/delete", cookie=cookie,
+         data={"user": "admin"})
+    assert registry.users.has("admin")                 # self delete ignored
+
+
+@pytest.mark.tier2
+def test_delete_user_and_group(registry):
+    registry.users.add("s1", "pw", role="student", group="ИУ7-31")
+    registry.users.add("s2", "pw", role="student", group="ИУ7-31")
+    registry.users.add("s3", "pw", role="student", group="ИУ7-32")
+    opener, cookie = _admin_cookie(registry)
+    _req(opener, "POST", f"{registry.base_url}/web/users/delete", cookie=cookie, data={"user": "s3"})
+    assert not registry.users.has("s3")
+    _req(opener, "POST", f"{registry.base_url}/web/users/delete-group", cookie=cookie,
+         data={"group": "ИУ7-31"})
+    assert not registry.users.has("s1")
+    assert not registry.users.has("s2")
+    assert registry.users.has("admin")                 # other group untouched

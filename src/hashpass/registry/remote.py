@@ -58,8 +58,16 @@ class RemoteRegistry:
         return f"{self.base_url.rstrip('/')}{path}"
 
     def _open(self, req: urllib.request.Request) -> bytes:
-        with _DIRECT.open(req, timeout=_TIMEOUT) as resp:  # localhost only, no proxy
-            return resp.read()
+        try:
+            with _DIRECT.open(req, timeout=_TIMEOUT) as resp:
+                return resp.read()
+        except urllib.error.HTTPError:
+            raise                                   # a real HTTP status -> callers handle it
+        except (ssl.SSLError, ConnectionError, urllib.error.URLError) as exc:
+            msg = (f"не удалось подключиться к пулу {self.base_url}: {exc}. "
+                   "Проверьте адрес и схему: пул на https требует https:// в pool.json, "
+                   "а самоподписанный сертификат — HASHPASS_TLS_INSECURE=1.")
+            raise RuntimeError(msg) from exc
 
     def _cache_token(self, token: str) -> None:
         expiry = token_expiry(token)

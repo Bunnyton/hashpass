@@ -7,9 +7,7 @@ endpoints check the caller's role. It may be self-hosted as the pool; it must st
 at or used to touch the legacy server (no 185.x).
 """
 import json
-import os
 import re
-import secrets
 import ssl
 import tarfile
 import time
@@ -32,7 +30,6 @@ from hashpass.registry.web import (
     render_dashboard,
     render_engine_install_script,
     render_front,
-    render_generated_password,
     render_images,
     render_install_script,
     render_login,
@@ -180,8 +177,10 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_reset_do()
         elif path == "/web/users/reset":
             self._web_reset_link()
-        elif path == "/web/admin/regenerate":
-            self._web_regenerate_admin()
+        elif path == "/web/users/delete":
+            self._web_delete_user()
+        elif path == "/web/users/delete-group":
+            self._web_delete_group()
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -245,6 +244,9 @@ class _Handler(BaseHTTPRequestHandler):
         role = str(data.get("role", ""))
         if role not in ROLES:
             self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        if target == _user:                          # an admin cannot change their own role
+            self._empty(HTTPStatus.FORBIDDEN)
             return
         try:
             self.server.users.set_role(target, role)
@@ -443,12 +445,13 @@ class _Handler(BaseHTTPRequestHandler):
             self.server.progress().all(), group=group))
 
     def _web_users(self) -> None:
-        if self._session_role(("admin",)) is None:
+        actor = self._session_role(("admin",))
+        if actor is None:
             self._redirect("/web/login")
             return
         self._html(HTTPStatus.OK, render_users(
             self.server.users.all_users(),
-            registration_open=self.server.config.registration_open))
+            registration_open=self.server.config.registration_open, current_user=actor))
 
     def _web_images(self) -> None:
         if self._session_role(_AUTHOR_ROLES) is None:
@@ -491,18 +494,6 @@ class _Handler(BaseHTTPRequestHandler):
         self._html(HTTPStatus.OK,
                    render_reset_link(target, f"{self._pool_url()}/web/reset?token={token}"))
 
-    def _web_regenerate_admin(self) -> None:
-        if self._session_role(("admin",)) is None:
-            self._redirect("/web/login")
-            return
-        admin_user = os.environ.get("HASHPASS_ADMIN", "admin")
-        if not self.server.users.has(admin_user):
-            self._redirect("/web/users")
-            return
-        new = secrets.token_urlsafe(12)
-        self.server.users.set_password(admin_user, new)
-        self._html(HTTPStatus.OK, render_generated_password(admin_user, new))
-
     def _web_reset_do(self) -> None:
         form = self._form()
         token = form.get("token", "")
@@ -532,13 +523,40 @@ class _Handler(BaseHTTPRequestHandler):
         self._html(HTTPStatus.UNAUTHORIZED, render_login("Неверный логин/пароль или нет доступа."))
 
     def _web_set_role(self) -> None:
-        if self._session_role(("admin",)) is None:
+        actor = self._session_role(("admin",))
+        if actor is None:
             self._redirect("/web/login")
             return
         form = self._form()
         target, role = form.get("user", "").strip(), form.get("role", "")
-        if role in ROLES and self.server.users.has(target):
-            self.server.users.set_role(target, role)
+        if target != actor and role in ROLES and self.server.users.has(target):
+            self.server.users.set_role(target, role)   # never change your own role (self-lockout)
+        self._redirect("/web/users")
+
+    def _web_delete_user(self) -> None:
+        actor = self._session_role(("admin",))
+        if actor is None:
+            self._redirect("/web/login")
+            return
+        target = self._form().get("user", "").strip()
+        if target and target != actor:                 # never delete yourself
+            self.server.users.delete(target)
+            self.server.progress().delete(target)
+        self._redirect("/web/users")
+
+    def _web_delete_group(self) -> None:
+        actor = self._session_role(("admin",))
+        if actor is None:
+            self._redirect("/web/login")
+            return
+        group = self._form().get("group", "").strip()
+        if group:
+            prog = self.server.progress()
+            for profile in self.server.users.all_users():
+                user = str(profile["user"])
+                if str(profile.get("group", "")) == group and user != actor:
+                    self.server.users.delete(user)
+                    prog.delete(user)
         self._redirect("/web/users")
 
     def _web_registration(self) -> None:

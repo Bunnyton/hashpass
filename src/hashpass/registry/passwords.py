@@ -128,6 +128,15 @@ class UserStore:
         rec = self._load().get(user)
         return None if rec is None else str(rec["role"])
 
+    def delete(self, user: str) -> bool:
+        """Remove a user; return whether one was removed."""
+        users = self._load()
+        if user not in users:
+            return False
+        del users[user]
+        self._save(users)
+        return True
+
     def set_role(self, user: str, role: str) -> None:
         """Change a user's role (KeyError if unknown, ValueError on a bad role)."""
         if role not in ROLES:

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import signal
 import socket
 import subprocess
 import sys
@@ -895,6 +896,12 @@ def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  #
                          progress_path=env.registry / "progress",
                          certfile=cert, keyfile=key)   # binds now; a busy port raises here
     _seed_admin(users, _default_io(), reset=reset_admin)   # only after the port bound successfully
+
+    def _stop(*_a: object) -> None:
+        raise KeyboardInterrupt   # SIGTERM -> clean shutdown, same path as Ctrl-C
+
+    with contextlib.suppress(ValueError):   # signals are only settable in the main thread
+        signal.signal(signal.SIGTERM, _stop)
     scheme = "https" if cert is not None else "http"
     bound_host, bound_port = server.server_address
     if bound_host in ("0.0.0.0", "::"):   # noqa: S104  (operator explicitly exposed the pool)
