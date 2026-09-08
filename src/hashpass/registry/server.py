@@ -11,6 +11,7 @@ import re
 import tarfile
 import time
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -24,6 +25,7 @@ from hashpass.registry.passwords import ROLES, UserStore
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
+from hashpass.registry.web import render_dashboard, render_front, render_login, render_users
 from hashpass.taskdigest import task_digest
 
 _BEARER = "Bearer "
@@ -66,7 +68,8 @@ class RegistryServer(ThreadingHTTPServer):
 
 
 class _Handler(BaseHTTPRequestHandler):
-    """Routes: POST /login /register /admin/registration /admin/role; GET /me /closure /image; PUT /image."""
+    """Pool routes: auth (/login /register /me /admin/*), blobs (/image /task /closure),
+    catalog/progress (/catalog /submit /progress), and the web dashboard (/ /web/*)."""
 
     def log_message(self, fmt: str, *args: object) -> None:
         """Silence per-request stderr logging."""
@@ -146,6 +149,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._admin_role()
         elif path == "/submit":
             self._submit()
+        elif path == "/web/login":
+            self._web_login()
+        elif path == "/web/users/role":
+            self._web_set_role()
+        elif path == "/web/users/registration":
+            self._web_registration()
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -221,6 +230,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
+        if path == "/" or path.startswith("/web"):
+            self._web_get(path)
+            return
         if path == "/me":
             self._me()
             return
@@ -292,6 +304,110 @@ class _Handler(BaseHTTPRequestHandler):
         store = self.server.progress()
         payload = store.all() if self.server.users.role(user) in _AUTHOR_ROLES else {user: store.get(user)}
         self._json(HTTPStatus.OK, {"progress": payload})
+
+    # -- web dashboard (server-rendered HTML, cookie session) --------------
+
+    def _html(self, status: HTTPStatus, body: str, *, cookie: str | None = None) -> None:
+        data = body.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        if cookie is not None:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _redirect(self, location: str, *, cookie: str | None = None) -> None:
+        self.send_response(HTTPStatus.SEE_OTHER)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        if cookie is not None:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+
+    def _pool_url(self) -> str:
+        return f"http://{self.headers.get('Host', '127.0.0.1')}"
+
+    def _form(self) -> dict[str, str]:
+        parsed = parse_qs(self._read_body().decode("utf-8", "replace"))
+        return {key: values[0] for key, values in parsed.items()}
+
+    def _session_user(self) -> str | None:
+        raw = self.headers.get("Cookie", "")
+        if not raw:
+            return None
+        jar = SimpleCookie()
+        jar.load(raw)
+        if "hp_session" not in jar:
+            return None
+        return verify_token(self.server.secret, jar["hp_session"].value, now=time.time())
+
+    def _session_role(self, roles: tuple[str, ...]) -> str | None:
+        user = self._session_user()
+        if user is not None and self.server.users.role(user) in roles:
+            return user
+        return None
+
+    def _web_get(self, path: str) -> None:
+        if path == "/":
+            self._html(HTTPStatus.OK, render_front(self._pool_url()))
+        elif path == "/web/login":
+            self._html(HTTPStatus.OK, render_login())
+        elif path == "/web/logout":
+            self._redirect("/web/login", cookie="hp_session=; Max-Age=0; Path=/")
+        elif path == "/web":
+            self._web_dashboard()
+        elif path == "/web/users":
+            self._web_users()
+        else:
+            self._empty(HTTPStatus.NOT_FOUND)
+
+    def _web_dashboard(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        group = parse_qs(urlsplit(self.path).query).get("group", [None])[0]
+        self._html(HTTPStatus.OK, render_dashboard(
+            self.server.users.all_users(),
+            [e.as_dict() for e in self.server.catalog().entries()],
+            self.server.progress().all(), group=group))
+
+    def _web_users(self) -> None:
+        if self._session_role(("admin",)) is None:
+            self._redirect("/web/login")
+            return
+        self._html(HTTPStatus.OK, render_users(
+            self.server.users.all_users(),
+            registration_open=self.server.config.registration_open))
+
+    def _web_login(self) -> None:
+        form = self._form()
+        user = form.get("user", "").strip()
+        if (self.server.users.verify(user, form.get("password", ""))
+                and self.server.users.role(user) in _AUTHOR_ROLES):
+            token = issue_token(self.server.secret, user, now=time.time())
+            self._redirect("/web", cookie=f"hp_session={token}; Path=/; HttpOnly; SameSite=Lax")
+            return
+        self._html(HTTPStatus.UNAUTHORIZED, render_login("Неверный логин/пароль или нет доступа."))
+
+    def _web_set_role(self) -> None:
+        if self._session_role(("admin",)) is None:
+            self._redirect("/web/login")
+            return
+        form = self._form()
+        target, role = form.get("user", "").strip(), form.get("role", "")
+        if role in ROLES and self.server.users.has(target):
+            self.server.users.set_role(target, role)
+        self._redirect("/web/users")
+
+    def _web_registration(self) -> None:
+        if self._session_role(("admin",)) is None:
+            self._redirect("/web/login")
+            return
+        self.server.config.registration_open = self._form().get("open") == "true"
+        if self.server.config_path is not None:
+            save_config(self.server.config_path, self.server.config)
+        self._redirect("/web/users")
 
     def do_HEAD(self) -> None:
         target = self._image_parts()

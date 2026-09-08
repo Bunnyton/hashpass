@@ -1,0 +1,78 @@
+"""Tier2: web login/cookie/dashboard flow over the live server."""
+import urllib.error
+import urllib.parse
+import urllib.request
+from http import HTTPStatus
+
+import pytest
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *_args, **_kwargs) -> None:  # noqa: ANN002, ANN003
+        return None  # inspect 303s instead of following them
+
+
+def _opener() -> urllib.request.OpenerDirector:
+    return urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({}))
+
+
+def _req(opener, method, url, *, cookie=None, data=None) -> tuple:
+    headers = {}
+    if cookie:
+        headers["Cookie"] = cookie
+    body = None
+    if data is not None:
+        body = urllib.parse.urlencode(data).encode("utf-8")
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+    req = urllib.request.Request(url, data=body, method=method, headers=headers)  # noqa: S310
+    try:
+        resp = opener.open(req, timeout=10)
+        return resp.status, resp.headers, resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers, exc.read().decode("utf-8")
+
+
+@pytest.mark.tier2
+def test_login_sets_cookie_and_dashboard_lists_students(registry):
+    registry.users.add("teacher", "pw", role="admin", full_name="Teacher", group="")
+    registry.users.add("s1", "pw", role="student", full_name="Иван", group="ИУ7-31")
+    opener = _opener()
+
+    # anonymous dashboard -> redirect to login
+    status, headers, _ = _req(opener, "GET", f"{registry.base_url}/web")
+    assert status == HTTPStatus.SEE_OTHER
+    assert headers["Location"] == "/web/login"
+
+    # login -> 303 + session cookie
+    status, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
+                              data={"user": "teacher", "password": "pw"})
+    assert status == HTTPStatus.SEE_OTHER
+    cookie = headers["Set-Cookie"].split(";")[0]
+    assert cookie.startswith("hp_session=")
+
+    # dashboard with the cookie renders the student
+    status, _, body = _req(opener, "GET", f"{registry.base_url}/web", cookie=cookie)
+    assert status == HTTPStatus.OK
+    assert "Иван" in body
+
+
+@pytest.mark.tier2
+def test_web_login_rejects_student(registry):
+    registry.users.add("s1", "pw", role="student", full_name="I", group="G")
+    status, _, body = _req(_opener(), "POST", f"{registry.base_url}/web/login",
+                           data={"user": "s1", "password": "pw"})
+    assert status == HTTPStatus.UNAUTHORIZED
+    assert "нет доступа" in body
+
+
+@pytest.mark.tier2
+def test_web_admin_can_toggle_registration(registry):
+    registry.users.add("admin", "pw", role="admin", full_name="A", group="")
+    opener = _opener()
+    _, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
+                         data={"user": "admin", "password": "pw"})
+    cookie = headers["Set-Cookie"].split(";")[0]
+    _req(opener, "POST", f"{registry.base_url}/web/users/registration",
+         cookie=cookie, data={"open": "false"})
+    _, _, body = _req(opener, "GET", f"{registry.base_url}/web/users", cookie=cookie)
+    assert "Открыть регистрацию" in body   # now closed -> the toggle offers to open it
