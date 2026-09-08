@@ -16,6 +16,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_push = sub.add_parser("push", help="push an image/task to a registry")
     p_push.add_argument("ref")
     p_push.add_argument("registry")
+    p_push.add_argument("--task", type=int, metavar="N",
+                        help="publish this task at catalog slot N")
+    p_push.add_argument("--title", default="", help="task title shown in the catalog")
     sub.add_parser("serve", help="run the local registry service (127.0.0.1)")
     p_login = sub.add_parser("login", help="log in to a registry (caches a token)")
     p_login.add_argument("registry")
@@ -33,7 +36,7 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:
     if command == "build":
         return cli.cmd_build(env, args.taskfile, args.tag)
     if command == "push":
-        return cli.cmd_push(env, args.ref, args.registry)
+        return cli.cmd_push(env, args.ref, args.registry, task_number=args.task, title=args.title)
     if command == "serve":
         return cli.cmd_serve(env)
     if command == "login":

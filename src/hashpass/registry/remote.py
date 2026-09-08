@@ -6,6 +6,7 @@ legacy server (no 185.x). Tokens are cached locally and reused until they expire
 """
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -21,15 +22,15 @@ from hashpass.registry.token import token_expiry
 _TIMEOUT = 30
 _ALLOWED_SCHEMES = ("http://", "https://")
 
-# This client only ever talks to a localhost registry (see the SECURITY BOUNDARY above), so it
-# must NOT route through an ambient HTTP(S)_PROXY -- a sandbox/corp proxy would intercept
-# 127.0.0.1 and answer 500. An empty ProxyHandler disables proxying for every request.
+# The pool is reached directly (loopback in tests), so this client must NOT route through an
+# ambient HTTP(S)_PROXY -- a sandbox/corp proxy would intercept 127.0.0.1 and answer 500. An empty
+# ProxyHandler disables proxying for every request.
 _DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 @dataclass
 class RemoteRegistry:
-    """HTTP registry client: anon pull, token-gated push. Localhost/dev/test only, never shipped."""
+    """HTTP pool client: anonymous pull, token-gated push/register/submit. Never point at 185.x."""
 
     base_url: str
     cache: CredentialCache | None = None
@@ -133,17 +134,27 @@ class RemoteRegistry:
             copied.append(item)
         return copied
 
-    def push_task(self, task_dir: Path, name: str, version: str, *, token: str | None = None) -> None:
-        """Push a task's artifacts (bundle/hp/meta) to the pool (requires author role)."""
-        self._put_task(name, version, pack_task(task_dir), self._auth_token(token))
+    def push_task(self, task_dir: Path, name: str, version: str, *,  # noqa: PLR0913
+                  number: int | None = None, title: str = "", token: str | None = None) -> None:
+        """Push a task's artifacts to the pool; with `number`, also claim that catalog slot."""
+        query = ""
+        if number is not None:
+            query = "?" + urllib.parse.urlencode({"number": number, "title": title})
+        self._put_task(name, version, query, pack_task(task_dir), self._auth_token(token))
+
+    def catalog(self, *, token: str | None = None) -> list[dict[str, object]]:
+        """Return the ordered task catalog (requires a login token)."""
+        result = self._get_json("/catalog", token=self._auth_token(token))
+        return list(result.get("catalog", []))
 
     def pull_task(self, ref: str, dest_task_dir: Path, *, token: str | None = None) -> None:
         """Pull a task's artifacts into dest_task_dir (requires a login token)."""
         unpack_task(self._get_task(ref, token=self._auth_token(token)), dest_task_dir)
 
-    def _put_task(self, name: str, version: str, blob: bytes, token: str) -> None:
+    def _put_task(self, name: str, version: str, query: str,
+                  blob: bytes, token: str) -> None:
         req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(f"/task/{name}/{version}"), data=blob, method="PUT",
+            self._url(f"/task/{name}/{version}{query}"), data=blob, method="PUT",
             headers={"Authorization": f"Bearer {token}",
                      "Content-Type": "application/octet-stream"},
         )

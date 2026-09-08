@@ -30,11 +30,12 @@ def _no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @dataclass
 class RunningRegistry:
-    """A live localhost registry server plus its backing image store and user store."""
+    """A live localhost registry server plus its backing image store, user store, and catalog path."""
 
     base_url: str
     store: ImageStore
     users: UserStore
+    catalog_path: Path
 
 
 @pytest.fixture
@@ -42,12 +43,13 @@ def registry(tmp_path: Path) -> Iterator[RunningRegistry]:
     """Start a localhost registry server on an ephemeral port; shut it down on teardown."""
     store = ImageStore(tmp_path / "srv")
     users = UserStore(tmp_path / "users.json")
-    server = make_server(store, users, _SECRET)
+    catalog_path = tmp_path / "catalog.json"
+    server = make_server(store, users, _SECRET, catalog_path=catalog_path)
     host, port = server.server_address
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield RunningRegistry(f"http://{host}:{port}", store, users)
+        yield RunningRegistry(f"http://{host}:{port}", store, users, catalog_path)
     finally:
         server.shutdown()
         thread.join(timeout=5)

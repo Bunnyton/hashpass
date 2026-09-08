@@ -35,11 +35,13 @@ from hashpass.recipe.parse import load_recipe
 from hashpass.registry.config import load_config
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.passwords import UserStore
+from hashpass.registry.refs import split_ref
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.server import make_server
 from hashpass.registry.token import token_user
 from hashpass.taskbuild import build_task
 from hashpass.taskrun import run_task
+from hashpass.taskstore import task_dir
 
 _ENV_HOME = "HASHPASS_HOME"
 _HOME_DIRNAME = ".hashpass"
@@ -820,7 +822,8 @@ def cmd_serve(env: Home) -> int:
     config_path = env.registry / "config.json"
     _seed_admin(users, _default_io())
     server = make_server(store, users, _registry_secret(env), host=host, port=port,
-                         config=load_config(config_path), config_path=config_path)
+                         config=load_config(config_path), config_path=config_path,
+                         catalog_path=env.registry / "catalog.json")
     bound_host, bound_port = server.server_address
     sys.stdout.write(f"пул на http://{bound_host}:{bound_port} (Ctrl-C — остановить)\n")
     try:
@@ -844,12 +847,22 @@ def cmd_login(env: Home, registry: str, user: str | None) -> int:
     return 0
 
 
-def cmd_push(env: Home, ref: str, registry: str) -> int:
-    """Push a ref and its `from` closure to a registry (using the cached login token)."""
+def cmd_push(env: Home, ref: str, registry: str, *,
+             task_number: int | None = None, title: str = "") -> int:
+    """Push a ref (+ its `from` closure) to a registry; with a task number, publish it at that slot."""
     store = ImageStore(env.images)
     cache = CredentialCache(env.creds)
-    copied = RemoteRegistry(registry, cache=cache).push(store, ref)
+    client = RemoteRegistry(registry, cache=cache)
+    copied = client.push(store, ref)
     sys.stdout.write(f"pushed {ref} ({len(copied)} layer(s))\n")
+    if task_number is not None:
+        tdir = task_dir(ref, store)
+        if not tdir.exists():
+            msg = f"{ref} is not a task (no task/ artifacts); nothing to publish with --task"
+            raise ValueError(msg)
+        name, version = split_ref(ref)
+        client.push_task(tdir, name, version, number=task_number, title=title)
+        sys.stdout.write(f"published task #{task_number}: {ref}\n")
     return 0
 
 

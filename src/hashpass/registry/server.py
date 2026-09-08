@@ -12,14 +12,16 @@ import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
+from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.passwords import ROLES, UserStore
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
+from hashpass.taskdigest import task_digest
 
 _BEARER = "Bearer "
 _MIN_IMAGE_PARTS = 3  # /<kind>/<name.../>/<version>: kind + >=1 name segment + version
@@ -32,14 +34,19 @@ class RegistryServer(ThreadingHTTPServer):
 
     def __init__(self, address: tuple[str, int], *, store: ImageStore,  # noqa: PLR0913
                  users: UserStore, secret: bytes, config: ServerConfig | None = None,
-                 config_path: Path | None = None) -> None:
-        """Bind the server with its image store, user store, HMAC secret, and config."""
+                 config_path: Path | None = None, catalog_path: Path | None = None) -> None:
+        """Bind the server with its image store, user store, HMAC secret, config, and catalog."""
         super().__init__(address, _Handler)
         self.store = store
         self.users = users
         self.secret = secret
         self.config = config or ServerConfig()
         self.config_path = config_path
+        self.catalog_path = catalog_path
+
+    def catalog(self) -> Catalog:
+        """Return a Catalog over this server's catalog file (a temp path if none was set)."""
+        return Catalog(self.catalog_path or (Path(self.store.root) / "catalog.json"))
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -199,6 +206,9 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/me":
             self._me()
             return
+        if path == "/catalog":
+            self._catalog()
+            return
         parts = path.strip("/").split("/")
         if len(parts) >= _MIN_IMAGE_PARTS and parts[0] == "closure":
             self._serve_closure(f"{'/'.join(parts[1:-1])}:{parts[-1]}")
@@ -216,6 +226,13 @@ class _Handler(BaseHTTPRequestHandler):
             self._empty(HTTPStatus.UNAUTHORIZED)
             return
         self._json(HTTPStatus.OK, profile)
+
+    def _catalog(self) -> None:
+        if self._token_user() is None:
+            self._empty(HTTPStatus.UNAUTHORIZED)
+            return
+        self._json(HTTPStatus.OK,
+                   {"catalog": [e.as_dict() for e in self.server.catalog().entries()]})
 
     def do_HEAD(self) -> None:
         target = self._image_parts()
@@ -257,6 +274,18 @@ class _Handler(BaseHTTPRequestHandler):
         except (ValueError, OSError, tarfile.TarError):
             self._empty(HTTPStatus.BAD_REQUEST)
             return
+        query = parse_qs(urlsplit(self.path).query)
+        number = query.get("number", [""])[0]
+        if number:  # register/overwrite this task's catalog slot with a server-computed digest
+            name, version = ref.rsplit(":", 1)
+            title = query.get("title", [""])[0]
+            try:
+                slot = int(number)
+            except ValueError:
+                self._empty(HTTPStatus.BAD_REQUEST)
+                return
+            self.server.catalog().put(
+                CatalogEntry(slot, name, version, title, task_digest(task_dir)))
         self._empty(HTTPStatus.CREATED)
 
     def _serve_closure(self, ref: str) -> None:
@@ -292,7 +321,8 @@ class _Handler(BaseHTTPRequestHandler):
 def make_server(store: ImageStore, users: UserStore, secret: bytes, *,  # noqa: PLR0913
                 host: str = "127.0.0.1", port: int = 0,
                 config: ServerConfig | None = None,
-                config_path: Path | None = None) -> RegistryServer:
+                config_path: Path | None = None,
+                catalog_path: Path | None = None) -> RegistryServer:
     """Create a pool registry server (port 0 = ephemeral). Default host is loopback."""
     return RegistryServer((host, port), store=store, users=users, secret=secret,
-                          config=config, config_path=config_path)
+                          config=config, config_path=config_path, catalog_path=catalog_path)

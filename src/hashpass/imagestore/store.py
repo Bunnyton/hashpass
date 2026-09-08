@@ -60,6 +60,11 @@ class ImageStore:
         """
         self._root = Path(root)
 
+    @property
+    def root(self) -> Path:
+        """The store's images/ root directory."""
+        return self._root
+
     def _dir(self, name: str, version: str) -> Path:
         return self._root / name / version
 
