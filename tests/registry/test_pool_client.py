@@ -24,6 +24,30 @@ def test_pool_config_roundtrip(tmp_path):
 
 
 @pytest.mark.tier1
+def test_config_pool_shows_and_sets(tmp_path, monkeypatch):
+    monkeypatch.delenv("HASHPASS_POOL", raising=False)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "h")}, default_home=tmp_path)
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
+    assert cli.cmd_config_pool(env, io=io) == 0
+    assert "не задан" in "".join(out)
+    assert cli.cmd_config_pool(env, "1.2.3.4:8080", io=io) == 0     # scheme optional
+    assert cli.load_pool(env)["url"] == "1.2.3.4:8080"
+    out.clear()
+    assert cli.cmd_config_pool(env, io=io) == 0
+    assert "1.2.3.4:8080" in "".join(out)
+
+
+@pytest.mark.tier1
+def test_config_pool_switch_drops_stale_user(tmp_path):
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "h")}, default_home=tmp_path)
+    cli.save_pool(env, "http://old", "alice")
+    cli.cmd_config_pool(env, "http://new", io=cli.Io(read=lambda _p: None, write=lambda _s: None,
+                                                     clock=lambda: ""))
+    assert cli.load_pool(env) == {"url": "http://new", "user": ""}   # login hint reset on switch
+
+
+@pytest.mark.tier1
 def test_pool_url_resolution_precedence(tmp_path, monkeypatch):
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "h")}, default_home=tmp_path)
     monkeypatch.delenv("HASHPASS_POOL", raising=False)

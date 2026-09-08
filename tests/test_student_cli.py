@@ -46,6 +46,17 @@ def test_register_login_pull_dispatch(monkeypatch):
 
 
 @pytest.mark.tier1
+@pytest.mark.usefixtures("fake_env")
+def test_config_pool_dispatch(monkeypatch):
+    calls = []
+    monkeypatch.setattr(student_cli.cli, "cmd_config_pool",
+                        lambda _env, url: calls.append(url) or 0)
+    assert student_cli.main(["config", "pool", "1.2.3.4:8080"]) == 0
+    assert student_cli.main(["config", "pool"]) == 0          # no URL -> show current
+    assert calls == ["1.2.3.4:8080", None]
+
+
+@pytest.mark.tier1
 def test_unknown_command_exits_nonzero():
     with pytest.raises(SystemExit) as exc:
         student_cli.main(["frobnicate"])

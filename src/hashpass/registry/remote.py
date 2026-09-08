@@ -12,7 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from pathlib import Path
 from time import time
@@ -24,16 +24,16 @@ from hashpass.registry.refs import closure_refs, normalize_ref, split_ref
 from hashpass.registry.token import token_expiry
 
 _TIMEOUT = 30
-_ALLOWED_SCHEMES = ("http://", "https://")
 
 # The pool is reached directly (loopback in tests), so this client must NOT route through an
 # ambient HTTP(S)_PROXY -- a sandbox/corp proxy would intercept 127.0.0.1 and answer 500. An empty
-# ProxyHandler disables proxying for every request. For an HTTPS pool: HASHPASS_TLS_CAFILE trusts a
-# CA (e.g. a self-signed cert), HASHPASS_TLS_INSECURE=1 skips verification entirely (self-signed dev).
-def _build_opener() -> urllib.request.OpenerDirector:
+# ProxyHandler disables proxying for every request. For an HTTPS pool: a self-signed certificate is
+# accepted automatically (the common teaching-pool setup); HASHPASS_TLS_CAFILE pins a specific CA
+# (and then a bad cert is NOT silently accepted), HASHPASS_TLS_INSECURE=1 forces no verification.
+def _build_opener(*, insecure: bool = False) -> urllib.request.OpenerDirector:
     handlers: list[urllib.request.BaseHandler] = [urllib.request.ProxyHandler({})]
     cafile = os.environ.get("HASHPASS_TLS_CAFILE")
-    if os.environ.get("HASHPASS_TLS_INSECURE"):
+    if insecure or os.environ.get("HASHPASS_TLS_INSECURE"):
         handlers.append(urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))  # noqa: S323, SLF001
     elif cafile:
         handlers.append(urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=cafile)))
@@ -41,6 +41,13 @@ def _build_opener() -> urllib.request.OpenerDirector:
 
 
 _DIRECT = _build_opener()
+_DIRECT_INSECURE = _build_opener(insecure=True)   # retried opener that trusts a self-signed pool
+
+
+def _is_cert_error(exc: Exception) -> bool:
+    """Whether exc is a TLS certificate-verification failure (self-signed / untrusted CA)."""
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    return isinstance(reason, ssl.SSLCertVerificationError)
 
 
 @dataclass
@@ -50,24 +57,62 @@ class RemoteRegistry:
     base_url: str
     cache: CredentialCache | None = None
     sudo: bool = False
+    _resolved_base: str | None = field(default=None, init=False, repr=False, compare=False)
 
-    def _url(self, path: str) -> str:
-        if not self.base_url.startswith(_ALLOWED_SCHEMES):
-            msg = f"registry base_url must be http(s): {self.base_url!r}"
-            raise ValueError(msg)
-        return f"{self.base_url.rstrip('/')}{path}"
+    def _bases(self) -> list[str]:
+        """
+        Candidate base URLs to try, best first, so the user need not spell out the scheme.
 
-    def _open(self, req: urllib.request.Request) -> bytes:
+        A base resolved by a prior successful call is reused. Otherwise: no scheme -> try https
+        then http; a bare http:// -> try it, then https:// (an http->https fallback for a
+        TLS-only pool); an explicit https:// is used as given (never downgraded to plain http).
+        """
+        if self._resolved_base:
+            return [self._resolved_base]
+        raw = self.base_url.rstrip("/")
+        if raw.startswith("https://"):
+            return [raw]
+        if raw.startswith("http://"):
+            return [raw, "https://" + raw[len("http://"):]]
+        return ["https://" + raw, "http://" + raw]
+
+    def _open_once(self, req: urllib.request.Request) -> bytes:
+        """Open one request, transparently accepting a self-signed pool certificate."""
         try:
             with _DIRECT.open(req, timeout=_TIMEOUT) as resp:
                 return resp.read()
         except urllib.error.HTTPError:
             raise                                   # a real HTTP status -> callers handle it
-        except (ssl.SSLError, ConnectionError, urllib.error.URLError) as exc:
-            msg = (f"не удалось подключиться к пулу {self.base_url}: {exc}. "
-                   "Проверьте адрес и схему: пул на https требует https:// в pool.json, "
-                   "а самоподписанный сертификат — HASHPASS_TLS_INSECURE=1.")
-            raise RuntimeError(msg) from exc
+        except (urllib.error.URLError, ssl.SSLError) as exc:
+            if os.environ.get("HASHPASS_TLS_CAFILE") or not _is_cert_error(exc):
+                raise
+            with _DIRECT_INSECURE.open(req, timeout=_TIMEOUT) as resp:   # self-signed: trust it
+                return resp.read()
+
+    def _send(self, method: str, path: str, *, data: bytes | None = None,
+              headers: dict[str, str] | None = None) -> bytes:
+        """
+        Send a request, auto-selecting http/https and accepting a self-signed pool cert.
+
+        The first scheme that connects is cached for the rest of this client's life.
+        """
+        last: Exception | None = None
+        for base in self._bases():
+            req = urllib.request.Request(  # noqa: S310  (scheme is http/https by construction)
+                f"{base}{path}", data=data, method=method, headers=dict(headers or {}))
+            try:
+                body = self._open_once(req)
+            except urllib.error.HTTPError:
+                self._resolved_base = base          # the server answered -> this scheme is right
+                raise
+            except (urllib.error.URLError, ssl.SSLError, ConnectionError) as exc:
+                last = exc                          # this scheme did not connect -> try the next
+                continue
+            self._resolved_base = base
+            return body
+        msg = (f"не удалось подключиться к пулу {self.base_url}: {last}. "
+               "Проверьте адрес и что пул запущен.")
+        raise RuntimeError(msg) from last
 
     def _cache_token(self, token: str) -> None:
         expiry = token_expiry(token)
@@ -89,19 +134,12 @@ class RemoteRegistry:
         headers = {"Content-Type": "application/json"}
         if token is not None:
             headers["Authorization"] = f"Bearer {token}"
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(path), data=json.dumps(payload).encode("utf-8"), method="POST",
-            headers=headers,
-        )
-        raw = self._open(req)
+        raw = self._send("POST", path, data=json.dumps(payload).encode("utf-8"), headers=headers)
         return json.loads(raw.decode("utf-8")) if raw else {}
 
     def _get_json(self, path: str, *, token: str | None = None) -> dict[str, object]:
         headers = {"Authorization": f"Bearer {token}"} if token is not None else {}
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(path), method="GET", headers=headers,
-        )
-        return json.loads(self._open(req).decode("utf-8"))
+        return json.loads(self._send("GET", path, headers=headers).decode("utf-8"))
 
     def login(self, user: str, password: str) -> str:
         """Authenticate; cache and return a signed token. Server checks the PBKDF2 hash."""
@@ -225,42 +263,27 @@ class RemoteRegistry:
 
     def _put_task(self, name: str, version: str, query: str,
                   blob: bytes, token: str) -> None:
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(f"/task/{name}/{version}{query}"), data=blob, method="PUT",
-            headers={"Authorization": f"Bearer {token}",
-                     "Content-Type": "application/octet-stream"},
-        )
-        self._open(req)
+        self._send("PUT", f"/task/{name}/{version}{query}", data=blob,
+                   headers={"Authorization": f"Bearer {token}",
+                            "Content-Type": "application/octet-stream"})
 
     def _get_task(self, ref: str, *, token: str) -> bytes:
         name, version = split_ref(ref)
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(f"/task/{name}/{version}"), method="GET",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        return self._open(req)
+        return self._send("GET", f"/task/{name}/{version}",
+                          headers={"Authorization": f"Bearer {token}"})
 
     def _closure(self, ref: str) -> list[str]:
         name, version = split_ref(ref)
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(f"/closure/{name}/{version}"), method="GET",
-        )
-        return json.loads(self._open(req).decode("utf-8"))["refs"]
+        return json.loads(self._send("GET", f"/closure/{name}/{version}").decode("utf-8"))["refs"]
 
     def _get_image(self, ref: str) -> bytes:
         name, version = split_ref(ref)
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(f"/image/{name}/{version}"), method="GET",
-        )
-        return self._open(req)
+        return self._send("GET", f"/image/{name}/{version}")
 
     def _has_image(self, ref: str) -> bool:
         name, version = split_ref(ref)
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(f"/image/{name}/{version}"), method="HEAD",
-        )
         try:
-            self._open(req)
+            self._send("HEAD", f"/image/{name}/{version}")
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.NOT_FOUND:
                 return False
@@ -268,9 +291,6 @@ class RemoteRegistry:
         return True
 
     def _put_image(self, name: str, version: str, blob: bytes, token: str) -> None:
-        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
-            self._url(f"/image/{name}/{version}"), data=blob, method="PUT",
-            headers={"Authorization": f"Bearer {token}",
-                     "Content-Type": "application/octet-stream"},
-        )
-        self._open(req)
+        self._send("PUT", f"/image/{name}/{version}", data=blob,
+                   headers={"Authorization": f"Bearer {token}",
+                            "Content-Type": "application/octet-stream"})

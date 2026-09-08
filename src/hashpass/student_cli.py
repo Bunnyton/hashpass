@@ -17,6 +17,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("pull", help="pull new/updated tasks from the pool")
     p_run = sub.add_parser("run", help="run a task by catalog number or ref")
     p_run.add_argument("task", help="catalog number (e.g. 1) or a ref (name:version)")
+    p_cfg = sub.add_parser("config", help="показать/задать настройки (адрес пула)")
+    cfg_sub = p_cfg.add_subparsers(dest="config_key")
+    p_cfg_pool = cfg_sub.add_parser("pool", help="показать или задать адрес пула")
+    p_cfg_pool.add_argument("url", nargs="?", help="новый адрес пула (без него — показать текущий)")
     return parser
 
 
@@ -31,6 +35,8 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:
         return cli.cmd_pool_login(env, args.pool)
     if command == "pull":
         return cli.cmd_pool_pull(env)
+    if command == "config":
+        return cli.cmd_config_pool(env, getattr(args, "url", None))
     return cli.cmd_pool_run(env, args.task)
 
 

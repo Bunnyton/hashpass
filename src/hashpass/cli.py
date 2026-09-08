@@ -1052,6 +1052,29 @@ def _pool_token(env: Home, url: str) -> str | None:
     return CredentialCache(env.creds).cached_token(url, now=time.time())
 
 
+def cmd_config_pool(env: Home, url: str | None = None, io: Io | None = None) -> int:
+    """
+    Show or set the saved pool address (`hashpass config pool [URL]`).
+
+    Without URL, print the current pool. With URL, save it to pool.json so later runs use it;
+    the scheme is optional (the client tries https then http) — e.g. `config pool 1.2.3.4:8080`.
+    """
+    io = io or _default_io()
+    if url is None:
+        current = _pool_url(env)
+        io.write(f"текущий пул: {current}\n" if current else "пул не задан\n")
+        return 0
+    url = url.strip()
+    if not url:
+        msg = "укажите адрес пула, например: hashpass config pool 1.2.3.4:8080"
+        raise RuntimeError(msg)
+    pool = load_pool(env)
+    keep_user = str(pool.get("user", "")) if pool.get("url") == url else ""
+    save_pool(env, url, keep_user)   # switching pools drops the stale login hint
+    io.write(f"\x1b[32m✓ пул сохранён\x1b[0m: {url}\n")
+    return 0
+
+
 def _prompt_new_password(io: Io) -> str:
     """Prompt for a new password twice, enforcing the policy, until the two entries match."""
     io.write("пароль: не короче 8 символов, минимум одна буква, одна цифра и один спецсимвол\n")
