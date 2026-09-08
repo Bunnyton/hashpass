@@ -45,6 +45,7 @@ from hashpass.taskbuild import build_task
 from hashpass.taskdigest import task_digest
 from hashpass.taskrun import run_task
 from hashpass.taskstore import task_dir
+from hashpass.version import check_and_update
 
 _ENV_HOME = "HASHPASS_HOME"
 _HOME_DIRNAME = ".hashpass"
@@ -1102,6 +1103,10 @@ def run_main(parser: argparse.ArgumentParser,
     and `hashengine` (author) front ends; each supplies its own parser and dispatch,
     including how a missing sub-command is handled.
     """
+    real_argv = list(argv) if argv is not None else sys.argv[1:]
+    with contextlib.suppress(Exception):   # self-update is best-effort; never block the CLI
+        check_and_update(resolve_root(os.environ, default_home=Path.home()),
+                         parser.prog, real_argv)
     args = parser.parse_args(argv)
     try:
         env = build_env()

@@ -10,6 +10,12 @@ if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
 
+@pytest.fixture(autouse=True)
+def _no_auto_update(monkeypatch) -> None:
+    """Never let the launch-time self-update check hit the network during tests."""
+    monkeypatch.setenv("HASHPASS_NO_UPDATE", "1")
+
+
 @pytest.fixture(scope="session")
 def base_tar(tmp_path_factory):
     """
