@@ -21,7 +21,8 @@ from hashpass.registry.web import (
 def test_front_shows_install_command():
     html = render_front("http://pool.example/")
     assert "http://pool.example/install.sh" in html
-    assert "curl" in html
+    assert "curl -fsSL http://pool.example/install.sh" in html   # plain http: no -k
+    assert "curl -fsSLk https://pool.example/install.sh" in render_front("https://pool.example/")  # self-signed
 
 
 @pytest.mark.tier1
@@ -92,6 +93,10 @@ def test_install_script_targets_pool_and_pip():
     assert "pip install --user" in script
     assert "git+https://github.com/Bunnyton/hashpass@main" in script
     assert "pool.json" in script
+    # preflight checks all tools before the download; the install line comes after them
+    for tool in ("python3", "python3 -m pip --version", "git"):
+        assert tool in script
+    assert script.index("не хватает зависимостей") < script.index("pip install --user")
 
 
 @pytest.mark.tier1

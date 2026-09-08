@@ -9,7 +9,16 @@ _INSTALL_TEMPLATE = """\
 set -euo pipefail
 POOL="__POOL__"
 echo "Установка hashpass (__ROLE__); пул: $POOL"
-command -v python3 >/dev/null 2>&1 || { echo "нужен python3"; exit 1; }
+# Preflight: everything the install needs must be present BEFORE we download anything.
+missing=""
+command -v python3 >/dev/null 2>&1 || missing="$missing python3"
+python3 -m pip --version >/dev/null 2>&1 || missing="$missing python3-pip"
+command -v git >/dev/null 2>&1 || missing="$missing git"
+if [ -n "$missing" ]; then
+  echo "не хватает зависимостей:$missing" >&2
+  echo "установите их и повторите, напр.:  sudo apt install -y$missing" >&2
+  exit 1
+fi
 python3 -m pip install --user --break-system-packages "git+https://github.com/__REPO__@main"
 mkdir -p "$HOME/.hashpass"
 printf '{"url": "%s", "user": ""}\\n' "$POOL" > "$HOME/.hashpass/pool.json"
@@ -119,10 +128,13 @@ def _field(label: str, name: str, *, kind: str = "text", extra: str = "") -> str
 def render_front(pool_url: str) -> str:
     """Public front page: what the pool is + the one-line student install command."""
     url = escape(pool_url.rstrip("/"))
+    # A self-signed HTTPS pool needs curl -k to fetch the installer (the pip step uses GitHub's
+    # real cert, so it is unaffected); a plain-http pool does not.
+    flags = "-fsSLk" if pool_url.startswith("https://") else "-fsSL"
     body = ("<h1>hashpass — учебный пул</h1>"
             "<p class='sub'>Интерактивные задания по Linux в живой консоли Debian. "
             "Установка студенту — одной командой:</p>"
-            f"<code class='code'>curl -fsSL {url}/install.sh | bash</code>"
+            f"<code class='code'>curl {flags} {url}/install.sh | bash</code>"
             "<p style='margin-top:18px'><a class='btn' href='/web/login'>Вход для преподавателя</a></p>")
     return _page("hashpass", body, nav=False)
 
