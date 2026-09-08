@@ -163,6 +163,15 @@ def render_reset_form(token: str, error: str = "") -> str:
     return _page("Восстановление — hashpass", body, nav=False)
 
 
+def render_generated_password(user: str, password: str) -> str:
+    """Show a freshly generated admin password once, after an admin regenerated it."""
+    body = (f"<h1>Новый пароль администратора</h1>"
+            f"<p class='sub'>Пользователь <b>{escape(user)}</b> — сохраните, больше не покажется:</p>"
+            f"<code class='code'>{escape(password)}</code>"
+            "<p style='margin-top:16px'><a class='btn ghost' href='/web/users'>← к пользователям</a></p>")
+    return _page("Пароль администратора — hashpass", body)
+
+
 def render_reset_link(user: str, link: str) -> str:
     """Show the admin the freshly generated reset link for a user, to send out-of-band."""
     body = (f"<h1>Ссылка для сброса пароля</h1>"
@@ -250,6 +259,10 @@ def render_users(profiles: list[dict], *, registration_open: bool) -> str:
             f"<form class='inline' method='post' action='/web/users/registration'>"
             f"<input type='hidden' name='open' value='{toggle_to}'>"
             f"<button class='sm' type='submit'>{toggle_label}</button></form></div></div>"
+            "<div class='card'><div class='row' style='justify-content:space-between'>"
+            "<span>Пароль администратора</span>"
+            "<form class='inline' method='post' action='/web/admin/regenerate'>"
+            "<button class='sm' type='submit'>Перегенерировать</button></form></div></div>"
             "<h2>Все пользователи</h2>"
             "<table class='wide'><tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th>"
             "<th>Изменить роль</th><th>Пароль</th></tr>"

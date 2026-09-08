@@ -41,6 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--tls-key", help="TLS private key (PEM), with --tls-cert")
     p_serve.add_argument("--tls-self-signed", action="store_true",
                          help="generate + use a self-signed cert (needs openssl)")
+    p_serve.add_argument("--reset-admin", action="store_true",
+                         help="regenerate the admin password on startup and print it")
     p_login = sub.add_parser("login", help="log in to the registry (prompts login + password)")
     p_login.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
     p_pull = sub.add_parser("pull", help="pull an image/task from the registry")
@@ -64,7 +66,8 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
         return cli.cmd_push(env, args.ref, args.registry, task_number=args.task, title=args.title)
     if command == "serve":
         return cli.cmd_serve(env, args.host, args.port, certfile=args.tls_cert,
-                             keyfile=args.tls_key, self_signed=args.tls_self_signed)
+                             keyfile=args.tls_key, self_signed=args.tls_self_signed,
+                             reset_admin=args.reset_admin)
     if command == "login":
         return cli.cmd_login(env, args.registry)
     if command == "pull":

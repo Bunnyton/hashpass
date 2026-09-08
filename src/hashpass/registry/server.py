@@ -7,7 +7,9 @@ endpoints check the caller's role. It may be self-hosted as the pool; it must st
 at or used to touch the legacy server (no 185.x).
 """
 import json
+import os
 import re
+import secrets
 import ssl
 import tarfile
 import time
@@ -30,6 +32,7 @@ from hashpass.registry.web import (
     render_dashboard,
     render_engine_install_script,
     render_front,
+    render_generated_password,
     render_images,
     render_install_script,
     render_login,
@@ -153,7 +156,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     # -- POST --------------------------------------------------------------
 
-    def do_POST(self) -> None:  # noqa: C901  (a flat route dispatcher)
+    def do_POST(self) -> None:  # noqa: C901, PLR0912  (a flat route dispatcher)
         path = urlsplit(self.path).path
         if path == "/login":
             self._login()
@@ -177,6 +180,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_reset_do()
         elif path == "/web/users/reset":
             self._web_reset_link()
+        elif path == "/web/admin/regenerate":
+            self._web_regenerate_admin()
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -485,6 +490,18 @@ class _Handler(BaseHTTPRequestHandler):
                             now=time.time(), ttl=_RESET_TTL)
         self._html(HTTPStatus.OK,
                    render_reset_link(target, f"{self._pool_url()}/web/reset?token={token}"))
+
+    def _web_regenerate_admin(self) -> None:
+        if self._session_role(("admin",)) is None:
+            self._redirect("/web/login")
+            return
+        admin_user = os.environ.get("HASHPASS_ADMIN", "admin")
+        if not self.server.users.has(admin_user):
+            self._redirect("/web/users")
+            return
+        new = secrets.token_urlsafe(12)
+        self.server.users.set_password(admin_user, new)
+        self._html(HTTPStatus.OK, render_generated_password(admin_user, new))
 
     def _web_reset_do(self) -> None:
         form = self._form()

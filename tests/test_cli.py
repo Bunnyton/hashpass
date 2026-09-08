@@ -234,6 +234,7 @@ def test_engine_parser_args():
     s = p.parse_args(["serve", "--host", "0.0.0.0", "--port", str(serve_port)])  # noqa: S104
     assert (s.host, s.port) == ("0.0.0.0", serve_port)  # noqa: S104
     assert p.parse_args(["serve"]).host is None    # defaults resolved in cmd_serve
+    assert p.parse_args(["serve", "--reset-admin"]).reset_admin is True
     assert p.parse_args([]).command is None
 
 

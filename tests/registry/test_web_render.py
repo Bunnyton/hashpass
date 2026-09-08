@@ -8,6 +8,7 @@ from hashpass.registry.web import (
     render_dashboard,
     render_engine_install_script,
     render_front,
+    render_generated_password,
     render_install_script,
     render_login,
     render_password_form,
@@ -70,6 +71,7 @@ def test_password_and_reset_forms():
     assert "Пароль изменён" in render_password_form(done=True)
     assert "TOK" in render_reset_form("TOK")
     assert "http://p/web/reset" in render_reset_link("bob", "http://p/web/reset?token=x")
+    assert "SEKRET-123" in render_generated_password("admin", "SEKRET-123")
 
 
 @pytest.mark.tier1

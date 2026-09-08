@@ -809,17 +809,27 @@ def _push_image(env: Home, store: ImageStore, ref: str, io: Io) -> None:
     io.write(f"\x1b[36m↑ отправлено на сервис\x1b[0m: {ref} ({len(copied)} слой(ёв))\n")
 
 
-def _seed_admin(users: UserStore, io: Io) -> None:
-    """On an empty pool, create an admin (from env, else a generated password printed once)."""
-    if users.all_users():
-        return
+def _seed_admin(users: UserStore, io: Io, *, reset: bool = False) -> None:
+    """
+    Ensure a pool admin: create one on an empty pool (or regenerate on `reset`); print once.
+
+    Password comes from $HASHPASS_ADMIN_PASSWORD, else a freshly generated one that is printed
+    a single time. `reset=True` (serve --reset-admin) regenerates it even on a non-empty pool —
+    the operator's recovery when the admin password was lost.
+    """
     admin_user = os.environ.get("HASHPASS_ADMIN", "admin")
+    if users.all_users() and not reset:
+        return
     admin_pw = os.environ.get("HASHPASS_ADMIN_PASSWORD")
     generated = admin_pw is None
     if generated:
         admin_pw = secrets.token_urlsafe(12)
-    users.add(admin_user, admin_pw, role="admin", comment="pool administrator")
-    io.write(f"\x1b[36m✓ создан администратор пула: {admin_user}\x1b[0m\n")
+    if users.has(admin_user):
+        users.set_password(admin_user, admin_pw)
+        io.write(f"\x1b[36m✓ пароль администратора перегенерирован: {admin_user}\x1b[0m\n")
+    else:
+        users.add(admin_user, admin_pw, role="admin", comment="pool administrator")
+        io.write(f"\x1b[36m✓ создан администратор пула: {admin_user}\x1b[0m\n")
     if generated:
         io.write(f"\x1b[33m  пароль (сохраните — покажется один раз): {admin_pw}\x1b[0m\n")
 
@@ -864,7 +874,7 @@ def _resolve_tls(env: Home, certfile: str | None, keyfile: str | None,
 
 def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  # noqa: PLR0913
               certfile: str | None = None, keyfile: str | None = None,
-              self_signed: bool = False) -> int:
+              self_signed: bool = False, reset_admin: bool = False) -> int:
     """
     Run the pool (registry + web); bind the port before seeding an admin.
 
@@ -884,7 +894,7 @@ def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  #
                          catalog_path=env.registry / "catalog.json",
                          progress_path=env.registry / "progress",
                          certfile=cert, keyfile=key)   # binds now; a busy port raises here
-    _seed_admin(users, _default_io())   # only after the port bound successfully
+    _seed_admin(users, _default_io(), reset=reset_admin)   # only after the port bound successfully
     scheme = "https" if cert is not None else "http"
     bound_host, bound_port = server.server_address
     if bound_host in ("0.0.0.0", "::"):   # noqa: S104  (operator explicitly exposed the pool)

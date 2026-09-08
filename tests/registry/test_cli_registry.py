@@ -89,6 +89,29 @@ def test_serve_checks_port_before_seeding_admin(tmp_path, monkeypatch):
         blocker.close()
 
 
+@pytest.mark.tier1
+def test_seed_admin_reset_uses_env_password(tmp_path, monkeypatch):
+    monkeypatch.setenv("HASHPASS_ADMIN", "admin")
+    monkeypatch.setenv("HASHPASS_ADMIN_PASSWORD", "envpw123")
+    users = UserStore(tmp_path / "u.json")
+    users.add("admin", "old", role="admin")
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "")
+    cli._seed_admin(users, io, reset=True)   # noqa: SLF001
+    assert not users.verify("admin", "old")
+    assert users.verify("admin", "envpw123")
+    assert users.role("admin") == "admin"   # role preserved
+
+
+@pytest.mark.tier1
+def test_seed_admin_no_reset_skips_when_users_exist(tmp_path, monkeypatch):
+    monkeypatch.delenv("HASHPASS_ADMIN_PASSWORD", raising=False)
+    users = UserStore(tmp_path / "u.json")
+    users.add("admin", "keep", role="admin")
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "")
+    cli._seed_admin(users, io, reset=False)   # noqa: SLF001
+    assert users.verify("admin", "keep")     # untouched
+
+
 @pytest.mark.tier2
 def test_login_failure_returns_1(registry, tmp_path, monkeypatch):
     registry.users.add("dev", "s3cr3t")

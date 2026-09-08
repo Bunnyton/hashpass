@@ -141,6 +141,17 @@ def test_admin_reset_link_flow(registry):
 
 
 @pytest.mark.tier2
+def test_admin_regenerate_password(registry):
+    opener, cookie = _admin_cookie(registry)   # admin/pw, logged in
+    status, _, body = _req(opener, "POST", f"{registry.base_url}/web/admin/regenerate", cookie=cookie)
+    assert status == HTTPStatus.OK
+    new = re.search(r"<code class='code'>([^<]+)</code>", body).group(1)
+    assert RemoteRegistry(registry.base_url).login("admin", new)   # new password works
+    assert _req(_opener(), "POST", f"{registry.base_url}/web/login",
+                data={"user": "admin", "password": "pw"})[0] == HTTPStatus.UNAUTHORIZED  # old fails
+
+
+@pytest.mark.tier2
 def test_inline_role_change(registry):
     registry.users.add("stud", "pw", role="student", group="G")
     opener, cookie = _admin_cookie(registry)
