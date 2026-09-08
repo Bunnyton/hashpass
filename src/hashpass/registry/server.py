@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from hashpass.imagestore.store import ImageStore
-from hashpass.registry.blob import pack_image, unpack_image
+from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.passwords import ROLES, UserStore
 from hashpass.registry.refs import closure_refs
@@ -99,12 +99,15 @@ class _Handler(BaseHTTPRequestHandler):
             return None, HTTPStatus.FORBIDDEN
         return user, None
 
-    def _image_parts(self) -> tuple[str, str] | None:
+    def _parts_for(self, kind: str) -> tuple[str, str] | None:
         parts = urlsplit(self.path).path.strip("/").split("/")
-        if len(parts) >= _MIN_IMAGE_PARTS and parts[0] == "image":
-            # /image/<name.../>/<version>: name may be multi-segment (`ns/app`), version is last.
+        if len(parts) >= _MIN_IMAGE_PARTS and parts[0] == kind:
+            # /<kind>/<name.../>/<version>: name may be multi-segment (`ns/app`), version is last.
             return "/".join(parts[1:-1]), parts[-1]
         return None
+
+    def _image_parts(self) -> tuple[str, str] | None:
+        return self._parts_for("image")
 
     # -- POST --------------------------------------------------------------
 
@@ -201,6 +204,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._serve_closure(f"{'/'.join(parts[1:-1])}:{parts[-1]}")
         elif (target := self._image_parts()) is not None:
             self._serve_image(f"{target[0]}:{target[1]}")
+        elif (task := self._parts_for("task")) is not None:
+            self._serve_task(f"{task[0]}:{task[1]}")
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -218,16 +223,38 @@ class _Handler(BaseHTTPRequestHandler):
         self._empty(HTTPStatus.OK if present else HTTPStatus.NOT_FOUND)
 
     def do_PUT(self) -> None:
-        if self._image_parts() is None:
+        if self._image_parts() is not None:
+            self._put_image()
+        elif (task := self._parts_for("task")) is not None:
+            self._put_task(f"{task[0]}:{task[1]}")
+        else:
             self._empty(HTTPStatus.NOT_FOUND)
-            return
-        if self._token_user() is None:
-            self._empty(HTTPStatus.UNAUTHORIZED)
+
+    def _put_image(self) -> None:
+        _user, err = self._auth_role(("author", "admin"))
+        if err is not None:
+            self._empty(err)
             return
         try:
             unpack_image(self._read_body(), self.server.store)
         except (ValueError, KeyError, OSError, tarfile.TarError):
             # ValueError also covers an unsafe (traversing) name/version from the blob (§5).
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        self._empty(HTTPStatus.CREATED)
+
+    def _put_task(self, ref: str) -> None:
+        _user, err = self._auth_role(("author", "admin"))
+        if err is not None:
+            self._empty(err)
+            return
+        if not self.server.store.exists(ref):
+            self._empty(HTTPStatus.NOT_FOUND)  # push the image before its task
+            return
+        task_dir = self.server.store.get(ref).layer.parent / "task"
+        try:
+            unpack_task(self._read_body(), task_dir)
+        except (ValueError, OSError, tarfile.TarError):
             self._empty(HTTPStatus.BAD_REQUEST)
             return
         self._empty(HTTPStatus.CREATED)
@@ -247,6 +274,19 @@ class _Handler(BaseHTTPRequestHandler):
             self._empty(HTTPStatus.NOT_FOUND)
             return
         self._blob(HTTPStatus.OK, pack_image(img))
+
+    def _serve_task(self, ref: str) -> None:
+        if self._token_user() is None:
+            self._empty(HTTPStatus.UNAUTHORIZED)  # a task's grader is not public
+            return
+        if not self.server.store.exists(ref):
+            self._empty(HTTPStatus.NOT_FOUND)
+            return
+        task_dir = self.server.store.get(ref).layer.parent / "task"
+        if not task_dir.exists():
+            self._empty(HTTPStatus.NOT_FOUND)
+            return
+        self._blob(HTTPStatus.OK, pack_task(task_dir))
 
 
 def make_server(store: ImageStore, users: UserStore, secret: bytes, *,  # noqa: PLR0913

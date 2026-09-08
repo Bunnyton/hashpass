@@ -22,7 +22,7 @@ def _seed(store: ImageStore, tmp_path: Path, name: str, parents: tuple[str, ...]
 
 @pytest.mark.tier2
 def test_login_caches_token(registry, tmp_path):
-    registry.users.add("alice", "pw-correct")
+    registry.users.add("alice", "pw-correct", role="author")
     cache = CredentialCache(tmp_path / "creds.json")
     client = RemoteRegistry(registry.base_url, cache=cache)
     token = client.login("alice", "pw-correct")
@@ -31,7 +31,7 @@ def test_login_caches_token(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_login_bad_password_raises_401(registry):
-    registry.users.add("alice", "pw-correct")
+    registry.users.add("alice", "pw-correct", role="author")
     client = RemoteRegistry(registry.base_url)
     with pytest.raises(urllib.error.HTTPError) as exc:
         client.login("alice", "wrong")
@@ -49,7 +49,7 @@ def test_push_requires_token(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_push_and_pull_closure_via_client(registry, tmp_path):
-    registry.users.add("alice", "pw-correct")
+    registry.users.add("alice", "pw-correct", role="author")
     local = ImageStore(tmp_path / "local")
     _seed(local, tmp_path, "base", (), "BASE")
     _seed(local, tmp_path, "app", ("base:1",), "APP")
@@ -71,7 +71,7 @@ def test_push_and_pull_closure_via_client(registry, tmp_path):
 @pytest.mark.tier2
 def test_push_pull_namespaced_name(registry, tmp_path):
     # A namespaced ref (`alice/app:1`) survives the multi-segment URL path on push and pull.
-    registry.users.add("alice", "pw-correct")
+    registry.users.add("alice", "pw-correct", role="author")
     local = ImageStore(tmp_path / "local")
     _seed(local, tmp_path, "base", (), "BASE")
     _seed(local, tmp_path, "alice/app", ("base:1",), "APP")

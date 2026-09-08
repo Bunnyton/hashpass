@@ -18,7 +18,7 @@ def _seed(store: ImageStore, tmp_path: Path, name: str, parents: tuple[str, ...]
 
 @pytest.mark.tier2
 def test_full_login_push_pull_roundtrip(registry, tmp_path):
-    registry.users.add("dev", "s3cr3t")
+    registry.users.add("dev", "s3cr3t", role="author")
     local = ImageStore(tmp_path / "local")
     _seed(local, tmp_path, "base", (), "B")
     _seed(local, tmp_path, "tool", ("base:1",), "T")

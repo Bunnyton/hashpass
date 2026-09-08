@@ -63,7 +63,7 @@ def test_put_requires_valid_token(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_put_then_get_and_closure(registry, tmp_path):
-    registry.users.add("alice", "pw-correct")
+    registry.users.add("alice", "pw-correct", role="author")
     token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
     auth = {"Authorization": f"Bearer {token}"}
     local = ImageStore(tmp_path / "local")
@@ -86,7 +86,7 @@ def test_put_then_get_and_closure(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_put_rejects_traversing_blob(registry, tmp_path):
-    registry.users.add("alice", "pw-correct")
+    registry.users.add("alice", "pw-correct", role="author")
     token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
     auth = {"Authorization": f"Bearer {token}"}
     layer = tmp_path / "layer"

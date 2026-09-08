@@ -9,10 +9,11 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from http import HTTPStatus
+from pathlib import Path
 from time import time
 
 from hashpass.imagestore.store import ImageStore
-from hashpass.registry.blob import pack_image, unpack_image
+from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.refs import closure_refs, normalize_ref, split_ref
 from hashpass.registry.token import token_expiry
@@ -131,6 +132,30 @@ class RemoteRegistry:
             unpack_image(self._get_image(item), store, sudo=self.sudo)
             copied.append(item)
         return copied
+
+    def push_task(self, task_dir: Path, name: str, version: str, *, token: str | None = None) -> None:
+        """Push a task's artifacts (bundle/hp/meta) to the pool (requires author role)."""
+        self._put_task(name, version, pack_task(task_dir), self._auth_token(token))
+
+    def pull_task(self, ref: str, dest_task_dir: Path, *, token: str | None = None) -> None:
+        """Pull a task's artifacts into dest_task_dir (requires a login token)."""
+        unpack_task(self._get_task(ref, token=self._auth_token(token)), dest_task_dir)
+
+    def _put_task(self, name: str, version: str, blob: bytes, token: str) -> None:
+        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
+            self._url(f"/task/{name}/{version}"), data=blob, method="PUT",
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/octet-stream"},
+        )
+        self._open(req)
+
+    def _get_task(self, ref: str, *, token: str) -> bytes:
+        name, version = split_ref(ref)
+        req = urllib.request.Request(  # noqa: S310  (scheme guarded in _url)
+            self._url(f"/task/{name}/{version}"), method="GET",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return self._open(req)
 
     def _closure(self, ref: str) -> list[str]:
         name, version = split_ref(ref)

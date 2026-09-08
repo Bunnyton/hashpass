@@ -51,7 +51,7 @@ def _seed(store, tmp_path, name, parents, marker) -> None:
 
 @pytest.mark.tier2
 def test_login_push_pull_through_localhost(registry, tmp_path, monkeypatch):
-    registry.users.add("dev", "s3cr3t")
+    registry.users.add("dev", "s3cr3t", role="author")   # pushing images requires author role
     home = tmp_path / "home"
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
     local = ImageStore(env.images)

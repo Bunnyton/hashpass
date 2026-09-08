@@ -1,4 +1,4 @@
-"""Image blob (tar) pack/unpack for HTTP transfer: a meta.json member + the layer/ tree."""
+"""Blob (tar) pack/unpack for HTTP transfer: images (meta + layer/) and tasks (bundle/hp/meta)."""
 import io
 import json
 import tarfile
@@ -33,3 +33,21 @@ def unpack_image(blob: bytes, dest: ImageStore, *, sudo: bool = False) -> str:
             meta["name"], meta["version"], tmp / "layer", tuple(meta["parents"]), sudo=sudo,
         )
     return f"{img.name}:{img.version}"
+
+
+def pack_task(task_dir: Path) -> bytes:
+    """Pack a task's artifacts dir (bundle/, hp/, task-meta.json) into a tar byte blob."""
+    src = Path(task_dir)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for child in sorted(src.iterdir()):
+            tar.add(child, arcname=child.name)
+    return buf.getvalue()
+
+
+def unpack_task(blob: bytes, dest_task_dir: Path) -> None:
+    """Extract a task blob into dest_task_dir (creating it); mirrors `pack_task`."""
+    dest = Path(dest_task_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(blob), mode="r") as tar:
+        tar.extractall(dest, filter="data")
