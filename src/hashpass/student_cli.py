@@ -1,4 +1,4 @@
-"""hashpass student CLI: run, list, pull, login over hashpass.cli (authoring lives in hashengine)."""
+"""hashpass student CLI: register/login on the pool, pull tasks, run them (no authoring)."""
 import argparse
 from collections.abc import Sequence
 
@@ -6,33 +6,32 @@ from hashpass import cli
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Construct the student parser: run, list, pull, login (no sub-command → task picker)."""
-    parser = argparse.ArgumentParser(prog="hashpass", description="Run hashpass tasks.")
+    """Student parser: register, login, pull, run (no sub-command → pull + list tasks)."""
+    parser = argparse.ArgumentParser(prog="hashpass",
+                                     description="Register, pull, and run hashpass tasks.")
     sub = parser.add_subparsers(dest="command")
-    p_run = sub.add_parser("run", help="run a task (interactive) or a bare image (shell)")
-    p_run.add_argument("ref")
-    sub.add_parser("list", help="list available tasks and images")
-    p_pull = sub.add_parser("pull", help="pull an image/task from a registry")
-    p_pull.add_argument("ref")
-    p_pull.add_argument("registry")
-    p_login = sub.add_parser("login", help="log in to a registry (caches a token)")
-    p_login.add_argument("registry")
-    p_login.add_argument("-u", "--user")
+    p_reg = sub.add_parser("register", help="register on the pool (name + group)")
+    p_reg.add_argument("--pool", help="pool URL (else $HASHPASS_POOL or the saved one)")
+    p_login = sub.add_parser("login", help="log in to the pool")
+    p_login.add_argument("--pool", help="pool URL (else $HASHPASS_POOL or the saved one)")
+    sub.add_parser("pull", help="pull new/updated tasks from the pool")
+    p_run = sub.add_parser("run", help="run a task by catalog number or ref")
+    p_run.add_argument("task", help="catalog number (e.g. 1) or a ref (name:version)")
     return parser
 
 
 def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:
-    """Route a parsed student sub-command (no sub-command → interactive task picker)."""
+    """Route a parsed student sub-command (no sub-command → pool home: pull + list)."""
     command = args.command
     if command is None:
-        return cli.task_mode(env)
-    if command == "run":
-        return cli.cmd_run(env, args.ref)
-    if command == "list":
-        return cli.cmd_images(env)
+        return cli.cmd_pool_home(env)
+    if command == "register":
+        return cli.cmd_register(env, args.pool)
+    if command == "login":
+        return cli.cmd_pool_login(env, args.pool)
     if command == "pull":
-        return cli.cmd_pull(env, args.ref, args.registry)
-    return cli.cmd_login(env, args.registry, args.user)
+        return cli.cmd_pool_pull(env)
+    return cli.cmd_pool_run(env, args.task)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

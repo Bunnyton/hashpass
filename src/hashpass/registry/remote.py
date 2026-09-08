@@ -5,9 +5,11 @@ Point base_url at your pool (loopback in tests, or the self-hosted pool). It mus
 legacy server (no 185.x). Tokens are cached locally and reused until they expire.
 """
 import json
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
@@ -133,6 +135,41 @@ class RemoteRegistry:
             unpack_image(self._get_image(item), store, sudo=self.sudo)
             copied.append(item)
         return copied
+
+    def closure(self, ref: str) -> list[str]:
+        """Return a ref's bottom-up `from` closure from the pool."""
+        return self._closure(normalize_ref(ref))
+
+    def pull_many(self, refs: list[str], store: ImageStore, *, workers: int = 8) -> list[str]:
+        """
+        Pull several refs + their closures concurrently; each missing layer is fetched once.
+
+        Downloads run in a thread pool; the (fast) local save is serialized under a lock so
+        shared parent layers are never written twice. Returns the layers actually fetched.
+        """
+        needed: list[str] = []
+        seen: set[str] = set()
+        for ref in refs:
+            for item in self._closure(normalize_ref(ref)):
+                if item not in seen:
+                    seen.add(item)
+                    needed.append(item)
+        to_fetch = [item for item in needed if not store.exists(item)]
+        lock = threading.Lock()
+        fetched: list[str] = []
+
+        def _one(item: str) -> None:
+            blob = self._get_image(item)          # network download (parallel)
+            with lock:                            # local save (serialized: no shared-parent race)
+                if store.exists(item):
+                    return
+                unpack_image(blob, store, sudo=self.sudo)
+                fetched.append(item)
+
+        if to_fetch:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                list(pool.map(_one, to_fetch))
+        return fetched
 
     def push_task(self, task_dir: Path, name: str, version: str, *,  # noqa: PLR0913
                   number: int | None = None, title: str = "", token: str | None = None) -> None:

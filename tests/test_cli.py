@@ -255,11 +255,11 @@ def test_engine_parser_args():
 @pytest.mark.tier1
 def test_student_parser_args():
     p = student_cli.build_parser()
-    assert p.parse_args(["run", "x:1"]).ref == "x:1"
-    assert p.parse_args(["list"]).command == "list"
-    assert p.parse_args(["pull", "x:1", "http://h"]).command == "pull"
-    a = p.parse_args(["login", "http://h", "-u", "alice"])
-    assert (a.registry, a.user) == ("http://h", "alice")
+    assert p.parse_args(["run", "3"]).task == "3"
+    assert p.parse_args(["run", "lab:1"]).task == "lab:1"
+    assert p.parse_args(["register", "--pool", "http://p"]).pool == "http://p"
+    assert p.parse_args(["login"]).pool is None
+    assert p.parse_args(["pull"]).command == "pull"
     assert p.parse_args([]).command is None
 
 
@@ -275,9 +275,9 @@ def test_main_images_dispatch(tmp_path, monkeypatch, capsys):
 
 
 @pytest.mark.tier1
-def test_main_no_args_empty_task_mode(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))
-    assert student_cli.main([]) == 0
+def test_task_mode_empty_message(tmp_path, capsys):
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    assert cli.task_mode(env) == 0
     assert "no tasks built yet" in capsys.readouterr().out
 
 

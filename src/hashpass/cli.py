@@ -3,6 +3,7 @@ import argparse
 import base64
 import contextlib
 import getpass
+import json
 import os
 import re
 import secrets
@@ -22,6 +23,7 @@ try:
 except ImportError:                       # pragma: no cover - readline is optional
     readline = None
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +42,7 @@ from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.server import make_server
 from hashpass.registry.token import token_user
 from hashpass.taskbuild import build_task
+from hashpass.taskdigest import task_digest
 from hashpass.taskrun import run_task
 from hashpass.taskstore import task_dir
 
@@ -52,6 +55,8 @@ _CREDS_NAME = "creds.json"
 _WORK_DIRNAME = "work"
 _REGISTRY_DIRNAME = "registry"     # local registry service data: store/, users.json, secret
 _ENV_REGISTRY = "HASHPASS_REGISTRY"
+_ENV_POOL = "HASHPASS_POOL"          # student: the pool URL to register/login/pull against
+_POOL_NAME = "pool.json"             # student: saved {url, user}
 # The local registry service. LOCALHOST ONLY -- images are pushed here, never to a real remote
 # (no 185.x). A fixed URL keeps the login token cache stable across invocations.
 _DEFAULT_REGISTRY = "http://127.0.0.1:8080"
@@ -872,6 +877,170 @@ def cmd_pull(env: Home, ref: str, registry: str) -> int:
     copied = RemoteRegistry(registry).pull(ref, store)
     sys.stdout.write(f"pulled {ref} ({len(copied)} layer(s))\n")
     return 0
+
+
+# --- student pool client: identity, parallel pull, catalog listing --------------------
+
+def _pool_path(env: Home) -> Path:
+    return env.root / _POOL_NAME
+
+
+def load_pool(env: Home) -> dict[str, str]:
+    """Read the saved pool config ({url, user}); {} if absent or unreadable."""
+    path = _pool_path(env)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_pool(env: Home, url: str, user: str) -> None:
+    """Persist the pool URL + login so later runs need no re-typing."""
+    env.root.mkdir(parents=True, exist_ok=True)
+    _pool_path(env).write_text(json.dumps({"url": url, "user": user}, indent=2), encoding="utf-8")
+
+
+def _pool_url(env: Home, explicit: str | None = None) -> str | None:
+    """Resolve the pool URL: explicit arg -> $HASHPASS_POOL -> saved pool.json."""
+    return explicit or os.environ.get(_ENV_POOL) or load_pool(env).get("url") or None
+
+
+def _pool_token(env: Home, url: str) -> str | None:
+    return CredentialCache(env.creds).cached_token(url, now=time.time())
+
+
+def cmd_register(env: Home, pool_url: str | None = None, io: Io | None = None) -> int:
+    """Register on the pool (ФИО + group required); cache the token and save the pool config."""
+    io = io or _default_io()
+    url = _pool_url(env, pool_url) or (io.read("Адрес пула (URL): ") or "").strip()
+    if not url:
+        msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
+        raise RuntimeError(msg)
+    user = (io.read("логин: ") or "").strip()
+    full_name = (io.read("ФИО: ") or "").strip()
+    group = (io.read("группа (например ИУ7-31): ") or "").strip()
+    if not user or not full_name or not group:
+        msg = "логин, ФИО и группа обязательны для регистрации"
+        raise RuntimeError(msg)
+    password = getpass.getpass("пароль: ")
+    RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, full_name, group)
+    save_pool(env, url, user)
+    io.write(f"\x1b[32m✓ регистрация выполнена\x1b[0m: {user}\n")
+    return 0
+
+
+def cmd_pool_login(env: Home, pool_url: str | None = None, io: Io | None = None) -> int:
+    """Log in to the pool; cache the token and save the pool config."""
+    io = io or _default_io()
+    url = _pool_url(env, pool_url) or (io.read("Адрес пула (URL): ") or "").strip()
+    if not url:
+        msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
+        raise RuntimeError(msg)
+    user = (io.read("логин: ") or "").strip()
+    password = getpass.getpass("пароль: ")
+    try:
+        RemoteRegistry(url, cache=CredentialCache(env.creds)).login(user, password)
+    except urllib.error.URLError as exc:
+        io.write(f"вход не выполнен: {exc}\n")
+        return 1
+    save_pool(env, url, user)
+    io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
+    return 0
+
+
+def _require_pool_identity(env: Home, io: Io) -> tuple[str, str]:
+    """Return (url, user) for the pool, prompting for registration/login on first run."""
+    url = _pool_url(env)
+    if url and (token := _pool_token(env, url)) and (user := token_user(token)):
+        return url, user
+    io.write("Вы ещё не вошли в пул.\n")
+    choice = (io.read("Регистрация (r) или вход (l)? [r]: ") or "r").strip().lower()
+    if choice.startswith("l"):
+        cmd_pool_login(env, url, io)
+    else:
+        cmd_register(env, url, io)
+    url = _pool_url(env)
+    token = _pool_token(env, url) if url else None
+    user = token_user(token) if token else None
+    if not url or not user:
+        msg = "не удалось войти в пул"
+        raise RuntimeError(msg)
+    return url, user
+
+
+def pull_new(env: Home, url: str, token: str, *, workers: int = 8) -> tuple[int, int]:
+    """Pull catalog images (parallel) + changed task bundles; return (layers, tasks) fetched."""
+    store = ImageStore(env.images)
+    client = RemoteRegistry(url)
+    entries = client.catalog(token=token)
+    layers = client.pull_many([str(e["ref"]) for e in entries], store, workers=workers)
+
+    def _task(entry: dict[str, object]) -> str | None:
+        ref = str(entry["ref"])
+        tdir = task_dir(ref, store)
+        if not tdir.exists() or task_digest(tdir) != entry.get("digest"):
+            client.pull_task(ref, tdir, token=token)
+            return ref
+        return None
+
+    tasks: list[str] = []
+    if entries:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            tasks = [ref for ref in pool.map(_task, entries) if ref]
+    return len(layers), len(tasks)
+
+
+def _resolve_pool_ref(client: RemoteRegistry, token: str, arg: str) -> str:
+    """Resolve a catalog number to its ref; pass a non-numeric arg through unchanged."""
+    if arg.isdigit():
+        entry = next((e for e in client.catalog(token=token) if e["number"] == int(arg)), None)
+        if entry is None:
+            msg = f"нет задания №{arg} в пуле"
+            raise RuntimeError(msg)
+        return str(entry["ref"])
+    return arg
+
+
+def cmd_pool_pull(env: Home, io: Io | None = None) -> int:
+    """Refresh: ensure pool identity, then pull new/updated tasks in parallel."""
+    io = io or _default_io()
+    url, _user = _require_pool_identity(env, io)
+    layers, tasks = pull_new(env, url, _pool_token(env, url) or "")
+    io.write(f"подтянуто: слоёв {layers}, заданий {tasks}\n")
+    return 0
+
+
+def cmd_pool_home(env: Home, io: Io | None = None) -> int:
+    """Student no-arg: ensure identity, pull new tasks in parallel, list them by number."""
+    io = io or _default_io()
+    url, user = _require_pool_identity(env, io)
+    token = _pool_token(env, url) or ""
+    layers, tasks = pull_new(env, url, token)
+    if layers or tasks:
+        io.write(f"\x1b[2m↓ подтянуто: слоёв {layers}, заданий {tasks}\x1b[0m\n")
+    entries = RemoteRegistry(url).catalog(token=token)
+    if not entries:
+        io.write("в пуле пока нет заданий\n")
+        return 0
+    io.write(f"Задания ({user}):\n")
+    for entry in entries:
+        io.write(f"  {entry['number']}. {entry['title'] or entry['ref']}\n")
+    io.write("Запуск:  hashpass run <номер>\n")
+    return 0
+
+
+def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
+    """Student run: resolve a number/ref via the pool, ensure it's pulled, and run it."""
+    io = io or _default_io()
+    url, _user = _require_pool_identity(env, io)
+    token = _pool_token(env, url) or ""
+    ref = _resolve_pool_ref(RemoteRegistry(url), token, arg)
+    if not ImageStore(env.images).exists(ref):
+        pull_new(env, url, token)
+    return cmd_run(env, ref, io)
 
 
 def task_mode(env: Home, io: Io | None = None) -> int:
