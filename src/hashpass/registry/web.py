@@ -290,7 +290,8 @@ def _catalog_block(row: dict) -> str:
 def _image_card(row: dict) -> str:
     ref = str(row["ref"])
     kind = str(row.get("kind", "image"))
-    kind_pill = f"<span class='pill {'author' if kind == 'task' else ''}'>{escape(kind)}</span>"
+    kind_ru = {"task": "задание", "image": "образ"}.get(kind, kind)
+    kind_pill = f"<span class='pill {'author' if kind == 'task' else ''}'>{escape(kind_ru)}</span>"
     desc = str(row.get("description", ""))
     describe = ("<h2>Описание</h2>"
                 "<form method='post' action='/web/images/describe'>"

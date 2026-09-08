@@ -70,7 +70,8 @@ _BASE_VERSION = "trixie"
 _DEFAULT_STUDENT = "local"
 _STOP_WORDS = frozenset({"exit", "quit"})
 _COL_GAP = "  "
-_HEADER = ("REF", "KIND")
+_HEADER = ("Образ", "Тип")
+_KIND_RU = {"task": "задание", "image": "образ"}   # display labels; the stored kind stays task/image
 
 
 @dataclass(frozen=True)
@@ -200,7 +201,7 @@ def format_image_rows(rows: list[tuple[str, str]]) -> str:
     width = max((len(ref) for ref, _ in rows), default=0)
     width = max(width, len(_HEADER[0]))
     lines = [f"{_HEADER[0]:<{width}}{_COL_GAP}{_HEADER[1]}"]
-    lines += [f"{ref:<{width}}{_COL_GAP}{kind}" for ref, kind in rows]
+    lines += [f"{ref:<{width}}{_COL_GAP}{_KIND_RU.get(kind, kind)}" for ref, kind in rows]
     return "\n".join(lines) + "\n"
 
 
@@ -705,7 +706,7 @@ def cmd_run(env: Home, ref: str, io: Io | None = None, *,
     try:
         stored = store.get(ref)
     except KeyError:
-        io.write(f"no such image: {ref}\n")
+        io.write(f"нет такого образа: {ref}\n")
         return 1
     if (stored.layer.parent / "task").exists():
         return _run_task(env, ref, store, io, student_id=student_id, on_complete=on_complete)
@@ -1005,16 +1006,16 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR09
     store = ImageStore(env.images)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     copied = client.push(store, ref)
-    sys.stdout.write(f"pushed {ref} ({len(copied)} layer(s))\n")
+    sys.stdout.write(f"отправлено {ref} (слоёв: {len(copied)})\n")
     _attach_taskfile(client, store, ref, io)
     if task_number is not None:
         tdir = task_dir(ref, store)
         if not tdir.exists():
-            msg = f"{ref} is not a task (no task/ artifacts); nothing to publish with --task"
+            msg = f"{ref} — не задание (нет артефактов task/); публиковать с --task нечего"
             raise ValueError(msg)
         name, version = split_ref(ref)
         client.push_task(tdir, name, version, number=task_number, title=title)
-        sys.stdout.write(f"published task #{task_number}: {ref}\n")
+        sys.stdout.write(f"опубликовано задание №{task_number}: {ref}\n")
     return 0
 
 
@@ -1024,7 +1025,7 @@ def cmd_pull(env: Home, ref: str, registry: str | None = None, io: Io | None = N
     url = _prompt_registry(env, registry, io)
     store = ImageStore(env.images)
     copied = RemoteRegistry(url).pull(ref, store)
-    sys.stdout.write(f"pulled {ref} ({len(copied)} layer(s))\n")
+    sys.stdout.write(f"подтянуто {ref} (слоёв: {len(copied)})\n")
     return 0
 
 
@@ -1033,8 +1034,8 @@ def cmd_remote_images(env: Home, registry: str | None = None, io: Io | None = No
     io = io or _default_io()
     url = _ensure_registry_login(env, registry, io)
     rows = RemoteRegistry(url, cache=CredentialCache(env.creds)).pool_images()
-    lines = [f"{'REF':<30}{_COL_GAP}{'KIND':<6}{_COL_GAP}#"]
-    lines += [f"{r['ref']!s:<30}{_COL_GAP}{r['kind']!s:<6}{_COL_GAP}"
+    lines = [f"{'Образ':<30}{_COL_GAP}{'Тип':<8}{_COL_GAP}№"]
+    lines += [f"{r['ref']!s:<30}{_COL_GAP}{_KIND_RU.get(str(r['kind']), str(r['kind'])):<8}{_COL_GAP}"
               f"{r['number'] if r.get('number') is not None else ''}" for r in rows]
     sys.stdout.write("\n".join(lines) + "\n")
     return 0
@@ -1299,7 +1300,7 @@ def pool_status(env: Home, url: str, token: str, user: str) -> list[dict[str, ob
 
 def _status_badge(row: dict[str, object]) -> str:
     if not row.get("available", True):
-        return "\x1b[2m🔒 недоступно\x1b[0m"          # visible, but locked right now
+        return "\x1b[2mнедоступно\x1b[0m"          # visible, but locked right now
     if row.get("server") == "passed":
         return "\x1b[32m★ зачтено\x1b[0m"
     if row.get("local"):
@@ -1384,7 +1385,7 @@ def _run_from_menu(env: Home, url: str, user: str, token: str,  # noqa: PLR0913,
         cmd_pool_run(env, str(current), io)
         nxt = _next_number(pool_status(env, url, token, user), current)
         if nxt is None:
-            io.write("\x1b[32m🎉 Все доступные задания зачтены!\x1b[0m\n")
+            io.write("\x1b[32mВсе доступные задания зачтены!\x1b[0m\n")
             return
         ans = (io.read(f"Перейти к следующему заданию №{nxt}? "
                        "[Enter — да, номер — другое, q — в меню]: ") or "").strip().lower()
@@ -1435,11 +1436,11 @@ def task_mode(env: Home, io: Io | None = None) -> int:
     store = ImageStore(env.images)
     tasks = [ref for ref in store.list() if _kind(store, ref) == "task"]
     if not tasks:
-        io.write("no tasks built yet — an author runs `hashengine build <Taskfile>` first\n")
+        io.write("заданий пока нет — автор сначала делает `hashengine build <Taskfile>`\n")
         return 0
     for i, ref in enumerate(tasks, 1):
         io.write(f"{i}. {ref}\n")
-    idx = select_index(io.read("pick a task # (blank to quit): "), len(tasks))
+    idx = select_index(io.read("выберите № задания (пусто — выход): "), len(tasks))
     if idx is None:
         return 0
     return cmd_run(env, tasks[idx], io)
@@ -1467,7 +1468,7 @@ def run_main(parser: argparse.ArgumentParser,
         env = build_env()
         return dispatch(env, args)
     except (KeyboardInterrupt, EOFError):
-        sys.stderr.write(f"\n{parser.prog}: aborted\n")
+        sys.stderr.write(f"\n{parser.prog}: прервано\n")
         return _EXIT_ABORTED
     except (OSError, ValueError, RuntimeError, KeyError,
             urllib.error.URLError, subprocess.CalledProcessError) as exc:

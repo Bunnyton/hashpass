@@ -21,36 +21,37 @@ def _engine_enabled() -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     """Construct the author/server parser: build, push, serve, login, images."""
-    parser = argparse.ArgumentParser(prog="hashengine",
-                                     description="Author, build, publish, and serve hashpass tasks.")
+    parser = argparse.ArgumentParser(
+        prog="hashengine",
+        description="Сборка, публикация и запуск пула заданий hashpass (для авторов).")
     sub = parser.add_subparsers(dest="command")
-    p_build = sub.add_parser("build", help="build an image/task from a Taskfile")
+    p_build = sub.add_parser("build", help="собрать образ/задание из Taskfile")
     p_build.add_argument("taskfile")
-    p_build.add_argument("-t", "--tag", help="name[:version] (overrides the Taskfile's image line)")
-    p_push = sub.add_parser("push", help="push an image/task to the registry")
+    p_build.add_argument("-t", "--tag", help="имя[:версия] (переопределяет строку image в Taskfile)")
+    p_push = sub.add_parser("push", help="отправить образ/задание на пул")
     p_push.add_argument("ref")
-    p_push.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
+    p_push.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
     p_push.add_argument("--task", type=int, metavar="N",
-                        help="publish this task at catalog slot N")
-    p_push.add_argument("--title", default="", help="task title shown in the catalog")
-    p_serve = sub.add_parser("serve", help="run the pool (registry + web)")
-    p_serve.add_argument("--host", help="bind address (default 127.0.0.1 or $HASHPASS_REGISTRY; "
-                         "use 0.0.0.0 to expose the pool)")
-    p_serve.add_argument("--port", type=int, help="bind port (default 8080 or $HASHPASS_REGISTRY)")
-    p_serve.add_argument("--tls-cert", help="TLS certificate (PEM) → serve HTTPS")
-    p_serve.add_argument("--tls-key", help="TLS private key (PEM), with --tls-cert")
+                        help="опубликовать задание в слоте каталога N")
+    p_push.add_argument("--title", default="", help="заголовок задания в каталоге")
+    p_serve = sub.add_parser("serve", help="запустить пул (реестр + веб)")
+    p_serve.add_argument("--host", help="адрес привязки (по умолчанию 127.0.0.1 или $HASHPASS_REGISTRY; "
+                         "0.0.0.0 — открыть пул наружу)")
+    p_serve.add_argument("--port", type=int, help="порт (по умолчанию 8080 или $HASHPASS_REGISTRY)")
+    p_serve.add_argument("--tls-cert", help="TLS-сертификат (PEM) → работать по HTTPS")
+    p_serve.add_argument("--tls-key", help="приватный TLS-ключ (PEM), вместе с --tls-cert")
     p_serve.add_argument("--tls-self-signed", action="store_true",
-                         help="generate + use a self-signed cert (needs openssl)")
+                         help="сгенерировать и использовать самоподписанный сертификат (нужен openssl)")
     p_serve.add_argument("--reset-admin", action="store_true",
-                         help="regenerate the admin password on startup and print it")
-    p_login = sub.add_parser("login", help="log in to the registry (prompts login + password)")
-    p_login.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
-    p_pull = sub.add_parser("pull", help="pull an image/task from the registry")
+                         help="перегенерировать пароль администратора при старте и вывести его")
+    p_login = sub.add_parser("login", help="вход на пул (запросит логин + пароль)")
+    p_login.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
+    p_pull = sub.add_parser("pull", help="подтянуть образ/задание с пула")
     p_pull.add_argument("ref")
-    p_pull.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
-    sub.add_parser("images", help="list locally built images and tasks")
-    p_remote = sub.add_parser("remote", help="list images/tasks stored on the pool")
-    p_remote.add_argument("registry", nargs="?", help="registry URL (default: the saved one)")
+    p_pull.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
+    sub.add_parser("images", help="список локально собранных образов и заданий")
+    p_remote = sub.add_parser("remote", help="список образов/заданий на пуле")
+    p_remote.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
     return parser
 
 

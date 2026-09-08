@@ -111,15 +111,16 @@ def _seed_image(store: ImageStore, tmp_path, name: str, *, task: bool = False) -
 
 @pytest.mark.tier1
 def test_format_image_rows_empty_is_header_only():
-    assert cli.format_image_rows([]) == "REF  KIND\n"
+    assert cli.format_image_rows([]) == "Образ  Тип\n"
 
 
 @pytest.mark.tier1
 def test_format_image_rows_aligns_columns():
-    out = cli.format_image_rows([("log-archive:1", "task"), ("base:latest", "image")])
-    assert out == ("REF            KIND\n"
-                   "log-archive:1  task\n"
-                   "base:latest    image\n")
+    out = cli.format_image_rows([("log-archive:1", "task"), ("base:latest", "image")]).splitlines()
+    assert out[0].startswith("Образ")
+    assert out[1] == "log-archive:1" + "  " + "задание"   # kind shown in Russian
+    assert out[2] == "base:latest".ljust(len("log-archive:1")) + "  " + "образ"
+    assert out[1].index("задание") == out[2].index("образ")   # columns aligned
 
 
 @pytest.mark.tier1
@@ -213,7 +214,7 @@ def test_cmd_run_unknown_ref_reports_and_exits_1(tmp_path):
     out = []
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "t")
     assert cli.cmd_run(env, "ghost:1", io) == 1
-    assert out == ["no such image: ghost:1\n"]
+    assert out == ["нет такого образа: ghost:1\n"]
 
 
 @pytest.mark.tier1
@@ -264,7 +265,7 @@ def test_main_images_dispatch(tmp_path, monkeypatch, capsys):
 def test_task_mode_empty_message(tmp_path, capsys):
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
     assert cli.task_mode(env) == 0
-    assert "no tasks built yet" in capsys.readouterr().out
+    assert "заданий пока нет" in capsys.readouterr().out
 
 
 @pytest.mark.tier1

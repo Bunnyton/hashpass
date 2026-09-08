@@ -8,15 +8,15 @@ from hashpass import cli
 def build_parser() -> argparse.ArgumentParser:
     """Student parser: register, login, pull, run (no sub-command → pull + list tasks)."""
     parser = argparse.ArgumentParser(prog="hashpass",
-                                     description="Register, pull, and run hashpass tasks.")
+                                     description="Регистрация, загрузка и запуск заданий hashpass.")
     sub = parser.add_subparsers(dest="command")
-    p_reg = sub.add_parser("register", help="register on the pool (name + group)")
-    p_reg.add_argument("--pool", help="pool URL (else $HASHPASS_POOL or the saved one)")
-    p_login = sub.add_parser("login", help="log in to the pool")
-    p_login.add_argument("--pool", help="pool URL (else $HASHPASS_POOL or the saved one)")
-    sub.add_parser("pull", help="pull new/updated tasks from the pool")
-    p_run = sub.add_parser("run", help="run a task by catalog number or ref")
-    p_run.add_argument("task", help="catalog number (e.g. 1) or a ref (name:version)")
+    p_reg = sub.add_parser("register", help="регистрация на пуле (логин + группа)")
+    p_reg.add_argument("--pool", help="адрес пула (иначе $HASHPASS_POOL или сохранённый)")
+    p_login = sub.add_parser("login", help="вход на пул")
+    p_login.add_argument("--pool", help="адрес пула (иначе $HASHPASS_POOL или сохранённый)")
+    sub.add_parser("pull", help="подтянуть новые/обновлённые задания с пула")
+    p_run = sub.add_parser("run", help="запустить задание по номеру или ref")
+    p_run.add_argument("task", help="номер из каталога (напр. 1) или ref (имя:версия)")
     p_cfg = sub.add_parser("config", help="показать/задать настройки (адрес пула)")
     cfg_sub = p_cfg.add_subparsers(dest="config_key")
     p_cfg_pool = cfg_sub.add_parser("pool", help="показать или задать адрес пула")

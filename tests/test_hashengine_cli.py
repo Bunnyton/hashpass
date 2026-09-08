@@ -7,7 +7,7 @@ from hashengine import cli as engine_cli
 def test_images_empty_env_prints_header(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))
     assert engine_cli.main(["images"]) == 0
-    assert "REF" in capsys.readouterr().out
+    assert "Образ" in capsys.readouterr().out
 
 
 @pytest.mark.tier1
