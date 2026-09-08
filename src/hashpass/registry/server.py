@@ -68,8 +68,7 @@ class RegistryServer(ThreadingHTTPServer):
 
 
 class _Handler(BaseHTTPRequestHandler):
-    """Pool routes: auth (/login /register /me /admin/*), blobs (/image /task /closure),
-    catalog/progress (/catalog /submit /progress), and the web dashboard (/ /web/*)."""
+    """Pool routes: auth, image/task/closure blobs, catalog/submit/progress, and the /web dashboard."""
 
     def log_message(self, fmt: str, *args: object) -> None:
         """Silence per-request stderr logging."""
