@@ -76,9 +76,11 @@ def test_users_self_row_has_no_role_or_delete():
 @pytest.mark.tier1
 def test_password_and_reset_forms():
     assert "Текущий пароль" in render_password_form()
+    assert "спецсимвол" in render_password_form()          # the password-policy hint
     assert "class='err'" in render_password_form("плохо")
     assert "Пароль изменён" in render_password_form(done=True)
     assert "TOK" in render_reset_form("TOK")
+    assert "спецсимвол" in render_reset_form("TOK")
     assert "http://p/web/reset" in render_reset_link("bob", "http://p/web/reset?token=x")
 
 

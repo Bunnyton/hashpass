@@ -138,6 +138,9 @@ def render_login(error: str = "") -> str:
     return _page("Вход — hashpass", body, nav=False)
 
 
+_PW_HINT = "Не короче 8 символов, минимум одна буква, одна цифра и один спецсимвол."
+
+
 def render_password_form(error: str = "", *, done: bool = False) -> str:
     """Change-own-password form (for a logged-in author/admin)."""
     msg = "<div class='note'>Пароль изменён.</div>" if done else ""
@@ -147,6 +150,7 @@ def render_password_form(error: str = "", *, done: bool = False) -> str:
             + _field("Текущий пароль", "old", kind="password", extra="autofocus")
             + _field("Новый пароль", "new", kind="password")
             + _field("Повторите новый", "confirm", kind="password")
+            + f"<p class='sub'>{_PW_HINT}</p>"
             + "<button type='submit'>Сменить</button></form>")
     return _page("Пароль — hashpass", body)
 
@@ -159,6 +163,7 @@ def render_reset_form(token: str, error: str = "") -> str:
             f"<input type='hidden' name='token' value='{escape(token)}'>"
             + _field("Новый пароль", "new", kind="password", extra="autofocus")
             + _field("Повторите", "confirm", kind="password")
+            + f"<p class='sub'>{_PW_HINT}</p>"
             + "<button type='submit'>Сохранить</button></form>")
     return _page("Восстановление — hashpass", body, nav=False)
 

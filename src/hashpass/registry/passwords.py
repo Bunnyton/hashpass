@@ -15,6 +15,34 @@ _PW_FIELDS = 4
 
 ROLES = ("student", "author", "admin")
 
+MIN_PASSWORD_LEN = 8
+
+
+class WeakPasswordError(ValueError):
+    """A chosen password does not meet the pool's password policy."""
+
+
+def validate_password(password: str) -> None:
+    """
+    Enforce the password policy; raise WeakPasswordError (in Russian) if it fails.
+
+    Policy: at least MIN_PASSWORD_LEN characters, with at least one letter, one
+    digit, and one special character (anything non-alphanumeric). Kept
+    deliberately light -- this is a teaching pool, not a bank.
+    """
+    if len(password) < MIN_PASSWORD_LEN:
+        msg = f"пароль должен быть не короче {MIN_PASSWORD_LEN} символов"
+        raise WeakPasswordError(msg)
+    if not any(c.isalpha() for c in password):
+        msg = "пароль должен содержать хотя бы одну букву"
+        raise WeakPasswordError(msg)
+    if not any(c.isdigit() for c in password):
+        msg = "пароль должен содержать хотя бы одну цифру"
+        raise WeakPasswordError(msg)
+    if not any(not c.isalnum() for c in password):
+        msg = "пароль должен содержать хотя бы один спецсимвол"
+        raise WeakPasswordError(msg)
+
 
 def hash_password(password: str, *, iterations: int = _PW_ITERATIONS,
                   salt: bytes | None = None) -> str:

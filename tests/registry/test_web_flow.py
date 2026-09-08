@@ -117,13 +117,13 @@ def _admin_cookie(registry) -> tuple:
 def test_change_own_password(registry):
     opener, cookie = _admin_cookie(registry)
     status, _, body = _req(opener, "POST", f"{registry.base_url}/web/password", cookie=cookie,
-                           data={"old": "pw", "new": "pw2", "confirm": "pw2"})
+                           data={"old": "pw", "new": "pass456!", "confirm": "pass456!"})
     assert status == HTTPStatus.OK
     assert "Пароль изменён" in body
     assert _req(_opener(), "POST", f"{registry.base_url}/web/login",
                 data={"user": "admin", "password": "pw"})[0] == HTTPStatus.UNAUTHORIZED
     assert _req(_opener(), "POST", f"{registry.base_url}/web/login",
-                data={"user": "admin", "password": "pw2"})[0] == HTTPStatus.SEE_OTHER
+                data={"user": "admin", "password": "pass456!"})[0] == HTTPStatus.SEE_OTHER
 
 
 @pytest.mark.tier2
@@ -135,9 +135,9 @@ def test_admin_reset_link_flow(registry):
     assert status == HTTPStatus.OK
     token = re.search(r"token=([^<\s]+)", body).group(1)
     reset = _req(_opener(), "POST", f"{registry.base_url}/web/reset",
-                 data={"token": token, "new": "newpw", "confirm": "newpw"})
+                 data={"token": token, "new": "pass456!", "confirm": "pass456!"})
     assert reset[0] == HTTPStatus.SEE_OTHER            # -> back to login
-    assert RemoteRegistry(registry.base_url).login("stud", "newpw")   # new password works
+    assert RemoteRegistry(registry.base_url).login("stud", "pass456!")   # new password works
 
 
 @pytest.mark.tier2

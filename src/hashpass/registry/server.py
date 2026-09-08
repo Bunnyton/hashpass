@@ -22,7 +22,7 @@ from hashpass.key import global_key
 from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
-from hashpass.registry.passwords import ROLES, UserStore
+from hashpass.registry.passwords import ROLES, UserStore, WeakPasswordError, validate_password
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
@@ -209,6 +209,11 @@ class _Handler(BaseHTTPRequestHandler):
         comment = str(data.get("comment", "")).strip()[:_MAX_COMMENT]
         if not _USER_RE.match(user) or not password or not group:
             self._empty(HTTPStatus.BAD_REQUEST)  # safe login + password + group are mandatory
+            return
+        try:
+            validate_password(password)
+        except WeakPasswordError as exc:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
         if self.server.users.has(user):
             self._empty(HTTPStatus.CONFLICT)
@@ -478,6 +483,11 @@ class _Handler(BaseHTTPRequestHandler):
         if not self.server.users.verify(user, form.get("old", "")):
             self._html(HTTPStatus.OK, render_password_form("неверный текущий пароль"))
             return
+        try:
+            validate_password(new)
+        except WeakPasswordError as exc:
+            self._html(HTTPStatus.OK, render_password_form(str(exc)))
+            return
         self.server.users.set_password(user, new)
         self._html(HTTPStatus.OK, render_password_form(done=True))
 
@@ -504,6 +514,11 @@ class _Handler(BaseHTTPRequestHandler):
         new, confirm = form.get("new", ""), form.get("confirm", "")
         if not new or new != confirm:
             self._html(HTTPStatus.OK, render_reset_form(token, "пароли пусты или не совпадают"))
+            return
+        try:
+            validate_password(new)
+        except WeakPasswordError as exc:
+            self._html(HTTPStatus.OK, render_reset_form(token, str(exc)))
             return
         try:
             self.server.users.set_password(subject[len(_RESET_PREFIX):], new)

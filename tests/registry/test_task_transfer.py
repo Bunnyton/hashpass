@@ -42,7 +42,7 @@ def test_pack_unpack_preserves_digest(tmp_path):
 def test_push_task_author_gated_then_pull(registry, tmp_path):
     registry.users.add("author1", "pw", role="author")
     student_c = RemoteRegistry(registry.base_url)
-    student_tok = student_c.register("stud", "pw", group="G")
+    student_tok = student_c.register("stud", "pass123!", group="G")
     author_c = RemoteRegistry(registry.base_url)
     author_tok = author_c.login("author1", "pw")
 

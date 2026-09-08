@@ -1,4 +1,5 @@
 """Tier2: /register, /me, and admin gating over the live server via RemoteRegistry."""
+import json
 import urllib.error
 from http import HTTPStatus
 
@@ -10,7 +11,7 @@ from hashpass.registry.remote import RemoteRegistry
 @pytest.mark.tier2
 def test_register_creates_student_and_me(registry):
     c = RemoteRegistry(registry.base_url)
-    token = c.register("stud", "pw", group="ИУ7-31", comment="hi")
+    token = c.register("stud", "pass123!", group="ИУ7-31", comment="hi")
     assert token
     assert registry.users.role("stud") == "student"
     me = c.me(token=token)
@@ -24,16 +25,26 @@ def test_register_creates_student_and_me(registry):
 def test_register_requires_group(registry):
     c = RemoteRegistry(registry.base_url)
     with pytest.raises(urllib.error.HTTPError) as exc:
-        c.register("s2", "pw", group="")
+        c.register("s2", "pass123!", group="")
     assert exc.value.code == HTTPStatus.BAD_REQUEST
+
+
+@pytest.mark.tier2
+def test_register_rejects_weak_password(registry):
+    c = RemoteRegistry(registry.base_url)
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        c.register("weak", "short", group="G")   # fails the password policy
+    assert exc.value.code == HTTPStatus.BAD_REQUEST
+    assert "пароль" in json.loads(exc.value.read())["error"]   # the policy reason travels back
+    assert not registry.users.has("weak")
 
 
 @pytest.mark.tier2
 def test_register_duplicate_conflicts(registry):
     c = RemoteRegistry(registry.base_url)
-    c.register("dup", "pw", group="G")
+    c.register("dup", "pass123!", group="G")
     with pytest.raises(urllib.error.HTTPError) as exc:
-        c.register("dup", "pw2", group="G")
+        c.register("dup", "pass456!", group="G")
     assert exc.value.code == HTTPStatus.CONFLICT
 
 
@@ -44,7 +55,7 @@ def test_register_closed_is_forbidden(registry):
     admin_token = c.login("admin", "pw")
     c.set_registration(open_=False, token=admin_token)
     with pytest.raises(urllib.error.HTTPError) as exc:
-        c.register("late", "pw", group="G")
+        c.register("late", "pass123!", group="G")
     assert exc.value.code == HTTPStatus.FORBIDDEN
 
 
@@ -79,12 +90,12 @@ def test_admin_endpoints_are_role_gated(registry):
     c = RemoteRegistry(registry.base_url)
     registry.users.add("admin", "pw", role="admin")
     admin_token = c.login("admin", "pw")
-    c.register("st", "pw", group="G")
+    c.register("st", "pass123!", group="G")
     # admin can grant a role
     c.set_role("st", "author", token=admin_token)
     assert registry.users.role("st") == "author"
     # a non-admin (student) token -> 403
-    student_token = c.register("st2", "pw", group="G")
+    student_token = c.register("st2", "pass123!", group="G")
     with pytest.raises(urllib.error.HTTPError) as exc:
         c.set_registration(open_=False, token=student_token)
     assert exc.value.code == HTTPStatus.FORBIDDEN

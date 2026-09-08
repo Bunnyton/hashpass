@@ -1,8 +1,31 @@
 import pytest
 
-from hashpass.registry.passwords import UserStore, hash_password, verify_password
+from hashpass.registry.passwords import (
+    UserStore,
+    WeakPasswordError,
+    hash_password,
+    validate_password,
+    verify_password,
+)
 
 _RECORD_FIELDS = 4
+
+
+@pytest.mark.tier1
+def test_password_policy_accepts_a_strong_password():
+    validate_password("pass123!")   # length 8, letter + digit + special -> no raise
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize(("password", "reason"), [
+    ("aB3!", "короче"),          # too short
+    ("12345678!", "букв"),       # no letter
+    ("password!", "цифр"),       # no digit
+    ("password1", "спецсимвол"),  # no special character
+])
+def test_password_policy_rejects_weak_passwords(password, reason):
+    with pytest.raises(WeakPasswordError, match=reason):
+        validate_password(password)
 
 
 @pytest.mark.tier1

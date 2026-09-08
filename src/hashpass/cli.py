@@ -37,7 +37,7 @@ from hashpass.recipe.model import CopyStep, Recipe, image_ref, is_task
 from hashpass.recipe.parse import load_recipe
 from hashpass.registry.config import load_config
 from hashpass.registry.creds import CredentialCache
-from hashpass.registry.passwords import UserStore
+from hashpass.registry.passwords import UserStore, WeakPasswordError, validate_password
 from hashpass.registry.refs import split_ref
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.server import make_server
@@ -1053,11 +1053,14 @@ def _pool_token(env: Home, url: str) -> str | None:
 
 
 def _prompt_new_password(io: Io) -> str:
-    """Prompt for a new password twice, looping until the two entries match."""
+    """Prompt for a new password twice, enforcing the policy, until the two entries match."""
+    io.write("пароль: не короче 8 символов, минимум одна буква, одна цифра и один спецсимвол\n")
     while True:
         pw = getpass.getpass("пароль: ")
-        if not pw:
-            io.write("пароль не может быть пустым\n")
+        try:
+            validate_password(pw)
+        except WeakPasswordError as exc:
+            io.write(f"{exc}\n")
             continue
         if getpass.getpass("повторите пароль: ") == pw:
             return pw
