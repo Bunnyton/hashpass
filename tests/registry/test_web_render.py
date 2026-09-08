@@ -10,6 +10,9 @@ from hashpass.registry.web import (
     render_front,
     render_install_script,
     render_login,
+    render_password_form,
+    render_reset_form,
+    render_reset_link,
     render_users,
 )
 
@@ -50,10 +53,23 @@ def test_dashboard_rows_cells_and_group_filter():
 
 
 @pytest.mark.tier1
-def test_users_toggle_label_flips():
-    profiles = [{"user": "a", "role": "admin", "group": "", "comment": "c"}]
-    assert "Закрыть регистрацию" in render_users(profiles, registration_open=True)
+def test_users_toggle_and_inline_controls():
+    profiles = [{"user": "s1", "role": "student", "group": "G", "comment": ""}]
+    html = render_users(profiles, registration_open=True)
+    assert "Закрыть регистрацию" in html
     assert "Открыть регистрацию" in render_users(profiles, registration_open=False)
+    assert "/web/users/role" in html          # inline per-user role change
+    assert "/web/users/reset" in html         # per-user reset link
+    assert "ссылка сброса" in html
+
+
+@pytest.mark.tier1
+def test_password_and_reset_forms():
+    assert "Текущий пароль" in render_password_form()
+    assert "class='err'" in render_password_form("плохо")
+    assert "Пароль изменён" in render_password_form(done=True)
+    assert "TOK" in render_reset_form("TOK")
+    assert "http://p/web/reset" in render_reset_link("bob", "http://p/web/reset?token=x")
 
 
 @pytest.mark.tier1

@@ -1,10 +1,13 @@
 """Tier2: web login/cookie/dashboard flow over the live server."""
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
 from http import HTTPStatus
 
 import pytest
+
+from hashpass.registry.remote import RemoteRegistry
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -100,3 +103,47 @@ def test_web_admin_can_toggle_registration(registry):
          cookie=cookie, data={"open": "false"})
     _, _, body = _req(opener, "GET", f"{registry.base_url}/web/users", cookie=cookie)
     assert "Открыть регистрацию" in body   # now closed -> the toggle offers to open it
+
+
+def _admin_cookie(registry) -> tuple:
+    registry.users.add("admin", "pw", role="admin", group="")
+    opener = _opener()
+    _, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
+                         data={"user": "admin", "password": "pw"})
+    return opener, headers["Set-Cookie"].split(";")[0]
+
+
+@pytest.mark.tier2
+def test_change_own_password(registry):
+    opener, cookie = _admin_cookie(registry)
+    status, _, body = _req(opener, "POST", f"{registry.base_url}/web/password", cookie=cookie,
+                           data={"old": "pw", "new": "pw2", "confirm": "pw2"})
+    assert status == HTTPStatus.OK
+    assert "Пароль изменён" in body
+    assert _req(_opener(), "POST", f"{registry.base_url}/web/login",
+                data={"user": "admin", "password": "pw"})[0] == HTTPStatus.UNAUTHORIZED
+    assert _req(_opener(), "POST", f"{registry.base_url}/web/login",
+                data={"user": "admin", "password": "pw2"})[0] == HTTPStatus.SEE_OTHER
+
+
+@pytest.mark.tier2
+def test_admin_reset_link_flow(registry):
+    registry.users.add("stud", "old", role="student", group="G")
+    opener, cookie = _admin_cookie(registry)
+    status, _, body = _req(opener, "POST", f"{registry.base_url}/web/users/reset", cookie=cookie,
+                           data={"user": "stud"})
+    assert status == HTTPStatus.OK
+    token = re.search(r"token=([^<\s]+)", body).group(1)
+    reset = _req(_opener(), "POST", f"{registry.base_url}/web/reset",
+                 data={"token": token, "new": "newpw", "confirm": "newpw"})
+    assert reset[0] == HTTPStatus.SEE_OTHER            # -> back to login
+    assert RemoteRegistry(registry.base_url).login("stud", "newpw")   # new password works
+
+
+@pytest.mark.tier2
+def test_inline_role_change(registry):
+    registry.users.add("stud", "pw", role="student", group="G")
+    opener, cookie = _admin_cookie(registry)
+    _req(opener, "POST", f"{registry.base_url}/web/users/role", cookie=cookie,
+         data={"user": "stud", "role": "author"})
+    assert registry.users.role("stud") == "author"

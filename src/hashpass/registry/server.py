@@ -33,6 +33,9 @@ from hashpass.registry.web import (
     render_images,
     render_install_script,
     render_login,
+    render_password_form,
+    render_reset_form,
+    render_reset_link,
     render_users,
 )
 from hashpass.taskdigest import task_digest
@@ -43,6 +46,8 @@ _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
 _USER_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # safe as a login + a per-user progress filename
 _AUTHOR_ROLES = ("author", "admin")
 _MAX_COMMENT = 500
+_RESET_PREFIX = "reset:"                 # a reset token's subject; never a real login
+_RESET_TTL = 2 * 24 * 60 * 60            # password-reset links live 2 days
 
 
 def _now() -> str:
@@ -148,7 +153,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     # -- POST --------------------------------------------------------------
 
-    def do_POST(self) -> None:
+    def do_POST(self) -> None:  # noqa: C901  (a flat route dispatcher)
         path = urlsplit(self.path).path
         if path == "/login":
             self._login()
@@ -166,6 +171,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_set_role()
         elif path == "/web/users/registration":
             self._web_registration()
+        elif path == "/web/password":
+            self._web_password_change()
+        elif path == "/web/reset":
+            self._web_reset_do()
+        elif path == "/web/users/reset":
+            self._web_reset_link()
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -372,7 +383,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _pool_url(self) -> str:
-        return f"http://{self.headers.get('Host', '127.0.0.1')}"
+        scheme = "https" if isinstance(self.connection, ssl.SSLSocket) else "http"
+        return f"{scheme}://{self.headers.get('Host', '127.0.0.1')}"
 
     def _form(self) -> dict[str, str]:
         parsed = parse_qs(self._read_body().decode("utf-8", "replace"))
@@ -407,6 +419,11 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_users()
         elif path == "/web/images":
             self._web_images()
+        elif path == "/web/password":
+            self._web_password_form()
+        elif path == "/web/reset":
+            token = parse_qs(urlsplit(self.path).query).get("token", [""])[0]
+            self._html(HTTPStatus.OK, render_reset_form(token))
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -433,6 +450,59 @@ class _Handler(BaseHTTPRequestHandler):
             self._redirect("/web/login")
             return
         self._html(HTTPStatus.OK, render_images(self._pool_image_rows()))
+
+    def _web_password_form(self) -> None:
+        if self._session_user() is None:
+            self._redirect("/web/login")
+            return
+        self._html(HTTPStatus.OK, render_password_form())
+
+    def _web_password_change(self) -> None:
+        user = self._session_user()
+        if user is None:
+            self._redirect("/web/login")
+            return
+        form = self._form()
+        new, confirm = form.get("new", ""), form.get("confirm", "")
+        if not new or new != confirm:
+            self._html(HTTPStatus.OK, render_password_form("новые пароли пусты или не совпадают"))
+            return
+        if not self.server.users.verify(user, form.get("old", "")):
+            self._html(HTTPStatus.OK, render_password_form("неверный текущий пароль"))
+            return
+        self.server.users.set_password(user, new)
+        self._html(HTTPStatus.OK, render_password_form(done=True))
+
+    def _web_reset_link(self) -> None:
+        if self._session_role(("admin",)) is None:
+            self._redirect("/web/login")
+            return
+        target = self._form().get("user", "")
+        if not self.server.users.has(target):
+            self._redirect("/web/users")
+            return
+        token = issue_token(self.server.secret, _RESET_PREFIX + target,
+                            now=time.time(), ttl=_RESET_TTL)
+        self._html(HTTPStatus.OK,
+                   render_reset_link(target, f"{self._pool_url()}/web/reset?token={token}"))
+
+    def _web_reset_do(self) -> None:
+        form = self._form()
+        token = form.get("token", "")
+        subject = verify_token(self.server.secret, token, now=time.time())
+        if subject is None or not subject.startswith(_RESET_PREFIX):
+            self._html(HTTPStatus.OK, render_reset_form(token, "ссылка недействительна или истекла"))
+            return
+        new, confirm = form.get("new", ""), form.get("confirm", "")
+        if not new or new != confirm:
+            self._html(HTTPStatus.OK, render_reset_form(token, "пароли пусты или не совпадают"))
+            return
+        try:
+            self.server.users.set_password(subject[len(_RESET_PREFIX):], new)
+        except KeyError:
+            self._html(HTTPStatus.OK, render_reset_form(token, "пользователь не найден"))
+            return
+        self._redirect("/web/login")
 
     def _web_login(self) -> None:
         form = self._form()

@@ -33,6 +33,19 @@ def test_set_role_and_validation(tmp_path):
 
 
 @pytest.mark.tier1
+def test_set_password_preserves_profile(tmp_path):
+    us = UserStore(tmp_path / "u.json")
+    us.add("bob", "old", role="author", group="G", comment="c")
+    us.set_password("bob", "new")
+    assert not us.verify("bob", "old")
+    assert us.verify("bob", "new")
+    prof = us.get("bob")
+    assert (prof["role"], prof["group"], prof["comment"]) == ("author", "G", "c")
+    with pytest.raises(KeyError):
+        us.set_password("ghost", "x")
+
+
+@pytest.mark.tier1
 def test_legacy_string_record_normalizes(tmp_path):
     p = tmp_path / "u.json"
     p.write_text(json.dumps({"old": hash_password("pw")}), encoding="utf-8")  # legacy: bare hash str

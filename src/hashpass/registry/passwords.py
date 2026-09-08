@@ -99,6 +99,14 @@ class UserStore:
         """Return whether a user is registered (regardless of password)."""
         return user in self._load()
 
+    def set_password(self, user: str, password: str) -> None:
+        """Replace a user's password hash, preserving role/group/comment (KeyError if unknown)."""
+        users = self._load()
+        if user not in users:
+            raise KeyError(user)
+        users[user]["pw"] = hash_password(password)
+        self._save(users)
+
     def verify(self, user: str, password: str) -> bool:
         """Return whether password matches the stored hash for user (False if unknown)."""
         rec = self._load().get(user)
