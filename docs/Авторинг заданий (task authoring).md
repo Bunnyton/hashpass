@@ -38,11 +38,11 @@ stage "Вытащи строку с TODO из /notes.txt в /found.txt"
   observe /found.txt
 ```
 
-**2. Собери и запусти** — через CLI `hashpass` (нужен `systemd-nspawn` + scoped sudo + docker):
+**2. Собери и запусти** — авторская команда `hashengine` (нужен `systemd-nspawn` + scoped sudo + docker):
 
 ```bash
-hashpass build Taskfile          # собрать; base-rootfs Debian создастся сам при первом build
-hashpass run hello-grep:1        # запустить: интерактивная сессия задания
+hashengine build Taskfile        # собрать; base-rootfs Debian создастся сам при первом build
+hashpass run <логин>/hello-grep:1  # запустить локально: интерактивная сессия задания
 ```
 
 Внутри `run` — промпт: вводишь Linux-команды, они выполняются в контейнере, система грейдит
@@ -50,8 +50,8 @@ hashpass run hello-grep:1        # запустить: интерактивна�
 вроде «принято»/«завершено» НЕТ, это на усмотрение автора (`on pass` / `voice bye` / финал);
 подсказки даются по условиям; `exit` — выйти. Неправильное решение просто не проходит стадию.
 
-> Команда `hashpass` появляется после `make install` (в корне репо); без установки — `python3 -m hashpass build …`.
-> Хранилище — `~/.hashpass/` (переопредели через `$HASHPASS_HOME`); base-rootfs кэшируется там же.
+> `hashengine` появляется и активируется после `make install` (в корне репо); без установки —
+> `python3 -m hashengine build …`. Хранилище автора — `~/.hashengine/` (base-rootfs кэшируется там же).
 
 ---
 
@@ -244,16 +244,19 @@ react on command exec watch.sh   # (перехватчик на каждую к�
 ## CLI — команды
 
 ```bash
-hashpass                        # без аргументов → режим заданий: список задач, выбор по номеру
-hashpass build <Taskfile> [-t name:ver]   # собрать; имя: -t > image-строка > каталог. Печатает прогресс.
-hashpass run <name:ver>         # задание → интерактивная сессия; образ → shell в контейнере
-hashpass images                 # список собранного (name:ver + kind: task|image)
-hashpass login <registry-url>   # логин/пароль → токен (кэш 7 дней)
-hashpass push <name:ver> <url>  # push (под токеном)
-hashpass pull <name:ver> <url>  # pull (аноним)
+# автор (hashengine):
+hashengine build <Taskfile> [-t name:ver]        # собрать; имя: -t > image-строка > каталог
+hashengine images                                # список собранного (name:ver + kind: task|image)
+hashengine login <registry-url>                  # логин/пароль → токен (кэш 7 дней)
+hashengine push <name:ver> --task <N> --title "…"  # опубликовать задание в пул под номером N
+hashengine serve                                 # поднять пул (реестр + веб-панель)
+# студент (hashpass):
+hashpass                        # без аргументов → подтянуть каталог и показать задания по номерам
+hashpass register / login       # регистрация (ФИО+группа) / вход на пул
+hashpass run <номер|name:ver>   # запустить задание; по прохождению результат уходит на пул
 ```
 
-`hashpass` доступна после `make install`; иначе — `python3 -m hashpass …`. Ошибки пользователя
+`hashengine` доступна после `make install`; иначе — `python3 -m hashengine …`. Ошибки пользователя
 (кривой Taskfile, нет docker, `push` без `login`, неизвестный ref) → чистое `hashpass: <причина>` в
 stderr, без трейсбека. `rmi` пока нет (удаление root-owned слоёв требует `sudo rm`, не выдан).
 
