@@ -35,3 +35,27 @@ def test_entry_ref_and_as_dict():
     assert d["number"] == number
     assert d["ref"] == "ns/app:2"
     assert d["digest"] == "abc"
+    assert d["available"] is True   # tasks default to available
+
+
+@pytest.mark.tier1
+def test_remove_and_availability(tmp_path):
+    cat = Catalog(tmp_path / "c.json")
+    cat.put(CatalogEntry(1, "a", "1", "A", "d1"))
+    assert cat.get(1).available is True
+    assert cat.set_available(1, available=False) is True
+    assert cat.get(1).available is False
+    assert cat.set_available(99, available=False) is False   # no such slot
+    # availability persists across reload and survives a re-read of entries()
+    assert Catalog(tmp_path / "c.json").entries()[0].available is False
+    assert cat.remove(1) is True
+    assert cat.get(1) is None
+    assert cat.remove(1) is False
+
+
+@pytest.mark.tier1
+def test_available_roundtrip_through_put(tmp_path):
+    cat = Catalog(tmp_path / "c.json")
+    cat.put(CatalogEntry(1, "a", "1", "A", "d1", available=False))
+    assert cat.get(1).available is False
+    assert cat.get(1).as_dict()["available"] is False

@@ -236,6 +236,17 @@ class RemoteRegistry:
             query = "?" + urllib.parse.urlencode({"number": number, "title": title})
         self._put_task(name, version, query, pack_task(task_dir), self._auth_token(token))
 
+    def push_attachment(self, name: str, version: str, filename: str, blob: bytes, *,  # noqa: PLR0913
+                        taskfile: bool = False, token: str | None = None) -> None:
+        """Attach a file (e.g. the Taskfile) to an image's pool card (author-only)."""
+        params = {"name": filename}
+        if taskfile:
+            params["taskfile"] = "1"
+        query = "?" + urllib.parse.urlencode(params)
+        self._send("PUT", f"/attachment/{name}/{version}{query}", data=blob,
+                   headers={"Authorization": f"Bearer {self._auth_token(token)}",
+                            "Content-Type": "application/octet-stream"})
+
     def catalog(self, *, token: str | None = None) -> list[dict[str, object]]:
         """Return the ordered task catalog (requires a login token)."""
         result = self._get_json("/catalog", token=self._auth_token(token))

@@ -296,6 +296,7 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
         build(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
         kind = "образ"
     sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} ({kind})\n")
+    store.set_taskfile_path(ref, str(taskfile_path.resolve()))   # push attaches it to the card later
     if task:
         # The registry blob carries an image's layer, not a task's hidden grader -- keep tasks local.
         io.write("\x1b[2m  задание сохранено локально (на сервис отправляются образы)\x1b[0m\n")
@@ -973,6 +974,25 @@ def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> i
     return 0
 
 
+def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io) -> None:
+    """On push, upload the Taskfile the image remembers (so its solutions/interactivity are on the pool)."""
+    try:
+        taskfile = store.get(ref).taskfile_path
+    except KeyError:
+        return
+    path = Path(taskfile) if taskfile else None
+    if path is None or not path.is_file():
+        io.write("\x1b[2mTaskfile не найден — можете приложить файлы вручную в карточке образа\x1b[0m\n")
+        return
+    name, version = split_ref(ref)
+    try:
+        client.push_attachment(name, version, path.name, path.read_bytes(), taskfile=True)
+    except (urllib.error.URLError, OSError, RuntimeError, ValueError) as exc:
+        io.write(f"\x1b[33m⚠ не удалось прикрепить Taskfile: {exc}\x1b[0m\n")
+        return
+    io.write(f"\x1b[36m↑ прикреплён Taskfile\x1b[0m: {path.name}\n")
+
+
 def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR0913
              task_number: int | None = None, title: str = "", io: Io | None = None) -> int:
     """
@@ -986,6 +1006,7 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR09
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     copied = client.push(store, ref)
     sys.stdout.write(f"pushed {ref} ({len(copied)} layer(s))\n")
+    _attach_taskfile(client, store, ref, io)
     if task_number is not None:
         tdir = task_dir(ref, store)
         if not tdir.exists():
@@ -1229,27 +1250,140 @@ def cmd_pool_pull(env: Home, io: Io | None = None) -> int:
     return 0
 
 
+def _solved_path(env: Home) -> Path:
+    return env.root / "solved.json"
+
+
+def load_solved(env: Home) -> dict[str, dict[str, object]]:
+    """Read the local record of tasks solved on this machine ({ref: {...}}); {} if none."""
+    path = _solved_path(env)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def mark_solved(env: Home, ref: str) -> None:
+    """Record locally that `ref` was solved here (the console graded every stage passed)."""
+    data = load_solved(env)
+    data[ref] = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    env.root.mkdir(parents=True, exist_ok=True)
+    _solved_path(env).write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def pool_status(env: Home, url: str, token: str, user: str) -> list[dict[str, object]]:
+    """
+    Per available task: {number, title, ref, local, server}.
+
+    `local` = solved on this machine (self-check); `server` = the pool's verdict ('passed'/'failed'/None).
+    """
+    client = RemoteRegistry(url)
+    entries = client.catalog(token=token)
+    try:
+        mine = client.progress(token=token).get(user, {})
+    except (urllib.error.URLError, RuntimeError):
+        mine = {}   # offline: still show what was solved locally
+    solved = load_solved(env)
+    rows: list[dict[str, object]] = []
+    for entry in entries:
+        ref = str(entry["ref"])
+        server = mine.get(ref, {}).get("status") if isinstance(mine.get(ref), dict) else None
+        rows.append({"number": entry["number"], "title": entry.get("title") or ref,
+                     "ref": ref, "local": ref in solved, "server": server})
+    return rows
+
+
+def _status_badge(row: dict[str, object]) -> str:
+    if row.get("server") == "passed":
+        return "\x1b[32m★ зачтено\x1b[0m"
+    if row.get("local"):
+        return "\x1b[33m✓ решено локально (не зачтено)\x1b[0m"
+    return "\x1b[2m· не начато\x1b[0m"
+
+
+def _render_pool_menu(rows: list[dict[str, object]], user: str) -> str:
+    lines = [f"\x1b[1mВаши задания\x1b[0m ({user}):", ""]
+    lines += [f"  {r['number']:>2}. [{_status_badge(r)}] {r['title']}" for r in rows]
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _next_number(rows: list[dict[str, object]], after: int) -> int | None:
+    """Return the next task worth doing after `after` (first uncredited ahead, else first)."""
+    todo = [r for r in rows if r.get("server") != "passed"]
+    ahead = [r for r in todo if int(r["number"]) > after]  # type: ignore[arg-type]
+    pick = (ahead or todo)
+    return int(pick[0]["number"]) if pick else None  # type: ignore[arg-type]
+
+
+def _resync(env: Home, url: str, user: str, token: str, io: Io) -> None:
+    """Self-check: re-submit tasks solved locally but not yet credited on the server."""
+    client = RemoteRegistry(url)
+    mine = client.progress(token=token).get(user, {})
+    store = ImageStore(env.images)
+    sent = 0
+    for ref in load_solved(env):
+        if isinstance(mine.get(ref), dict) and mine[ref].get("status") == "passed":
+            continue
+        tdir = task_dir(ref, store)
+        if not tdir.exists():
+            continue
+        try:
+            result = client.submit(ref, task_digest(tdir), passed=True, token=token)
+        except (urllib.error.URLError, RuntimeError, ValueError):
+            continue
+        sent += result.get("status") == "passed"
+    io.write(f"\x1b[36mсамопроверка: зачтено на сервере {sent}\x1b[0m\n")
+
+
 def cmd_pool_home(env: Home, io: Io | None = None) -> int:
-    """Student no-arg: ensure identity, pull new tasks in parallel, list them by number."""
+    """Student no-arg: a friendly menu — pull tasks, show status, pick one to run, offer the next."""
     io = io or _default_io()
     url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
     layers, tasks = pull_new(env, url, token)
     if layers or tasks:
         io.write(f"\x1b[2m↓ подтянуто: слоёв {layers}, заданий {tasks}\x1b[0m\n")
-    client = RemoteRegistry(url)
-    entries = client.catalog(token=token)
-    if not entries:
-        io.write("в пуле пока нет заданий\n")
-        return 0
-    mine = client.progress(token=token).get(user, {})
-    io.write(f"Задания ({user}):\n")
-    for entry in entries:
-        passed = mine.get(str(entry["ref"]), {}).get("status") == "passed"
-        mark = "\x1b[32m✓\x1b[0m" if passed else " "
-        io.write(f"  {mark} {entry['number']}. {entry['title'] or entry['ref']}\n")
-    io.write("Запуск:  hashpass run <номер>\n")
-    return 0
+    while True:
+        rows = pool_status(env, url, token, user)
+        if not rows:
+            io.write("в пуле пока нет доступных заданий\n")
+            return 0
+        io.write(_render_pool_menu(rows, user) + "\n")
+        choice = (io.read("Номер задания (Enter — обновить, s — самопроверка, q — выход): ")
+                  or "").strip().lower()
+        if choice in ("q", "quit", "exit", "выход"):
+            return 0
+        if choice == "":
+            pull_new(env, url, token)
+            continue
+        if choice == "s":
+            _resync(env, url, user, token, io)
+            continue
+        if not (choice.isdigit() and any(str(r["number"]) == choice for r in rows)):
+            io.write("нет такого номера\n")
+            continue
+        _run_from_menu(env, url, user, token, int(choice), io)
+
+
+def _run_from_menu(env: Home, url: str, user: str, token: str,  # noqa: PLR0913, PLR0917
+                   number: int, io: Io) -> None:
+    """Run a task from the menu, then offer to go straight to the next one (hand-holding flow)."""
+    current: int | None = number
+    while current is not None:
+        cmd_pool_run(env, str(current), io)
+        nxt = _next_number(pool_status(env, url, token, user), current)
+        if nxt is None:
+            io.write("\x1b[32m🎉 Все доступные задания зачтены!\x1b[0m\n")
+            return
+        ans = (io.read(f"Перейти к следующему заданию №{nxt}? "
+                       "[Enter — да, номер — другое, q — в меню]: ") or "").strip().lower()
+        if ans in ("q", "quit", "exit", "выход"):
+            return
+        current = int(ans) if ans.isdigit() else nxt
 
 
 def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
@@ -1265,14 +1399,17 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     def _submit(completed: bool) -> None:  # noqa: FBT001  (matches the on_complete callback)
         if not completed:
             return  # only report a real completion; the server digest-gates the credit
+        mark_solved(env, ref)   # решено локально — record it before the network, so a failed
+        io.write("\x1b[32m✓ решено локально\x1b[0m\n")   # submit still leaves a clear local status
         digest = task_digest(task_dir(ref, store))
         try:
             result = RemoteRegistry(url).submit(ref, digest, passed=True, token=token)
-        except (urllib.error.URLError, ValueError) as exc:
-            io.write(f"\x1b[33m⚠ результат не отправлен на сервер: {exc}\x1b[0m\n")
+        except (urllib.error.URLError, RuntimeError, ValueError) as exc:
+            io.write(f"\x1b[33m⚠ не зачтено на сервере (нет связи?): {exc}\x1b[0m\n"
+                     "\x1b[2m  позже запустите самопроверку (s в меню)\x1b[0m\n")
             return
         if result.get("status") == "passed":
-            io.write("\x1b[32m✓ задание зачтено на сервере\x1b[0m\n")
+            io.write("\x1b[32m★ задание зачтено на сервере\x1b[0m\n")
         else:
             io.write(f"\x1b[33mсервер не зачёл задание: {result.get('reason', result.get('status'))}"
                      "\x1b[0m\n")

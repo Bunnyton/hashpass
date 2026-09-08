@@ -40,6 +40,7 @@ class StoredImage:
     layer: Path
     parents: tuple[str, ...]
     build_key: str | None = None
+    taskfile_path: str | None = None   # absolute path of the Taskfile this was built from (author side)
 
 
 def _split_ref(ref: str) -> tuple[str, str]:
@@ -136,7 +137,17 @@ class ImageStore:
             raise KeyError(ref)
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         return StoredImage(name, version, dest / "layer", tuple(meta["parents"]),
-                           meta.get("build_key"))
+                           meta.get("build_key"), meta.get("taskfile_path"))
+
+    def set_taskfile_path(self, ref: str, taskfile_path: str) -> None:
+        """Record (in meta.json) the Taskfile an image was built from, for push to attach later."""
+        name, version = _split_ref(ref)
+        meta_path = self._dir(name, version) / "meta.json"
+        if not meta_path.exists():
+            raise KeyError(ref)
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta["taskfile_path"] = taskfile_path
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     def exists(self, ref: str) -> bool:
         """Return whether an image is stored under the reference."""

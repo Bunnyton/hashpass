@@ -1,5 +1,6 @@
 """Server-rendered web dashboard for the pool (stdlib only): front page, login, progress, users."""
 from html import escape
+from urllib.parse import quote
 
 _REPO = "Bunnyton/hashpass"
 
@@ -223,16 +224,90 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
     return _page("Прогресс — hashpass", f"<h1>Прогресс студентов</h1>{picker}{table}")
 
 
+def _fmt_size(n: object) -> str:
+    size = int(n) if isinstance(n, (int, float)) else 0
+    return f"{size} Б" if size < 1024 else f"{size / 1024:.0f} КБ"  # noqa: PLR2004
+
+
+def _attachments_block(ref: str, files: list[dict]) -> str:
+    q = quote(ref, safe="")
+    rows = ""
+    for f in files:
+        name = str(f.get("name", ""))
+        badge = " <span class='pill author'>Taskfile</span>" if f.get("taskfile") else ""
+        rows += (
+            f"<tr><td class='mono'>{escape(name)}{badge}</td>"
+            f"<td class='c'>{_fmt_size(f.get('size'))}</td>"
+            f"<td><a class='btn sm ghost' href='/web/images/file?ref={q}&name={quote(name, safe='')}'>"
+            "скачать</a></td>"
+            "<td><form class='inline' method='post' action='/web/images/attach-delete'>"
+            f"<input type='hidden' name='ref' value='{escape(ref)}'>"
+            f"<input type='hidden' name='name' value='{escape(name)}'>"
+            "<button class='sm ghost' type='submit'>удалить</button></form></td></tr>")
+    table = (f"<table><tr><th>Файл</th><th class='c'>Размер</th><th></th><th></th></tr>{rows}</table>"
+             if files else
+             "<p class='sub'>Файлов нет. Taskfile прикрепляется автоматически при <code>push</code>; "
+             "можно приложить файлы вручную ниже.</p>")
+    upload = ("<form class='inline row' method='post' action='/web/images/attach' "
+              "enctype='multipart/form-data'>"
+              f"<input type='hidden' name='ref' value='{escape(ref)}'>"
+              "<input type='file' name='file' required>"
+              "<button class='sm' type='submit'>Прикрепить</button></form>")
+    return f"<h2>Файлы</h2>{table}{upload}"
+
+
+def _catalog_block(row: dict) -> str:
+    ref = str(row["ref"])
+    number, title = row.get("number"), str(row.get("title", ""))
+    if number is None:                                   # a task not yet published to the catalog
+        return ("<h2>Каталог</h2><p class='sub'>Не назначено заданием.</p>"
+                "<form class='inline row' method='post' action='/web/catalog/assign'>"
+                f"<input type='hidden' name='ref' value='{escape(ref)}'>"
+                "<input name='number' type='number' placeholder='№' required style='width:5em'>"
+                "<input name='title' type='text' placeholder='заголовок'>"
+                "<button class='sm' type='submit'>Назначить заданием</button></form>")
+    available = bool(row.get("available"))
+    pill = ("<span class='pill'>доступно</span>" if available
+            else "<span class='pill no'>скрыто</span>")
+    toggle = "0" if available else "1"
+    toggle_label = "Скрыть" if available else "Открыть"
+    return (f"<h2>Каталог</h2><p>Задание <b>№{number}</b>: {escape(title) or '—'} {pill}</p>"
+            "<div class='row'>"
+            "<form class='inline' method='post' action='/web/catalog/available'>"
+            f"<input type='hidden' name='number' value='{number}'>"
+            f"<input type='hidden' name='available' value='{toggle}'>"
+            f"<button class='sm' type='submit'>{toggle_label}</button></form>"
+            "<form class='inline' method='post' action='/web/catalog/remove'>"
+            f"<input type='hidden' name='number' value='{number}'>"
+            "<button class='sm ghost' type='submit'>Снять с каталога</button></form></div>"
+            "<form class='inline row' method='post' action='/web/catalog/assign'>"
+            f"<input type='hidden' name='ref' value='{escape(ref)}'>"
+            f"<input name='number' type='number' value='{number}' required style='width:5em'>"
+            f"<input name='title' type='text' value='{escape(title)}' placeholder='заголовок'>"
+            "<button class='sm' type='submit'>Обновить</button></form>")
+
+
+def _image_card(row: dict) -> str:
+    ref = str(row["ref"])
+    kind = str(row.get("kind", "image"))
+    kind_pill = f"<span class='pill {'author' if kind == 'task' else ''}'>{escape(kind)}</span>"
+    desc = str(row.get("description", ""))
+    describe = ("<h2>Описание</h2>"
+                "<form method='post' action='/web/images/describe'>"
+                f"<input type='hidden' name='ref' value='{escape(ref)}'>"
+                "<textarea name='description' rows='3' style='width:100%;font:inherit' "
+                f"placeholder='описание образа'>{escape(desc)}</textarea>"
+                "<button class='sm' type='submit'>Сохранить описание</button></form>")
+    catalog = _catalog_block(row) if kind == "task" else ""
+    files = row.get("files") if isinstance(row.get("files"), list) else []
+    return (f"<div class='card wide'><div class='row'><b class='mono'>{escape(ref)}</b> "
+            f"{kind_pill}</div>{catalog}{describe}{_attachments_block(ref, files)}</div>")
+
+
 def render_images(images: list[dict]) -> str:
-    """List the images/tasks the pool holds (ref, kind, catalog number for tasks)."""
-    rows = "".join(
-        f"<tr><td>{escape(str(i['ref']))}</td><td>{escape(str(i['kind']))}</td>"
-        f"<td class='c'>{i['number'] if i.get('number') is not None else ''}</td></tr>"
-        for i in images)
-    body = ("<h1>Образы и задания пула</h1>"
-            "<table><tr><th>Ref</th><th>Тип</th><th>№ задания</th></tr>"
-            f"{rows or '<tr><td colspan=3>пусто</td></tr>'}</table>")
-    return _page("Образы — hashpass", body)
+    """Per-image cards: kind, catalog assignment/availability, description, and file attachments."""
+    cards = "".join(_image_card(row) for row in images) or "<p class='sub'>Пул пуст.</p>"
+    return _page("Образы — hashpass", f"<h1>Образы и задания пула</h1>{cards}")
 
 
 _ROLES = ("student", "author", "admin")

@@ -6,6 +6,7 @@ hashes, so every mutating or credit-granting request requires a valid bearer tok
 endpoints check the caller's role. It may be self-hosted as the pool; it must still NEVER be pointed
 at or used to touch the legacy server (no 185.x).
 """
+import contextlib
 import json
 import re
 import ssl
@@ -19,6 +20,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.key import global_key
+from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
@@ -46,6 +48,8 @@ _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
 _USER_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # safe as a login + a per-user progress filename
 _AUTHOR_ROLES = ("author", "admin")
 _MAX_COMMENT = 500
+_MAX_ATTACH = 8 * 1024 * 1024   # per-file attachment cap (8 MiB)
+_MAX_DESC = 2000                # image description cap
 _RESET_PREFIX = "reset:"                 # a reset token's subject; never a real login
 _RESET_TTL = 2 * 24 * 60 * 60            # password-reset links live 2 days
 
@@ -53,6 +57,38 @@ _RESET_TTL = 2 * 24 * 60 * 60            # password-reset links live 2 days
 def _now() -> str:
     """UTC timestamp (ISO-8601, second precision) for progress records."""
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _parse_multipart(body: bytes, content_type: str) -> tuple[dict[str, str], dict[str, tuple[str, bytes]]]:
+    """
+    Minimal multipart/form-data parser: return (text fields, file parts {name:(filename, bytes)}).
+
+    Enough for one small upload form; binary file content is preserved exactly (only the
+    structural CRLFs around each part are stripped, never bytes inside the content).
+    """
+    match = re.search(r"boundary=([^;]+)", content_type)
+    if not match:
+        return {}, {}
+    delim = b"--" + match.group(1).strip().strip('"').encode("utf-8", "replace")
+    fields: dict[str, str] = {}
+    files: dict[str, tuple[str, bytes]] = {}
+    for raw in body.split(delim):
+        part = raw[2:] if raw.startswith(b"\r\n") else raw
+        if part.endswith(b"\r\n"):
+            part = part[:-2]
+        head, sep, content = part.partition(b"\r\n\r\n")
+        if not sep:
+            continue
+        head_s = head.decode("utf-8", "replace")
+        name = re.search(r'name="([^"]*)"', head_s)
+        if name is None:
+            continue
+        filename = re.search(r'filename="([^"]*)"', head_s)
+        if filename is not None:
+            files[name.group(1)] = (filename.group(1), content)
+        else:
+            fields[name.group(1)] = content.decode("utf-8", "replace")
+    return fields, files
 
 
 class RegistryServer(ThreadingHTTPServer):
@@ -64,7 +100,7 @@ class RegistryServer(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], *, store: ImageStore,  # noqa: PLR0913
                  users: UserStore, secret: bytes, config: ServerConfig | None = None,
                  config_path: Path | None = None, catalog_path: Path | None = None,
-                 progress_path: Path | None = None) -> None:
+                 progress_path: Path | None = None, attachments_path: Path | None = None) -> None:
         """Bind the server with its stores, HMAC secret, config, catalog, and progress dir."""
         super().__init__(address, _Handler)
         self.store = store
@@ -74,6 +110,7 @@ class RegistryServer(ThreadingHTTPServer):
         self.config_path = config_path
         self.catalog_path = catalog_path
         self.progress_path = progress_path
+        self.attachments_path = attachments_path
 
     def catalog(self) -> Catalog:
         """Return a Catalog over this server's catalog file (next to the store if none was set)."""
@@ -82,6 +119,10 @@ class RegistryServer(ThreadingHTTPServer):
     def progress(self) -> ProgressStore:
         """Return a ProgressStore over this server's progress dir (next to the store by default)."""
         return ProgressStore(self.progress_path or (Path(self.store.root) / "progress"))
+
+    def attachments(self) -> AttachmentStore:
+        """Return an AttachmentStore over this server's attachments dir (next to the store)."""
+        return AttachmentStore(self.attachments_path or (Path(self.store.root) / "attachments"))
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -181,6 +222,18 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_delete_user()
         elif path == "/web/users/delete-group":
             self._web_delete_group()
+        elif path == "/web/images/describe":
+            self._web_image_describe()
+        elif path == "/web/images/attach":
+            self._web_image_attach()
+        elif path == "/web/images/attach-delete":
+            self._web_image_attach_delete()
+        elif path == "/web/catalog/assign":
+            self._web_catalog_assign()
+        elif path == "/web/catalog/remove":
+            self._web_catalog_remove()
+        elif path == "/web/catalog/available":
+            self._web_catalog_available()
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -307,11 +360,14 @@ class _Handler(BaseHTTPRequestHandler):
         self._json(HTTPStatus.OK, profile)
 
     def _catalog(self) -> None:
-        if self._token_user() is None:
+        user = self._token_user()
+        if user is None:
             self._empty(HTTPStatus.UNAUTHORIZED)
             return
-        self._json(HTTPStatus.OK,
-                   {"catalog": [e.as_dict() for e in self.server.catalog().entries()]})
+        entries = self.server.catalog().entries()
+        if self.server.users.role(user) not in _AUTHOR_ROLES:
+            entries = [e for e in entries if e.available]   # students never see hidden tasks
+        self._json(HTTPStatus.OK, {"catalog": [e.as_dict() for e in entries]})
 
     def _submit(self) -> None:
         user = self._token_user()
@@ -328,6 +384,9 @@ class _Handler(BaseHTTPRequestHandler):
         entry = self.server.catalog().find(task_ref)
         if entry is None:
             self._empty(HTTPStatus.NOT_FOUND)
+            return
+        if not entry.available:   # a hidden task accepts no submissions (no credit while closed)
+            self._json(HTTPStatus.OK, {"status": "unavailable"})
             return
         prog = self.server.progress()
         if digest != entry.digest:  # the task was altered locally -> no credit (basic integrity)
@@ -352,12 +411,18 @@ class _Handler(BaseHTTPRequestHandler):
         self._json(HTTPStatus.OK, {"progress": payload})
 
     def _pool_image_rows(self) -> list[dict[str, object]]:
-        catalog_no = {e.ref: e.number for e in self.server.catalog().entries()}
+        entries = {e.ref: e for e in self.server.catalog().entries()}
+        att = self.server.attachments()
         rows: list[dict[str, object]] = []
         for ref in self.server.store.list():
             is_task = (self.server.store.get(ref).layer.parent / "task").exists()
+            entry = entries.get(ref)
+            info = att.describe(ref)
             rows.append({"ref": ref, "kind": "task" if is_task else "image",
-                         "number": catalog_no.get(ref)})
+                         "number": entry.number if entry else None,
+                         "title": entry.title if entry else "",
+                         "available": entry.available if entry else None,
+                         "description": info["description"], "files": info["files"]})
         return rows
 
     def _images(self) -> None:
@@ -431,6 +496,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_users()
         elif path == "/web/images":
             self._web_images()
+        elif path == "/web/images/file":
+            self._web_attachment_download()
         elif path == "/web/password":
             self._web_password_form()
         elif path == "/web/reset":
@@ -463,6 +530,105 @@ class _Handler(BaseHTTPRequestHandler):
             self._redirect("/web/login")
             return
         self._html(HTTPStatus.OK, render_images(self._pool_image_rows()))
+
+    def _web_ref_form(self) -> tuple[dict[str, str], str] | None:
+        """Author-gate a POST, return (form, ref) if the ref exists, else redirect and return None."""
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return None
+        form = self._form()
+        ref = form.get("ref", "")
+        if not ref or not self.server.store.exists(ref):
+            self._redirect("/web/images")
+            return None
+        return form, ref
+
+    def _web_image_describe(self) -> None:
+        got = self._web_ref_form()
+        if got is None:
+            return
+        form, ref = got
+        with contextlib.suppress(ValueError, OSError):
+            self.server.attachments().set_description(ref, form.get("description", "")[:_MAX_DESC])
+        self._redirect("/web/images")
+
+    def _web_image_attach(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        fields, files = _parse_multipart(self._read_body(), self.headers.get("Content-Type", ""))
+        ref, part = fields.get("ref", ""), files.get("file")
+        if ref and self.server.store.exists(ref) and part and part[1] and len(part[1]) <= _MAX_ATTACH:
+            with contextlib.suppress(ValueError, OSError):
+                self.server.attachments().put_file(ref, part[0], part[1])
+        self._redirect("/web/images")
+
+    def _web_image_attach_delete(self) -> None:
+        got = self._web_ref_form()
+        if got is None:
+            return
+        form, ref = got
+        with contextlib.suppress(ValueError, OSError):
+            self.server.attachments().delete_file(ref, form.get("name", ""))
+        self._redirect("/web/images")
+
+    def _web_attachment_download(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        query = parse_qs(urlsplit(self.path).query)
+        ref, name = query.get("ref", [""])[0], query.get("name", [""])[0]
+        try:
+            blob = self.server.attachments().read_file(ref, name)
+            safe = safe_filename(name)
+        except (ValueError, FileNotFoundError, OSError):
+            self._empty(HTTPStatus.NOT_FOUND)
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Disposition", f'attachment; filename="{safe}"')
+        self.send_header("Content-Length", str(len(blob)))
+        self.end_headers()
+        self.wfile.write(blob)
+
+    def _web_catalog_assign(self) -> None:
+        got = self._web_ref_form()
+        if got is None:
+            return
+        form, ref = got
+        task_dir = self.server.store.get(ref).layer.parent / "task"
+        try:
+            slot = int(form.get("number", ""))
+        except ValueError:
+            self._redirect("/web/images")
+            return
+        if not task_dir.exists():   # only a task image (with a grader) can back a catalog slot
+            self._redirect("/web/images")
+            return
+        name, version = ref.rsplit(":", 1)
+        existing = self.server.catalog().get(slot)
+        available = existing.available if existing is not None else True
+        self.server.catalog().put(CatalogEntry(
+            slot, name, version, form.get("title", ""), task_digest(task_dir), available))
+        self._redirect("/web/images")
+
+    def _web_catalog_remove(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        with contextlib.suppress(ValueError):
+            self.server.catalog().remove(int(self._form().get("number", "")))
+        self._redirect("/web/images")
+
+    def _web_catalog_available(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        form = self._form()
+        with contextlib.suppress(ValueError):
+            self.server.catalog().set_available(
+                int(form.get("number", "")), available=form.get("available", "") == "1")
+        self._redirect("/web/images")
 
     def _web_password_form(self) -> None:
         if self._session_user() is None:
@@ -589,12 +755,36 @@ class _Handler(BaseHTTPRequestHandler):
         self._empty(HTTPStatus.OK if present else HTTPStatus.NOT_FOUND)
 
     def do_PUT(self) -> None:
-        if self._image_parts() is not None:
+        if (att := self._parts_for("attachment")) is not None:
+            self._put_attachment(f"{att[0]}:{att[1]}")   # /attachment/<name.../>/<version>?name=
+        elif self._image_parts() is not None:
             self._put_image()
         elif (task := self._parts_for("task")) is not None:
             self._put_task(f"{task[0]}:{task[1]}")
         else:
             self._empty(HTTPStatus.NOT_FOUND)
+
+    def _put_attachment(self, ref: str) -> None:
+        _user, err = self._auth_role(_AUTHOR_ROLES)
+        if err is not None:
+            self._empty(err)
+            return
+        if not self.server.store.exists(ref):
+            self._empty(HTTPStatus.NOT_FOUND)   # push the image before attaching to it
+            return
+        query = parse_qs(urlsplit(self.path).query)
+        filename = query.get("name", [""])[0]
+        body = self._read_body()
+        if not filename or not body or len(body) > _MAX_ATTACH:
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        taskfile = query.get("taskfile", [""])[0] == "1"
+        try:
+            self.server.attachments().put_file(ref, filename, body, taskfile=taskfile)
+        except (ValueError, OSError):
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        self._empty(HTTPStatus.CREATED)
 
     def _put_image(self) -> None:
         _user, err = self._auth_role(("author", "admin"))
@@ -672,7 +862,7 @@ def make_server(store: ImageStore, users: UserStore, secret: bytes, *,  # noqa: 
                 config: ServerConfig | None = None,
                 config_path: Path | None = None,
                 catalog_path: Path | None = None,
-                progress_path: Path | None = None,
+                progress_path: Path | None = None, attachments_path: Path | None = None,
                 certfile: Path | None = None, keyfile: Path | None = None) -> RegistryServer:
     """
     Create a pool registry server (port 0 = ephemeral). Default host is loopback.
@@ -681,7 +871,7 @@ def make_server(store: ImageStore, users: UserStore, secret: bytes, *,  # noqa: 
     """
     server = RegistryServer((host, port), store=store, users=users, secret=secret,
                             config=config, config_path=config_path, catalog_path=catalog_path,
-                            progress_path=progress_path)
+                            progress_path=progress_path, attachments_path=attachments_path)
     if certfile is not None and keyfile is not None:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(str(certfile), str(keyfile))
