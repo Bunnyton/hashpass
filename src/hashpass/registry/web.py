@@ -365,7 +365,8 @@ def _task_li(entry: dict) -> str:
 def _block_div(b: dict, task_options: str) -> str:
     bid, name, is_open = str(b["id"]), str(b["name"]), bool(b["open"])
     items = "".join(_task_li(e) for e in b.get("tasks", []))
-    state = "<span class='pill'>открыт</span>" if is_open else "<span class='pill no'>закрыт</span>"
+    state = ("<span class='pill open'>открыт</span>" if is_open
+             else "<span class='pill closed'>закрыт</span>")
     return (f"<div class='block card' data-block-id='{escape(bid)}'>"
             f"<div class='row'><b>{escape(name)}</b> {state}"
             "<form class='inline' method='post' action='/web/blocks/toggle'>"
