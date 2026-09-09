@@ -49,75 +49,129 @@ def render_engine_install_script(pool_url: str) -> str:
     return _install_script(pool_url, role="engine", nxt="hashengine установлен.",
                            extra=_ENGINE_ACTIVATE)
 
+_FONTS = ("https://fonts.googleapis.com/css2?"
+          "family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap")
+
 _STYLE = """
 :root{color-scheme:light dark;
-  --bg:#f4f5f8;--surface:#fff;--surface2:#f9fafb;--border:#e5e7eb;--text:#111827;
-  --muted:#6b7280;--accent:#4f46e5;--accent-ink:#fff;--accent-hi:#4338ca;
-  --good:#16a34a;--bad:#dc2626;--chip:#eef2ff;--chip-ink:#3730a3}
-:root[data-theme=dark],:root:not([data-theme=light]) @media (prefers-color-scheme:dark){}
-@media(prefers-color-scheme:dark){:root:not([data-theme=light]){
-  --bg:#0d1117;--surface:#161b22;--surface2:#1c2230;--border:#30363d;--text:#e6edf3;
-  --muted:#9aa4b2;--accent:#6d64f5;--accent-hi:#8b83ff;--chip:#232a4d;--chip-ink:#c7d0ff}}
+  --bg:#eef1f6;--surface:#ffffff;--surface2:#f4f7fb;--border:#e2e8f1;--border-strong:#d2dbe8;
+  --text:#0f1b2d;--muted:#5a6b82;--faint:#8493a8;
+  --accent:#1d63ed;--accent-ink:#ffffff;--accent-hi:#1550cf;--accent-soft:#e7effe;
+  --ok:#0f9d58;--ok-soft:#e2f6ea;--warn:#b9760a;--warn-soft:#f9edd0;--danger:#d33a3a;--danger-soft:#fbe4e4;
+  --shadow:0 1px 2px rgba(16,27,45,.06),0 1px 3px rgba(16,27,45,.05);--shadow-lg:0 6px 22px rgba(16,27,45,.12);
+  --radius:12px;--radius-sm:9px;
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0a1120;--surface:#111a2e;--surface2:#0e1626;--border:#233149;--border-strong:#2e4062;
+  --text:#e7eefb;--muted:#9fb0c9;--faint:#68799a;
+  --accent:#4b8bff;--accent-ink:#061127;--accent-hi:#6ba0ff;--accent-soft:#15233f;
+  --ok:#31c06a;--ok-soft:#0f2c1c;--warn:#dfa23a;--warn-soft:#2e2612;--danger:#f0605f;--danger-soft:#331a1c;
+  --shadow:0 1px 2px rgba(0,0,0,.45);--shadow-lg:0 8px 28px rgba(0,0,0,.55)}}
 *{box-sizing:border-box}
-body{font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;
-  background:var(--bg);color:var(--text)}
-.nav{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--border);
-  display:flex;gap:6px;align-items:center;padding:10px 22px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
-.nav .brand{font-weight:800;letter-spacing:.5px;margin-right:14px}
-.nav .brand b{color:var(--accent)}
-.nav a{color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;font-weight:500}
+body{font-family:var(--font);font-size:15px;line-height:1.55;margin:0;background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+.nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--border);
+  display:flex;gap:4px;align-items:center;padding:10px 24px}
+.nav .brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:-.01em;margin-right:16px}
+.nav .brand .logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#7aa8ff);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+.nav .brand b{color:var(--accent);font-weight:800}
+.nav a{color:var(--muted);text-decoration:none;padding:7px 12px;border-radius:8px;font-weight:600;font-size:14px;
+  transition:background .15s,color .15s}
 .nav a:hover{background:var(--surface2);color:var(--text)}
+.nav a.on{color:var(--accent);background:var(--accent-soft)}
 .nav .sp{flex:1}
-main{max-width:1080px;margin:0 auto;padding:26px 22px 60px}
-h1{font-size:23px;margin:.1em 0 .1em;letter-spacing:-.01em;text-wrap:balance}
-h2{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
-  margin:1.8em 0 .7em;font-weight:700}
-.sub{color:var(--muted);margin:.2em 0 1.2em}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;
-  box-shadow:0 1px 2px rgba(0,0,0,.04);max-width:440px;margin:0 0 14px}
-.wide{max-width:none}
-table{border-collapse:separate;border-spacing:0;width:100%;background:var(--surface);
-  border:1px solid var(--border);border-radius:12px;overflow:hidden;
-  box-shadow:0 1px 2px rgba(0,0,0,.04);font-variant-numeric:tabular-nums}
-th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border)}
-th{background:var(--surface2);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+main{max-width:1120px;margin:0 auto;padding:30px 24px 72px}
+h1{font-size:26px;font-weight:800;margin:.1em 0 .35em;letter-spacing:-.02em;text-wrap:balance}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin:1.6em 0 .6em;font-weight:700}
+.sub{color:var(--muted);margin:.2em 0 1.3em;max-width:65ch}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;
+  box-shadow:var(--shadow);margin:0 0 14px}
+.card.narrow{max-width:420px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;align-items:start}
+table{border-collapse:separate;border-spacing:0;width:100%;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);font-variant-numeric:tabular-nums}
+th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--border)}
+th{background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:700}
 tr:last-child td{border-bottom:0}
 tbody tr:hover td,table tr:hover td{background:var(--surface2)}
 td.c,th.c{text-align:center}
-.ok{color:var(--good);font-weight:800}.no{color:var(--bad);font-weight:700}.dim{color:var(--muted)}
-.pill{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--chip);
-  color:var(--chip-ink);font-size:12px;font-weight:600}
-.pill.admin{background:#fde68a;color:#92400e}.pill.author{background:#bbf7d0;color:#166534}
-label{display:block;margin-top:12px;font-size:12px;font-weight:600;text-transform:uppercase;
-  letter-spacing:.04em;color:var(--muted)}
-input,select{font:inherit;width:100%;padding:9px 11px;margin-top:5px;border:1px solid var(--border);
-  border-radius:9px;background:var(--surface);color:var(--text)}
-input:focus,select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
-.btn,button{font:inherit;font-weight:600;padding:9px 15px;margin-top:12px;border:1px solid var(--accent);
-  border-radius:9px;background:var(--accent);color:var(--accent-ink);cursor:pointer;text-decoration:none;
-  display:inline-block}
+td a{text-decoration:none;font-weight:700}
+.ok{color:var(--ok);font-weight:800}.no{color:var(--danger);font-weight:700}.dim{color:var(--muted)}
+td.ok{color:var(--ok)}td.no{color:var(--danger)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:var(--surface2);
+  color:var(--muted);font-size:12px;font-weight:600;border:1px solid var(--border);line-height:1.3}
+.pill.ok,.pill.open{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.pill.no,.pill.closed{background:var(--danger-soft);color:var(--danger);border-color:transparent}
+.pill.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pill.accent{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.pill.admin{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pill.author{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+label{display:block;margin-top:13px;font-size:12px;font-weight:600;color:var(--muted)}
+input,select,textarea{font:inherit;width:100%;padding:9px 12px;margin-top:5px;border:1px solid var(--border-strong);
+  border-radius:var(--radius-sm);background:var(--surface);color:var(--text);transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.btn,button{font:inherit;font-weight:600;padding:9px 16px;margin-top:12px;border:1px solid var(--accent);
+  border-radius:var(--radius-sm);background:var(--accent);color:var(--accent-ink);cursor:pointer;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px;transition:background .15s,border-color .15s,transform .05s}
 .btn:hover,button:hover{background:var(--accent-hi);border-color:var(--accent-hi)}
-.btn.ghost{background:transparent;color:var(--accent);}
-.btn.ghost:hover{background:var(--chip)}
-.btn.sm,button.sm{padding:5px 10px;margin:0;font-size:13px}
+.btn:active,button:active{transform:translateY(1px)}
+.btn:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.ghost,button.ghost{background:transparent;color:var(--text);border-color:var(--border-strong)}
+.btn.ghost:hover,button.ghost:hover{background:var(--surface2);border-color:var(--border-strong)}
+.btn.sm,button.sm{padding:5px 11px;margin:0;font-size:13px;border-radius:8px}
+.btn.danger,button.danger{background:transparent;color:var(--danger);border-color:transparent}
+.btn.danger:hover,button.danger:hover{background:var(--danger-soft)}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-form.inline{margin:0}form.inline select{width:auto;margin:0}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.code{display:block;background:var(--surface2);border:1px solid var(--border);border-radius:9px;
-  padding:11px 13px;overflow-x:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px}
-.err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;border-radius:9px;padding:9px 12px;margin:10px 0}
-.note{background:var(--chip);color:var(--chip-ink);border-radius:9px;padding:9px 12px;margin:10px 0}
-@media(prefers-color-scheme:dark){.err{background:#3b1216;color:#fecaca;border-color:#5b1a20}}
+form.inline{margin:0;display:inline-flex}form.inline.row{display:flex}form.inline select,form.inline input{width:auto;margin:0}
+code,.mono{font-family:var(--mono);font-size:.92em}
+.code{display:block;position:relative;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:13px 15px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;color:var(--text)}
+.err{background:var(--danger-soft);color:var(--danger);border:1px solid transparent;border-radius:var(--radius-sm);
+  padding:10px 13px;margin:10px 0;font-weight:500}
+.note{background:var(--ok-soft);color:var(--ok);border-radius:var(--radius-sm);padding:10px 13px;margin:10px 0;font-weight:500}
+.block{margin:0 0 16px;padding:16px 18px}
+.block .row:first-child{margin-bottom:10px}
+.tasklist{list-style:none;margin:8px 0 12px;padding:0;display:flex;flex-direction:column;gap:6px;min-height:20px}
+.titem{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);cursor:grab}
+.titem:hover{border-color:var(--border-strong)}
+.titem .grip{color:var(--faint);cursor:grab;user-select:none;font-weight:700}
+.titem .mono{flex:1}
+.hero{max-width:760px;margin:6vh auto 0;text-align:center}
+.hero h1{font-size:42px;letter-spacing:-.03em;line-height:1.08}
+.hero .sub{margin:14px auto 0;font-size:17px;max-width:56ch}
+.hero .cmd{margin:26px auto 20px;max-width:640px}
+.cmd{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:5px 6px 5px 16px;box-shadow:var(--shadow);text-align:left}
+.cmd code{flex:1;font-family:var(--mono);font-size:14px;overflow-x:auto;white-space:nowrap;padding:9px 0}
+.cmd .prompt{color:var(--faint);user-select:none}
+.cmd button{margin:0}
+.authwrap{max-width:400px;margin:7vh auto 0}
+.authwrap .card{margin-top:14px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(max-width:640px){main{padding:20px 14px 56px}.nav{padding:10px 14px}h1{font-size:22px}.hero h1{font-size:30px}}
 """
 
 
-def _page(title: str, body: str, *, nav: bool = True) -> str:
-    header = ("<div class='nav'><span class='brand'>hash<b>pass</b></span>"
-              "<a href='/web'>Прогресс</a><a href='/web/images'>Образы</a>"
-              "<a href='/web/users'>Пользователи</a><span class='sp'></span>"
+_NAV = (("/web", "Прогресс"), ("/web/images", "Образы и каталог"),
+        ("/web/users", "Пользователи"))
+
+
+def _page(title: str, body: str, *, nav: bool = True, active: str = "") -> str:
+    links = "".join(
+        f"<a href='{href}'{' class=on' if href == active else ''}>{escape(label)}</a>"
+        for href, label in _NAV)
+    header = (f"<div class='nav'><span class='brand'><span class='logo'></span>hash<b>pass</b></span>"
+              f"{links}<span class='sp'></span>"
               "<a href='/web/password'>Пароль</a><a href='/web/logout'>Выход</a></div>") if nav else ""
     return (f"<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
             f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            f"<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+            f"<link rel='stylesheet' href='{_FONTS}'>"
             f"<title>{escape(title)}</title><style>{_STYLE}</style></head>"
             f"<body>{header}<main>{body}</main></body></html>")
 
@@ -126,28 +180,38 @@ def _field(label: str, name: str, *, kind: str = "text", extra: str = "") -> str
     return f"<label>{escape(label)}<input name='{name}' type='{kind}' {extra}></label>"
 
 
+_COPY_JS = ("<script>function hpcopy(b){var c=b.parentNode.querySelector('code');"
+            "navigator.clipboard&&navigator.clipboard.writeText(c.innerText.replace(/^\\$\\s*/,''));"
+            "var t=b.textContent;b.textContent='скопировано';setTimeout(function(){b.textContent=t;},1200);}"
+            "</script>")
+
+
 def render_front(pool_url: str) -> str:
     """Public front page: what the pool is + the one-line student install command."""
     url = escape(pool_url.rstrip("/"))
     # A self-signed HTTPS pool needs curl -k to fetch the installer (the pip step uses GitHub's
     # real cert, so it is unaffected); a plain-http pool does not.
     flags = "-fsSLk" if pool_url.startswith("https://") else "-fsSL"
-    body = ("<h1>hashpass — учебный пул</h1>"
-            "<p class='sub'>Интерактивные задания по Linux в живой консоли Debian. "
-            "Установка студенту — одной командой:</p>"
-            f"<code class='code'>curl {flags} {url}/install.sh | bash</code>"
-            "<p style='margin-top:18px'><a class='btn' href='/web/login'>Вход для преподавателя</a></p>")
+    body = ("<div class='hero'><span class='pill accent'>учебный пул</span>"
+            "<h1>Интерактивные задания по Linux</h1>"
+            "<p class='sub'>Живая консоль Debian, автоматическая проверка каждого шага. "
+            "Студент подключается одной командой:</p>"
+            "<div class='cmd'><span class='prompt'>$</span>"
+            f"<code>curl {flags} {url}/install.sh | bash</code>"
+            "<button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div>"
+            "<a class='btn' href='/web/login'>Вход для преподавателя</a></div>" + _COPY_JS)
     return _page("hashpass", body, nav=False)
 
 
 def render_login(error: str = "") -> str:
     """Teacher/admin login form."""
     err = f"<div class='err'>{escape(error)}</div>" if error else ""
-    body = (f"<h1>Вход преподавателя</h1><p class='sub'>Доступ к прогрессу и управлению.</p>{err}"
+    body = ("<div class='authwrap'><h1>Вход преподавателя</h1>"
+            f"<p class='sub'>Доступ к прогрессу и управлению.</p>{err}"
             "<form class='card' method='post' action='/web/login'>"
             + _field("Логин", "user", extra="autofocus")
             + _field("Пароль", "password", kind="password")
-            + "<button type='submit'>Войти</button></form>")
+            + "<button type='submit'>Войти</button></form></div>")
     return _page("Вход — hashpass", body, nav=False)
 
 
@@ -226,7 +290,7 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
                     f"<td class='c'>{passed}/{len(entries)}</td>{cells}</tr>")
     table = (f"<table><tr><th>Логин</th><th>Группа</th><th>Комментарий</th><th>Σ</th>{head}</tr>"
              f"{''.join(rows) or '<tr><td colspan=99>нет студентов</td></tr>'}</table>")
-    return _page("Прогресс — hashpass", f"<h1>Прогресс студентов</h1>{picker}{table}")
+    return _page("Прогресс — hashpass", f"<h1>Прогресс студентов</h1>{picker}{table}", active="/web")
 
 
 _VERDICT_RU = {"typed": "набрано вручную", "pasted": "похоже на вставку", "unknown": "нет данных"}
@@ -253,7 +317,7 @@ def render_history(user: str, ref: str, record: dict) -> str:
             f"(вручную {int(auth.get('typed', 0))}, вставлено {int(auth.get('pasted', 0))})</p>"
             f"{table}<p style='margin-top:16px'>"
             "<a class='btn ghost' href='/web'>← к прогрессу</a></p>")
-    return _page("История — hashpass", body)
+    return _page("История — hashpass", body, active="/web")
 
 
 def _fmt_size(n: object) -> str:
@@ -368,7 +432,7 @@ def render_images(images: list[dict], blocks: list[dict]) -> str:
     task_refs = [str(r["ref"]) for r in images if r.get("kind") == "task"]
     cards = "".join(_image_card(row) for row in images) or "<p class='sub'>Пул пуст.</p>"
     body = f"{_catalog_section(blocks, task_refs)}<h1>Образы</h1>{cards}{_DRAG_JS}"
-    return _page("Образы — hashpass", body)
+    return _page("Образы — hashpass", body, active="/web/images")
 
 
 _ROLES = ("student", "author", "admin")
@@ -419,4 +483,4 @@ def render_users(profiles: list[dict], *, registration_open: bool, current_user:
             "<table class='wide'><tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th>"
             "<th>Изменить роль</th><th>Пароль</th><th>Удалить</th></tr>"
             f"{rows or '<tr><td colspan=7 class=dim>нет пользователей</td></tr>'}</table>")
-    return _page("Пользователи — hashpass", body)
+    return _page("Пользователи — hashpass", body, active="/web/users")
