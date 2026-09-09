@@ -8,8 +8,25 @@ from pathlib import Path
 
 import pytest
 
+from hashpass.registry.catalog import Catalog
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.server import _parse_multipart
+
+
+@pytest.mark.tier2
+def test_history_and_antibot_recorded_and_shown(registry):
+    Catalog(registry.catalog_path).add_task("lab:1", "d1")
+    student = RemoteRegistry(registry.base_url)
+    stok = student.register("stud", "pass123!", group="G")
+    history = [{"command": "echo pasted solution here", "ts": "T", "typing": 0.02, "pasted": True}]
+    auth = {"verdict": "pasted", "typed": 0, "pasted": 1}
+    result = student.submit("lab:1", "d1", passed=True, history=history, authenticity=auth, token=stok)
+    assert result["status"] == "passed"
+    opener, cookie = _author_cookie(registry)
+    url = f"{registry.base_url}/web/history?user=stud&ref={urllib.parse.quote('lab:1')}"
+    _, _, body = _req(opener, "GET", url, cookie=cookie)
+    assert "echo pasted solution here" in body      # the student's command is visible
+    assert "похоже на вставку" in body              # anti-bot verdict shown
 
 
 @pytest.mark.tier1

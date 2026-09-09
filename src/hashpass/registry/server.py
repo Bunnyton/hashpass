@@ -32,6 +32,7 @@ from hashpass.registry.web import (
     render_dashboard,
     render_engine_install_script,
     render_front,
+    render_history,
     render_images,
     render_install_script,
     render_login,
@@ -50,6 +51,9 @@ _AUTHOR_ROLES = ("author", "admin")
 _MAX_COMMENT = 500
 _MAX_ATTACH = 8 * 1024 * 1024   # per-file attachment cap (8 MiB)
 _MAX_DESC = 2000                # image description cap
+_MAX_HISTORY = 500              # command-history entries kept per submission
+_MAX_CMD = 1000                 # per-command length kept
+_AUTH_VERDICTS = ("typed", "pasted", "unknown")
 _RESET_PREFIX = "reset:"                 # a reset token's subject; never a real login
 _RESET_TTL = 2 * 24 * 60 * 60            # password-reset links live 2 days
 
@@ -89,6 +93,32 @@ def _parse_multipart(body: bytes, content_type: str) -> tuple[dict[str, str], di
         else:
             fields[name.group(1)] = content.decode("utf-8", "replace")
     return fields, files
+
+
+def _sanitize_history(raw: object) -> list[dict[str, object]] | None:
+    """Coerce client-supplied command history into a safe, capped list (or None)."""
+    if not isinstance(raw, list):
+        return None
+    out: list[dict[str, object]] = []
+    for item in raw[:_MAX_HISTORY]:
+        if not isinstance(item, dict):
+            continue
+        typing = item.get("typing")
+        out.append({"command": str(item.get("command", ""))[:_MAX_CMD],
+                    "ts": str(item.get("ts", ""))[:64],
+                    "typing": float(typing) if isinstance(typing, (int, float)) else None,
+                    "pasted": bool(item.get("pasted", False))})
+    return out
+
+
+def _sanitize_authenticity(raw: object) -> dict[str, object] | None:
+    """Coerce the client-supplied anti-bot summary into a safe {verdict, typed, pasted} (or None)."""
+    if not isinstance(raw, dict):
+        return None
+    verdict = str(raw.get("verdict", "unknown"))
+    return {"verdict": verdict if verdict in _AUTH_VERDICTS else "unknown",
+            "typed": int(raw["typed"]) if isinstance(raw.get("typed"), (int, float)) else 0,
+            "pasted": int(raw["pasted"]) if isinstance(raw.get("pasted"), (int, float)) else 0}
 
 
 class RegistryServer(ThreadingHTTPServer):
@@ -388,6 +418,8 @@ class _Handler(BaseHTTPRequestHandler):
         task_ref = str(data.get("task_ref", ""))
         digest = str(data.get("digest", ""))
         passed = bool(data.get("passed", False))
+        history = _sanitize_history(data.get("history"))       # client-supplied -> sanitize
+        authenticity = _sanitize_authenticity(data.get("authenticity"))
         entry = self.server.catalog().find(task_ref)
         if entry is None:
             self._empty(HTTPStatus.NOT_FOUND)
@@ -397,15 +429,18 @@ class _Handler(BaseHTTPRequestHandler):
             return
         prog = self.server.progress()
         if digest != entry.digest:  # the task was altered locally -> no credit (basic integrity)
-            prog.record(user, task_ref, status="failed", ts=_now(), digest=digest)
+            prog.record(user, task_ref, status="failed", ts=_now(), digest=digest,
+                        history=history, authenticity=authenticity)
             self._json(HTTPStatus.OK, {"status": "failed", "reason": "digest-mismatch"})
             return
         if not passed:
-            prog.record(user, task_ref, status="failed", ts=_now(), digest=digest)
+            prog.record(user, task_ref, status="failed", ts=_now(), digest=digest,
+                        history=history, authenticity=authenticity)
             self._json(HTTPStatus.OK, {"status": "failed"})
             return
         gkey = global_key(self.server.secret, user, task_ref)  # bound to the authenticated principal
-        prog.record(user, task_ref, status="passed", ts=_now(), global_key=gkey, digest=digest)
+        prog.record(user, task_ref, status="passed", ts=_now(), global_key=gkey, digest=digest,
+                    history=history, authenticity=authenticity)
         self._json(HTTPStatus.OK, {"status": "passed", "global_key": gkey})
 
     def _progress(self) -> None:
@@ -491,7 +526,7 @@ class _Handler(BaseHTTPRequestHandler):
             return user
         return None
 
-    def _web_get(self, path: str) -> None:
+    def _web_get(self, path: str) -> None:  # noqa: C901  (a flat route dispatcher)
         if path == "/":
             self._html(HTTPStatus.OK, render_front(self._pool_url()))
         elif path == "/web/login":
@@ -506,6 +541,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_images()
         elif path == "/web/images/file":
             self._web_attachment_download()
+        elif path == "/web/history":
+            self._web_history()
         elif path == "/web/password":
             self._web_password_form()
         elif path == "/web/reset":
@@ -539,6 +576,15 @@ class _Handler(BaseHTTPRequestHandler):
             return
         blocks = [b.as_dict() for b in self.server.catalog().blocks()]
         self._html(HTTPStatus.OK, render_images(self._pool_image_rows(), blocks))
+
+    def _web_history(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        query = parse_qs(urlsplit(self.path).query)
+        user, ref = query.get("user", [""])[0], query.get("ref", [""])[0]
+        record = self.server.progress().get(user).get(ref, {}) if user else {}
+        self._html(HTTPStatus.OK, render_history(user, ref, record))
 
     def _web_ref_form(self) -> tuple[dict[str, str], str] | None:
         """Author-gate a POST, return (form, ref) if the ref exists, else redirect and return None."""

@@ -92,6 +92,15 @@ if set -q HP_PORT
         set -e __hp_shadow
     end
 
+    # Typing timing (anti-bot): mark when the prompt is drawn and when the command is submitted,
+    # so the host can estimate typing speed (chars/sec) and flag pasted commands.
+    function __hp_mark_prompt --on-event fish_prompt
+        set -g __hp_prompt_t (date +%s.%N)
+    end
+    function __hp_mark_submit --on-event fish_preexec
+        set -g __hp_submit_t (date +%s.%N)
+    end
+
     function __hp_postexec --on-event fish_postexec
         set -l log "$HOME/.hp-typescript"
         set -l size (stat -c %s "$log" 2>/dev/null; or echo 0)
@@ -100,7 +109,11 @@ if set -q HP_PORT
             set out (tail -c +(math $__hp_off + 1) "$log" 2>/dev/null | tail -c 65536 | base64 -w0)
         end
         set -g __hp_off $size
-        hp-io "cmd "(printf '%s' $argv[1] | base64 -w0)" "$out 2>/dev/null
+        set -l typing ''
+        if set -q __hp_prompt_t; and set -q __hp_submit_t
+            set typing (math "$__hp_submit_t - $__hp_prompt_t" 2>/dev/null)
+        end
+        hp-io "cmd "(printf '%s' $argv[1] | base64 -w0)" "$out" "$typing 2>/dev/null
         set -g __hp_off (stat -c %s "$log" 2>/dev/null; or echo $size)
     end
     hp-io hello 2>/dev/null

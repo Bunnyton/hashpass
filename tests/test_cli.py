@@ -57,11 +57,13 @@ def test_extract_output_isolates_stdout_via_osc133():
 def test_parse_cmd_request_decodes_command_and_cleans_output():
     cmd = base64.b64encode("grep ERROR log".encode()).decode()
     out = base64.b64encode("\x1b[31mERROR here\x1b[0m\r\n".encode()).decode()
-    command, output = cli._parse_cmd_request(f"cmd {cmd} {out}")  # noqa: SLF001
+    command, output, typing = cli._parse_cmd_request(f"cmd {cmd} {out}")  # noqa: SLF001
     assert command == "grep ERROR log"
     assert "ERROR here" in output
     assert "\x1b" not in output                                # ANSI stripped for matching
-    assert cli._parse_cmd_request(f"cmd {cmd}") == ("grep ERROR log", "")  # noqa: SLF001
+    assert typing is None
+    assert cli._parse_cmd_request(f"cmd {cmd}") == ("grep ERROR log", "", None)  # noqa: SLF001
+    assert cli._parse_cmd_request(f"cmd {cmd} {out} 0.75")[2] == 0.75  # noqa: SLF001, PLR2004
 
 
 @pytest.mark.tier1
@@ -347,6 +349,29 @@ def test_ensure_base_image_stores_debian_trixie(tmp_path, base_tar):
 
 
 @pytest.mark.tier1
+def test_antibot_flags_pasted_and_summarizes():
+    assert cli._looks_pasted("echo hello world done", 0.05) is True    # noqa: SLF001  (~400 c/s)
+    assert cli._looks_pasted("echo hello world done", 5.0) is False    # noqa: SLF001  (~4 c/s)
+    assert cli._looks_pasted("ls", 0.001) is False                     # noqa: SLF001  (too short)
+    assert cli._looks_pasted("a real command here", None) is False     # noqa: SLF001  (no timing)
+    hist = [{"command": "echo hello world done", "typing": 0.05, "pasted": True},
+            {"command": "cat /etc/passwd file", "typing": 0.02, "pasted": True},
+            {"command": "grep something here now", "typing": 4.0, "pasted": False},
+            {"command": "ls", "typing": 0.01, "pasted": False}]        # short -> not judged
+    assert cli._authenticity(hist) == {"verdict": "pasted", "typed": 1, "pasted": 2}  # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_render_observe_records_command_history():
+    session = SimpleNamespace(observe=lambda *_a, **_k: FeedResult(advanced=False, stage=0,
+                                                                   local_key=""))
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "T")
+    hist: list[dict] = []
+    cli._render_observe(session, "echo hello world done", "out", 0.05, io, history=hist)  # noqa: SLF001
+    assert hist == [{"command": "echo hello world done", "ts": "T", "typing": 0.05, "pasted": True}]
+
+
+@pytest.mark.tier1
 def test_render_observe_no_forced_phrase_completion_fires_outro(monkeypatch):
     # No forced "принято"/"завершено" text: completing fires the author's outro, advancing enters
     # the next stage; the host-side key is NEVER written to the console (nothing to copy/fake).
@@ -362,7 +387,7 @@ def test_render_observe_no_forced_phrase_completion_fires_outro(monkeypatch):
             enter=lambda: writes.append("<enter>"),
         )
         monkeypatch.setattr(cli, "current_stage", lambda _p: stage_left)
-        cli._render_observe(session, "cmd", "out", io)  # noqa: SLF001
+        cli._render_observe(session, "cmd", "out", None, io)  # noqa: SLF001
         return "".join(writes)
 
     done = run(None, "key{secret}")

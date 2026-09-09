@@ -429,14 +429,43 @@ def _extract_output(delta: str) -> str:
     return _strip_terminal(delta[begin:end.start()] if end else delta[begin:])
 
 
-def _parse_cmd_request(req: str) -> tuple[str, str]:
-    """Decode a `cmd <command-b64> [<output-b64>]` request into (command, clean stdout)."""
-    parts = req[4:].split(" ", 1)
+_CMD_FIELDS = 3   # cmd <command-b64> <output-b64> <typing-seconds>
+
+
+def _parse_cmd_request(req: str) -> tuple[str, str, float | None]:
+    """Decode a `cmd <command-b64> [<output-b64>] [<typing-seconds>]` request."""
+    parts = req[4:].split(" ")
     command = base64.b64decode(parts[0]).decode("utf-8", "replace")
     output = ""
     if len(parts) > 1 and parts[1]:
         output = _extract_output(base64.b64decode(parts[1]).decode("utf-8", "replace"))
-    return command, output
+    typing: float | None = None
+    if len(parts) >= _CMD_FIELDS and parts[2]:   # guest-measured prompt->submit seconds (new runtime)
+        with contextlib.suppress(ValueError):
+            typing = float(parts[2])
+    return command, output, typing
+
+
+_PASTE_MIN_LEN = 12     # short commands are too noisy to judge as typed vs pasted
+_PASTE_MAX_CPS = 20.0   # >20 chars/sec of sustained typing is (almost) certainly a paste
+_HISTORY_CAP = 500      # keep a session's command history bounded
+
+
+def _looks_pasted(command: str, typing: float | None) -> bool:
+    """Heuristic: a long command entered implausibly fast (chars/sec) was likely pasted."""
+    if typing is None or typing <= 0 or len(command) < _PASTE_MIN_LEN:
+        return False
+    return len(command) / typing > _PASTE_MAX_CPS
+
+
+def _authenticity(history: list[dict[str, object]]) -> dict[str, object]:
+    """Summarize a session's typed-vs-pasted signal (only substantial, timed commands count)."""
+    judged = [h for h in history
+              if h.get("typing") is not None and len(str(h.get("command", ""))) >= _PASTE_MIN_LEN]
+    pasted = sum(1 for h in judged if h.get("pasted"))
+    typed = len(judged) - pasted
+    verdict = "unknown" if not judged else ("pasted" if pasted > typed else "typed")
+    return {"verdict": verdict, "typed": typed, "pasted": pasted}
 
 
 def _policy_reply(session: object) -> str:
@@ -448,9 +477,15 @@ def _policy_reply(session: object) -> str:
     return f"{','.join(sm.allow)};{','.join(sm.deny)};{','.join(sm.neutral)}\n"
 
 
-def _render_observe(session: object, command: str, output: str, io: Io) -> None:
+def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
+                    typing: float | None, io: Io,
+                    *, history: list[dict[str, object]] | None = None) -> None:
     """React/grade/hint on one console command (+ its captured output), then announce a pass."""
-    res = session.observe(command, ts=io.clock(), output=output)  # react + grade + hints + on_pass
+    ts = io.clock()
+    if history is not None and len(history) < _HISTORY_CAP:
+        history.append({"command": command[:1000], "ts": ts, "typing": typing,
+                        "pasted": _looks_pasted(command, typing)})
+    res = session.observe(command, ts=ts, output=output)  # react + grade + hints + on_pass
     if not res.advanced:
         return
     if current_stage(session.progress) is None:
@@ -462,8 +497,9 @@ def _render_observe(session: object, command: str, output: str, io: Io) -> None:
         _announce_stage(session, io)
 
 
-def _grade_server(session: object, router: _Router, clock: Callable[[], str],
-                  stop: threading.Event, readme: str | None) -> tuple[int, threading.Thread]:
+def _grade_server(session: object, router: _Router, clock: Callable[[], str],  # noqa: PLR0913, PLR0917
+                  stop: threading.Event, readme: str | None,
+                  history: list[dict[str, object]] | None = None) -> tuple[int, threading.Thread]:
     """
     Start a loopback grade server; return its port and (unstarted) thread.
 
@@ -490,15 +526,16 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],
                 break
             with conn, contextlib.suppress(OSError):
                 conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # per-char, no Nagle
-                _handle_request(conn, _recv_request(conn),
-                                session=session, router=router, readme=readme, clock=clock)
+                _handle_request(conn, _recv_request(conn), session=session, router=router,
+                                readme=readme, clock=clock, history=history)
         srv.close()
 
     return port, threading.Thread(target=loop, daemon=True)
 
 
 def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: PLR0913
-                    router: _Router, readme: str | None, clock: Callable[[], str]) -> None:
+                    router: _Router, readme: str | None, clock: Callable[[], str],
+                    history: list[dict[str, object]] | None = None) -> None:
     """Serve one console request: `policy` (raw reply), else `hello`/`cmd` rendered to the socket."""
     if req.startswith("policy"):
         # The console PULLS the current stage's command policy before running each command, so it
@@ -527,7 +564,7 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
             _render_intro(session, readme, io)
         elif req.startswith("cmd "):
             with contextlib.suppress(Exception):
-                _render_observe(session, *_parse_cmd_request(req), io)
+                _render_observe(session, *_parse_cmd_request(req), io, history=history)
     finally:
         router.to(_sink_noop)
         session.pause = _no_pause
@@ -595,8 +632,8 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR0913
               student_id: str = _DEFAULT_STUDENT,
-              on_complete: Callable[[bool], None] | None = None) -> int:
-    """Boot the task console; grade live, then report whether every stage passed via on_complete."""
+              on_complete: Callable[[bool, list[dict[str, object]]], None] | None = None) -> int:
+    """Boot the task console; grade live, then report pass + command history via on_complete."""
     # Unique workdir per run: a fresh overlay each session (no stale files -> no false
     # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
     workdir = env.work / "run" / uuid.uuid4().hex
@@ -606,7 +643,8 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
                        student_id=student_id, nonce=uuid.uuid4().hex,
                        sink=router.write, sleep=time.sleep)
     stop = threading.Event()
-    port, grader = _grade_server(session, router, io.clock, stop, session.meta.readme)
+    history: list[dict[str, object]] = []              # every command the student runs, in order
+    port, grader = _grade_server(session, router, io.clock, stop, session.meta.readme, history)
     completed = False
     try:
         # The whole interaction (greeting, per-command react/grade/hints/on_pass) runs live IN
@@ -626,7 +664,7 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
         stop.set()
         session.teardown()
     if on_complete is not None:
-        on_complete(completed)
+        on_complete(completed, history)
     return 0
 
 
@@ -699,7 +737,7 @@ def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
 
 def cmd_run(env: Home, ref: str, io: Io | None = None, *,
             student_id: str = _DEFAULT_STUDENT,
-            on_complete: Callable[[bool], None] | None = None) -> int:
+            on_complete: Callable[[bool, list[dict[str, object]]], None] | None = None) -> int:
     """Run a task (interactive student session) or a bare image (interactive shell)."""
     io = io or _default_io()
     store = ImageStore(env.images)
@@ -1416,20 +1454,23 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     if not store.exists(ref):
         pull_new(env, url, token)
 
-    def _submit(completed: bool) -> None:  # noqa: FBT001  (matches the on_complete callback)
+    def _submit(completed: bool, history: list[dict[str, object]]) -> None:  # noqa: FBT001
         if not completed:
             return  # only report a real completion; the server digest-gates the credit
         mark_solved(env, ref)   # record «решено» before the network, so a failed submit still
         io.write("\x1b[32m✓ решено\x1b[0m\n")   # leaves a clear local status
         digest = task_digest(task_dir(ref, store))
+        authenticity = _authenticity(history)
         try:
-            result = RemoteRegistry(url).submit(ref, digest, passed=True, token=token)
+            result = RemoteRegistry(url).submit(ref, digest, passed=True, token=token,
+                                                history=history, authenticity=authenticity)
         except (urllib.error.URLError, RuntimeError, ValueError) as exc:
             io.write(f"\x1b[33m⚠ не зачтено (нет связи?): {exc}\x1b[0m\n"
                      "\x1b[2m  позже нажмите s в меню для самопроверки\x1b[0m\n")
             return
         if result.get("status") == "passed":
-            io.write("\x1b[32m★ зачтено\x1b[0m\n")
+            note = "  \x1b[33m(похоже на вставку)\x1b[0m" if authenticity["verdict"] == "pasted" else ""
+            io.write(f"\x1b[32m★ зачтено\x1b[0m{note}\n")
         else:
             io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"
                      "\x1b[0m\n")

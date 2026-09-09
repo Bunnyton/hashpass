@@ -103,7 +103,7 @@ def test_cmd_pool_run_submits_on_completion(registry, tmp_path, monkeypatch):
         "stud", "pass123!", group="G")
 
     def fake_run(_env, _ref, _io, *, student_id, on_complete) -> int:  # noqa: ARG001
-        on_complete(True)   # noqa: FBT003  (pretend every stage passed)
+        on_complete(True, [])   # noqa: FBT003  (pretend every stage passed; no history)
         return 0
 
     monkeypatch.setattr(cli, "cmd_run", fake_run)

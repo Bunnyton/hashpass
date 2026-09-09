@@ -190,12 +190,17 @@ def render_reset_link(user: str, link: str) -> str:
     return _page("Сброс пароля — hashpass", body)
 
 
-def _cell(status: str | None) -> str:
+def _cell(user: str, ref: str, record: dict | None) -> str:
+    status = (record or {}).get("status")
+    if status not in ("passed", "failed"):
+        return "<td class='c'>·</td>"
+    verdict = ((record or {}).get("authenticity") or {}).get("verdict")
+    href = f"/web/history?user={quote(user, safe='')}&ref={quote(ref, safe='')}"
     if status == "passed":
-        return "<td class='c ok'>✓</td>"
-    if status == "failed":
-        return "<td class='c no'>✗</td>"
-    return "<td class='c'>·</td>"
+        mark, cls = ("✓⚠", "c no") if verdict == "pasted" else ("✓", "c ok")
+    else:
+        mark, cls = "✗", "c no"
+    return f"<td class='{cls}'><a href='{href}' title='история'>{mark}</a></td>"
 
 
 def render_dashboard(profiles: list[dict], entries: list[dict],
@@ -213,7 +218,7 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
     for p in students:
         user = str(p["user"])
         done = progress.get(user, {})
-        cells = "".join(_cell((done.get(str(e["ref"])) or {}).get("status")) for e in entries)
+        cells = "".join(_cell(user, str(e["ref"]), done.get(str(e["ref"]))) for e in entries)
         passed = sum(1 for e in entries if (done.get(str(e["ref"])) or {}).get("status") == "passed")
         rows.append(f"<tr><td class='mono'>{escape(user)}</td>"
                     f"<td>{escape(str(p.get('group', '')))}</td>"
@@ -222,6 +227,33 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
     table = (f"<table><tr><th>Логин</th><th>Группа</th><th>Комментарий</th><th>Σ</th>{head}</tr>"
              f"{''.join(rows) or '<tr><td colspan=99>нет студентов</td></tr>'}</table>")
     return _page("Прогресс — hashpass", f"<h1>Прогресс студентов</h1>{picker}{table}")
+
+
+_VERDICT_RU = {"typed": "набрано вручную", "pasted": "похоже на вставку", "unknown": "нет данных"}
+
+
+def render_history(user: str, ref: str, record: dict) -> str:
+    """Render a student's command history for one task, with the anti-bot (typed/pasted) summary."""
+    auth = record.get("authenticity") or {}
+    verdict = _VERDICT_RU.get(str(auth.get("verdict", "unknown")), "нет данных")
+    status = str(record.get("status", ""))
+    rows = ""
+    for h in record.get("history", []):
+        cmd = str(h.get("command", ""))
+        typing = h.get("typing")
+        speed = f"{len(cmd) / typing:.0f} зн/с" if isinstance(typing, (int, float)) and typing > 0 else "—"
+        flag = "<span class='pill no'>вставка</span>" if h.get("pasted") else ""
+        rows += (f"<tr><td class='mono'>{escape(cmd)}</td>"
+                 f"<td class='c'>{escape(speed)}</td><td>{flag}</td></tr>")
+    table = (f"<table><tr><th>Команда</th><th class='c'>Скорость</th><th></th></tr>{rows}</table>"
+             if rows else "<p class='sub'>История команд не записана (старый рантайм или нет данных).</p>")
+    body = (f"<h1>История: {escape(user)}</h1>"
+            f"<p class='sub'><span class='mono'>{escape(ref)}</span> — {escape(status)}; "
+            f"антибот: <b>{escape(verdict)}</b> "
+            f"(вручную {int(auth.get('typed', 0))}, вставлено {int(auth.get('pasted', 0))})</p>"
+            f"{table}<p style='margin-top:16px'>"
+            "<a class='btn ghost' href='/web'>← к прогрессу</a></p>")
+    return _page("История — hashpass", body)
 
 
 def _fmt_size(n: object) -> str:

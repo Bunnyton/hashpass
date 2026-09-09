@@ -255,11 +255,17 @@ class RemoteRegistry:
         result = self._get_json("/images", token=self._auth_token(token))
         return list(result.get("images", []))
 
-    def submit(self, task_ref: str, digest: str, *,
-               passed: bool, token: str | None = None) -> dict[str, object]:
-        """Submit a task result; returns {status, global_key?} (digest-gated, principal-bound)."""
-        return self._post_json("/submit", {"task_ref": task_ref, "digest": digest, "passed": passed},
-                               token=self._auth_token(token))
+    def submit(self, task_ref: str, digest: str, *, passed: bool,  # noqa: PLR0913
+               history: list[dict[str, object]] | None = None,
+               authenticity: dict[str, object] | None = None,
+               token: str | None = None) -> dict[str, object]:
+        """Submit a task result (+ optional command history / anti-bot signal); returns {status,...}."""
+        payload: dict[str, object] = {"task_ref": task_ref, "digest": digest, "passed": passed}
+        if history is not None:
+            payload["history"] = history
+        if authenticity is not None:
+            payload["authenticity"] = authenticity
+        return self._post_json("/submit", payload, token=self._auth_token(token))
 
     def progress(self, *, token: str | None = None) -> dict[str, object]:
         """Return progress: an author sees every student; a student sees only their own."""
