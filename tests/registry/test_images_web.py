@@ -1,4 +1,5 @@
 """Tier2: image cards over the live server — attachments, description, and catalog management."""
+import json
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -106,29 +107,51 @@ def test_web_describe_and_delete(registry, tmp_path):
 
 
 @pytest.mark.tier2
-def test_web_catalog_assign_toggle_remove(registry, tmp_path):
+def test_web_blocks_add_task_toggle_remove(registry, tmp_path):
     _seed(registry, "lab:1", tmp_path, task=True)
     opener, cookie = _author_cookie(registry)
     base = registry.base_url
     student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
     sc = RemoteRegistry(registry.base_url)
 
-    _req(opener, "POST", f"{base}/web/catalog/assign", cookie=cookie,
-         data={"ref": "lab:1", "number": "1", "title": "Первое"})
-    assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, True)]
+    # add a task to the catalog: it auto-numbers into a (default) open block
+    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "lab:1"})
+    cat = sc.catalog(token=student)
+    assert [(e["number"], e["available"]) for e in cat] == [(1, True)]
+    block_id = cat[0]["block_id"]
 
-    _req(opener, "POST", f"{base}/web/catalog/available", cookie=cookie,
-         data={"number": "1", "available": "0"})
-    # still visible to the student, but locked (available=False) and no credit on submit
+    # closing the whole block locks its tasks (still visible), and /submit is refused
+    _req(opener, "POST", f"{base}/web/blocks/toggle", cookie=cookie,
+         data={"block_id": block_id, "open": "0"})
     assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, False)]
     assert sc.submit("lab:1", "any", passed=True, token=student)["status"] == "unavailable"
 
-    _req(opener, "POST", f"{base}/web/catalog/available", cookie=cookie,
-         data={"number": "1", "available": "1"})
+    _req(opener, "POST", f"{base}/web/blocks/toggle", cookie=cookie,
+         data={"block_id": block_id, "open": "1"})
     assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, True)]
 
-    _req(opener, "POST", f"{base}/web/catalog/remove", cookie=cookie, data={"number": "1"})
+    _req(opener, "POST", f"{base}/web/catalog/remove", cookie=cookie, data={"ref": "lab:1"})
     assert sc.catalog(token=student) == []
+
+
+@pytest.mark.tier2
+def test_web_catalog_layout_reorders(registry, tmp_path):
+    for name in ("a", "b"):
+        _seed(registry, f"{name}:1", tmp_path, task=True)
+    opener, cookie = _author_cookie(registry)
+    base = registry.base_url
+    student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
+    sc = RemoteRegistry(registry.base_url)
+    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "a:1"})
+    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "b:1"})
+    block_id = sc.catalog(token=student)[0]["block_id"]
+    # drag: JS posts the new order as JSON (id + task refs)
+    req = urllib.request.Request(  # noqa: S310
+        f"{base}/web/catalog/layout", method="POST",
+        data=json.dumps({"blocks": [{"id": block_id, "tasks": ["b:1", "a:1"]}]}).encode(),
+        headers={"Cookie": cookie, "Content-Type": "application/json"})
+    opener.open(req, timeout=10)
+    assert [e["ref"] for e in sc.catalog(token=student)] == ["b:1", "a:1"]
 
 
 @pytest.mark.tier2

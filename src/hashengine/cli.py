@@ -31,9 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_push = sub.add_parser("push", help="отправить образ/задание на пул")
     p_push.add_argument("ref")
     p_push.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
-    p_push.add_argument("--task", type=int, metavar="N",
-                        help="опубликовать задание в слоте каталога N")
-    p_push.add_argument("--title", default="", help="заголовок задания в каталоге")
+    p_push.add_argument("--task", action="store_true",
+                        help="добавить задание в каталог (номер назначится автоматически)")
     p_serve = sub.add_parser("serve", help="запустить пул (реестр + веб)")
     p_serve.add_argument("--host", help="адрес привязки (по умолчанию 127.0.0.1 или $HASHPASS_REGISTRY; "
                          "0.0.0.0 — открыть пул наружу)")
@@ -64,7 +63,7 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
     if command == "build":
         return cli.cmd_build(env, args.taskfile, args.tag)
     if command == "push":
-        return cli.cmd_push(env, args.ref, args.registry, task_number=args.task, title=args.title)
+        return cli.cmd_push(env, args.ref, args.registry, publish=args.task)
     if command == "serve":
         return cli.cmd_serve(env, args.host, args.port, certfile=args.tls_cert,
                              keyfile=args.tls_key, self_signed=args.tls_self_signed,

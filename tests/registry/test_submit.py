@@ -35,7 +35,7 @@ def _publish(registry, tmp_path) -> tuple:
     td = tmp_path / "task"
     td.mkdir()
     _make_task_dir(td)
-    ac.push_task(td, "lab", "1", number=1, title="T", token=atok)
+    ac.push_task(td, "lab", "1", publish=True, token=atok)
     return td, atok
 
 

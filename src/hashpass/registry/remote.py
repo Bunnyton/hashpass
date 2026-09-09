@@ -228,12 +228,10 @@ class RemoteRegistry:
                 list(pool.map(_one, to_fetch))
         return fetched
 
-    def push_task(self, task_dir: Path, name: str, version: str, *,  # noqa: PLR0913
-                  number: int | None = None, title: str = "", token: str | None = None) -> None:
-        """Push a task's artifacts to the pool; with `number`, also claim that catalog slot."""
-        query = ""
-        if number is not None:
-            query = "?" + urllib.parse.urlencode({"number": number, "title": title})
+    def push_task(self, task_dir: Path, name: str, version: str, *,
+                  publish: bool = False, token: str | None = None) -> None:
+        """Push a task's artifacts to the pool; with `publish`, also add it to the catalog."""
+        query = "?publish=1" if publish else ""
         self._put_task(name, version, query, pack_task(task_dir), self._auth_token(token))
 
     def push_attachment(self, name: str, version: str, filename: str, blob: bytes, *,  # noqa: PLR0913

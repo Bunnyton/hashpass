@@ -93,7 +93,7 @@ def test_pull_new_fetches_catalog_tasks_and_is_idempotent(registry, tmp_path):
         td = tmp_path / f"t{i}"
         td.mkdir()
         _make_task_dir(td, marker=str(i))
-        ac.push_task(td, name, "1", number=i, title=f"T{i}", token=atok)
+        ac.push_task(td, name, "1", publish=True, token=atok)
 
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud")}, default_home=tmp_path)
     sc = RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds))

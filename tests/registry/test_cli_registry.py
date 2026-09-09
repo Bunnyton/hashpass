@@ -133,10 +133,10 @@ def test_cmd_push_with_task_number_publishes_to_catalog(registry, tmp_path, monk
     monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
     io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
     assert cli.cmd_login(env, registry.base_url, io) == 0
-    assert cli.cmd_push(env, "lab:1", registry.base_url, task_number=2, title="Lab") == 0
+    assert cli.cmd_push(env, "lab:1", registry.base_url, publish=True) == 0
     client = RemoteRegistry(registry.base_url)
     cat = client.catalog(token=client.login("dev", "s3cr3t"))
-    assert [(e["number"], e["ref"], e["title"]) for e in cat] == [(2, "lab:1", "Lab")]
+    assert [(e["number"], e["ref"]) for e in cat] == [(1, "lab:1")]   # auto-numbered
 
 
 @pytest.mark.tier2

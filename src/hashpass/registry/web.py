@@ -208,7 +208,7 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
     picker = " ".join(
         f"<a class='pill' href='/web?group={escape(g)}'>{escape(g)}</a>" for g in groups)
     picker = f"<p>Группы: <a class='pill' href='/web'>все</a> {picker}</p>" if groups else ""
-    head = "".join(f"<th title='{escape(str(e['title']))}'>{e['number']}</th>" for e in entries)
+    head = "".join(f"<th title='{escape(str(e['ref']))}'>{e['number']}</th>" for e in entries)
     rows = []
     for p in students:
         user = str(p["user"])
@@ -256,35 +256,59 @@ def _attachments_block(ref: str, files: list[dict]) -> str:
     return f"<h2>Файлы</h2>{table}{upload}"
 
 
-def _catalog_block(row: dict) -> str:
-    ref = str(row["ref"])
-    number, title = row.get("number"), str(row.get("title", ""))
-    if number is None:                                   # a task not yet published to the catalog
-        return ("<h2>Каталог</h2><p class='sub'>Не назначено заданием.</p>"
-                "<form class='inline row' method='post' action='/web/catalog/assign'>"
-                f"<input type='hidden' name='ref' value='{escape(ref)}'>"
-                "<input name='number' type='number' placeholder='№' required style='width:5em'>"
-                "<input name='title' type='text' placeholder='заголовок'>"
-                "<button class='sm' type='submit'>Назначить заданием</button></form>")
-    available = bool(row.get("available"))
-    pill = ("<span class='pill'>доступно</span>" if available
-            else "<span class='pill no'>скрыто</span>")
-    toggle = "0" if available else "1"
-    toggle_label = "Скрыть" if available else "Открыть"
-    return (f"<h2>Каталог</h2><p>Задание <b>№{number}</b>: {escape(title) or '—'} {pill}</p>"
-            "<div class='row'>"
-            "<form class='inline' method='post' action='/web/catalog/available'>"
-            f"<input type='hidden' name='number' value='{number}'>"
-            f"<input type='hidden' name='available' value='{toggle}'>"
-            f"<button class='sm' type='submit'>{toggle_label}</button></form>"
+def _task_li(entry: dict) -> str:
+    ref = str(entry["ref"])
+    return (f"<li class='titem' draggable='true' data-ref='{escape(ref)}'>"
+            f"<span class='grip' title='перетащите'>≡</span> "
+            f"<b>№{entry.get('number')}</b> <span class='mono'>{escape(ref)}</span>"
             "<form class='inline' method='post' action='/web/catalog/remove'>"
-            f"<input type='hidden' name='number' value='{number}'>"
-            "<button class='sm ghost' type='submit'>Снять с каталога</button></form></div>"
-            "<form class='inline row' method='post' action='/web/catalog/assign'>"
             f"<input type='hidden' name='ref' value='{escape(ref)}'>"
-            f"<input name='number' type='number' value='{number}' required style='width:5em'>"
-            f"<input name='title' type='text' value='{escape(title)}' placeholder='заголовок'>"
-            "<button class='sm' type='submit'>Обновить</button></form>")
+            "<button class='sm ghost' type='submit'>убрать</button></form></li>")
+
+
+def _block_div(b: dict, task_options: str) -> str:
+    bid, name, is_open = str(b["id"]), str(b["name"]), bool(b["open"])
+    items = "".join(_task_li(e) for e in b.get("tasks", []))
+    state = "<span class='pill'>открыт</span>" if is_open else "<span class='pill no'>закрыт</span>"
+    return (f"<div class='block card' data-block-id='{escape(bid)}'>"
+            f"<div class='row'><b>{escape(name)}</b> {state}"
+            "<form class='inline' method='post' action='/web/blocks/toggle'>"
+            f"<input type='hidden' name='block_id' value='{escape(bid)}'>"
+            f"<input type='hidden' name='open' value='{'0' if is_open else '1'}'>"
+            f"<button class='sm' type='submit'>{'Закрыть' if is_open else 'Открыть'}</button></form>"
+            "<form class='inline' method='post' action='/web/blocks/rename'>"
+            f"<input type='hidden' name='block_id' value='{escape(bid)}'>"
+            f"<input name='name' value='{escape(name)}' style='width:9em'>"
+            "<button class='sm ghost' type='submit'>Переименовать</button></form>"
+            "<form class='inline' method='post' action='/web/blocks/remove'>"
+            f"<input type='hidden' name='block_id' value='{escape(bid)}'>"
+            "<button class='sm ghost' type='submit'>Удалить блок</button></form></div>"
+            f"<ul class='tasklist' data-block-id='{escape(bid)}'>{items}</ul>"
+            "<form class='inline row' method='post' action='/web/catalog/add'>"
+            f"<input type='hidden' name='block_id' value='{escape(bid)}'>"
+            f"<select name='ref'>{task_options}</select>"
+            "<button class='sm' type='submit'>Добавить задание</button></form></div>")
+
+
+_DRAG_JS = """<script>
+(function(){var dragged=null;
+document.addEventListener('dragstart',function(e){var li=e.target.closest&&e.target.closest('.titem');if(li){dragged=li;e.dataTransfer.effectAllowed='move';}});
+document.addEventListener('dragover',function(e){if(!dragged)return;var ul=e.target.closest('.tasklist');if(!ul)return;e.preventDefault();var li=e.target.closest('.titem');if(li&&li!==dragged){var r=li.getBoundingClientRect();ul.insertBefore(dragged,(e.clientY-r.top)/r.height>0.5?li.nextSibling:li);}else if(!li){ul.appendChild(dragged);}});
+document.addEventListener('drop',function(e){if(!dragged)return;e.preventDefault();dragged=null;
+var blocks=[].map.call(document.querySelectorAll('.block'),function(b){return {id:b.getAttribute('data-block-id'),tasks:[].map.call(b.querySelectorAll('.titem'),function(li){return li.getAttribute('data-ref');})};});
+fetch('/web/catalog/layout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blocks:blocks})}).then(function(){location.reload();});});
+})();</script>"""
+
+
+def _catalog_section(blocks: list[dict], task_refs: list[str]) -> str:
+    options = "".join(f"<option value='{escape(r)}'>{escape(r)}</option>" for r in task_refs)
+    body = "".join(_block_div(b, options) for b in blocks) or "<p class='sub'>Блоков пока нет.</p>"
+    add_block = ("<form class='inline row' method='post' action='/web/blocks/add'>"
+                 "<input name='name' placeholder='название блока' required>"
+                 "<button class='sm' type='submit'>Добавить блок</button></form>")
+    return (f"<h1>Каталог заданий</h1><p class='sub'>Задания сгруппированы по блокам; "
+            "перетащите задание, чтобы изменить порядок или блок. Открытие блока открывает "
+            f"все его задания студентам.</p>{add_block}<div id='cat'>{body}</div>")
 
 
 def _image_card(row: dict) -> str:
@@ -292,6 +316,9 @@ def _image_card(row: dict) -> str:
     kind = str(row.get("kind", "image"))
     kind_ru = {"task": "задание", "image": "образ"}.get(kind, kind)
     kind_pill = f"<span class='pill {'author' if kind == 'task' else ''}'>{escape(kind_ru)}</span>"
+    number = row.get("number")
+    where = (f" <span class='pill'>в каталоге №{number}, блок «{escape(str(row.get('block_name', '')))}»</span>"
+             if number is not None else "")
     desc = str(row.get("description", ""))
     describe = ("<h2>Описание</h2>"
                 "<form method='post' action='/web/images/describe'>"
@@ -299,16 +326,17 @@ def _image_card(row: dict) -> str:
                 "<textarea name='description' rows='3' style='width:100%;font:inherit' "
                 f"placeholder='описание образа'>{escape(desc)}</textarea>"
                 "<button class='sm' type='submit'>Сохранить описание</button></form>")
-    catalog = _catalog_block(row) if kind == "task" else ""
     files = row.get("files") if isinstance(row.get("files"), list) else []
     return (f"<div class='card wide'><div class='row'><b class='mono'>{escape(ref)}</b> "
-            f"{kind_pill}</div>{catalog}{describe}{_attachments_block(ref, files)}</div>")
+            f"{kind_pill}{where}</div>{describe}{_attachments_block(ref, files)}</div>")
 
 
-def render_images(images: list[dict]) -> str:
-    """Per-image cards: kind, catalog assignment/availability, description, and file attachments."""
+def render_images(images: list[dict], blocks: list[dict]) -> str:
+    """Render the catalog (blocks with drag-reorder) plus per-image cards (description + files)."""
+    task_refs = [str(r["ref"]) for r in images if r.get("kind") == "task"]
     cards = "".join(_image_card(row) for row in images) or "<p class='sub'>Пул пуст.</p>"
-    return _page("Образы — hashpass", f"<h1>Образы и задания пула</h1>{cards}")
+    body = f"{_catalog_section(blocks, task_refs)}<h1>Образы</h1>{cards}{_DRAG_JS}"
+    return _page("Образы — hashpass", body)
 
 
 _ROLES = ("student", "author", "admin")

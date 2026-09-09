@@ -33,14 +33,13 @@ def test_push_task_number_shows_in_catalog_with_server_digest(registry, tmp_path
     tdir = tmp_path / "task"
     tdir.mkdir()
     _make_task_dir(tdir)
-    c.push_task(tdir, "lab", "1", number=1, title="Первое задание", token=tok)
+    c.push_task(tdir, "lab", "1", publish=True, token=tok)
 
     cat = c.catalog(token=tok)
     assert len(cat) == 1
     entry = cat[0]
-    assert entry["number"] == 1
+    assert entry["number"] == 1                   # auto-numbered by position
     assert entry["ref"] == "lab:1"
-    assert entry["title"] == "Первое задание"
     assert entry["digest"] == task_digest(tdir)  # server-computed digest matches the local tree
 
 

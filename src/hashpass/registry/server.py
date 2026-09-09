@@ -22,7 +22,7 @@ from hashpass.imagestore.store import ImageStore
 from hashpass.key import global_key
 from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
-from hashpass.registry.catalog import Catalog, CatalogEntry
+from hashpass.registry.catalog import Catalog
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.passwords import ROLES, UserStore, WeakPasswordError, validate_password
 from hashpass.registry.progress_store import ProgressStore
@@ -228,12 +228,20 @@ class _Handler(BaseHTTPRequestHandler):
             self._web_image_attach()
         elif path == "/web/images/attach-delete":
             self._web_image_attach_delete()
-        elif path == "/web/catalog/assign":
-            self._web_catalog_assign()
+        elif path == "/web/catalog/add":
+            self._web_catalog_add()
         elif path == "/web/catalog/remove":
             self._web_catalog_remove()
-        elif path == "/web/catalog/available":
-            self._web_catalog_available()
+        elif path == "/web/catalog/layout":
+            self._web_catalog_layout()
+        elif path == "/web/blocks/add":
+            self._web_block_add()
+        elif path == "/web/blocks/rename":
+            self._web_block_rename()
+        elif path == "/web/blocks/remove":
+            self._web_block_remove()
+        elif path == "/web/blocks/toggle":
+            self._web_block_toggle()
         else:
             self._empty(HTTPStatus.NOT_FOUND)
 
@@ -419,7 +427,8 @@ class _Handler(BaseHTTPRequestHandler):
             info = att.describe(ref)
             rows.append({"ref": ref, "kind": "task" if is_task else "image",
                          "number": entry.number if entry else None,
-                         "title": entry.title if entry else "",
+                         "block_id": entry.block_id if entry else None,
+                         "block_name": entry.block_name if entry else "",
                          "available": entry.available if entry else None,
                          "description": info["description"], "files": info["files"]})
         return rows
@@ -528,7 +537,8 @@ class _Handler(BaseHTTPRequestHandler):
         if self._session_role(_AUTHOR_ROLES) is None:
             self._redirect("/web/login")
             return
-        self._html(HTTPStatus.OK, render_images(self._pool_image_rows()))
+        blocks = [b.as_dict() for b in self.server.catalog().blocks()]
+        self._html(HTTPStatus.OK, render_images(self._pool_image_rows(), blocks))
 
     def _web_ref_form(self) -> tuple[dict[str, str], str] | None:
         """Author-gate a POST, return (form, ref) if the ref exists, else redirect and return None."""
@@ -590,43 +600,68 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(blob)
 
-    def _web_catalog_assign(self) -> None:
+    def _web_catalog_add(self) -> None:
         got = self._web_ref_form()
         if got is None:
             return
         form, ref = got
         task_dir = self.server.store.get(ref).layer.parent / "task"
-        try:
-            slot = int(form.get("number", ""))
-        except ValueError:
+        if not task_dir.exists():   # only a task image (with a grader) can join the catalog
             self._redirect("/web/images")
             return
-        if not task_dir.exists():   # only a task image (with a grader) can back a catalog slot
-            self._redirect("/web/images")
-            return
-        name, version = ref.rsplit(":", 1)
-        existing = self.server.catalog().get(slot)
-        available = existing.available if existing is not None else True
-        self.server.catalog().put(CatalogEntry(
-            slot, name, version, form.get("title", ""), task_digest(task_dir), available))
+        self.server.catalog().add_task(ref, task_digest(task_dir),
+                                       block_id=form.get("block_id") or None)
         self._redirect("/web/images")
 
     def _web_catalog_remove(self) -> None:
+        got = self._web_ref_form()
+        if got is None:
+            return
+        _form, ref = got
+        self.server.catalog().remove_task(ref)
+        self._redirect("/web/images")
+
+    def _web_catalog_layout(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._empty(HTTPStatus.UNAUTHORIZED)
+            return
+        data = self._json_body()
+        if data is None or not isinstance(data.get("blocks"), list):
+            self._empty(HTTPStatus.BAD_REQUEST)
+            return
+        self.server.catalog().set_layout(data["blocks"])   # drag-and-drop reorder / move
+        self._json(HTTPStatus.OK, {"ok": True})
+
+    def _web_block_add(self) -> None:
         if self._session_role(_AUTHOR_ROLES) is None:
             self._redirect("/web/login")
             return
-        with contextlib.suppress(ValueError):
-            self.server.catalog().remove(int(self._form().get("number", "")))
+        self.server.catalog().add_block(self._form().get("name", "").strip() or "Блок")
         self._redirect("/web/images")
 
-    def _web_catalog_available(self) -> None:
+    def _web_block_rename(self) -> None:
         if self._session_role(_AUTHOR_ROLES) is None:
             self._redirect("/web/login")
             return
         form = self._form()
-        with contextlib.suppress(ValueError):
-            self.server.catalog().set_available(
-                int(form.get("number", "")), available=form.get("available", "") == "1")
+        self.server.catalog().rename_block(form.get("block_id", ""),
+                                           form.get("name", "").strip() or "Блок")
+        self._redirect("/web/images")
+
+    def _web_block_remove(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        self.server.catalog().remove_block(self._form().get("block_id", ""))
+        self._redirect("/web/images")
+
+    def _web_block_toggle(self) -> None:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            self._redirect("/web/login")
+            return
+        form = self._form()
+        self.server.catalog().set_block_open(form.get("block_id", ""),
+                                             open_=form.get("open", "") == "1")
         self._redirect("/web/images")
 
     def _web_password_form(self) -> None:
@@ -813,17 +848,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._empty(HTTPStatus.BAD_REQUEST)
             return
         query = parse_qs(urlsplit(self.path).query)
-        number = query.get("number", [""])[0]
-        if number:  # register/overwrite this task's catalog slot with a server-computed digest
-            name, version = ref.rsplit(":", 1)
-            title = query.get("title", [""])[0]
-            try:
-                slot = int(number)
-            except ValueError:
-                self._empty(HTTPStatus.BAD_REQUEST)
-                return
-            self.server.catalog().put(
-                CatalogEntry(slot, name, version, title, task_digest(task_dir)))
+        if query.get("publish", [""])[0] == "1":   # `push --task`: add it to the catalog (auto-number)
+            self.server.catalog().add_task(ref, task_digest(task_dir))
         self._empty(HTTPStatus.CREATED)
 
     def _serve_closure(self, ref: str) -> None:

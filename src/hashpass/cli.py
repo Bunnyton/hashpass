@@ -994,10 +994,10 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
     io.write(f"\x1b[36m↑ прикреплён Taskfile\x1b[0m: {path.name}\n")
 
 
-def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR0913
-             task_number: int | None = None, title: str = "", io: Io | None = None) -> int:
+def cmd_push(env: Home, ref: str, registry: str | None = None, *,
+             publish: bool = False, io: Io | None = None) -> int:
     """
-    Push a ref (+ its `from` closure); with a task number, publish it at that catalog slot.
+    Push a ref (+ its `from` closure); with `publish`, also add it to the catalog (auto-numbered).
 
     Resolves the registry (explicit → saved) and logs in inline if there is no cached token.
     """
@@ -1008,14 +1008,14 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR09
     copied = client.push(store, ref)
     sys.stdout.write(f"отправлено {ref} (слоёв: {len(copied)})\n")
     _attach_taskfile(client, store, ref, io)
-    if task_number is not None:
+    if publish:
         tdir = task_dir(ref, store)
         if not tdir.exists():
-            msg = f"{ref} — не задание (нет артефактов task/); публиковать с --task нечего"
+            msg = f"{ref} — не задание (нет артефактов task/); публиковать нечего"
             raise ValueError(msg)
         name, version = split_ref(ref)
-        client.push_task(tdir, name, version, number=task_number, title=title)
-        sys.stdout.write(f"опубликовано задание №{task_number}: {ref}\n")
+        client.push_task(tdir, name, version, publish=True)
+        sys.stdout.write(f"опубликовано в каталог: {ref}\n")
     return 0
 
 
@@ -1292,9 +1292,10 @@ def pool_status(env: Home, url: str, token: str, user: str) -> list[dict[str, ob
     for entry in entries:
         ref = str(entry["ref"])
         server = mine.get(ref, {}).get("status") if isinstance(mine.get(ref), dict) else None
-        rows.append({"number": entry["number"], "title": entry.get("title") or ref,
+        rows.append({"number": entry["number"], "title": ref,   # a task's name is its image ref
                      "ref": ref, "local": ref in solved, "server": server,
-                     "available": entry.get("available", True)})
+                     "available": entry.get("available", True),
+                     "block": str(entry.get("block_name", ""))})
     return rows
 
 
@@ -1310,7 +1311,13 @@ def _status_badge(row: dict[str, object]) -> str:
 
 def _render_pool_menu(rows: list[dict[str, object]], user: str) -> str:
     lines = [f"\x1b[1mВаши задания\x1b[0m ({user}):", ""]
-    lines += [f"  {r['number']:>2}. [{_status_badge(r)}] {r['title']}" for r in rows]
+    block = object()   # sentinel so the first block header always prints
+    for r in rows:
+        if r.get("block") != block:
+            block = r.get("block")
+            lock = "" if r.get("available", True) else "  \x1b[2m(закрыт)\x1b[0m"
+            lines.append(f"\x1b[1m{block or 'Задания'}\x1b[0m{lock}" if block or lock else "Задания")
+        lines.append(f"  {r['number']:>2}. [{_status_badge(r)}] {r['title']}")
     lines.append("")
     return "\n".join(lines)
 
