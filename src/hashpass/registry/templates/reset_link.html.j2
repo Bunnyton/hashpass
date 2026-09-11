@@ -1,0 +1,7 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<h1>Ссылка для сброса пароля</h1>
+<p class='sub'>Отправьте её пользователю <b>{{ user }}</b> (действует ограниченно):</p>
+<code class='code'>{{ link }}</code>
+<p style='margin-top:16px'><a class='btn ghost' href='/web/users'>← к пользователям</a></p>
+{% endblock %}

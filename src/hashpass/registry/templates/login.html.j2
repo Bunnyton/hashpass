@@ -1,0 +1,13 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<div class='authwrap'>
+<h1>Вход преподавателя</h1>
+<p class='sub'>Доступ к прогрессу и управлению.</p>
+{% if error %}<div class='err'>{{ error }}</div>{% endif %}
+<form class='card' method='post' action='/web/login'>
+<label>Логин<input name='user' type='text' autofocus></label>
+<label>Пароль<input name='password' type='password' ></label>
+<button type='submit'>Войти</button>
+</form>
+</div>
+{% endblock %}

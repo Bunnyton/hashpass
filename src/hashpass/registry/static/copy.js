@@ -1,0 +1,1 @@
+function hpcopy(b){var c=b.parentNode.querySelector('code');navigator.clipboard&&navigator.clipboard.writeText(c.innerText.replace(/^\$\s*/,''));var t=b.textContent;b.textContent='скопировано';setTimeout(function(){b.textContent=t;},1200);}

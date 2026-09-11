@@ -1,0 +1,13 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<h1>Новый пароль</h1>
+<p class='sub'>Задайте пароль по ссылке восстановления.</p>
+{% if error %}<div class='err'>{{ error }}</div>{% endif %}
+<form class='card' method='post' action='/web/reset'>
+<input type='hidden' name='token' value='{{ token }}'>
+<label>Новый пароль<input name='new' type='password' autofocus></label>
+<label>Повторите<input name='confirm' type='password' ></label>
+<p class='sub'>{{ hint }}</p>
+<button type='submit'>Сохранить</button>
+</form>
+{% endblock %}

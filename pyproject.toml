@@ -2,7 +2,7 @@
 name = "hashpass"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = ["flask>=3.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
@@ -17,6 +17,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"hashpass.registry" = ["templates/*.html.j2", "static/*.css", "static/*.js"]
 
 [tool.pytest.ini_options]
 addopts = "-m 'not tier3' -ra"

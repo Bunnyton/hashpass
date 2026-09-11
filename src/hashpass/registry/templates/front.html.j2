@@ -1,0 +1,11 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<div class='hero'>
+<span class='pill accent'>учебный пул</span>
+<h1>Интерактивные задания по Linux</h1>
+<p class='sub'>Живая консоль Debian, автоматическая проверка каждого шага. Студент подключается одной командой:</p>
+<div class='cmd'><span class='prompt'>$</span><code>curl {{ flags }} {{ url }}/install.sh | bash</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div>
+<a class='btn' href='/web/login'>Вход для преподавателя</a>
+</div>
+<script src='/static/copy.js'></script>
+{% endblock %}

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang='ru'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
+<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap'>
+<link rel='stylesheet' href='/static/style.css'>
+<script src='https://unpkg.com/htmx.org@2.0.4' defer></script>
+<title>{{ title }}</title>
+</head>
+<body>
+{%- if nav %}
+<div class='nav'><span class='brand'><span class='logo'></span>hash<b>pass</b></span>
+<a href='/web'{% if active == '/web' %} class='on'{% endif %}>Прогресс</a>
+<a href='/web/images'{% if active == '/web/images' %} class='on'{% endif %}>Образы и каталог</a>
+<a href='/web/users'{% if active == '/web/users' %} class='on'{% endif %}>Пользователи</a>
+<span class='sp'></span><a href='/web/password'>Пароль</a><a href='/web/logout'>Выход</a></div>
+{%- endif %}
+<main>{% block main %}{% endblock %}</main>
+</body></html>

@@ -1,0 +1,86 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<h1>Каталог заданий</h1>
+<p class='sub'>Задания сгруппированы по блокам; перетащите задание, чтобы изменить порядок или блок. Открытие блока открывает все его задания студентам.</p>
+<form class='inline row' method='post' action='/web/blocks/add'>
+<input name='name' placeholder='название блока' required>
+<button class='sm' type='submit'>Добавить блок</button>
+</form>
+<div id='cat'>
+{% if blocks %}{% for b in blocks %}
+<div class='block card' data-block-id='{{ b.id }}'>
+<div class='row'><b>{{ b.name }}</b>
+{% if b.open %}<span class='pill open'>открыт</span>{% else %}<span class='pill closed'>закрыт</span>{% endif %}
+<form class='inline' method='post' action='/web/blocks/toggle'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<input type='hidden' name='open' value='{{ '0' if b.open else '1' }}'>
+<button class='sm' type='submit'>{{ 'Закрыть' if b.open else 'Открыть' }}</button>
+</form>
+<form class='inline' method='post' action='/web/blocks/rename'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<input name='name' value='{{ b.name }}' style='width:9em'>
+<button class='sm ghost' type='submit'>Переименовать</button>
+</form>
+<form class='inline' method='post' action='/web/blocks/remove'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<button class='sm ghost' type='submit'>Удалить блок</button>
+</form>
+</div>
+<ul class='tasklist' data-block-id='{{ b.id }}'>
+{% for e in b.tasks %}
+<li class='titem' draggable='true' data-ref='{{ e.ref }}'>
+<span class='grip' title='перетащите'>≡</span> <b>№{{ e.number }}</b> <span class='mono'>{{ e.ref }}</span>
+<form class='inline' method='post' action='/web/catalog/remove'>
+<input type='hidden' name='ref' value='{{ e.ref }}'>
+<button class='sm ghost' type='submit'>убрать</button>
+</form>
+</li>
+{% endfor %}
+</ul>
+<form class='inline row' method='post' action='/web/catalog/add'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<select name='ref'>{% for r in task_refs %}<option value='{{ r }}'>{{ r }}</option>{% endfor %}</select>
+<button class='sm' type='submit'>Добавить задание</button>
+</form>
+</div>
+{% endfor %}{% else %}<p class='sub'>Блоков пока нет.</p>{% endif %}
+</div>
+<h1>Образы</h1>
+{% if images %}{% for row in images %}
+<div class='card wide'>
+<div class='row'><b class='mono'>{{ row.ref }}</b>
+{% if row.kind == 'task' %}<span class='pill author'>задание</span>{% else %}<span class='pill '>образ</span>{% endif %}
+{% if row.number is not none %} <span class='pill'>в каталоге №{{ row.number }}, блок «{{ row.block_name }}»</span>{% endif %}
+</div>
+<h2>Описание</h2>
+<form method='post' action='/web/images/describe'>
+<input type='hidden' name='ref' value='{{ row.ref }}'>
+<textarea name='description' rows='3' style='width:100%;font:inherit' placeholder='описание образа'>{{ row.description }}</textarea>
+<button class='sm' type='submit'>Сохранить описание</button>
+</form>
+<h2>Файлы</h2>
+{% if row.files %}
+<table><tr><th>Файл</th><th class='c'>Размер</th><th></th><th></th></tr>
+{% for f in row.files %}
+<tr><td class='mono'>{{ f.name }}{% if f.taskfile %} <span class='pill author'>Taskfile</span>{% endif %}</td>
+<td class='c'>{{ f.size_ru }}</td>
+<td><a class='btn sm ghost' href='/web/images/file?ref={{ row.ref_q }}&name={{ f.name_q }}'>скачать</a></td>
+<td><form class='inline' method='post' action='/web/images/attach-delete'>
+<input type='hidden' name='ref' value='{{ row.ref }}'>
+<input type='hidden' name='name' value='{{ f.name }}'>
+<button class='sm ghost' type='submit'>удалить</button>
+</form></td></tr>
+{% endfor %}
+</table>
+{% else %}
+<p class='sub'>Файлов нет. Taskfile прикрепляется автоматически при <code>push</code>; можно приложить файлы вручную ниже.</p>
+{% endif %}
+<form class='inline row' method='post' action='/web/images/attach' enctype='multipart/form-data'>
+<input type='hidden' name='ref' value='{{ row.ref }}'>
+<input type='file' name='file' required>
+<button class='sm' type='submit'>Прикрепить</button>
+</form>
+</div>
+{% endfor %}{% else %}<p class='sub'>Пул пуст.</p>{% endif %}
+<script src='/static/drag.js'></script>
+{% endblock %}
