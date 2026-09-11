@@ -27,6 +27,7 @@ from hashpass.registry.catalog import Catalog
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.passwords import ROLES, UserStore, WeakPasswordError, validate_password
 from hashpass.registry.progress_store import ProgressStore
+from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
 from hashpass.registry.web import (
@@ -600,7 +601,19 @@ class PoolServer:
             return self._redirect("/web/login")
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
         record = self.progress().get(user).get(ref, {}) if user else {}
-        return self._html(render_history(user, ref, record))
+        return self._html(render_history(user, ref, record,
+                                         ref_commands=self._reference_commands(ref)))
+
+    def _reference_commands(self, ref: str) -> list[str]:
+        """Return the task's `solve` commands parsed from its Taskfile attachment, or []."""
+        if not ref:
+            return []
+        att = self.attachments()
+        for f in att.describe(ref).get("files", []) or []:
+            if f.get("taskfile"):
+                with contextlib.suppress(ValueError, FileNotFoundError, OSError):
+                    return reference_commands(att.read_file(ref, f["name"]).decode("utf-8", "replace"))
+        return []
 
     def _web_login_get(self) -> Response:
         return self._html(render_login())

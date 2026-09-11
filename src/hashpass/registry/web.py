@@ -4,6 +4,8 @@ from urllib.parse import quote
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from hashpass.registry.reference import normalise as _norm_cmd
+
 _REPO = "Bunnyton/hashpass"
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -133,24 +135,37 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
         entries=entries, rows=rows, groups=groups)
 
 
-_VERDICT_RU = {"typed": "набрано вручную", "pasted": "похоже на вставку", "unknown": "нет данных"}
+def render_history(user: str, ref: str, record: dict,
+                   *, ref_commands: list[str] | None = None) -> str:
+    """
+    Render one student's command history for one task, as anti-bot flags — no verdict.
 
-
-def render_history(user: str, ref: str, record: dict) -> str:
-    """Render a student's command history for one task, with the anti-bot (typed/pasted) summary."""
-    auth = record.get("authenticity") or {}
-    verdict = _VERDICT_RU.get(str(auth.get("verdict", "unknown")), "нет данных")
+    Flags on each command: `вставка` (client-supplied paste signal) and `эталон` (matches a
+    reference `solve` command from the Taskfile). A small summary at the top gives raw counts
+    (typed / pasted / matches-reference / extras); the teacher decides.
+    """
+    ref_set = {c for c in (ref_commands or []) if c}
     rows = []
+    matches = 0
     for h in record.get("history", []):
         cmd = str(h.get("command", ""))
         typing = h.get("typing")
-        speed = f"{len(cmd) / typing:.0f} зн/с" if isinstance(typing, (int, float)) and typing > 0 else "—"
-        rows.append({"command": cmd, "speed": speed, "pasted": bool(h.get("pasted"))})
+        speed = (f"{len(cmd) / typing:.0f} зн/с"
+                 if isinstance(typing, (int, float)) and typing > 0 else "—")
+        is_ref = _norm_cmd(cmd) in ref_set if ref_set else False
+        matches += 1 if is_ref else 0
+        rows.append({"command": cmd, "speed": speed,
+                     "pasted": bool(h.get("pasted")), "is_ref": is_ref})
+    auth = record.get("authenticity") or {}
+    typed_n = int(auth.get("typed", 0))
+    pasted_n = int(auth.get("pasted", 0))
+    total = len(rows) or (typed_n + pasted_n)
+    extras = max(0, total - matches)
     return _env.get_template("history.html.j2").render(
         title="История — hashpass", nav=True, active="/web",
         user=user, ref=ref, status=str(record.get("status", "")),
-        verdict=verdict, typed=int(auth.get("typed", 0)), pasted=int(auth.get("pasted", 0)),
-        rows=rows)
+        total=total, typed=typed_n, pasted=pasted_n,
+        matches=matches, extras=extras, has_ref=bool(ref_set), rows=rows)
 
 
 def _fmt_size(n: object) -> str:

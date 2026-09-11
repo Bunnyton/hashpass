@@ -26,7 +26,7 @@ def test_history_and_antibot_recorded_and_shown(registry):
     url = f"{registry.base_url}/web/history?user=stud&ref={urllib.parse.quote('lab:1')}"
     _, _, body = _req(opener, "GET", url, cookie=cookie)
     assert "echo pasted solution here" in body      # the student's command is visible
-    assert "похоже на вставку" in body              # anti-bot verdict shown
+    assert "вставка" in body                        # per-command paste flag shown
 
 
 @pytest.mark.tier1

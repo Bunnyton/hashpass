@@ -1,15 +1,29 @@
 {% extends 'base.html.j2' %}
 {% block main %}
+<p class='crumb'><a href='/web'>← Прогресс</a></p>
 <h1>История: {{ user }}</h1>
-<p class='sub'><span class='mono'>{{ ref }}</span> — {{ status }}; антибот: <b>{{ verdict }}</b> (вручную {{ typed }}, вставлено {{ pasted }})</p>
+<p class='sub'><span class='mono'>{{ ref }}</span> — {{ status }}</p>
+<div class='flags'>
+<span class='pill'>всего: {{ total }}</span>
+<span class='pill{% if pasted %} no{% endif %}'>вставок: {{ pasted }}</span>
+<span class='pill'>набрано: {{ typed }}</span>
+{% if has_ref %}<span class='pill{% if matches %} warn{% endif %}'>дословно эталон: {{ matches }}</span>{% endif %}
+{% if has_ref %}<span class='pill'>сверх эталона: {{ extras }}</span>{% endif %}
+{% if not has_ref %}<span class='pill dim'>эталон не найден в Taskfile</span>{% endif %}
+</div>
+<p class='sub small'>Пометки — на решение препода. «Вставка» — команду вставили (клиент отметил).
+«Дословно эталон» — команда совпадает с solve-командой из Taskfile.
+«Сверх эталона» — команды, которых нет в solve (шум или исследование).</p>
 {% if rows %}
-<table><tr><th>Команда</th><th class='c'>Скорость</th><th></th></tr>
+<table><tr><th>Команда</th><th class='c'>Скорость</th><th class='c'>Пометки</th></tr>
 {% for h in rows %}
-<tr><td class='mono'>{{ h.command }}</td><td class='c'>{{ h.speed }}</td><td>{% if h.pasted %}<span class='pill no'>вставка</span>{% endif %}</td></tr>
+<tr><td class='mono'>{{ h.command }}</td>
+<td class='c'>{{ h.speed }}</td>
+<td class='c'>{% if h.pasted %}<span class='pill no sm'>вставка</span>{% endif %}
+{% if h.is_ref %}<span class='pill warn sm'>эталон</span>{% endif %}</td></tr>
 {% endfor %}
 </table>
 {% else %}
 <p class='sub'>История команд не записана (старый рантайм или нет данных).</p>
 {% endif %}
-<p style='margin-top:16px'><a class='btn ghost' href='/web'>← к прогрессу</a></p>
 {% endblock %}
