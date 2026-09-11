@@ -1,0 +1,100 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<div class='cat-head'>
+<h1>Каталог заданий</h1>
+<details class='add-menu' id='add-menu'>
+<summary class='btn'>+ Добавить</summary>
+<div class='add-panel card'>
+<form class='add-task-form' method='post' action='/web/catalog/add'>
+<label>Задание — начните вводить имя образа
+<input name='ref' list='ref-options' placeholder='например, fruit-count:1' autocomplete='off' required>
+</label>
+<datalist id='ref-options'>{% for r in task_refs %}<option value='{{ r }}'></option>{% endfor %}</datalist>
+<p class='sub small'>Задание — это образ. Если такого образа нет, задание не добавится.</p>
+<button type='submit'>Добавить задание</button>
+</form>
+<hr class='divider'>
+<form class='add-block-form' method='post' action='/web/blocks/add'>
+<label>Блок (название необязательно)
+<input name='name' placeholder='без названия' autocomplete='off'>
+</label>
+<button class='ghost' type='submit'>Добавить блок</button>
+</form>
+</div>
+</details>
+</div>
+<p class='sub'>Перетащите задание, чтобы изменить его номер или блок. Скрытое видно студенту как «№N · закрыто», но не показывает, какое именно.</p>
+{% if blocks %}
+<div id='cat'>
+{% for b in blocks %}
+<div class='block card{% if not b.open %} block-hidden{% endif %}' data-block-id='{{ b.id }}'>
+<div class='block-head'>
+<form class='inline block-rename' method='post' action='/web/blocks/rename'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<input name='name' value='{{ b.name }}' placeholder='без названия' class='block-name-input'>
+</form>
+{% if b.open %}<span class='pill open'>доступен</span>{% else %}<span class='pill closed'>скрыт</span>{% endif %}
+<span class='sp'></span>
+<details class='menu block-menu'>
+<summary class='menu-dot' title='действия с блоком'>⋯</summary>
+<div class='menu-list card'>
+<form class='inline' method='post' action='/web/blocks/toggle'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<input type='hidden' name='open' value='{{ '0' if b.open else '1' }}'>
+<button class='menu-item' type='submit'>{{ 'Скрыть' if b.open else 'Сделать доступным' }}</button>
+</form>
+<form class='inline' method='post' action='/web/blocks/remove'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<button class='menu-item danger' type='submit'>Удалить блок</button>
+</form>
+</div>
+</details>
+</div>
+<ul class='tasklist' data-block-id='{{ b.id }}'>
+{% for e in b.tasks %}
+<li class='titem{% if e.hidden %} task-hidden{% endif %}' draggable='true' data-ref='{{ e.ref }}'>
+<span class='grip' title='перетащите'>⠿</span>
+<b class='num'>№{{ e.number }}</b>
+<span class='mono ref'>{{ e.ref }}</span>
+{% if e.hidden %}<span class='pill closed sm'>скрыт</span>{% endif %}
+<span class='sp'></span>
+<details class='menu task-menu'>
+<summary class='menu-dot' title='действия'>⋯</summary>
+<div class='menu-list card'>
+<a class='menu-item' href='/web/image/{{ e.ref_url }}'>Редактировать</a>
+<form class='inline' method='post' action='/web/tasks/toggle'>
+<input type='hidden' name='ref' value='{{ e.ref }}'>
+<input type='hidden' name='hidden' value='{{ '0' if e.hidden else '1' }}'>
+<button class='menu-item' type='submit'>{{ 'Показать' if e.hidden else 'Скрыть' }}</button>
+</form>
+<form class='inline' method='post' action='/web/catalog/remove'>
+<input type='hidden' name='ref' value='{{ e.ref }}'>
+<button class='menu-item danger' type='submit'>Удалить</button>
+</form>
+</div>
+</details>
+</li>
+{% endfor %}
+</ul>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class='empty card'>
+<p class='sub'>Каталог пуст. Нажмите «+ Добавить», чтобы создать задание или блок.</p>
+</div>
+{% endif %}
+{% if all_images %}
+<h2>Все образы</h2>
+<ul class='imglist'>
+{% for r in all_images %}
+<li><a href='/web/image/{{ r.ref_url }}' class='imglist-row'>
+<span class='mono'>{{ r.ref }}</span>
+{% if r.kind == 'task' %}<span class='pill author sm'>задание</span>{% else %}<span class='pill sm'>образ</span>{% endif %}
+{% if r.number is not none %}<span class='pill sm'>№{{ r.number }}</span>{% endif %}
+</a></li>
+{% endfor %}
+</ul>
+{% endif %}
+<script src='/static/catalog.js'></script>
+{% endblock %}

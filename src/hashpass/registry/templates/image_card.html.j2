@@ -1,0 +1,45 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<p class='crumb'><a href='/web/images'>← Каталог</a></p>
+<div class='card-hero'>
+<h1 class='mono ref-title'>{{ image.ref }}</h1>
+<div class='row'>
+{% if image.kind == 'task' %}<span class='pill author'>задание</span>{% else %}<span class='pill'>образ</span>{% endif %}
+{% if image.number is not none %}<span class='pill'>№{{ image.number }}{% if image.block_name %} · «{{ image.block_name }}»{% endif %}</span>{% endif %}
+{% if image.hidden %}<span class='pill closed'>скрыт</span>{% endif %}
+</div>
+</div>
+<div class='card'>
+<h2>Описание</h2>
+<form method='post' action='/web/images/describe'>
+<input type='hidden' name='ref' value='{{ image.ref }}'>
+<textarea name='description' rows='4' placeholder='что делает образ / задание, для кого, что важно' class='desc'>{{ image.description }}</textarea>
+<button class='sm' type='submit'>Сохранить</button>
+</form>
+</div>
+<div class='card'>
+<h2>Файлы</h2>
+{% if image.files %}
+<table>
+<tr><th>Файл</th><th class='c'>Размер</th><th></th><th></th></tr>
+{% for f in image.files %}
+<tr><td class='mono'>{{ f.name }}{% if f.taskfile %} <span class='pill author sm'>Taskfile</span>{% endif %}</td>
+<td class='c'>{{ f.size_ru }}</td>
+<td><a class='btn sm ghost' href='/web/images/file?ref={{ image.ref_q }}&name={{ f.name_q }}'>скачать</a></td>
+<td><form class='inline' method='post' action='/web/images/attach-delete'>
+<input type='hidden' name='ref' value='{{ image.ref }}'>
+<input type='hidden' name='name' value='{{ f.name }}'>
+<button class='sm ghost' type='submit'>удалить</button>
+</form></td></tr>
+{% endfor %}
+</table>
+{% else %}
+<p class='sub'>Файлов нет. Taskfile прикрепляется автоматически при <code>push</code>.</p>
+{% endif %}
+<form class='inline row upload' method='post' action='/web/images/attach' enctype='multipart/form-data'>
+<input type='hidden' name='ref' value='{{ image.ref }}'>
+<input type='file' name='file' required>
+<button class='sm' type='submit'>Прикрепить</button>
+</form>
+</div>
+{% endblock %}

@@ -92,8 +92,10 @@ def test_push_attachment_and_web_download(registry, tmp_path):
     tok = c.login("dev", "pass123!")
     c.push_attachment("lab", "1", "Taskfile", b"stage one\nsolve: ls\n", taskfile=True, token=tok)
     opener, cookie = _author_cookie(registry)
-    _, _, body = _req(opener, "GET", f"{registry.base_url}/web/images", cookie=cookie)
-    assert "lab:1" in body
+    # ref is listed on the catalog page; per-image files live on the card page
+    _, _, cat_body = _req(opener, "GET", f"{registry.base_url}/web/images", cookie=cookie)
+    assert "lab:1" in cat_body
+    _, _, body = _req(opener, "GET", f"{registry.base_url}/web/image/lab:1", cookie=cookie)
     assert "Taskfile" in body
     dl = f"{registry.base_url}/web/images/file?ref={urllib.parse.quote('lab:1')}&name=Taskfile"
     status, _, content = _req(opener, "GET", dl, cookie=cookie)
@@ -119,7 +121,7 @@ def test_web_describe_and_delete(registry, tmp_path):
          data={"ref": "lab:1", "description": "Описание образа"})
     _req(opener, "POST", f"{base}/web/images/attach-delete", cookie=cookie,
          data={"ref": "lab:1", "name": "nope"})   # deleting a missing file is harmless
-    _, _, body = _req(opener, "GET", f"{base}/web/images", cookie=cookie)
+    _, _, body = _req(opener, "GET", f"{base}/web/image/lab:1", cookie=cookie)
     assert "Описание образа" in body
 
 
@@ -186,8 +188,8 @@ def test_web_multipart_upload_and_list(registry, tmp_path):
         f"{registry.base_url}/web/images/attach", data=body, method="POST",
         headers={"Cookie": cookie, "Content-Type": f"multipart/form-data; boundary={b}"})
     follow = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    follow.open(req, timeout=10).read()   # 303 -> follows the redirect back to /web/images
-    _, _, page = _req(opener, "GET", f"{registry.base_url}/web/images", cookie=cookie)
+    follow.open(req, timeout=10).read()   # 303 -> follows the redirect back to the card page
+    _, _, page = _req(opener, "GET", f"{registry.base_url}/web/image/lab:1", cookie=cookie)
     assert "notes.txt" in page
     dl = f"{registry.base_url}/web/images/file?ref={urllib.parse.quote('lab:1')}&name=notes.txt"
     assert _req(opener, "GET", dl, cookie=cookie)[2] == "privet"

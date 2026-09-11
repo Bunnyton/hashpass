@@ -89,7 +89,11 @@ code,.mono{font-family:var(--mono);font-size:.92em}
 .hero{max-width:760px;margin:6vh auto 0;text-align:center}
 .hero h1{font-size:42px;letter-spacing:-.03em;line-height:1.08}
 .hero .sub{margin:14px auto 0;font-size:17px;max-width:56ch}
-.hero .cmd{margin:26px auto 20px;max-width:640px}
+.steps{list-style:none;margin:26px auto 20px;padding:0;max-width:640px;display:flex;flex-direction:column;gap:10px;text-align:left}
+.steps li{display:flex;gap:12px;align-items:center}
+.steps .step-n{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
+  font-weight:700;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+.steps .cmd{flex:1;margin:0}
 .cmd{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius);padding:5px 6px 5px 16px;box-shadow:var(--shadow);text-align:left}
 .cmd code{flex:1;font-family:var(--mono);font-size:14px;overflow-x:auto;white-space:nowrap;padding:9px 0}
@@ -97,5 +101,62 @@ code,.mono{font-family:var(--mono);font-size:.92em}
 .cmd button{margin:0}
 .authwrap{max-width:400px;margin:7vh auto 0}
 .authwrap .card{margin-top:14px}
+/* catalog editor: header row + single add button that toggles the add-panel */
+.cat-head{display:flex;align-items:center;gap:14px;margin:.4em 0 .2em}
+.cat-head h1{margin:0;flex:1}
+.add-menu{position:relative}
+.add-menu>summary{list-style:none;cursor:pointer}
+.add-menu>summary::-webkit-details-marker{display:none}
+.add-panel{position:absolute;right:0;top:calc(100% + 8px);min-width:340px;z-index:15;padding:16px}
+.add-panel .divider{border:0;border-top:1px solid var(--border);margin:14px -4px}
+.add-panel button{margin-top:10px}
+.small{font-size:12.5px;margin:.3em 0}
+/* one block card: name is an inline input, actions live under a ⋯ menu */
+.block-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.block-name-input{flex:0 1 240px;margin:0;padding:6px 10px;font-weight:700;background:transparent;
+  border:1px solid transparent;color:var(--text)}
+.block-name-input:hover{border-color:var(--border)}
+.block-name-input:focus{border-color:var(--accent)}
+.block-rename{flex:1}
+.block-hidden{opacity:.6}
+.block-hidden .titem{background:transparent}
+/* three-dot dropdowns (block and task menus) */
+.menu{position:relative}
+.menu>summary,.menu-dot{list-style:none;cursor:pointer;width:28px;height:28px;border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--muted);
+  font-weight:700;font-size:18px;line-height:1}
+.menu>summary::-webkit-details-marker{display:none}
+.menu>summary:hover,.menu-dot:hover{background:var(--surface2);color:var(--text)}
+.menu-list{position:absolute;right:0;top:calc(100% + 4px);min-width:180px;padding:6px;z-index:15;
+  box-shadow:var(--shadow-lg);display:flex;flex-direction:column;gap:2px}
+.menu-item{display:block;width:100%;text-align:left;background:transparent;color:var(--text);
+  border:0;margin:0;padding:8px 10px;border-radius:7px;font:inherit;font-weight:500;font-size:14px;
+  text-decoration:none;cursor:pointer}
+.menu-item:hover{background:var(--surface2)}
+.menu-item.danger{color:var(--danger)}
+.menu-item.danger:hover{background:var(--danger-soft)}
+/* per-task row: grip + number + ref + ⋯; a hidden task is dimmed */
+.titem .num{color:var(--faint);font-weight:600;min-width:2.6em}
+.titem .ref{flex:1}
+.titem .sp{flex:1}
+.titem.dragging{opacity:.35}
+.task-hidden{opacity:.55}
+.pill.sm{padding:1px 7px;font-size:11px}
+.empty{padding:32px 20px;text-align:center}
+/* image card page (dedicated per-image page) */
+.crumb{margin:.2em 0 1em}
+.crumb a{color:var(--muted);text-decoration:none;font-weight:600}
+.crumb a:hover{color:var(--text)}
+.card-hero{padding:6px 0 18px}
+.card-hero h1{margin:.1em 0 .5em;letter-spacing:-.01em}
+.card-hero .row{gap:10px}
+.desc{width:100%;font:inherit;min-height:6em;resize:vertical}
+.upload{margin-top:10px}
+.imglist{list-style:none;margin:0 0 24px;padding:0;display:flex;flex-direction:column;gap:4px}
+.imglist-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius-sm);text-decoration:none;color:var(--text)}
+.imglist-row:hover{border-color:var(--border-strong);background:var(--surface2)}
+.imglist-row .mono{flex:1}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-@media(max-width:640px){main{padding:20px 14px 56px}.nav{padding:10px 14px}h1{font-size:22px}.hero h1{font-size:30px}}
+@media(max-width:640px){main{padding:20px 14px 56px}.nav{padding:10px 14px}h1{font-size:22px}.hero h1{font-size:30px}
+  .add-panel{right:auto;left:0;min-width:min(90vw,340px)}}

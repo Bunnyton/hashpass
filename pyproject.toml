@@ -21,6 +21,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "hashpass.registry" = ["templates/*.html.j2", "static/*.css", "static/*.js"]
 
+
 [tool.pytest.ini_options]
 addopts = "-m 'not tier3' -ra"
 markers = [

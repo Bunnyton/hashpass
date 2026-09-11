@@ -14,6 +14,7 @@ import tarfile
 import time
 from http import HTTPStatus
 from pathlib import Path
+from urllib.parse import quote
 
 from flask import Flask, Response, request
 from werkzeug.serving import make_server as _wsgi_make_server
@@ -29,11 +30,12 @@ from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.token import issue_token, verify_token
 from hashpass.registry.web import (
+    render_catalog,
     render_dashboard,
     render_engine_install_script,
     render_front,
     render_history,
-    render_images,
+    render_image_card,
     render_install_script,
     render_login,
     render_password_form,
@@ -207,6 +209,8 @@ class PoolServer:
         app.add_url_rule("/web/reset", "web_reset_get", self._web_reset_get, methods=["GET"])
         app.add_url_rule("/web/reset", "web_reset_post", self._web_reset_post, methods=["POST"])
         app.add_url_rule("/web/images", "web_images", self._web_images, methods=["GET"])
+        app.add_url_rule("/web/image/<path:ref>", "web_image_card",
+                         self._web_image_card, methods=["GET"])
         app.add_url_rule("/web/images/file", "web_image_file",
                          self._web_image_file, methods=["GET"])
         app.add_url_rule("/web/images/describe", "web_image_describe",
@@ -222,6 +226,8 @@ class PoolServer:
                          self._web_catalog_remove, methods=["POST"])
         app.add_url_rule("/web/catalog/layout", "web_catalog_layout",
                          self._web_catalog_layout, methods=["POST"])
+        app.add_url_rule("/web/tasks/toggle", "web_task_toggle",
+                         self._web_task_toggle, methods=["POST"])
         app.add_url_rule("/web/blocks/add", "web_block_add",
                          self._web_block_add, methods=["POST"])
         app.add_url_rule("/web/blocks/rename", "web_block_rename",
@@ -575,7 +581,19 @@ class PoolServer:
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
         blocks = [b.as_dict() for b in self.catalog().blocks()]
-        return self._html(render_images(self._pool_image_rows(), blocks))
+        return self._html(render_catalog(self._pool_image_rows(), blocks))
+
+    def _web_image_card(self, ref: str) -> Response:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            return self._redirect("/web/login")
+        if not self.store.exists(ref):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        row = next((r for r in self._pool_image_rows() if r["ref"] == ref), None)
+        if row is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        entry = self.catalog().find(ref)
+        row = {**row, "hidden": entry.hidden if entry else False}
+        return self._html(render_image_card(row))
 
     def _web_history(self) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:
@@ -704,6 +722,11 @@ class PoolServer:
             return None
         return ref, ref
 
+    @staticmethod
+    def _card_url(ref: str) -> str:
+        """Path to the image card page for one ref (URL-encoded, matches the /web/image/<ref> route)."""
+        return f"/web/image/{quote(ref, safe='/:')}" if ref else "/web/images"
+
     def _web_image_describe(self) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
@@ -712,7 +735,7 @@ class PoolServer:
             return self._redirect("/web/images")
         with contextlib.suppress(ValueError, OSError):
             self.attachments().set_description(ref, request.form.get("description", "")[:_MAX_DESC])
-        return self._redirect("/web/images")
+        return self._redirect(self._card_url(ref))
 
     def _web_image_attach(self) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:
@@ -724,7 +747,7 @@ class PoolServer:
             if data and len(data) <= _MAX_ATTACH:
                 with contextlib.suppress(ValueError, OSError):
                     self.attachments().put_file(ref, upload.filename, data)
-        return self._redirect("/web/images")
+        return self._redirect(self._card_url(ref))
 
     def _web_image_attach_delete(self) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:
@@ -734,7 +757,7 @@ class PoolServer:
             return self._redirect("/web/images")
         with contextlib.suppress(ValueError, OSError):
             self.attachments().delete_file(ref, request.form.get("name", ""))
-        return self._redirect("/web/images")
+        return self._redirect(self._card_url(ref))
 
     def _web_image_file(self) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:
@@ -769,6 +792,15 @@ class PoolServer:
         if not ref or not self.store.exists(ref):
             return self._redirect("/web/images")
         self.catalog().remove_task(ref)
+        return self._redirect("/web/images")
+
+    def _web_task_toggle(self) -> Response:
+        if self._session_role(_AUTHOR_ROLES) is None:
+            return self._redirect("/web/login")
+        ref = request.form.get("ref", "")
+        if not ref:
+            return self._redirect("/web/images")
+        self.catalog().set_task_hidden(ref, hidden=request.form.get("hidden", "") == "1")
         return self._redirect("/web/images")
 
     def _web_catalog_layout(self) -> Response:

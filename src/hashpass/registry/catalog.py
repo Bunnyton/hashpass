@@ -21,7 +21,8 @@ class CatalogEntry:
     digest: str
     block_id: str
     block_name: str
-    available: bool      # its block is open
+    available: bool      # visible to students: block.open AND NOT task.hidden
+    hidden: bool = False  # per-task teacher override (default: visible when the block is open)
 
     @property
     def ref(self) -> str:
@@ -32,7 +33,8 @@ class CatalogEntry:
         """Serializable view (used by /catalog, the student menu, and the web)."""
         return {"number": self.number, "name": self.name, "version": self.version,
                 "digest": self.digest, "ref": self.ref, "block_id": self.block_id,
-                "block_name": self.block_name, "available": self.available}
+                "block_name": self.block_name, "available": self.available,
+                "hidden": self.hidden}
 
 
 @dataclass(frozen=True)
@@ -96,9 +98,11 @@ class Catalog:
             entries: list[CatalogEntry] = []
             for t in b.get("tasks", []):
                 number += 1
+                hidden = bool(t.get("hidden", False))
                 entries.append(CatalogEntry(
                     number, str(t.get("name", "")), str(t.get("version", "")),
-                    str(t.get("digest", "")), str(b.get("id", "")), str(b.get("name", "")), is_open))
+                    str(t.get("digest", "")), str(b.get("id", "")), str(b.get("name", "")),
+                    available=is_open and not hidden, hidden=hidden))
             result.append(Block(str(b.get("id", "")), str(b.get("name", "")), is_open, entries))
         return result
 
@@ -167,6 +171,17 @@ class Catalog:
         target["tasks"].append({"name": name, "version": version, "digest": digest})
         self._save(data)
 
+    def set_task_hidden(self, ref: str, *, hidden: bool) -> bool:
+        """Toggle a single task's per-teacher hidden flag; return whether it existed."""
+        data = self._load()
+        for b in data.get("blocks", []):
+            for t in b.get("tasks", []):
+                if f"{t.get('name')}:{t.get('version')}" == ref:
+                    t["hidden"] = hidden
+                    self._save(data)
+                    return True
+        return False
+
     def remove_task(self, ref: str) -> bool:
         """Remove a task from whatever block holds it; return whether one was removed."""
         data = self._load()
@@ -188,6 +203,7 @@ class Catalog:
         (no stored digest) are dropped. This is how reorder / move-between-blocks is applied.
         """
         digest = {e.ref: e.digest for e in self.entries()}
+        hidden = {e.ref: e.hidden for e in self.entries()}
         prev = {str(b.get("id")): b for b in self._load().get("blocks", []) if isinstance(b, dict)}
         blocks: list[dict[str, object]] = []
         for b in layout:
@@ -199,7 +215,8 @@ class Catalog:
                 if ref not in digest:
                     continue
                 name, _, version = ref.partition(":")
-                tasks.append({"name": name, "version": version, "digest": digest[ref]})
+                tasks.append({"name": name, "version": version, "digest": digest[ref],
+                              "hidden": hidden.get(ref, False)})
             blocks.append({"id": block_id, "name": str(b.get("name", was.get("name", ""))),
                            "open": bool(b.get("open", was.get("open", True))), "tasks": tasks})
         self._save({"blocks": blocks})

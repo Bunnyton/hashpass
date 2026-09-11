@@ -158,27 +158,57 @@ def _fmt_size(n: object) -> str:
     return f"{size} Б" if size < 1024 else f"{size / 1024:.0f} КБ"  # noqa: PLR2004
 
 
-def render_images(images: list[dict], blocks: list[dict]) -> str:
-    """Render the catalog (blocks with drag-reorder) plus per-image cards (description + files)."""
-    task_refs = [str(r["ref"]) for r in images if r.get("kind") == "task"]
-    prepared_images = []
-    for row in images:
-        ref = str(row["ref"])
-        files = row.get("files") if isinstance(row.get("files"), list) else []
-        prepared_files = [{"name": str(f.get("name", "")),
-                           "name_q": quote(str(f.get("name", "")), safe=""),
-                           "size_ru": _fmt_size(f.get("size")),
-                           "taskfile": bool(f.get("taskfile"))} for f in files]
-        prepared_images.append({
-            "ref": ref, "ref_q": quote(ref, safe=""),
-            "kind": str(row.get("kind", "image")),
-            "number": row.get("number"),
+def _prepare_files(files: list[dict]) -> list[dict]:
+    return [{"name": str(f.get("name", "")),
+             "name_q": quote(str(f.get("name", "")), safe=""),
+             "size_ru": _fmt_size(f.get("size")),
+             "taskfile": bool(f.get("taskfile"))} for f in files]
+
+
+def _prepare_image(row: dict) -> dict:
+    """Shape one image row (ref + files + description) for a template."""
+    ref = str(row["ref"])
+    files = row.get("files") if isinstance(row.get("files"), list) else []
+    hidden = bool(row.get("hidden", False))
+    return {"ref": ref, "ref_q": quote(ref, safe=""), "ref_url": quote(ref, safe="/:"),
+            "kind": str(row.get("kind", "image")), "number": row.get("number"),
             "block_name": str(row.get("block_name", "")),
             "description": str(row.get("description", "")),
-            "files": prepared_files})
-    return _env.get_template("images.html.j2").render(
-        title="Образы — hashpass", nav=True, active="/web/images",
-        blocks=blocks, task_refs=task_refs, images=prepared_images)
+            "hidden": hidden, "files": _prepare_files(files)}
+
+
+def render_catalog(images: list[dict], blocks: list[dict]) -> str:
+    """Render the catalog editor (blocks + tasks with drag-reorder, no inline image cards)."""
+    task_refs = [str(r["ref"]) for r in images if r.get("kind") == "task"]
+    by_ref = {str(r["ref"]): r for r in images}
+    prepared_blocks = []
+    for b in blocks:
+        tasks = []
+        for e in b.get("tasks", []):
+            ref = str(e.get("ref", ""))
+            img = by_ref.get(ref, {})
+            tasks.append({"ref": ref, "number": e.get("number"),
+                          "hidden": bool(e.get("hidden") or img.get("hidden")),
+                          "ref_url": quote(ref, safe="/:")})
+        prepared_blocks.append({"id": str(b.get("id", "")), "name": str(b.get("name", "")),
+                                "open": bool(b.get("open", True)), "tasks": tasks})
+    all_images = [{"ref": str(r["ref"]), "ref_url": quote(str(r["ref"]), safe="/:"),
+                   "kind": str(r.get("kind", "image")), "number": r.get("number")}
+                  for r in images]
+    return _env.get_template("catalog.html.j2").render(
+        title="Каталог — hashpass", nav=True, active="/web/images",
+        blocks=prepared_blocks, task_refs=task_refs, all_images=all_images)
+
+
+# Kept for the routing seam: /web/images renders the catalog editor.
+render_images = render_catalog
+
+
+def render_image_card(image: dict) -> str:
+    """Render one image's dedicated page (description editor + files)."""
+    return _env.get_template("image_card.html.j2").render(
+        title=f"{image.get('ref', '')} — hashpass", nav=True, active="/web/images",
+        image=_prepare_image(image))
 
 
 _ROLES = ("student", "author", "admin")
