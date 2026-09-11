@@ -1341,10 +1341,10 @@ def _status_badge(row: dict[str, object]) -> str:
     if not row.get("available", True):
         return "\x1b[2mнедоступно\x1b[0m"          # visible, but locked right now
     if row.get("server") == "passed":
-        return "\x1b[32m★ зачтено\x1b[0m"
+        return "\x1b[32mзачтено\x1b[0m"
     if row.get("local"):
-        return "\x1b[33m✓ решено\x1b[0m"
-    return "\x1b[2m· не начато\x1b[0m"
+        return "\x1b[33mрешено\x1b[0m"
+    return "\x1b[2mне начато\x1b[0m"
 
 
 def _render_pool_menu(rows: list[dict[str, object]], user: str) -> str:
@@ -1388,11 +1388,18 @@ def _resync(env: Home, url: str, user: str, token: str, io: Io) -> None:
     io.write(f"\x1b[36mсамопроверка: зачтено {sent}\x1b[0m\n")
 
 
-def cmd_pool_home(env: Home, io: Io | None = None) -> int:
-    """Student no-arg: a friendly menu — pull tasks, show status, pick one to run, offer the next."""
+def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY branch + text menu)
+    """Student no-arg: full-screen Textual TUI on a TTY, else the plain-text menu below."""
     io = io or _default_io()
     url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
+    if sys.stdout.isatty() and sys.stdin.isatty() and io is _default_io():
+        try:
+            from hashpass.tui import run_tui  # noqa: PLC0415  (optional dep)
+        except ImportError:
+            io.write("\x1b[2m(пакет textual не установлен, использую текстовый режим)\x1b[0m\n")
+        else:
+            return run_tui(env, url, user, token)
     layers, tasks = pull_new(env, url, token)
     if layers or tasks:
         io.write(f"\x1b[2m↓ подтянуто: слоёв {layers}, заданий {tasks}\x1b[0m\n")
@@ -1458,19 +1465,19 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
         if not completed:
             return  # only report a real completion; the server digest-gates the credit
         mark_solved(env, ref)   # record «решено» before the network, so a failed submit still
-        io.write("\x1b[32m✓ решено\x1b[0m\n")   # leaves a clear local status
+        io.write("\x1b[32mрешено\x1b[0m\n")   # leaves a clear local status
         digest = task_digest(task_dir(ref, store))
         authenticity = _authenticity(history)
         try:
             result = RemoteRegistry(url).submit(ref, digest, passed=True, token=token,
                                                 history=history, authenticity=authenticity)
         except (urllib.error.URLError, RuntimeError, ValueError) as exc:
-            io.write(f"\x1b[33m⚠ не зачтено (нет связи?): {exc}\x1b[0m\n"
+            io.write(f"\x1b[33mне зачтено (нет связи?): {exc}\x1b[0m\n"
                      "\x1b[2m  позже нажмите s в меню для самопроверки\x1b[0m\n")
             return
         if result.get("status") == "passed":
             note = "  \x1b[33m(похоже на вставку)\x1b[0m" if authenticity["verdict"] == "pasted" else ""
-            io.write(f"\x1b[32m★ зачтено\x1b[0m{note}\n")
+            io.write(f"\x1b[32mзачтено\x1b[0m{note}\n")
         else:
             io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"
                      "\x1b[0m\n")
