@@ -32,7 +32,6 @@ if TYPE_CHECKING:
     from hashpass.cli import Home
 
 _DOWN_WORKERS = 6            # parallel background downloads
-_POLL_INTERVAL = 0.4         # UI refresh cadence (seconds); state is polled, not pushed
 
 
 @dataclass
@@ -127,12 +126,18 @@ class PoolTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        """Load the catalog and start the refresh timer -- do NOT auto-pull anything."""
+        """
+        Load the catalog once -- do NOT auto-pull anything and do NOT tick a redraw timer.
+
+        The list is rebuilt only when state actually changes: on refresh (r), after an
+        on-demand download finishes, and after a task has been run. A periodic re-paint
+        (used earlier for background download progress) kept re-emitting `highlighted`
+        events every ~0.4 s and made the right-hand detail pane visibly flicker.
+        """
         self.title = f"hashpass · {self.user}"
         self._reload_catalog()
         # a lazy pool: created only if the student actually asks to run an unready task
         self._pool = ThreadPoolExecutor(max_workers=_DOWN_WORKERS)
-        self.set_interval(_POLL_INTERVAL, self._paint)
 
     def on_unmount(self) -> None:
         """Stop background workers on quit."""
