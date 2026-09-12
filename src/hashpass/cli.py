@@ -1390,10 +1390,14 @@ def _resync(env: Home, url: str, user: str, token: str, io: Io) -> None:
 
 def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY branch + text menu)
     """Student no-arg: full-screen Textual TUI on a TTY, else the plain-text menu below."""
+    # Interactive = launched from the shell (no explicit io from tests / other callers).
+    # Test the io argument itself; `io is _default_io()` would always be False since
+    # `_default_io()` returns a fresh Io on every call.
+    interactive = io is None
     io = io or _default_io()
     url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
-    if io is _default_io():
+    if interactive:
         tty = sys.stdout.isatty() and sys.stdin.isatty()
         try:
             from hashpass.tui import run_tui  # noqa: PLC0415  (optional dep)
