@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import sys
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -255,11 +254,13 @@ class PoolTUI(App):
             if row.state != "готово":
                 self._flash(f"Не удалось загрузить {row.ref}: {row.state}")
                 return
-        from hashpass.cli import Io, cmd_pool_run  # noqa: PLC0415
+        from hashpass.cli import Io, _now_iso, cmd_pool_run  # noqa: PLC0415
         # Silent io: don't let cmd_pool_run's post-run status messages ("решено",
         # "зачтено") flash on the terminal between the task's exit and Textual's
         # alt-screen resume -- the same info is already in the tree after reload.
-        silent = Io(read=lambda _p: None, write=lambda _s: None, clock=time.strftime)
+        # `clock` must be a zero-arg callable returning an ISO stamp -- reuse cli._now_iso;
+        # earlier attempt at `time.strftime` blew up because strftime needs a format string.
+        silent = Io(read=lambda _p: None, write=lambda _s: None, clock=_now_iso)
         with self.suspend():
             self._task_frame_start(row)
             cmd_pool_run(self.env, row.ref, silent)
@@ -285,11 +286,11 @@ class PoolTUI(App):
 
     def action_resync(self) -> None:
         """s: re-submit tasks solved locally but not credited on the server."""
-        from hashpass.cli import Io, _resync  # noqa: PLC0415
+        from hashpass.cli import Io, _now_iso, _resync  # noqa: PLC0415
         buf: list[str] = []
         _resync(self.env, self.url, self.user, self.token,
-                Io(read=lambda _p: None, write=buf.append, clock=time.strftime))
-        self._flash("[green]" + ("\n".join(buf).strip() or "готово") + "[/]")
+                Io(read=lambda _p: None, write=buf.append, clock=_now_iso))
+        self._flash("\n".join(buf).strip() or "готово")
         self._reload_catalog()
 
 
