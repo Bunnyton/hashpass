@@ -1,6 +1,6 @@
 [project]
 name = "hashpass"
-version = "0.2.0"
+version = "0.2.1"
 requires-python = ">=3.13"
 dependencies = ["flask>=3.0", "textual>=1.0"]
 
