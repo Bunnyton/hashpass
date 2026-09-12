@@ -7,7 +7,7 @@ import hashpass.student_cli
 
 @pytest.mark.tier1
 def test_package_imports():
-    assert hashpass.__version__ == "0.2.3"
+    assert hashpass.__version__ == "0.2.4"
 
 
 @pytest.mark.tier1

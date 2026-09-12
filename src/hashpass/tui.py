@@ -1,15 +1,17 @@
 """
 Full-screen Textual TUI for the student pool client (the `hashpass` menu).
 
-Replaces the line-oriented `_render_pool_menu`: a left-hand blocks/tasks list, a right-hand
-task detail card, one **Enter** to run a task, live parallel background downloads with per-task
-state (ожидает / грузится / готово / ошибка), and clean statuses (решено / зачтено) instead
-of the old `★` glyph. Hidden tasks (locked block or per-task hidden) render as "№N · закрыто"
-without the ref -- the student sees the slot but not what it is.
+Left: a `Tree` of blocks -> tasks -- arrows navigate, Enter on a leaf runs it,
+Enter on a block collapses/expands it (native Tree behaviour, nothing to relearn).
+Right: a splash card on empty selection, a rich task-detail card on a highlighted
+task. Statuses are words (решено / зачтено / не начато / грузится). Hidden tasks
+render as "№N · закрыто" without the ref -- the student sees the slot but not
+which task it is. Bindings honour both English AND Russian keyboard layouts, so
+q/й, r/к, s/ы all work regardless of the OS layout.
 
-If the runtime `textual` package isn't installed, `cli.cmd_pool_home` falls back to the plain
-text menu; `run_tui` never raises for that path -- it raises `ImportError` at the top of the
-module before any function is called.
+If the runtime `textual` package isn't installed, `cli.cmd_pool_home` falls back
+to the plain text menu; `run_tui` never raises for that path -- the ImportError
+happens on this module's own import, before any function is called.
 """
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ from typing import TYPE_CHECKING
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.widgets import Footer, Header, ListItem, ListView, Static
+from textual.widgets import Footer, Static, Tree
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.remote import RemoteRegistry
@@ -32,6 +34,22 @@ if TYPE_CHECKING:
     from hashpass.cli import Home
 
 _DOWN_WORKERS = 6            # parallel background downloads
+
+_SPLASH = """\
+[b cyan]hashpass[/]  ·  ваша живая консоль Debian
+
+[dim]Слева — блоки с заданиями. Выберите одно стрелками
+и нажмите [b]Enter[/b] — оно запустится в настоящей консоли.[/]
+
+  ▸ [b]Enter[/]   запустить задание
+  ▸ [b]↑ ↓[/]     навигация
+  ▸ [b]←  →[/]    свернуть / развернуть блок
+  ▸ [b]r[/]       обновить каталог с пула
+  ▸ [b]s[/]       самопроверка (переотправить решённое)
+  ▸ [b]q[/]       выход
+
+[dim]Работают обе раскладки клавиатуры (q/й, r/к, s/ы).[/]
+"""
 
 
 @dataclass
@@ -48,11 +66,6 @@ class TaskRow:
     state: str = "ожидает"          # local download state: ожидает / грузится / готово / ошибка
     hidden: bool = False            # locked to the student: block closed OR per-task hidden
 
-    @property
-    def runnable(self) -> bool:
-        """True when the student can Enter into it (visible and downloaded)."""
-        return not self.hidden and self.state == "готово"
-
     def status_label(self) -> str:
         """One-line right-hand-side label with server verdict + local download progress."""
         if self.hidden:
@@ -67,42 +80,49 @@ class TaskRow:
             return head
         return f"{head} · {self.state}"
 
-
-class _TaskItem(ListItem):
-    """A ListView item that remembers which TaskRow it renders (or None for a block header)."""
-
-    def __init__(self, label: Static, row: TaskRow | None) -> None:
-        super().__init__(label)
-        self.row = row
+    def tree_label(self) -> str:
+        """Render the one-line label as it appears in the tree (Rich markup)."""
+        if self.hidden:
+            return f"[dim]№{self.number} · закрыто[/]"
+        badge = ""
+        if self.server == "passed":
+            badge = "[green]● зачтено[/]"
+        elif self.local:
+            badge = "[yellow]● решено[/]"
+        else:
+            badge = "[dim]○ не начато[/]"
+        state = ""
+        if self.state == "грузится":
+            state = "  [cyan]грузится…[/]"
+        elif self.state == "ошибка":
+            state = "  [red]ошибка[/]"
+        elif self.state == "ожидает" and self.server != "passed" and not self.local:
+            state = ""
+        return f"№{self.number} · {self.ref}   {badge}{state}"
 
 
 class PoolTUI(App):
-    """Full-screen blocks/tasks tree + live downloads + one-Enter run."""
+    """Full-screen blocks/tasks tree + a rich detail card + one-Enter run."""
 
     CSS = """
     Screen { layout: horizontal; }
-    #tasks { width: 44%; border-right: heavy $accent; padding: 0; }
-    #detail { padding: 1 2; }
-    ListView { padding: 0; }
-    ListItem { padding: 0 1; height: 1; }
-    ListItem.-block { color: $accent; text-style: bold; padding-top: 1; }
-    ListItem.-hidden { color: $text-muted; }
-    ListItem.-done { color: $success; }
-    ListItem.-loading { color: $warning; }
-    ListItem.-error { color: $error; }
-    .detail-title { text-style: bold; padding-bottom: 1; }
-    .detail-pill { color: $accent; }
+    #tasks { width: 46%; border-right: heavy $accent-lighten-2; background: $surface; }
+    #detail { padding: 2 3; background: $panel; }
+    Tree { padding: 1 1 1 1; background: $surface; }
+    Tree > .tree--cursor { background: $accent 40%; color: $text; }
+    Tree > .tree--highlight-line { background: $accent 20%; }
     """
 
+    # Textual binds against the character, not the physical key -- a Russian layout
+    # would map Q/R/S to й/к/ы. Bind both plus uppercase; Enter needs no localisation.
     BINDINGS = [   # noqa: RUF012  (Textual expects a plain class-level list)
-        Binding("q", "quit", "Выход"),
-        Binding("r", "refresh", "Обновить"),
-        Binding("s", "resync", "Самопроверка"),
-        Binding("enter", "run", "Запустить"),
+        Binding("q,Q,й,Й", "quit", "Выход"),
+        Binding("r,R,к,К", "refresh", "Обновить"),
+        Binding("s,S,ы,Ы", "resync", "Самопроверка"),
     ]
 
     def __init__(self, env: Home, url: str, user: str, token: str) -> None:
-        """Store credentials and hand-off env; start with an empty rows list."""
+        """Wire creds + env; the rows list stays empty until on_mount reloads."""
         super().__init__()
         self.env = env
         self.url = url
@@ -117,44 +137,37 @@ class PoolTUI(App):
     # -- lifecycle --------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        """Header + horizontal split (tasks | detail) + footer with keybinds."""
-        yield Header(show_clock=False)
+        """Header + horizontal split (Tree | detail Static) + footer with keybinds."""
+        tree: Tree[TaskRow | str] = Tree("Каталог", id="tasks")
+        tree.show_root = False
+        tree.guide_depth = 3
         with Horizontal():
-            yield ListView(id="tasks")
-            yield Static("Выберите задание из списка слева.\n\n[dim]q — выход · r — обновить · s — самопроверка · Enter — запустить[/]",
-                         id="detail")
+            yield tree
+            yield Static(_SPLASH, id="detail", markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
-        """
-        Load the catalog once -- do NOT auto-pull anything and do NOT tick a redraw timer.
-
-        The list is rebuilt only when state actually changes: on refresh (r), after an
-        on-demand download finishes, and after a task has been run. A periodic re-paint
-        (used earlier for background download progress) kept re-emitting `highlighted`
-        events every ~0.4 s and made the right-hand detail pane visibly flicker.
-        """
+        """Load the catalog once; no ticking timer, no background pulls until Enter."""
         self.title = f"hashpass · {self.user}"
         self._reload_catalog()
-        # a lazy pool: created only if the student actually asks to run an unready task
         self._pool = ThreadPoolExecutor(max_workers=_DOWN_WORKERS)
 
     def on_unmount(self) -> None:
-        """Stop background workers on quit."""
+        """Stop the on-demand download pool on quit."""
         if self._pool is not None:
             self._pool.shutdown(wait=False, cancel_futures=True)
 
     # -- data -------------------------------------------------------------
 
     def _reload_catalog(self) -> None:
-        """Fetch catalog + progress + local-solved, then rebuild `self.rows`."""
+        """Fetch catalog + progress + local-solved, rebuild `self.rows`, redraw the tree."""
         from hashpass.cli import (  # noqa: PLC0415  (avoid cycle at module load)
             load_solved,
             task_dir,
         )
         try:
             entries = self.client.catalog(token=self.token)
-        except Exception:                                  # noqa: BLE001 (offline / network -- render empty)
+        except Exception:                                  # noqa: BLE001 (offline)
             entries = []
         solved = load_solved(self.env)
         try:
@@ -180,7 +193,7 @@ class PoolTUI(App):
                 state="готово" if ready else "ожидает", hidden=hidden))
         with self._rows_lock:
             self.rows = rows
-        self._paint()
+        self._paint_tree()
 
     def _download_row(self, row: TaskRow) -> None:
         """Pull the row's image closure + task bundle; update `row.state` transitions."""
@@ -200,111 +213,117 @@ class PoolTUI(App):
 
     # -- render -----------------------------------------------------------
 
-    def _paint(self) -> None:
-        """Rebuild the left ListView from `self.rows`, preserving the highlighted index."""
-        lv = self.query_one("#tasks", ListView)
-        cur = lv.index
-        lv.clear()
-        last_block: str | None = None
+    def _paint_tree(self) -> None:
+        """Rebuild the Tree from `self.rows`, grouping tasks under their block."""
+        tree = self.query_one("#tasks", Tree)
+        tree.clear()
         with self._rows_lock:
             rows_snapshot = list(self.rows)
         if not rows_snapshot:
-            lv.append(_TaskItem(Static("В пуле пока нет заданий."), None))
+            tree.root.add_leaf("[dim]в пуле пока нет заданий[/]")
             return
+        by_block: dict[str, list[TaskRow]] = {}
+        order: list[str] = []
         for row in rows_snapshot:
-            if row.block != last_block:
-                last_block = row.block
-                header = _TaskItem(Static(row.block or "Задания"), None)
-                header.disabled = True
-                header.add_class("-block")
-                lv.append(header)
-            if row.hidden:
-                label = Static(f"№{row.number} · закрыто")
-                item = _TaskItem(label, row)
-                item.add_class("-hidden")
-            else:
-                label = Static(f"№{row.number} · {row.ref}    {row.status_label()}")
-                item = _TaskItem(label, row)
-                if row.state == "ошибка":
-                    item.add_class("-error")
-                elif row.state in {"грузится", "ожидает"}:
-                    item.add_class("-loading")
-                elif row.server == "passed" or row.local:
-                    item.add_class("-done")
-            lv.append(item)
-        if cur is not None and cur < len(lv):
-            lv.index = cur
-
-    def _row_of(self, item: _TaskItem | None) -> TaskRow | None:
-        return item.row if isinstance(item, _TaskItem) else None
+            key = row.block or "Задания"
+            if key not in by_block:
+                by_block[key] = []
+                order.append(key)
+            by_block[key].append(row)
+        for block in order:
+            block_rows = by_block[block]
+            visible_open = sum(1 for r in block_rows if r.state == "готово" and not r.hidden)
+            head = (f"[b cyan]{block}[/]  "
+                    f"[dim]{visible_open}/{len(block_rows)} готово[/]")
+            b_node = tree.root.add(head, expand=True)
+            for row in block_rows:
+                b_node.add_leaf(row.tree_label(), data=row)
+        # focus the tree so arrow keys work immediately
+        tree.focus()
 
     def _update_detail(self, row: TaskRow | None) -> None:
+        """Rich card on the right for the currently-highlighted task (splash if none)."""
         detail = self.query_one("#detail", Static)
         if row is None:
-            detail.update("Выберите задание из списка слева.\n\n"
-                          "[dim]q — выход · r — обновить · s — самопроверка · Enter — запустить[/]")
+            detail.update(_SPLASH)
             return
         if row.hidden:
-            detail.update(f"[b]№{row.number}[/b]\n\n[dim]Задание закрыто преподавателем.[/dim]")
+            detail.update(
+                f"[b]№{row.number}[/]   [dim]{row.block or 'Задания'}[/]\n\n"
+                "[b red]🔒 закрыто[/]\n\n"
+                "[dim]Преподаватель пока не открыл это задание.[/]")
             return
-        state_line = f"Загрузка: [b]{row.state}[/]"
-        server_line = ""
+        # Big status pill
         if row.server == "passed":
-            server_line = "\nПул: [green]зачтено[/]"
-        elif row.server == "failed":
-            server_line = "\nПул: [yellow]не зачтено[/]"
-        local_line = "\nЛокально: [green]решено[/]" if row.local else ""
+            pill = "[b green on black] ● зачтено [/]"
+        elif row.local:
+            pill = "[b yellow on black] ● решено на этой машине [/]"
+        else:
+            pill = "[b white on grey30] ○ не начато [/]"
+        # Download state
+        if row.state == "готово":
+            load = "[green]готово, можно запускать[/]"
+        elif row.state == "грузится":
+            load = "[cyan]грузится…[/]"
+        elif row.state == "ошибка":
+            load = "[red]ошибка загрузки[/]"
+        else:
+            load = "[dim]ещё не загружено — Enter скачает и запустит[/]"
         detail.update(
-            f"[b]№{row.number}[/b]  [dim]{row.block or 'Задания'}[/]\n"
+            f"[b]№{row.number}[/]   [dim]блок «{row.block or 'Задания'}»[/]\n"
             f"[b cyan]{row.ref}[/]\n\n"
-            f"{state_line}{server_line}{local_line}\n\n"
-            "[dim]Enter — запустить · q — выход · r — обновить[/]")
+            f"{pill}\n\n"
+            f"Локально: {load}\n\n"
+            "[dim]────────────────────────────────[/]\n"
+            "[b]Enter[/] — запустить задание\n"
+            "[dim]r — обновить · s — самопроверка · q — выход[/]")
+
+    def _flash(self, msg: str) -> None:
+        """Overwrite the detail pane with a one-shot status (auto-clears on next highlight)."""
+        self.query_one("#detail", Static).update(msg or _SPLASH)
 
     # -- events -----------------------------------------------------------
 
-    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
-        """Highlighted item -> refresh the right-hand detail panel."""
-        self._update_detail(self._row_of(event.item))
+    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Show the task detail on the right whenever the highlight moves."""
+        row = event.node.data if isinstance(event.node.data, TaskRow) else None
+        self._update_detail(row)
 
-    def action_refresh(self) -> None:
-        """Reload the catalog. Do not touch downloads -- those wait for Enter on a row."""
-        self._reload_catalog()
-
-    def action_resync(self) -> None:
-        """Re-submit tasks solved locally but not credited on the server (self-check)."""
-        from hashpass.cli import Io, _resync  # noqa: PLC0415
-        buf: list[str] = []
-        _resync(self.env, self.url, self.user, self.token,
-                Io(read=lambda _p: None, write=buf.append, clock=time.strftime))
-        self._flash("\n".join(buf).strip())
-        self._reload_catalog()
-
-    def action_run(self) -> None:
-        """Enter: download this task on-demand if needed (visible progress), then run it."""
-        lv = self.query_one("#tasks", ListView)
-        item = lv.highlighted_child
-        row = self._row_of(item)
-        if row is None or row.hidden:
-            self._flash("Выберите доступное задание.")
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Enter on a task -> download-if-needed + run. Enter on a block -> Tree toggles it."""
+        row = event.node.data if isinstance(event.node.data, TaskRow) else None
+        if row is None:
+            return                                 # let Tree's own expand/collapse fire
+        if row.hidden:
+            self._flash("[yellow]Это задание закрыто преподавателем.[/]")
             return
         if row.state != "готово":
-            # download only THIS task (and its closure), never the whole catalog
-            self._flash(f"Загружаю {row.ref}…  (прогресс на строке слева)")
+            self._flash(f"[cyan]Загружаю {row.ref}…[/]  [dim](без сети — займёт несколько секунд)[/]")
+            self.refresh()
             self._download_row(row)
             if row.state != "готово":
-                self._flash(f"Не удалось загрузить {row.ref}: {row.state}")
+                self._flash(f"[red]Не удалось загрузить {row.ref}: {row.state}[/]")
                 return
         from hashpass.cli import cmd_pool_run  # noqa: PLC0415
         with self.suspend():
             cmd_pool_run(self.env, row.ref)
         self._reload_catalog()
 
-    def _flash(self, msg: str) -> None:
-        """Show a one-shot status message in the detail pane (auto-clears on next highlight)."""
-        self.query_one("#detail", Static).update(msg or "")
+    def action_refresh(self) -> None:
+        """r: reload the catalog. Nothing downloads here -- Enter on a row does that."""
+        self._reload_catalog()
+
+    def action_resync(self) -> None:
+        """s: re-submit tasks solved locally but not credited on the server."""
+        from hashpass.cli import Io, _resync  # noqa: PLC0415
+        buf: list[str] = []
+        _resync(self.env, self.url, self.user, self.token,
+                Io(read=lambda _p: None, write=buf.append, clock=time.strftime))
+        self._flash("[green]" + ("\n".join(buf).strip() or "готово") + "[/]")
+        self._reload_catalog()
 
 
 def run_tui(env: Home, url: str, user: str, token: str) -> int:
-    """Enter the Textual app; on quit, return 0. Errors bubble up so `cmd_pool_home` can fall back."""
+    """Enter the Textual app; on quit, return 0. Errors bubble up so cmd_pool_home can fall back."""
     PoolTUI(env, url, user, token).run()
     return 0
