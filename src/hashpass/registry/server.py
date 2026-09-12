@@ -282,7 +282,14 @@ class PoolServer:
         auth = request.headers.get("Authorization", "")
         if not auth.startswith(_BEARER):
             return None
-        return verify_token(self.secret, auth[len(_BEARER):], now=time.time())
+        user = verify_token(self.secret, auth[len(_BEARER):], now=time.time())
+        # The HMAC token is valid till its expiry regardless of whether the account still
+        # exists.  If an admin deleted the user, we treat the token as unauthenticated so
+        # `/submit`, `/catalog`, `/progress`, `/me` etc. all refuse and no progress gets
+        # written for a ghost login.
+        if user is None or not self.users.has(user):
+            return None
+        return user
 
     def _auth_role(self, roles: tuple[str, ...]) -> tuple[str | None, HTTPStatus | None]:
         """Return (user, None) if the bearer token maps to a user in `roles`, else (None, 401/403)."""
@@ -297,7 +304,12 @@ class PoolServer:
         token = request.cookies.get("hp_session")
         if not token:
             return None
-        return verify_token(self.secret, token, now=time.time())
+        user = verify_token(self.secret, token, now=time.time())
+        # Same guard as `_token_user`: a cookie session for a deleted account
+        # is treated as no session -- every `/web/*` route redirects to /web/login.
+        if user is None or not self.users.has(user):
+            return None
+        return user
 
     def _session_role(self, roles: tuple[str, ...]) -> str | None:
         user = self._session_user()
