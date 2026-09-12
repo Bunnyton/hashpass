@@ -38,12 +38,12 @@ _DOWN_WORKERS = 6            # parallel background downloads
 _SPLASH = """\
 [b cyan]hashpass[/]  ·  ваша живая консоль Debian
 
-[dim]Слева — блоки с заданиями. Выберите одно стрелками
-и нажмите [b]Enter[/b] — оно запустится в настоящей консоли.[/]
+[dim]Слева — блоки с заданиями. Выберите стрелками
+и нажмите [b]Enter[/b] — задание запустится в настоящей консоли,
+блок — свернётся или развернётся.[/]
 
-  ▸ [b]Enter[/]   запустить задание
-  ▸ [b]↑ ↓[/]     навигация
-  ▸ [b]←  →[/]    свернуть / развернуть блок
+  ▸ [b]Enter[/]   запустить задание · свернуть/развернуть блок
+  ▸ [b]↑ ↓[/]     навигация по дереву
   ▸ [b]r[/]       обновить каталог с пула
   ▸ [b]s[/]       самопроверка (переотправить решённое)
   ▸ [b]q[/]       выход
@@ -290,10 +290,13 @@ class PoolTUI(App):
         self._update_detail(row)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
-        """Enter on a task -> download-if-needed + run. Enter on a block -> Tree toggles it."""
+        """Enter on a task -> download-if-needed + run. Enter on a block -> collapse/expand it."""
         row = event.node.data if isinstance(event.node.data, TaskRow) else None
         if row is None:
-            return                                 # let Tree's own expand/collapse fire
+            # block header: toggle expand/collapse explicitly so Enter feels intuitive
+            # (Tree.NodeSelected fires but Textual doesn't toggle on its own here)
+            event.node.toggle()
+            return
         if row.hidden:
             self._flash("[yellow]Это задание закрыто преподавателем.[/]")
             return

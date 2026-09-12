@@ -9,7 +9,7 @@ import pytest
 def test_shell_captures_last_cmd_and_output(tmp_path):
     root = tmp_path
     (root / ".hash").mkdir()
-    shell = Path("runtime/usr/bin/hash").read_text(encoding="utf-8")
+    shell = Path("src/hashpass/runtime/usr/bin/hash").read_text(encoding="utf-8")
     (root / "hash").write_text(shell, encoding="utf-8")
     (root / "hash").chmod(0o755)
     # прогоняем shell, скармливая команды на stdin
@@ -29,7 +29,7 @@ def test_shell_captures_last_cmd_and_output(tmp_path):
 def test_shell_captures_last_cmd_and_transcript_log(tmp_path):
     root = tmp_path
     (root / ".hash").mkdir()
-    shell = Path("runtime/usr/bin/hash").read_text(encoding="utf-8")
+    shell = Path("src/hashpass/runtime/usr/bin/hash").read_text(encoding="utf-8")
     (root / "hash").write_text(shell, encoding="utf-8")
     (root / "hash").chmod(0o755)
     subprocess.run(

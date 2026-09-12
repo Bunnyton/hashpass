@@ -1,6 +1,6 @@
 [project]
 name = "hashpass"
-version = "0.2.4"
+version = "0.2.5"
 requires-python = ">=3.13"
 dependencies = ["flask>=3.0", "textual>=1.0"]
 
@@ -15,11 +15,23 @@ hashengine = "hashengine.cli:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+# include everything git-tracked as package data (safe: git ls-files sees dotfiles too);
+# this is why the runtime overlay (src/hashpass/runtime/, incl. .hash/.keep) ships in the wheel.
+include-package-data = true
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 "hashpass.registry" = ["templates/*.html.j2", "static/*.css", "static/*.js"]
+# Belt-and-suspenders: explicit patterns for the runtime overlay in case setuptools
+# ever changes what include-package-data covers.
+"hashpass" = [
+    "runtime/**/*",
+    "runtime/**/.*",
+    "runtime/.hash/.keep",
+]
 
 
 [tool.pytest.ini_options]

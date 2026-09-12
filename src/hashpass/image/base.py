@@ -1,7 +1,11 @@
 import subprocess
 from pathlib import Path
 
-_RUNTIME = Path(__file__).resolve().parents[3] / "runtime"
+# Runtime lives INSIDE the hashpass package (src/hashpass/runtime/) so it ships with
+# `pip install`.  parents[1] is the `hashpass` package root; that works both for a
+# git-checkout run and for a site-packages install (which stops at
+# .../python3.NN/site-packages/hashpass/, not at the whole site-packages).
+_RUNTIME = Path(__file__).resolve().parents[1] / "runtime"
 _SYSTEMD_INSTALL = (
     # chown 0:0 / first: the base dir is created by the unprivileged builder (uid 1000) while
     # its extracted contents are root-owned; systemd's postinst tmpfiles refuses that "unsafe
