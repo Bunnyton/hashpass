@@ -15,6 +15,7 @@ happens on this module's own import, before any function is called.
 """
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -309,8 +310,23 @@ class PoolTUI(App):
                 return
         from hashpass.cli import cmd_pool_run  # noqa: PLC0415
         with self.suspend():
+            self._task_frame_start(row)
             cmd_pool_run(self.env, row.ref)
+        # Textual's alt-screen buffer resumes on __exit__ — TUI is instantly back
         self._reload_catalog()
+
+    @staticmethod
+    def _task_frame_start(row: TaskRow) -> None:
+        """Clear the screen and print a thin ANSI banner before the task's own console starts."""
+        title = f"№{row.number}  ·  {row.ref}  ·  блок «{row.block or 'Задания'}»"
+        bar = "─" * min(len(title) + 4, 78)
+        sys.stdout.write("\x1b[2J\x1b[H")                      # clear + home
+        sys.stdout.write(f"\x1b[1;36m╭{bar}╮\x1b[0m\n")
+        sys.stdout.write(f"\x1b[1;36m│\x1b[0m  \x1b[1m{title}\x1b[0m"
+                         + " " * max(0, len(bar) - len(title) - 2)
+                         + "\x1b[1;36m│\x1b[0m\n")
+        sys.stdout.write(f"\x1b[1;36m╰{bar}╯\x1b[0m\n\n")
+        sys.stdout.flush()
 
     def action_refresh(self) -> None:
         """r: reload the catalog. Nothing downloads here -- Enter on a row does that."""

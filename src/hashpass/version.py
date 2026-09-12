@@ -10,7 +10,7 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
-__version__ = "0.2.5"  # bump this AND pyproject, then tag a GitHub release, to ship an update
+__version__ = "0.2.6"  # bump this AND pyproject, then tag a GitHub release, to ship an update
 
 _REPO = "Bunnyton/hashpass"
 _LATEST_URL = f"https://api.github.com/repos/{_REPO}/releases/latest"
