@@ -127,13 +127,11 @@ class PoolTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        """Load the catalog, start background workers, and start the polling refresh timer."""
+        """Load the catalog and start the refresh timer -- do NOT auto-pull anything."""
         self.title = f"hashpass · {self.user}"
         self._reload_catalog()
+        # a lazy pool: created only if the student actually asks to run an unready task
         self._pool = ThreadPoolExecutor(max_workers=_DOWN_WORKERS)
-        for row in list(self.rows):
-            if not row.hidden and row.state != "готово":
-                self._pool.submit(self._download_row, row)
         self.set_interval(_POLL_INTERVAL, self._paint)
 
     def on_unmount(self) -> None:
@@ -264,12 +262,8 @@ class PoolTUI(App):
         self._update_detail(self._row_of(event.item))
 
     def action_refresh(self) -> None:
-        """Reload catalog + re-queue any missing downloads."""
+        """Reload the catalog. Do not touch downloads -- those wait for Enter on a row."""
         self._reload_catalog()
-        if self._pool is not None:
-            for row in list(self.rows):
-                if not row.hidden and row.state == "ожидает":
-                    self._pool.submit(self._download_row, row)
 
     def action_resync(self) -> None:
         """Re-submit tasks solved locally but not credited on the server (self-check)."""
@@ -281,7 +275,7 @@ class PoolTUI(App):
         self._reload_catalog()
 
     def action_run(self) -> None:
-        """Suspend Textual, hand the terminal to `cmd_pool_run`, then resume."""
+        """Enter: download this task on-demand if needed (visible progress), then run it."""
         lv = self.query_one("#tasks", ListView)
         item = lv.highlighted_child
         row = self._row_of(item)
@@ -289,8 +283,12 @@ class PoolTUI(App):
             self._flash("Выберите доступное задание.")
             return
         if row.state != "готово":
-            self._flash(f"Задание ещё {row.state}, подождите загрузки.")
-            return
+            # download only THIS task (and its closure), never the whole catalog
+            self._flash(f"Загружаю {row.ref}…  (прогресс на строке слева)")
+            self._download_row(row)
+            if row.state != "готово":
+                self._flash(f"Не удалось загрузить {row.ref}: {row.state}")
+                return
         from hashpass.cli import cmd_pool_run  # noqa: PLC0415
         with self.suspend():
             cmd_pool_run(self.env, row.ref)

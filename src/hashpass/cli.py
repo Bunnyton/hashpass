@@ -1397,12 +1397,12 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
         try:
             from hashpass.tui import run_tui  # noqa: PLC0415  (optional dep)
         except ImportError:
-            io.write("\x1b[2m(пакет textual не установлен, использую текстовый режим)\x1b[0m\n")
+            io.write("\x1b[33m⚠ textual не установлен — открываю текстовое меню.\x1b[0m\n"
+                     "\x1b[2m  Полноэкранный интерфейс включится после установки:\n"
+                     "  pip install --user --break-system-packages textual\x1b[0m\n")
         else:
             return run_tui(env, url, user, token)
-    layers, tasks = pull_new(env, url, token)
-    if layers or tasks:
-        io.write(f"\x1b[2m↓ подтянуто: слоёв {layers}, заданий {tasks}\x1b[0m\n")
+    # No blocking pull at startup — a task's image is fetched on demand by cmd_pool_run.
     while True:
         rows = pool_status(env, url, token, user)
         if not rows:
@@ -1414,8 +1414,7 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
         if choice in ("q", "quit", "exit", "выход"):
             return 0
         if choice == "":
-            pull_new(env, url, token)
-            continue
+            continue   # refresh the status view; downloads are per-task on demand
         if choice == "s":
             _resync(env, url, user, token, io)
             continue
@@ -1459,7 +1458,11 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
         return 0
     store = ImageStore(env.images)
     if not store.exists(ref):
-        pull_new(env, url, token)
+        # Fetch just THIS ref (and its closure), not the whole catalog -- nothing else downloads.
+        RemoteRegistry(url).pull_many([ref], store, workers=4)
+        tdir = task_dir(ref, store)
+        if not tdir.exists():
+            RemoteRegistry(url).pull_task(ref, tdir, token=token)
 
     def _submit(completed: bool, history: list[dict[str, object]]) -> None:  # noqa: FBT001
         if not completed:
