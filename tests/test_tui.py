@@ -81,14 +81,16 @@ def test_tui_boots_with_tree_of_blocks_and_tasks(tmp_path: Path) -> None:
 
 @pytest.mark.tier1
 def test_task_row_status_labels() -> None:
-    """A TaskRow computes the right one-line status labels across states."""
+    """A TaskRow computes the right two-badge status across states (local × server)."""
     r = TaskRow(ref="a:1", number=1, block="B", available=True, digest="")
-    assert r.status_label() == "не начато · ожидает"
+    assert r.status_label() == "не решено · не зачтено · ожидает"
     r.state = "готово"
-    assert r.status_label() == "не начато"
+    assert r.status_label() == "не решено · не зачтено"
     r.local = True
-    assert r.status_label() == "решено"
+    assert r.status_label() == "решено · не зачтено"      # locally done, pool hasn't credited
     r.server = "passed"
-    assert r.status_label() == "зачтено"
+    assert r.status_label() == "решено · зачтено"         # both -- fully done
+    r.local = False
+    assert r.status_label() == "не решено · зачтено"      # server credit only (done elsewhere)
     r.hidden = True
     assert r.status_label() == "закрыто"

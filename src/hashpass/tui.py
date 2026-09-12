@@ -24,8 +24,7 @@ from typing import TYPE_CHECKING
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
-from textual.widgets import Footer, Static, Tree
+from textual.widgets import Footer, Tree
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.remote import RemoteRegistry
@@ -35,22 +34,6 @@ if TYPE_CHECKING:
     from hashpass.cli import Home
 
 _DOWN_WORKERS = 6            # parallel background downloads
-
-_SPLASH = """\
-[b cyan]hashpass[/]  ·  ваша живая консоль Debian
-
-[dim]Слева — блоки с заданиями. Выберите стрелками
-и нажмите [b]Enter[/b] — задание запустится в настоящей консоли,
-блок — свернётся или развернётся.[/]
-
-  ▸ [b]Enter[/]   запустить задание · свернуть/развернуть блок
-  ▸ [b]↑ ↓[/]     навигация по дереву
-  ▸ [b]r[/]       обновить каталог с пула
-  ▸ [b]s[/]       самопроверка (переотправить решённое)
-  ▸ [b]q[/]       выход
-
-[dim]Работают обе раскладки клавиатуры (q/й, r/к, s/ы).[/]
-"""
 
 
 @dataclass
@@ -68,48 +51,44 @@ class TaskRow:
     hidden: bool = False            # locked to the student: block closed OR per-task hidden
 
     def status_label(self) -> str:
-        """One-line right-hand-side label with server verdict + local download progress."""
+        """One-line status without Rich markup (used by tests / plain-text callers)."""
         if self.hidden:
             return "закрыто"
-        if self.server == "passed":
-            head = "зачтено"
-        elif self.local:
-            head = "решено"
-        else:
-            head = "не начато"
+        parts = []
+        parts.append("решено" if self.local else "не решено")
+        parts.append("зачтено" if self.server == "passed" else "не зачтено")
+        head = " · ".join(parts)
         if self.state == "готово":
             return head
         return f"{head} · {self.state}"
 
     def tree_label(self) -> str:
-        """Render the one-line label as it appears in the tree (Rich markup)."""
+        """
+        Two badges -- `решено` (local, this machine) and `зачтено` (server credited).
+
+        The user pointed out these are distinct states: a task can be solved locally
+        (marked in `solved.json`) but still not credited on the pool (network fail,
+        digest mismatch, teacher-side digest bump), and, less often, the pool can
+        show `зачтено` without a local mark (done on another machine). Show both.
+        """
         if self.hidden:
             return f"[dim]№{self.number} · закрыто[/]"
-        badge = ""
-        if self.server == "passed":
-            badge = "[green]● зачтено[/]"
-        elif self.local:
-            badge = "[yellow]● решено[/]"
-        else:
-            badge = "[dim]○ не начато[/]"
-        state = ""
+        local_dot = "[green]●[/] решено" if self.local else "[dim]○ не решено[/]"
+        server_dot = "[green]●[/] зачтено" if self.server == "passed" else "[dim]○ не зачтено[/]"
+        tail = f"   {local_dot}   {server_dot}"
         if self.state == "грузится":
-            state = "  [cyan]грузится…[/]"
+            tail += "   [cyan]· грузится[/]"
         elif self.state == "ошибка":
-            state = "  [red]ошибка[/]"
-        elif self.state == "ожидает" and self.server != "passed" and not self.local:
-            state = ""
-        return f"№{self.number} · {self.ref}   {badge}{state}"
+            tail += "   [red]· ошибка[/]"
+        return f"№{self.number} · {self.ref}{tail}"
 
 
 class PoolTUI(App):
     """Full-screen blocks/tasks tree + a rich detail card + one-Enter run."""
 
     CSS = """
-    Screen { layout: horizontal; }
-    #tasks { width: 46%; border-right: heavy $accent-lighten-2; background: $surface; }
-    #detail { padding: 2 3; background: $panel; }
-    Tree { padding: 1 1 1 1; background: $surface; }
+    Screen { background: $surface; }
+    Tree { padding: 1 2; background: $surface; }
     Tree > .tree--cursor { background: $accent 40%; color: $text; }
     Tree > .tree--highlight-line { background: $accent 20%; }
     """
@@ -138,20 +117,28 @@ class PoolTUI(App):
     # -- lifecycle --------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        """Header + horizontal split (Tree | detail Static) + footer with keybinds."""
+        """
+        Just the Tree (full screen) + Footer with the key legend.
+
+        There is no separate detail pane: everything the student needs -- number,
+        ref, credit status, download state -- lives in each row's own label. That
+        removes the previous "left says зачтено, right says не начато" desync
+        window (the right pane wasn't repainted after a reload) and, per the
+        user, "уберём рассинхронизацию".
+        """
         tree: Tree[TaskRow | str] = Tree("Каталог", id="tasks")
         tree.show_root = False
         tree.guide_depth = 3
-        with Horizontal():
-            yield tree
-            yield Static(_SPLASH, id="detail", markup=True)
+        yield tree
         yield Footer()
 
     def on_mount(self) -> None:
-        """Load the catalog once; no ticking timer, no background pulls until Enter."""
+        """Load the catalog once; welcome the student; no ticking timer, no background pulls."""
         self.title = f"hashpass · {self.user}"
         self._reload_catalog()
         self._pool = ThreadPoolExecutor(max_workers=_DOWN_WORKERS)
+        # Textual toast in the corner -- friendly hello, not a modal
+        self.notify(f"Добро пожаловать, {self.user}!", severity="information", timeout=4)
 
     def on_unmount(self) -> None:
         """Stop the on-demand download pool on quit."""
@@ -242,53 +229,12 @@ class PoolTUI(App):
         # focus the tree so arrow keys work immediately
         tree.focus()
 
-    def _update_detail(self, row: TaskRow | None) -> None:
-        """Rich card on the right for the currently-highlighted task (splash if none)."""
-        detail = self.query_one("#detail", Static)
-        if row is None:
-            detail.update(_SPLASH)
-            return
-        if row.hidden:
-            detail.update(
-                f"[b]№{row.number}[/]   [dim]{row.block or 'Задания'}[/]\n\n"
-                "[b red]🔒 закрыто[/]\n\n"
-                "[dim]Преподаватель пока не открыл это задание.[/]")
-            return
-        # Big status pill
-        if row.server == "passed":
-            pill = "[b green on black] ● зачтено [/]"
-        elif row.local:
-            pill = "[b yellow on black] ● решено на этой машине [/]"
-        else:
-            pill = "[b white on grey30] ○ не начато [/]"
-        # Download state
-        if row.state == "готово":
-            load = "[green]готово, можно запускать[/]"
-        elif row.state == "грузится":
-            load = "[cyan]грузится…[/]"
-        elif row.state == "ошибка":
-            load = "[red]ошибка загрузки[/]"
-        else:
-            load = "[dim]ещё не загружено — Enter скачает и запустит[/]"
-        detail.update(
-            f"[b]№{row.number}[/]   [dim]блок «{row.block or 'Задания'}»[/]\n"
-            f"[b cyan]{row.ref}[/]\n\n"
-            f"{pill}\n\n"
-            f"Локально: {load}\n\n"
-            "[dim]────────────────────────────────[/]\n"
-            "[b]Enter[/] — запустить задание\n"
-            "[dim]r — обновить · s — самопроверка · q — выход[/]")
-
     def _flash(self, msg: str) -> None:
-        """Overwrite the detail pane with a one-shot status (auto-clears on next highlight)."""
-        self.query_one("#detail", Static).update(msg or _SPLASH)
+        """One-shot toast in the corner (no detail pane to overwrite any more)."""
+        if msg:
+            self.notify(msg, timeout=3)
 
     # -- events -----------------------------------------------------------
-
-    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
-        """Show the task detail on the right whenever the highlight moves."""
-        row = event.node.data if isinstance(event.node.data, TaskRow) else None
-        self._update_detail(row)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         """Enter on a task -> download-if-needed + run. Enter on a block -> collapse/expand it."""
@@ -299,19 +245,24 @@ class PoolTUI(App):
             event.node.toggle()
             return
         if row.hidden:
-            self._flash("[yellow]Это задание закрыто преподавателем.[/]")
+            self._flash("Задание закрыто преподавателем")
             return
         if row.state != "готово":
-            self._flash(f"[cyan]Загружаю {row.ref}…[/]  [dim](без сети — займёт несколько секунд)[/]")
+            self._flash(f"Загружаю {row.ref}…")
             self.refresh()
             self._download_row(row)
+            self._paint_tree()   # let the row label reflect the new state
             if row.state != "готово":
-                self._flash(f"[red]Не удалось загрузить {row.ref}: {row.state}[/]")
+                self._flash(f"Не удалось загрузить {row.ref}: {row.state}")
                 return
-        from hashpass.cli import cmd_pool_run  # noqa: PLC0415
+        from hashpass.cli import Io, cmd_pool_run  # noqa: PLC0415
+        # Silent io: don't let cmd_pool_run's post-run status messages ("решено",
+        # "зачтено") flash on the terminal between the task's exit and Textual's
+        # alt-screen resume -- the same info is already in the tree after reload.
+        silent = Io(read=lambda _p: None, write=lambda _s: None, clock=time.strftime)
         with self.suspend():
             self._task_frame_start(row)
-            cmd_pool_run(self.env, row.ref)
+            cmd_pool_run(self.env, row.ref, silent)
         # Textual's alt-screen buffer resumes on __exit__ — TUI is instantly back
         self._reload_catalog()
 
@@ -343,6 +294,8 @@ class PoolTUI(App):
 
 
 def run_tui(env: Home, url: str, user: str, token: str) -> int:
-    """Enter the Textual app; on quit, return 0. Errors bubble up so cmd_pool_home can fall back."""
+    """Enter the Textual app; on quit print a friendly goodbye. Errors bubble up."""
     PoolTUI(env, url, user, token).run()
+    sys.stdout.write(f"\n\x1b[36mДо скорой встречи, {user}!\x1b[0m\n")
+    sys.stdout.flush()
     return 0
