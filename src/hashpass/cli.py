@@ -1393,7 +1393,8 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
     io = io or _default_io()
     url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
-    if sys.stdout.isatty() and sys.stdin.isatty() and io is _default_io():
+    if io is _default_io():
+        tty = sys.stdout.isatty() and sys.stdin.isatty()
         try:
             from hashpass.tui import run_tui  # noqa: PLC0415  (optional dep)
         except ImportError:
@@ -1401,7 +1402,10 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
                      "\x1b[2m  Полноэкранный интерфейс включится после установки:\n"
                      "  pip install --user --break-system-packages textual\x1b[0m\n")
         else:
-            return run_tui(env, url, user, token)
+            if tty:
+                return run_tui(env, url, user, token)
+            io.write("\x1b[33m⚠ stdin/stdout не терминал — TUI требует TTY. "
+                     "Текстовое меню ниже.\x1b[0m\n")
     # No blocking pull at startup — a task's image is fetched on demand by cmd_pool_run.
     while True:
         rows = pool_status(env, url, token, user)
