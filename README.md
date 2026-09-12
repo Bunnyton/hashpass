@@ -30,7 +30,7 @@ hashpass — платформа для интерактивных заданий
 1. Установка (главная страница пула показывает эти три шага):
    ```bash
    sudo apt update
-   sudo apt install -y curl git
+   sudo apt install -y curl git python3-pip
    curl -fsSL https://<адрес-пула>/install.sh | bash
    ```
    Скрипт ставит `hashpass` и запоминает адрес пула. При первом запуске — регистрация (логин, ФИО,

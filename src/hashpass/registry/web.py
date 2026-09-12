@@ -31,7 +31,11 @@ if [ -n "$missing" ]; then
   echo "установите их и повторите, напр.:  sudo apt install -y$missing" >&2
   exit 1
 fi
-python3 -m pip install --user --break-system-packages "git+https://github.com/__REPO__@main"
+# `--upgrade`: pull the latest main (and re-resolve deps like textual) even when
+# some version of hashpass is already installed. `--upgrade-strategy eager` also
+# refreshes transitive deps to whatever pyproject now asks for.
+python3 -m pip install --user --break-system-packages --upgrade --upgrade-strategy eager \\
+    "git+https://github.com/__REPO__@main"
 mkdir -p "$HOME/.hashpass"
 printf '{"url": "%s", "user": ""}\\n' "$POOL" > "$HOME/.hashpass/pool.json"
 __EXTRA__
