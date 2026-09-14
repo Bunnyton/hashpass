@@ -991,12 +991,20 @@ def _login_or_register(env: Home, url: str, user: str, io: Io) -> None:
 def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
     """Resolve the registry and ensure a cached token, prompting for login inline if there is none."""
     url = _prompt_registry(env, registry, io)
-    if _pool_token(env, url) is None:
+    if _pool_token(env, url) is not None:
+        return url
+    # Reuse the login remembered in pool.json (or in the pending build-session) if we have one --
+    # the author has already typed it once during `hashengine build`, no need to ask again per task.
+    remembered = str(load_pool(env).get("user", "")).strip()
+    if remembered:
+        io.write(f"логин \x1b[36m{remembered}\x1b[0m (из pool.json), нужен только пароль:\n")
+        user = remembered
+    else:
         user = (io.read("логин: ") or "").strip()
         if not user:
             msg = "логин обязателен"
             raise RuntimeError(msg)
-        _login_or_register(env, url, user, io)
+    _login_or_register(env, url, user, io)
     return url
 
 

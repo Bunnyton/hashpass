@@ -51,10 +51,22 @@ TASKS=(
     first-steps grep-hunt inventory fruit-store proc-audit showcase
 )
 USER_LOGIN="${HASHPASS_USER:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("user",""))' 2>/dev/null || true)}"
+POOL_URL="${HASHPASS_POOL:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("url",""))' 2>/dev/null || true)}"
 
 if [[ -z "$USER_LOGIN" ]]; then
     echo "нужен логин: HASHPASS_USER=... ./deploy.sh, либо предварительно  hashengine login" >&2
     exit 1
+fi
+
+# Пре-логин на пул: закэшируем bearer-токен один раз, чтобы дальнейшие 28 push-ей
+# не спрашивали пароль на каждой итерации. Даже если токен уже свежий -- hashengine
+# login просто перезапишет его и никого не побеспокоит (пароль спрашивается один раз).
+if [[ -z "$DRY" ]]; then
+    echo "── единоразовый вход на пул ($POOL_URL) от имени $USER_LOGIN ──"
+    hashengine login "$POOL_URL" || {
+        echo "вход на пул не удался — деплой прерван" >&2
+        exit 1
+    }
 fi
 
 for name in "${TASKS[@]}"; do
