@@ -995,21 +995,30 @@ def _login_or_register(env: Home, url: str, user: str, io: Io) -> None:
 
 
 def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
-    """Resolve the registry and ensure a cached token, prompting for login inline if there is none."""
+    """
+    Resolve the registry and ensure a live cached token; prompt only when actually needed.
+
+    Fast path: cached token AND `/me` returns the profile -> no prompts.
+    Cached token but account gone -> drop token, forget the login hint, fall through.
+    No token: pick the login from `pool.json.user` if we have it (silently), else ask
+    it once, then let `_login_or_register` decide -- register-directly for a fresh login,
+    password-only for an existing one.
+    """
     url = _prompt_registry(env, registry, io)
-    if _pool_token(env, url) is not None:
-        return url
-    # Reuse the login remembered in pool.json (or in the pending build-session) if we have one --
-    # the author has already typed it once during `hashengine build`, no need to ask again per task.
+    token = _pool_token(env, url)
+    if token is not None:
+        if _pool_account_alive(url, token) is not False:
+            return url                                                # valid or offline -> use cache
+        # Server rejected the token (account deleted).  Clear it and the login hint so we
+        # fall into the register flow below without dragging a dead user around.
+        io.write("\x1b[33m⚠ Аккаунт на пуле не найден — регистрируем заново.\x1b[0m\n")
+        CredentialCache(env.creds).forget(url)
+        save_pool(env, url, "")
     remembered = str(load_pool(env).get("user", "")).strip()
-    if remembered:
-        io.write(f"логин \x1b[36m{remembered}\x1b[0m (из pool.json), нужен только пароль:\n")
-        user = remembered
-    else:
-        user = (io.read("логин: ") or "").strip()
-        if not user:
-            msg = "логин обязателен"
-            raise RuntimeError(msg)
+    user = remembered or (io.read("логин: ") or "").strip()
+    if not user:
+        msg = "логин обязателен"
+        raise RuntimeError(msg)
     _login_or_register(env, url, user, io)
     return url
 
@@ -1212,17 +1221,14 @@ def cmd_pool_login(env: Home, pool_url: str | None = None, io: Io | None = None)
 def _register_interactive(client: RemoteRegistry, user: str, io: Io,
                           *, password: str | None = None) -> None:
     """
-    Offer registration after a failed login: group + optional comment + password.
+    Register the given login: group + optional comment + password.
 
-    If `password` is given (e.g. the one the student just typed at the login prompt),
-    reuse it -- no second prompt.  If the server rejects it as too weak, fall back to
-    the full `_prompt_new_password` dialog with the strength policy.
+    No Y/N confirm -- if we got here, the caller already knows the account doesn't
+    exist and wants it created.  `password` (if given, e.g. the one just typed at
+    the login prompt) is tried first; if the server rejects it as too weak, we
+    fall back to the full `_prompt_new_password` dialog.
     """
-    ans = (io.read(f"Пользователь «{user}» не найден. Зарегистрироваться? [Enter — да, n — нет]: ")
-           or "").strip().lower()
-    if ans in ("n", "no", "нет"):
-        msg = "вход отменён"
-        raise RuntimeError(msg)
+    io.write(f"\x1b[36mРегистрирую нового пользователя «{user}» на пуле.\x1b[0m\n")
     group = (io.read("группа (необязательно, напр. ИУ7-31): ") or "").strip()
     comment = (io.read("комментарий (необязательно): ") or "").strip()
     while True:
