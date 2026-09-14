@@ -40,7 +40,7 @@ def test_bundled_taskfile_parses(task_dir: Path) -> None:
 
 def _collect_files(recipe) -> set[str]:
     """Every file name referenced by `read`/`exec` in intro/outro and per-stage voice."""
-    from hashpass.recipe.model import ExecAction, ReadAction   # local import: tier1 module
+    from hashpass.recipe.model import ExecAction, ReadAction  # noqa: PLC0415
     out: set[str] = set()
     def _grab(action: object) -> None:
         if isinstance(action, ReadAction):

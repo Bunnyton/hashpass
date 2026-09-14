@@ -1027,6 +1027,9 @@ def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> i
     except urllib.error.URLError as exc:
         io.write(f"вход не выполнен: {exc}\n")
         return 1
+    except RuntimeError as exc:
+        io.write(f"{exc}\n")
+        return 1
     return 0
 
 

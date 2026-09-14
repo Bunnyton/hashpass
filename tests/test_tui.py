@@ -60,7 +60,7 @@ def test_tui_boots_with_tree_of_blocks_and_tasks(tmp_path: Path) -> None:
         app._download_row = lambda _row: None  # noqa: SLF001
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()   # let on_mount run
-            from textual.widgets import Tree                # noqa: PLC0415
+            from textual.widgets import Tree  # noqa: PLC0415
             tree = app.query_one("#tasks", Tree)
             # two block nodes under root
             block_nodes = list(tree.root.children)
