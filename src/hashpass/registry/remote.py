@@ -154,6 +154,13 @@ class RemoteRegistry:
         self._cache_token(token)
         return token
 
+    def user_exists(self, user: str) -> bool:
+        """Return whether a login exists on the pool (public; enumeration is intentional)."""
+        try:
+            return bool(self._get_json(f"/users/{user}/exists").get("exists"))
+        except (urllib.error.HTTPError, urllib.error.URLError, RuntimeError, ValueError):
+            return True   # unknown -> assume yes and let the normal login flow proceed
+
     def me(self, *, token: str | None = None) -> dict[str, object]:
         """Return the authenticated user's profile {user, role, full_name, group, …}."""
         return self._get_json("/me", token=self._auth_token(token))

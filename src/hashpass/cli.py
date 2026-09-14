@@ -972,21 +972,23 @@ def _prompt_registry(env: Home, registry: str | None, io: Io) -> str:
 
 def _login_or_register(env: Home, url: str, user: str, io: Io) -> None:
     """
-    Prompt for a password and log in; on 401 offer registration inline.
+    Check whether the login exists on the pool; if not, offer registration outright.
 
-    Same fallback flow that `hashpass login` uses.  Saves the pool URL + user on success.
-    The password typed at login is reused for registration -- no double-prompt; the server
-    validates its strength, and only if it's too weak does `_register_interactive` re-ask
-    via the full policy dialog.
+    Existing account -> prompt for the password, log in, treat 401 as "неверный пароль"
+    (no register-loop -- the user is real, they typoed the password).  Missing account ->
+    jump straight into `_register_interactive` so we don't burn the student's time
+    asking for a password we already know won't be accepted.
     """
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
-    password = getpass.getpass("пароль: ")
-    try:
-        client.login(user, password)
-    except urllib.error.HTTPError as exc:
-        if exc.code == HTTPStatus.UNAUTHORIZED:
-            _register_interactive(client, user, io, password=password)
-        else:
+    if not client.user_exists(user):
+        _register_interactive(client, user, io)
+    else:
+        try:
+            client.login(user, getpass.getpass("пароль: "))
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.UNAUTHORIZED:
+                msg = "неверный пароль"
+                raise RuntimeError(msg) from exc
             raise
     save_pool(env, url, user)
     io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")

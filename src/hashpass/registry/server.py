@@ -176,6 +176,8 @@ class PoolServer:
         app.add_url_rule("/admin/role", "admin_role", self._route_admin_role, methods=["POST"])
         app.add_url_rule("/submit", "submit", self._route_submit, methods=["POST"])
         app.add_url_rule("/me", "me", self._route_me, methods=["GET"])
+        app.add_url_rule("/users/<user>/exists", "user_exists",
+                         self._route_user_exists, methods=["GET"])
         app.add_url_rule("/catalog", "catalog_api", self._route_catalog, methods=["GET"])
         app.add_url_rule("/progress", "progress_api", self._route_progress, methods=["GET"])
         app.add_url_rule("/images", "images_api", self._route_images, methods=["GET"])
@@ -413,6 +415,15 @@ class PoolServer:
         except KeyError:
             return self._empty(HTTPStatus.NOT_FOUND)
         return self._json(HTTPStatus.OK, {"user": target, "role": role})
+
+    def _route_user_exists(self, user: str) -> Response:
+        """Public check: does this login exist on the pool?
+
+        Enumeration is intentional -- this is a teaching pool, and the client uses the
+        answer to skip the password prompt when the account clearly needs to be registered
+        rather than logged into.
+        """
+        return self._json(HTTPStatus.OK, {"user": user, "exists": self.users.has(user)})
 
     def _route_me(self) -> Response:
         user = self._token_user()
