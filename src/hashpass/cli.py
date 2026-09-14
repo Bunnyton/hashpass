@@ -975,13 +975,17 @@ def _login_or_register(env: Home, url: str, user: str, io: Io) -> None:
     Prompt for a password and log in; on 401 offer registration inline.
 
     Same fallback flow that `hashpass login` uses.  Saves the pool URL + user on success.
+    The password typed at login is reused for registration -- no double-prompt; the server
+    validates its strength, and only if it's too weak does `_register_interactive` re-ask
+    via the full policy dialog.
     """
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+    password = getpass.getpass("пароль: ")
     try:
-        client.login(user, getpass.getpass("пароль: "))
+        client.login(user, password)
     except urllib.error.HTTPError as exc:
         if exc.code == HTTPStatus.UNAUTHORIZED:
-            _register_interactive(client, user, io)   # offers sign-up, raises on decline
+            _register_interactive(client, user, io, password=password)
         else:
             raise
     save_pool(env, url, user)
@@ -1200,8 +1204,15 @@ def cmd_pool_login(env: Home, pool_url: str | None = None, io: Io | None = None)
     return 0
 
 
-def _register_interactive(client: RemoteRegistry, user: str, io: Io) -> None:
-    """Offer registration after a failed login: group + optional comment + confirmed password."""
+def _register_interactive(client: RemoteRegistry, user: str, io: Io,
+                          *, password: str | None = None) -> None:
+    """
+    Offer registration after a failed login: group + optional comment + password.
+
+    If `password` is given (e.g. the one the student just typed at the login prompt),
+    reuse it -- no second prompt.  If the server rejects it as too weak, fall back to
+    the full `_prompt_new_password` dialog with the strength policy.
+    """
     ans = (io.read(f"Пользователь «{user}» не найден. Зарегистрироваться? [Enter — да, n — нет]: ")
            or "").strip().lower()
     if ans in ("n", "no", "нет"):
@@ -1209,17 +1220,25 @@ def _register_interactive(client: RemoteRegistry, user: str, io: Io) -> None:
         raise RuntimeError(msg)
     group = (io.read("группа (необязательно, напр. ИУ7-31): ") or "").strip()
     comment = (io.read("комментарий (необязательно): ") or "").strip()
-    password = _prompt_new_password(io)
-    try:
-        client.register(user, password, group, comment)
-    except urllib.error.HTTPError as exc:
-        if exc.code == HTTPStatus.CONFLICT:
-            msg = f"логин «{user}» уже занят — вход не удался из-за неверного пароля"
-            raise RuntimeError(msg) from exc
-        if exc.code == HTTPStatus.FORBIDDEN:
-            msg = "регистрация на пуле закрыта — обратитесь к преподавателю"
-            raise RuntimeError(msg) from exc
-        raise
+    while True:
+        # Reuse the caller-supplied password on the first attempt (typed at login);
+        # if the server refuses it as weak, ask through the strict double-entry prompt.
+        pw = password if password is not None else _prompt_new_password(io)
+        try:
+            client.register(user, pw, group, comment)
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.BAD_REQUEST:                   # weak password
+                io.write("\x1b[33mПароль слишком слабый — выберите другой.\x1b[0m\n")
+                password = None                                       # discard reused one, prompt fresh
+                continue
+            if exc.code == HTTPStatus.CONFLICT:
+                msg = f"логин «{user}» уже занят — вход не удался из-за неверного пароля"
+                raise RuntimeError(msg) from exc
+            if exc.code == HTTPStatus.FORBIDDEN:
+                msg = "регистрация на пуле закрыта — обратитесь к преподавателю"
+                raise RuntimeError(msg) from exc
+            raise
+        break
     io.write(f"\x1b[32m✓ регистрация выполнена\x1b[0m: {user}\n")
 
 
