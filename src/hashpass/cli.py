@@ -970,6 +970,24 @@ def _prompt_registry(env: Home, registry: str | None, io: Io) -> str:
     return url
 
 
+def _login_or_register(env: Home, url: str, user: str, io: Io) -> None:
+    """
+    Prompt for a password and log in; on 401 offer registration inline.
+
+    Same fallback flow that `hashpass login` uses.  Saves the pool URL + user on success.
+    """
+    client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+    try:
+        client.login(user, getpass.getpass("пароль: "))
+    except urllib.error.HTTPError as exc:
+        if exc.code == HTTPStatus.UNAUTHORIZED:
+            _register_interactive(client, user, io)   # offers sign-up, raises on decline
+        else:
+            raise
+    save_pool(env, url, user)
+    io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
+
+
 def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
     """Resolve the registry and ensure a cached token, prompting for login inline if there is none."""
     url = _prompt_registry(env, registry, io)
@@ -978,20 +996,12 @@ def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
         if not user:
             msg = "логин обязателен"
             raise RuntimeError(msg)
-        try:
-            RemoteRegistry(url, cache=CredentialCache(env.creds)).login(user, getpass.getpass("пароль: "))
-        except urllib.error.HTTPError as exc:
-            if exc.code == HTTPStatus.UNAUTHORIZED:
-                msg = "неверный логин или пароль"
-                raise RuntimeError(msg) from exc
-            raise
-        save_pool(env, url, user)
-        io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
+        _login_or_register(env, url, user, io)
     return url
 
 
 def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> int:
-    """Log in to a registry/pool: prompts login + password inline; caches the token, saves the URL."""
+    """Log in to a registry/pool: prompts login + password inline; on 401 offers sign-up."""
     io = io or _default_io()
     url = _prompt_registry(env, registry, io)
     user = (io.read("логин: ") or "").strip()
@@ -999,17 +1009,10 @@ def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> i
         msg = "логин обязателен"
         raise RuntimeError(msg)
     try:
-        RemoteRegistry(url, cache=CredentialCache(env.creds)).login(user, getpass.getpass("пароль: "))
-    except urllib.error.HTTPError as exc:
-        if exc.code == HTTPStatus.UNAUTHORIZED:
-            io.write("неверный логин или пароль\n")
-            return 1
-        raise
+        _login_or_register(env, url, user, io)
     except urllib.error.URLError as exc:
         io.write(f"вход не выполнен: {exc}\n")
         return 1
-    save_pool(env, url, user)
-    io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
     return 0
 
 
