@@ -417,11 +417,11 @@ class PoolServer:
         return self._json(HTTPStatus.OK, {"user": target, "role": role})
 
     def _route_user_exists(self, user: str) -> Response:
-        """Public check: does this login exist on the pool?
+        """Report whether this login exists on the pool (public; enumeration intentional).
 
-        Enumeration is intentional -- this is a teaching pool, and the client uses the
-        answer to skip the password prompt when the account clearly needs to be registered
-        rather than logged into.
+        This is a teaching pool -- an attacker learning which logins are taken wins
+        nothing.  The client uses the answer to skip the password prompt when the
+        account clearly needs to be registered rather than logged into.
         """
         return self._json(HTTPStatus.OK, {"user": user, "exists": self.users.has(user)})
 
