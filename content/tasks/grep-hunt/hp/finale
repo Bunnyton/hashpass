@@ -1,0 +1,15 @@
+#!/bin/sh
+# Shown after the stage passes. ASCII: developer at the keyboard.
+cat <<'ART'
+
+           ,--.
+          |o_o |     TODO: fix everything
+          |:_/ |     ---------------------
+         //   \ \    - [x] найти TODO
+        (|     | )   - [ ] исправить TODO
+       /'\_   _/`\   - [ ] написать новые TODO
+       \___)=(___/
+
+     * TODO собраны — половина работы уже сделана! *
+
+ART

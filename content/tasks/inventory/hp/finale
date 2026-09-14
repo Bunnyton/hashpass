@@ -1,0 +1,14 @@
+#!/bin/sh
+# Shown after the stage passes. ASCII: warehouse shelves.
+cat <<'ART'
+
+     ┌───────┬───────┬───────┐
+     │ 🍎🍎 │ 🍞🍞 │ 🧀🧀 │
+     ├───────┼───────┼───────┤
+     │  ▢▢▢  │  ▢▢▢  │  ▢▢▢  │
+     └───────┴───────┴───────┘
+        apples   bread   cheese
+
+      * Опись сдана — склад в порядке. *
+
+ART

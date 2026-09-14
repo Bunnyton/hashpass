@@ -1,0 +1,26 @@
+# grep-hunt — тема: junior разбирает legacy-код, ищет TODO. Один этап.
+
+image grep-hunt:1
+
+run mkdir -p /home/student/legacy
+run printf 'alpha\nTODO: fix the leak\nbeta\ngamma\nTODO: rename ClassX\ndelta\n' > /home/student/legacy/notes.txt
+run chown -R student:student /home/student/legacy
+
+hidden hp
+
+settings
+  pager on
+
+say "Вам достался устаревший проект. Разгребайте techdebt."
+read brief.md
+
+stage "Найдите все строки с TODO в /home/student/legacy/notes.txt и запишите их в /home/student/todos.txt"
+  solve grep TODO /home/student/legacy/notes.txt > /home/student/todos.txt
+  variant grep -F TODO /home/student/legacy/notes.txt > /home/student/todos.txt
+  observe /home/student/todos.txt
+  neutral ls cat less pwd
+  on enter say "grep + перенаправление в файл. Совсем тривиально."
+  hint tries 2 say "Подсказка:  grep TODO /home/student/legacy/notes.txt > /home/student/todos.txt"
+  hint cmd grep missing TODO say "Ищем именно строку TODO."
+
+exec finale

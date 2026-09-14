@@ -1,0 +1,39 @@
+# fruit-store — тема: фруктовый ларёк, считаем уникальные позиции. Три этапа.
+
+image fruit-store:1
+
+run mkdir -p /home/student/store
+# Ассортимент дня — с повторами, как в реальном журнале продаж.
+run printf 'banana\napple\ncherry\napple\nbanana\napple\n' > /home/student/store/sold.txt
+run chown -R student:student /home/student/store
+
+hidden hp
+
+settings
+  pager on
+
+say "Утро в ларьке. Пора разобрать вчерашний журнал продаж."
+read brief.md
+
+stage "Этап 1/3: отсортируйте /home/student/store/sold.txt и сохраните в /home/student/store/sorted.txt"
+  solve sort /home/student/store/sold.txt > /home/student/store/sorted.txt
+  observe /home/student/store/sorted.txt
+  neutral ls cat pwd less
+  on enter say "sort умеет перенаправлять вывод в файл через `>`."
+  hint tries 2 say "Точно:  sort /home/student/store/sold.txt > /home/student/store/sorted.txt"
+
+stage "Этап 2/3: оставьте только уникальные строки — /home/student/store/unique.txt"
+  solve uniq /home/student/store/sorted.txt > /home/student/store/unique.txt
+  observe /home/student/store/unique.txt
+  neutral ls cat pwd less
+  on enter say "uniq выбрасывает соседние дубли — потому и нужен предварительный sort."
+  hint tries 2 say "Точно:  uniq /home/student/store/sorted.txt > /home/student/store/unique.txt"
+
+stage "Этап 3/3: посчитайте строки в unique.txt и запишите число в /home/student/store/howmany.txt"
+  solve wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt
+  observe /home/student/store/howmany.txt
+  neutral ls cat pwd less
+  on enter say "wc -l считает строки. `< file` — читать из файла, `> other` — писать в файл."
+  hint tries 2 say "Точно:  wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt"
+
+exec finale

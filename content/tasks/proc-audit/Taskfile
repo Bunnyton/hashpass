@@ -1,25 +1,35 @@
-# proc-audit — a two-stage task: install a package (big FS change via apt), then audit processes.
-# The base is minimal (systemd + fish, no ps/pgrep), so installing procps is a real, needed step
-# that also unlocks the process-search stage. Acceptance observes DISTINCTIVE TEXT ARTIFACTS the
-# student PRODUCES (the dpkg install status; the sleep-process count) — never a bare binary's
-# presence or the volatile process table, so the tolerant grader has a strong signal to match.
+# proc-audit — двухэтапка: установить пакет через apt, потом посчитать процессы.
+# База минимальная (systemd + fish, без ps/pgrep), поэтому установить procps — реально нужный шаг,
+# который разблокирует второй этап.
 
 image proc-audit:1
 
-# This task installs packages and writes to / -- it needs a root console.
+# Задание меняет / и ставит пакеты — нужна root-консоль.
 settings
   user root
+  pager on
 
-stage "Install the procps package with apt, then record its dpkg status into /install-status.txt"
+hidden hp
+
+say "Вас позвали на аудит системы. Инструментов нет — только руки и apt."
+read brief.md
+
+stage "Этап 1/2: поставьте пакет procps через apt и запишите его dpkg-статус в /install-status.txt"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y procps >/dev/null 2>&1
     dpkg -s procps | grep '^Status:' > /install-status.txt
   observe /install-status.txt
+  on enter say "Стандартный apt: сначала update, потом install -y procps."
+  hint tries 2 say "apt-get update && apt-get install -y procps"
 
-stage "Launch a background 'sleep 600', then count the running sleep processes with pgrep into /proc-count.txt"
+stage "Этап 2/2: запустите фоновый `sleep 600 &`, потом посчитайте sleep-процессы и запишите число в /proc-count.txt"
   solve:
     sleep 600 &
     sleep 0.3
     pgrep -x sleep | wc -l > /proc-count.txt
   observe /proc-count.txt
+  on enter say "`sleep 600 &` в фон, дайте секунду улечься, потом pgrep + wc."
+  hint tries 2 say "sleep 600 & ; sleep 0.3 ; pgrep -x sleep | wc -l > /proc-count.txt"
+
+exec finale

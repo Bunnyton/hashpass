@@ -1,0 +1,15 @@
+#!/bin/sh
+# Shown after all three stages pass. ASCII fruit basket.
+cat <<'ART'
+
+              ___________
+             ' ~~~~~~~~~ '
+              \ 🍎🍌🍒 /
+               \_______/
+              /'   |   '\
+             /_____|_____\
+              apples · bananas · cherries
+
+     * Ассортимент подсчитан. Хозяин доволен. *
+
+ART

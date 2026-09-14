@@ -1,0 +1,25 @@
+# inventory — тема: кладовщик делает опись содержимого склада. Один этап (ls в файл).
+
+image inventory:1
+
+run mkdir -p /home/student/warehouse
+run touch /home/student/warehouse/apples /home/student/warehouse/bread /home/student/warehouse/cheese
+run chown -R student:student /home/student/warehouse
+
+hidden hp
+
+settings
+  pager on
+
+say "Вас взяли кладовщиком. Первое поручение — опись."
+read brief.md
+
+stage "Сделайте опись содержимого /home/student/warehouse и запишите её в /home/student/inventory.txt"
+  solve ls /home/student/warehouse > /home/student/inventory.txt
+  variant ls -1 /home/student/warehouse > /home/student/inventory.txt
+  observe /home/student/inventory.txt
+  neutral cat less pwd
+  on enter say "ls + перенаправление. Классика жанра."
+  hint tries 2 say "Подсказка:  ls /home/student/warehouse > /home/student/inventory.txt"
+
+exec finale

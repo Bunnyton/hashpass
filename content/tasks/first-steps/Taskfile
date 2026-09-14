@@ -1,0 +1,22 @@
+# first-steps — вводное задание. Один этап: создать файл hello.txt.
+# Ставит студента в живой Debian, показывает как приёмка ловит только что созданный артефакт.
+
+image first-steps:1
+
+hidden hp
+
+settings
+  pager on
+
+say "Здравствуй, оператор. Первое поручение — простое."
+read intro.md
+
+stage "Создайте файл hello.txt со словом hello."
+  solve echo hello > hello.txt
+  observe hello.txt
+  neutral ls cat pwd
+  on enter say "Наберите:  echo hello > hello.txt   (Enter — выполнить)"
+  hint tries 2 say "Точная команда:  echo hello > hello.txt"
+  hint idle 25 say "Не спешите. Загляните в подсказку сверху."
+
+exec finale

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Shown after both stages pass. ASCII: sysadmin celebrates with coffee.
+cat <<'ART'
+
+       ( (
+        ) )
+     .______.
+     |      |___
+     |      |[_]|
+     |______|___|
+
+     $ ps aux | grep chill
+     student  2077  0.0  0.1  чашка_кофе
+
+     * Аудит завершён. Все процессы под контролем. *
+
+ART
