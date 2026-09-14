@@ -1202,8 +1202,8 @@ def cmd_pool_login(env: Home, pool_url: str | None = None, io: Io | None = None)
 
 def _register_interactive(client: RemoteRegistry, user: str, io: Io) -> None:
     """Offer registration after a failed login: group + optional comment + confirmed password."""
-    io.write(f"Пользователь «{user}» не найден или пароль неверный.\n")
-    ans = (io.read("Зарегистрироваться с этим логином? [Enter — да, n — нет]: ") or "").strip().lower()
+    ans = (io.read(f"Пользователь «{user}» не найден. Зарегистрироваться? [Enter — да, n — нет]: ")
+           or "").strip().lower()
     if ans in ("n", "no", "нет"):
         msg = "вход отменён"
         raise RuntimeError(msg)
