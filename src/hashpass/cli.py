@@ -1215,6 +1215,24 @@ def _register_interactive(client: RemoteRegistry, user: str, io: Io) -> None:
     io.write(f"\x1b[32m✓ регистрация выполнена\x1b[0m: {user}\n")
 
 
+def _pool_account_alive(url: str, token: str) -> bool | None:
+    """
+    Check whether the token's account still exists on the pool.
+
+    Returns True if it does, False if the pool rejected the token (account gone), None
+    if we can't tell (offline / network error -- the caller should proceed on cache).
+    """
+    try:
+        RemoteRegistry(url).me(token=token)
+    except urllib.error.HTTPError as exc:
+        if exc.code == HTTPStatus.UNAUTHORIZED:
+            return False                      # token valid to us, rejected by server -> user gone
+        return None                            # some other HTTP error -- don't nuke the token
+    except (urllib.error.URLError, RuntimeError, ValueError, OSError):
+        return None                            # offline / unreachable
+    return True
+
+
 def _require_pool_identity(env: Home, io: Io) -> tuple[str, str]:
     """
     Return (url, user) for the pool.
@@ -1224,7 +1242,17 @@ def _require_pool_identity(env: Home, io: Io) -> tuple[str, str]:
     """
     url = _pool_url(env)
     if url and (token := _pool_token(env, url)) and (user := token_user(token)):
-        return url, user
+        # Token signs OK locally -- but if we're online, confirm the account still exists
+        # on the pool.  An admin may have deleted the student; keeping the old token would
+        # let them stare at an empty catalog and never realise why.
+        alive = _pool_account_alive(url, token)
+        if alive is False:
+            io.write(f"\x1b[33m⚠ Аккаунт «{user}» больше не существует на пуле.\x1b[0m\n"
+                     "\x1b[2m  Требуется повторный вход или регистрация — сейчас предложу.\x1b[0m\n")
+            CredentialCache(env.creds).forget(url)      # stop reusing a ghost token
+            save_pool(env, url, "")                     # keep the URL, drop the login hint
+        else:
+            return url, user
     if not url:
         url = (io.read("Адрес пула (URL): ") or "").strip()
         if not url:
@@ -1468,9 +1496,14 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     if not store.exists(ref):
         # Fetch just THIS ref (and its closure), not the whole catalog -- nothing else downloads.
         RemoteRegistry(url).pull_many([ref], store, workers=4)
-        tdir = task_dir(ref, store)
-        if not tdir.exists():
-            RemoteRegistry(url).pull_task(ref, tdir, token=token)
+    tdir = task_dir(ref, store)
+    server_digest = str(entry.get("digest")) if entry else ""
+    # Re-pull the task bundle if it's missing OR its digest no longer matches the pool's.
+    # Without this a task the teacher re-published (bumped digest) would be graded against the
+    # stale local grader and then rejected server-side ("digest-mismatch") -- exactly the
+    # "перестало принимать" symptom reported by the user for an already-solved task.
+    if not tdir.exists() or (server_digest and task_digest(tdir) != server_digest):
+        RemoteRegistry(url).pull_task(ref, tdir, token=token)
 
     def _submit(completed: bool, history: list[dict[str, object]]) -> None:  # noqa: FBT001
         if not completed:

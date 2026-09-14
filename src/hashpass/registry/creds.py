@@ -33,3 +33,10 @@ class CredentialCache:
         if not isinstance(expiry, int) or not isinstance(token, str) or now >= expiry:
             return None
         return token
+
+    def forget(self, registry: str) -> None:
+        """Drop the cached token for registry (used when the server signals it is invalid)."""
+        data = self._load()
+        if data.pop(registry, None) is not None:
+            self._path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            self._path.chmod(0o600)
