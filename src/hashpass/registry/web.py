@@ -31,12 +31,16 @@ if [ -n "$missing" ]; then
   echo "установите их и повторите, напр.:  sudo apt install -y$missing" >&2
   exit 1
 fi
-# `--upgrade`: pull the latest main even when some version of hashpass is already
-# installed (missing new deps -- flask, textual -- get resolved from pyproject).
-# We deliberately DON'T pass `--upgrade-strategy eager`: touching transitive deps
-# breaks unrelated user-site packages and floods the log with pip-resolver warnings.
-python3 -m pip install --user --break-system-packages --upgrade \\
+# `--upgrade --force-reinstall --no-deps`: pip normally sees "hashpass X.Y.Z is
+# already installed" and does nothing -- even when the git branch has moved and
+# we forgot to bump the version.  --force-reinstall reinstalls the package no
+# matter what; --no-deps avoids touching flask/textual/etc. (which we already
+# have from the first install and don't want to churn on every rerun).  If new
+# runtime deps ever land, run install.sh a second time WITHOUT --no-deps, or
+# `pip install --upgrade flask textual` by hand.
+python3 -m pip install --user --break-system-packages --upgrade --force-reinstall --no-deps \\
     "git+https://github.com/__REPO__@main"
+python3 -m pip install --user --break-system-packages --upgrade "flask>=3.0" "textual>=1.0"
 mkdir -p "$HOME/.hashpass"
 printf '{"url": "%s", "user": ""}\\n' "$POOL" > "$HOME/.hashpass/pool.json"
 __EXTRA__
