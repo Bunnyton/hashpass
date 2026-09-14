@@ -14,11 +14,24 @@
 <button class='sm ghost' type='submit'>Удалить группу</button>
 </form></div>
 <h2>Все пользователи</h2>
-<table class='wide'><tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th><th>Изменить роль</th><th>Пароль</th><th>Удалить</th></tr>
+<p class='sub small'>Группа и комментарий редактируются кликом по ячейке (Enter/уход из поля — сохраняет). Не отображаются студентам.</p>
+<table class='wide'>
+<tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th><th>Изменить роль</th><th>Пароль</th><th>Удалить</th></tr>
 {% if rows %}{% for r in rows %}
-<tr><td class='mono'>{{ r.user }}</td><td>{{ r.group }}</td>
+<tr><td class='mono'>{{ r.user }}</td>
+<td>
+<form class='inline user-edit' method='post' action='/web/users/group'>
+<input type='hidden' name='user' value='{{ r.user }}'>
+<input name='group' value='{{ r.group }}' placeholder='—' class='inline-edit' style='width:9em' maxlength='64'>
+</form>
+</td>
 <td><span class='pill {{ r.role }}'>{{ r.role }}</span></td>
-<td>{{ r.comment }}</td>
+<td>
+<form class='inline user-edit' method='post' action='/web/users/comment'>
+<input type='hidden' name='user' value='{{ r.user }}'>
+<input name='comment' value='{{ r.comment }}' placeholder='—' class='inline-edit' style='width:14em' maxlength='500'>
+</form>
+</td>
 <td>{% if r.is_self %}<span class='dim'>вы</span>{% else %}
 <form class='inline row' method='post' action='/web/users/role'>
 <input type='hidden' name='user' value='{{ r.user }}'>
@@ -39,4 +52,5 @@
 </tr>
 {% endfor %}{% else %}<tr><td colspan=7 class=dim>нет пользователей</td></tr>{% endif %}
 </table>
+<script src='/static/users.js'></script>
 {% endblock %}

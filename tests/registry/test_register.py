@@ -22,11 +22,13 @@ def test_register_creates_student_and_me(registry):
 
 
 @pytest.mark.tier2
-def test_register_requires_group(registry):
+def test_register_group_is_optional(registry):
+    """Registration succeeds without a group (server-side metadata, editable later)."""
     c = RemoteRegistry(registry.base_url)
-    with pytest.raises(urllib.error.HTTPError) as exc:
-        c.register("s2", "pass123!", group="")
-    assert exc.value.code == HTTPStatus.BAD_REQUEST
+    tok = c.register("s2", "pass123!", group="")
+    assert tok
+    assert registry.users.has("s2")
+    assert registry.users.get("s2")["group"] == ""
 
 
 @pytest.mark.tier2

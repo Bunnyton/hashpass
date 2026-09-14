@@ -161,6 +161,20 @@ def test_admin_cannot_change_or_delete_self(registry):
 
 
 @pytest.mark.tier2
+def test_admin_can_edit_group_and_comment_inline(registry):
+    """Admin edits a user's group / comment via the inline autosave endpoints."""
+    registry.users.add("stud", "pw", role="student", group="OLD", comment="old")
+    opener, cookie = _admin_cookie(registry)
+    _req(opener, "POST", f"{registry.base_url}/web/users/group", cookie=cookie,
+         data={"user": "stud", "group": "ИУ7-99"})
+    _req(opener, "POST", f"{registry.base_url}/web/users/comment", cookie=cookie,
+         data={"user": "stud", "comment": "Отличник"})
+    prof = registry.users.get("stud")
+    assert prof["group"] == "ИУ7-99"
+    assert prof["comment"] == "Отличник"
+
+
+@pytest.mark.tier2
 def test_delete_user_and_group(registry):
     registry.users.add("s1", "pw", role="student", group="ИУ7-31")
     registry.users.add("s2", "pw", role="student", group="ИУ7-31")

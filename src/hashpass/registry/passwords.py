@@ -176,6 +176,22 @@ class UserStore:
         users[user]["role"] = role
         self._save(users)
 
+    def set_group(self, user: str, group: str) -> None:
+        """Change a user's group (server-side metadata, KeyError if unknown)."""
+        users = self._load()
+        if user not in users:
+            raise KeyError(user)
+        users[user]["group"] = group
+        self._save(users)
+
+    def set_comment(self, user: str, comment: str) -> None:
+        """Change a user's comment (server-side metadata, KeyError if unknown)."""
+        users = self._load()
+        if user not in users:
+            raise KeyError(user)
+        users[user]["comment"] = comment
+        self._save(users)
+
     def all_users(self) -> list[dict[str, object]]:
         """Return every user's public profile, sorted by login (for the dashboard)."""
         return [profile for user in sorted(self._load()) if (profile := self.get(user)) is not None]

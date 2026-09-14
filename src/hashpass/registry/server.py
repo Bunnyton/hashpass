@@ -195,6 +195,10 @@ class PoolServer:
         app.add_url_rule("/web/users", "web_users", self._web_users, methods=["GET"])
         app.add_url_rule("/web/users/role", "web_users_role",
                          self._web_users_role, methods=["POST"])
+        app.add_url_rule("/web/users/group", "web_users_group",
+                         self._web_users_group, methods=["POST"])
+        app.add_url_rule("/web/users/comment", "web_users_comment",
+                         self._web_users_comment, methods=["POST"])
         app.add_url_rule("/web/users/registration", "web_users_registration",
                          self._web_users_registration, methods=["POST"])
         app.add_url_rule("/web/users/reset", "web_users_reset",
@@ -365,7 +369,8 @@ class PoolServer:
         password = str(data.get("password", ""))
         group = str(data.get("group", "")).strip()
         comment = str(data.get("comment", "")).strip()[:_MAX_COMMENT]
-        if not _USER_RE.match(user) or not password or not group:
+        # login + password are required; group/comment are metadata and may be empty
+        if not _USER_RE.match(user) or not password:
             return self._empty(HTTPStatus.BAD_REQUEST)
         try:
             validate_password(password)
@@ -693,6 +698,28 @@ class PoolServer:
         role = request.form.get("role", "")
         if target != actor and role in ROLES and self.users.has(target):
             self.users.set_role(target, role)   # never change your own role (self-lockout)
+        return self._redirect("/web/users")
+
+    def _web_users_group(self) -> Response:
+        actor = self._session_role(("admin",))
+        if actor is None:
+            return self._redirect("/web/login")
+        target = request.form.get("user", "").strip()
+        group = request.form.get("group", "").strip()[:64]
+        if self.users.has(target):
+            with contextlib.suppress(KeyError):
+                self.users.set_group(target, group)
+        return self._redirect("/web/users")
+
+    def _web_users_comment(self) -> Response:
+        actor = self._session_role(("admin",))
+        if actor is None:
+            return self._redirect("/web/login")
+        target = request.form.get("user", "").strip()
+        comment = request.form.get("comment", "").strip()[:_MAX_COMMENT]
+        if self.users.has(target):
+            with contextlib.suppress(KeyError):
+                self.users.set_comment(target, comment)
         return self._redirect("/web/users")
 
     def _web_users_registration(self) -> Response:

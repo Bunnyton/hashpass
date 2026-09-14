@@ -1162,17 +1162,17 @@ def _prompt_new_password(io: Io) -> str:
 
 
 def cmd_register(env: Home, pool_url: str | None = None, io: Io | None = None) -> int:
-    """Register on the pool (group required; comment free-form); cache the token and save pool config."""
+    """Register on the pool (only login+password required; group/comment optional)."""
     io = io or _default_io()
     url = _pool_url(env, pool_url) or (io.read("Адрес пула (URL): ") or "").strip()
     if not url:
         msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
         raise RuntimeError(msg)
     user = (io.read("логин: ") or "").strip()
-    group = (io.read("группа (например ИУ7-31): ") or "").strip()
+    group = (io.read("группа (необязательно, напр. ИУ7-31): ") or "").strip()
     comment = (io.read("комментарий (необязательно): ") or "").strip()
-    if not user or not group:
-        msg = "логин и группа обязательны для регистрации"
+    if not user:
+        msg = "логин обязателен для регистрации"
         raise RuntimeError(msg)
     password = _prompt_new_password(io)
     RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, group, comment)
@@ -1207,11 +1207,8 @@ def _register_interactive(client: RemoteRegistry, user: str, io: Io) -> None:
     if ans in ("n", "no", "нет"):
         msg = "вход отменён"
         raise RuntimeError(msg)
-    group = (io.read("группа (например ИУ7-31): ") or "").strip()
+    group = (io.read("группа (необязательно, напр. ИУ7-31): ") or "").strip()
     comment = (io.read("комментарий (необязательно): ") or "").strip()
-    if not group:
-        msg = "группа обязательна для регистрации"
-        raise RuntimeError(msg)
     password = _prompt_new_password(io)
     try:
         client.register(user, password, group, comment)
