@@ -1,0 +1,25 @@
+# apt-remove — удалить пакет через apt.
+# Задание: удалить sl (в реальной жизни — потому что запарил ls-опечатки).
+
+image apt-remove:1
+
+# Установим sl заранее, чтобы было что удалять.
+run apt-get update >/dev/null 2>&1
+run apt-get install -y sl >/dev/null 2>&1 || true
+
+hidden hp
+
+settings
+  user root
+  pager on
+
+say "sl оказался слишком настойчив. Верните всё, как было."
+read brief.md
+
+stage "Удалите пакет sl из системы"
+  solve apt-get remove -y sl
+  check exec sh -c '! command -v sl >/dev/null 2>&1 && ! test -x /usr/games/sl'
+  on enter say "apt remove — обратная сторона apt install."
+  hint tries 2 say "sudo apt remove -y sl"
+
+exec finale

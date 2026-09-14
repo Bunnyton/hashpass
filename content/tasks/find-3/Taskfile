@@ -1,0 +1,28 @@
+# find-3 — поиск по имени (-name).
+# Задание: найти все директории 4-го уровня.
+
+image find-3:1
+
+run mkdir -p /home/student/search/a/b/c/level4_alpha/inside
+run mkdir -p /home/student/search/x/y/z/level4_beta/inside
+run mkdir -p /home/student/search/m/n/o/level4_gamma
+run mkdir -p /home/student/search/other/deep/tree/regular_dir
+run chown -R student:student /home/student/search
+
+hidden hp
+
+settings
+  pager on
+
+say "Ключ -name — фильтр по имени. С шаблоном * работает тонко."
+read brief.md
+
+stage "Найдите все директории с именем level4* внутри /home/student/search и запишите в /home/student/level4-dirs.txt"
+  solve find /home/student/search -type d -name "level4*" > /home/student/level4-dirs.txt
+  observe /home/student/level4-dirs.txt
+  neutral ls cat pwd cd
+  on enter say "Кавычки вокруг шаблона нужны, иначе шелл его подставит сам."
+  hint tries 2 say "find /home/student/search -type d -name \"level4*\" > /home/student/level4-dirs.txt"
+  hint idle 30 say "-type d — только директории, -name — по имени, звёздочка — любые символы."
+
+exec finale

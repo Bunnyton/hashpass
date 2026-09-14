@@ -1,0 +1,27 @@
+# cp-basics — команда cp: копирование одного файла.
+# Задание: скопировать copy_me.txt в директорию wait_file.
+
+image cp-basics:1
+
+run mkdir -p /home/student/wait_file
+run printf 'Любопытно, однако)\n' > /home/student/copy_me.txt
+run chown -R student:student /home/student/copy_me.txt /home/student/wait_file
+
+hidden hp
+
+settings
+  pager on
+
+say "Копия — вторая жизнь файла. Знакомимся с cp."
+read brief.md
+
+stage "Скопируйте /home/student/copy_me.txt в директорию /home/student/wait_file/"
+  solve cp /home/student/copy_me.txt /home/student/wait_file/
+  variant cp /home/student/copy_me.txt /home/student/wait_file/copy_me.txt
+  observe /home/student/wait_file/copy_me.txt
+  neutral ls cat pwd
+  on enter say "cp <откуда> <куда>. Второй аргумент может быть директорией."
+  hint tries 2 say "Точно:  cp /home/student/copy_me.txt /home/student/wait_file/"
+  hint idle 25 say "Не забудьте слеш в конце — тогда cp сохранит имя файла."
+
+exec finale

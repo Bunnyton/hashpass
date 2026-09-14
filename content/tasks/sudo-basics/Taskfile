@@ -1,0 +1,29 @@
+# sudo-basics — знакомство с root и sudo.
+# Задание 1: sudo touch /home/file.txt. Задание 2: sudo rm /home/file.txt.
+
+image sudo-basics:1
+
+hidden hp
+
+settings
+  pager on
+
+say "У всех прав есть root — суперпользователь. sudo пускает его в комнату на минуту."
+read brief.md
+
+stage "Этап 1/2: создайте файл /home/file.txt (обычному user'у это не разрешат)"
+  solve sudo touch /home/file.txt
+  observe /home/file.txt
+  neutral ls cat pwd
+  on enter say "В /home обычный пользователь не может создать файл. Нужен sudo."
+  hint tries 2 say "Точно:  sudo touch /home/file.txt"
+  hint idle 25 say "Пароль sudo для user 'student' — student."
+
+stage "Этап 2/2: удалите /home/file.txt (тоже через sudo)"
+  solve sudo rm -f /home/file.txt
+  check exec test ! -e /home/file.txt
+  neutral ls cat pwd
+  on enter say "Файл создал root — обычный rm не одолеет. Снова через sudo."
+  hint tries 2 say "Точно:  sudo rm /home/file.txt"
+
+exec finale

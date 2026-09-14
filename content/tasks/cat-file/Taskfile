@@ -1,0 +1,27 @@
+# cat-file — вторая команда: cat.
+# Задание: прочитать содержимое файла и сохранить пойманный ключ.
+
+image cat-file:1
+
+run mkdir -p /home/student/mailbox
+run printf 'Здесь может быть ваша реклама\nЗдесь может быть ваша реклама\nСЕКРЕТ: black-cat-on-a-mat\nЗдесь может быть ваша реклама\nЗдесь может быть ваша реклама\n' > /home/student/mailbox/key_here.txt
+run chown -R student:student /home/student/mailbox
+
+hidden hp
+
+settings
+  pager on
+
+say "Файлы можно читать прямо в терминале — команда cat это делает."
+read brief.md
+
+stage "Найдите в /home/student/mailbox/key_here.txt строку с СЕКРЕТОМ и сохраните её в /home/student/secret.txt"
+  solve grep СЕКРЕТ /home/student/mailbox/key_here.txt > /home/student/secret.txt
+  variant cat /home/student/mailbox/key_here.txt | grep СЕКРЕТ > /home/student/secret.txt
+  observe /home/student/secret.txt
+  neutral ls pwd less
+  on enter say "cat напечатает всё, а нужное — с грепом или руками в файл."
+  hint tries 2 say "Подсказка:  grep СЕКРЕТ /home/student/mailbox/key_here.txt > /home/student/secret.txt"
+  hint idle 25 say "Если файл длинный и убегает — cat | less, а сохранять надо только строку с СЕКРЕТ."
+
+exec finale

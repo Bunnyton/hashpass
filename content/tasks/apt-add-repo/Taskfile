@@ -1,0 +1,29 @@
+# apt-add-repo — добавить сторонний репозиторий (упрощённая версия).
+# Задание: добавить строку в /etc/apt/sources.list.d/custom.list и обновить список.
+
+image apt-add-repo:1
+
+hidden hp
+
+settings
+  user root
+  pager on
+
+say "Список пакетов apt берёт из репозиториев. Можно добавить свой."
+read brief.md
+
+stage "Этап 1/2: создайте /etc/apt/sources.list.d/custom.list с одной строкой репозитория"
+  solve:
+    echo 'deb http://deb.debian.org/debian trixie main' > /etc/apt/sources.list.d/custom.list
+  observe /etc/apt/sources.list.d/custom.list
+  on enter say "Обычно строка вида:  deb <URL> <кодовое имя дистрибутива> main"
+  hint tries 2 say "echo 'deb http://deb.debian.org/debian trixie main' > /etc/apt/sources.list.d/custom.list"
+
+stage "Этап 2/2: обновите список пакетов после добавления репозитория"
+  solve apt-get update >/dev/null 2>&1
+  accept cmd "apt update"
+  accept cmd "apt-get update"
+  on enter say "После нового репозитория apt должен пересчитать индексы. Как?"
+  hint tries 2 say "sudo apt update"
+
+exec finale

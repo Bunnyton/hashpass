@@ -1,0 +1,31 @@
+# rm-basics — удаление файлов.
+# Задание: удалить всё содержимое workdir одной командой (включая скрытые файлы).
+
+image rm-basics:1
+
+run mkdir -p /home/student/workdir /home/student/workdir/.hidden_junk
+run printf 'мусор 1\n' > /home/student/workdir/junk1.txt
+run printf 'мусор 2\n' > /home/student/workdir/junk2.txt
+run printf 'спрятанный мусор\n' > /home/student/workdir/.secret_junk
+run printf 'ещё мусор\n' > /home/student/workdir/.hidden_junk/inside.txt
+run chown -R student:student /home/student/workdir
+
+hidden hp
+
+settings
+  pager on
+
+say "rm — remove. Крушить, ломать! Но по правилам."
+read brief.md
+
+stage "Удалите ВСЁ содержимое /home/student/workdir (включая скрытые файлы) одной командой"
+  solve:
+    rm -rf /home/student/workdir/*
+    rm -rf /home/student/workdir/.[!.]*
+  check exec sh -c 'test -d /home/student/workdir && test -z "$(ls -A /home/student/workdir 2>/dev/null)"'
+  neutral ls cat pwd
+  on enter say "rm -rf стирает и файлы, и директории. Но * прячет от него скрытые!"
+  hint tries 2 say "* берёт только обычные. Скрытые — .[!.]* (те, что с точкой, но не . и ..)"
+  hint idle 25 say "Две команды одна за другой:  rm -rf ...workdir/* ; rm -rf ...workdir/.[!.]*"
+
+exec finale

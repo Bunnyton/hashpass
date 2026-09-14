@@ -1,0 +1,11 @@
+#!/bin/sh
+cat <<'ART'
+
+     depth   0    1    2    3    4
+             ▓    ▓    ▓    ▒    ░
+                            ^
+                        только этот слой
+
+     * -mindepth + -maxdepth = точная стрельба. *
+
+ART

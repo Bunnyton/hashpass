@@ -1,0 +1,34 @@
+# grep-search — автоматизация поиска: grep -r.
+# Задание: найти ключ во всём дереве одной командой.
+
+image grep-search:1
+
+run mkdir -p /home/student/haystack/a/b/c /home/student/haystack/x/y /home/student/haystack/z
+run printf 'обычный текст\n' > /home/student/haystack/a/f1.txt
+run printf 'скучные заметки\n' > /home/student/haystack/a/b/f2.txt
+run printf 'один из миллиона\n' > /home/student/haystack/a/b/c/f3.txt
+run printf 'просто болталка\n' > /home/student/haystack/x/f4.txt
+run printf 'здесь ничего\n' > /home/student/haystack/x/y/f5.txt
+run printf 'КЛЮЧ: silver-bullet-42\n' > /home/student/haystack/z/hidden.txt
+run chown -R student:student /home/student/haystack
+
+hidden hp
+
+settings
+  pager on
+
+say "Руками искать — долго. Настало время grep."
+read brief.md
+
+stage "Найдите строку с 'КЛЮЧ:' во всём дереве /home/student/haystack и запишите её в /home/student/key.txt"
+  solve:
+    grep -r КЛЮЧ /home/student/haystack | grep -o 'КЛЮЧ:.*' > /home/student/key.txt
+  variant:
+    grep -rh КЛЮЧ /home/student/haystack > /home/student/key.txt
+  observe /home/student/key.txt
+  neutral ls cat pwd cd
+  on enter say "Ключ -r включает рекурсивный обход. grep — тот самый инструмент."
+  hint tries 2 say "Подсказка:  grep -r КЛЮЧ /home/student/haystack"
+  hint idle 30 say "Just Google it! Или:  man grep."
+
+exec finale

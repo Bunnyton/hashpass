@@ -1,0 +1,32 @@
+# find-2 — точный уровень: -mindepth + -maxdepth + -type.
+# Задание: файлы РОВНО на 3-м уровне, без -name.
+
+image find-2:1
+
+run mkdir -p /home/student/search/a/b/c /home/student/search/x/y/z
+run touch /home/student/search/root.txt
+run touch /home/student/search/a/lvl1.txt
+run touch /home/student/search/a/b/lvl2.txt
+run touch /home/student/search/a/b/c/lvl3.txt
+run touch /home/student/search/x/one.txt
+run touch /home/student/search/x/y/two.txt
+run touch /home/student/search/x/y/z/three.txt
+run chown -R student:student /home/student/search
+
+hidden hp
+
+settings
+  pager on
+
+say "Продолжаем осваивать find. -mindepth — младший брат -maxdepth."
+read brief.md
+
+stage "Найдите файлы РОВНО на 3-м уровне внутри /home/student/search и запишите в /home/student/lvl3.txt"
+  solve find /home/student/search -mindepth 3 -maxdepth 3 -type f > /home/student/lvl3.txt
+  observe /home/student/lvl3.txt
+  neutral ls cat pwd cd
+  on enter say "Стенка снизу — -mindepth, стенка сверху — -maxdepth. -type f — только файлы."
+  hint tries 2 say "find /home/student/search -mindepth 3 -maxdepth 3 -type f > /home/student/lvl3.txt"
+  hint idle 30 say "Понимаешь? Чтобы видеть, нужно смотреть. — Джейсон Стэйтем."
+
+exec finale

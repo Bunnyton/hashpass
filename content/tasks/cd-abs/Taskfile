@@ -1,0 +1,28 @@
+# cd-abs — навигация: абсолютные и относительные пути.
+# Задание: дойти до глубокого каталога и записать туда абсолютный путь через pwd.
+
+image cd-abs:1
+
+run mkdir -p /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
+run printf 'Ты нашёл меня! Молодец.\n' > /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me/key_here.txt
+run chown -R student:student /home/student/dir1
+
+hidden hp
+
+settings
+  pager on
+
+say "Файлы — половина мира. Вторая половина — директории."
+read brief.md
+
+stage "Дойдите до /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и запишите вывод pwd в /home/student/where-i-am.txt"
+  solve:
+    cd /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
+    pwd > /home/student/where-i-am.txt
+  observe /home/student/where-i-am.txt
+  neutral ls cat pwd
+  on enter say "Клавиша Tab дополняет длинные имена — не набирайте их руками целиком."
+  hint tries 2 say "cd /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me ; pwd > /home/student/where-i-am.txt"
+  hint idle 30 say "pwd печатает АБСОЛЮТНЫЙ путь текущей директории."
+
+exec finale

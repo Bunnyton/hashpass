@@ -1,0 +1,29 @@
+# chgrp-basics — сменить группу файла.
+# Задание: назначить студентовскую группу файлу rock.txt в .secret/.
+
+image chgrp-basics:1
+
+run mkdir -p /home/student/.secret
+run printf 'Rock never dies. key{ready-to-rock}\n' > /home/student/.secret/rock.txt
+run groupadd -f FiveFingerDeathPunch
+run chown root:FiveFingerDeathPunch /home/student/.secret/rock.txt
+run chmod 640 /home/student/.secret/rock.txt
+run chmod 755 /home/student/.secret
+
+hidden hp
+
+settings
+  pager on
+
+say "Права держат тебя за пределами. Но группу можно сменить — и войти."
+read brief.md
+
+stage "Смените группу файла /home/student/.secret/rock.txt на 'student', чтобы получить доступ"
+  solve sudo chgrp student /home/student/.secret/rock.txt
+  check exec sh -c 'test "$(stat -c %G /home/student/.secret/rock.txt)" = "student"'
+  neutral ls cat pwd cd
+  on enter say "chgrp <новая группа> <файл>. Только sudo — обычному user'у не по силам."
+  hint tries 2 say "Точно:  sudo chgrp student /home/student/.secret/rock.txt"
+  hint idle 30 say "Проверить группу файла:  ls -l /home/student/.secret/rock.txt"
+
+exec finale

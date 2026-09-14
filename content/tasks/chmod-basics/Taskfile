@@ -1,0 +1,28 @@
+# chmod-basics — знакомство с правами (побитовая запись).
+# Задание: выставить директории права drwxr----x (то есть 741).
+
+image chmod-basics:1
+
+run mkdir -p /home/student/perm_dir
+run printf '#!/bin/bash\necho "Я обязательно выживу"\n' > /home/student/perm_dir/file.txt
+run printf '#!/bin/bash\necho "run me"\n' > /home/student/perm_dir/exec_me.sh
+run chmod 777 /home/student/perm_dir /home/student/perm_dir/file.txt /home/student/perm_dir/exec_me.sh
+run chown -R student:student /home/student/perm_dir
+
+hidden hp
+
+settings
+  pager on
+
+say "У каждого файла есть права. rwxrwxrwx — три тройки: владелец / группа / остальные."
+read brief.md
+
+stage "Выставьте директории /home/student/perm_dir права drwxr----x  (rwx для владельца, r для группы, x для остальных)"
+  solve chmod 741 /home/student/perm_dir
+  check exec sh -c 'test "$(stat -c %a /home/student/perm_dir)" = "741"'
+  neutral ls cat pwd
+  on enter say "rwx = 4+2+1 = 7. r-- = 4. --x = 1. Итого: 741."
+  hint tries 2 say "Точно:  chmod 741 /home/student/perm_dir"
+  hint idle 30 say "Побитовая запись — chmod NNN, три цифры от 0 до 7."
+
+exec finale

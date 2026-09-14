@@ -1,0 +1,11 @@
+#!/bin/sh
+cat <<'ART'
+
+     dir1/                dir2/
+      ├─ file1.txt   ─►    ├─ file1.txt
+      ├─ file2.txt   ─►    ├─ file2.txt
+      └─ file3.txt   ─►    └─ file3.txt
+
+     * cp -r  — рекурсивный копир. Всё на своих местах. *
+
+ART

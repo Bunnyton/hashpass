@@ -1,0 +1,21 @@
+# star-wars — призовое задание. Классика: telnet towel.blinkenlights.nl / telehack.
+# В нашем контейнере telnet вряд ли пробьёт, но команда сама зачётна.
+
+image star-wars:1
+
+hidden hp
+
+settings
+  pager on
+
+say "Ты добил модуль базовых команд. Держи приз, оператор."
+read brief.md
+
+stage "Запустите  telnet telehack.com  (или towel.blinkenlights.nl) и представьте себя в далёкой галактике"
+  accept cmd "telnet"
+  neutral ls cat pwd
+  on enter say "Классика ASCII-развлечений: старые Star Wars идут по telnet."
+  hint tries 2 say "Просто наберите:  telnet telehack.com"
+  hint idle 25 say "Если что — Ctrl+] и quit, чтобы выйти из telnet."
+
+exec finale

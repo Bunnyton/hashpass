@@ -1,0 +1,42 @@
+# chmod-evil — усложнённая chmod: относительная запись (u+r, o-x и т.п.).
+# Задание: получить набор целевых прав, используя ТОЛЬКО относительную запись.
+
+image chmod-evil:1
+
+run mkdir -p /home/student/target
+run touch /home/student/target/test1
+run touch /home/student/target/test2
+run touch /home/student/target/test3
+run chmod 000 /home/student/target/test1
+run chmod 000 /home/student/target/test2
+run chmod 000 /home/student/target/test3
+run chown -R student:student /home/student/target
+
+hidden hp
+
+settings
+  pager on
+
+say "Тварь ты дрожащая или право имеешь? Chmod поможет разобраться."
+read brief.md
+
+stage "Этап 1/3: сделайте /home/student/target/test1 с правами --x--x--x (u+x, g+x, o+x)"
+  solve chmod +x /home/student/target/test1
+  check exec sh -c 'test "$(stat -c %a /home/student/target/test1)" = "111"'
+  on enter say "Относительная запись: chmod +x file — даёт всем +x."
+  hint tries 2 say "chmod +x /home/student/target/test1"
+
+stage "Этап 2/3: сделайте /home/student/target/test2 с правами -w-rw-r-- (что-то вроде 264 — но задать ТОЛЬКО +/-)"
+  solve:
+    chmod u+w,g+rw,o+r /home/student/target/test2
+  check exec sh -c 'test "$(stat -c %a /home/student/target/test2)" = "264"'
+  on enter say "u — владелец, g — группа, o — остальные. +w добавит запись, +r чтение."
+  hint tries 2 say "chmod u+w,g+rw,o+r /home/student/target/test2"
+
+stage "Этап 3/3: сделайте /home/student/target/test3 с правами rwxr-xr-x (u+rwx, go+rx)"
+  solve chmod u+rwx,go+rx /home/student/target/test3
+  check exec sh -c 'test "$(stat -c %a /home/student/target/test3)" = "755"'
+  on enter say "go — сокращение для group+other. u+rwx,go+rx = знакомые 755."
+  hint tries 2 say "chmod u+rwx,go+rx /home/student/target/test3"
+
+exec finale

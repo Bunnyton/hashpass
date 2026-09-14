@@ -1,0 +1,29 @@
+# ls-la — ключи команд и скрытые файлы.
+# Задание: найти скрытый файл и записать вывод ls -la в артефакт.
+
+image ls-la:1
+
+run mkdir -p /home/student/attic
+run printf 'обычный файл\n' > /home/student/attic/normal.txt
+run printf 'старый ключ\n' > /home/student/attic/.hidden_key
+run chown -R student:student /home/student/attic
+
+hidden hp
+
+settings
+  pager on
+
+say "У большинства команд есть ключи. Пара букв — и поведение меняется."
+read brief.md
+
+stage "Выведите ВСЕ файлы (включая скрытые) в /home/student/attic и сохраните в /home/student/full-listing.txt"
+  solve ls -la /home/student/attic > /home/student/full-listing.txt
+  variant ls -al /home/student/attic > /home/student/full-listing.txt
+  variant ls -a -l /home/student/attic > /home/student/full-listing.txt
+  observe /home/student/full-listing.txt
+  neutral cat pwd less
+  on enter say "Ключи -l и -a пишутся слитно (-la), раздельно (-l -a) — как удобно."
+  hint tries 2 say "Точно:  ls -la /home/student/attic > /home/student/full-listing.txt"
+  hint idle 25 say "-l — длинный формат, -a — включая скрытые (те, что с точкой)."
+
+exec finale

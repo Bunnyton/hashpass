@@ -1,0 +1,21 @@
+# vim-intro — знакомство с vim.
+# Задание: запустить vimtutor хотя бы раз. Зачёт по команде.
+
+image vim-intro:1
+
+hidden hp
+
+settings
+  pager on
+
+say "Те самые три буквы. VIM. Мощнее, чем кажется."
+read brief.md
+
+stage "Запустите vimtutor — краткий обучающий курс по vim"
+  accept cmd "vimtutor"
+  neutral ls cat pwd
+  on enter say "vimtutor — встроенный урок vim. Есть даже русская версия: vimtutor ru"
+  hint tries 2 say "Просто:  vimtutor"
+  hint idle 25 say "Выход из vim — :q  (или :q! если что-то отредактировали и не хотите сохранять)."
+
+exec finale

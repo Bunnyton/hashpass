@@ -1,0 +1,31 @@
+# find-1 — знакомство с find: ключ -maxdepth.
+# Задание: найти всё в /home/student/search не глубже 3 уровня, сохранить в файл.
+
+image find-1:1
+
+run mkdir -p /home/student/search/lvl1/lvl2/lvl3/lvl4/lvl5
+run touch /home/student/search/f0.txt
+run touch /home/student/search/lvl1/f1.txt
+run touch /home/student/search/lvl1/lvl2/f2.txt
+run touch /home/student/search/lvl1/lvl2/lvl3/f3.txt
+run touch /home/student/search/lvl1/lvl2/lvl3/lvl4/f4.txt
+run touch /home/student/search/lvl1/lvl2/lvl3/lvl4/lvl5/f5.txt
+run chown -R student:student /home/student/search
+
+hidden hp
+
+settings
+  pager on
+
+say "find — швейцарский нож поиска. Ключей — вагон."
+read brief.md
+
+stage "Найдите всё внутри /home/student/search не глубже 3-го уровня и запишите список в /home/student/depth3.txt"
+  solve find /home/student/search -maxdepth 3 > /home/student/depth3.txt
+  observe /home/student/depth3.txt
+  neutral ls cat pwd cd
+  on enter say "find <where> -maxdepth <N> — ограничивает поиск по глубине."
+  hint tries 2 say "Точно:  find /home/student/search -maxdepth 3 > /home/student/depth3.txt"
+  hint idle 30 say "У find ключи с одним дефисом, даже длинные: -maxdepth, -mindepth, -name."
+
+exec finale

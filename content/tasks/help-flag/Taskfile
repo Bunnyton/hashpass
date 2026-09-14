@@ -1,0 +1,21 @@
+# help-flag — длинные ключи (--help).
+# Задание: запустить ls --help, зачёт по самой команде.
+
+image help-flag:1
+
+hidden hp
+
+settings
+  pager on
+
+say "Ключи бывают не только буквенные. Целые слова — тоже ключи."
+read brief.md
+
+stage "Запустите  ls --help  и посмотрите, что напечатает команда"
+  accept cmd "ls --help"
+  neutral cat pwd
+  on enter say "Именно так:  ls --help"
+  hint tries 2 say "Наберите:  ls --help"
+  hint idle 20 say "Двойной дефис перед словом — длинный ключ."
+
+exec finale

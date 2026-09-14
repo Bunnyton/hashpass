@@ -1,0 +1,27 @@
+# simple-ls — первая настоящая команда: ls.
+# Задание: посмотреть, что лежит в текущей директории, и сохранить вывод в файл.
+
+image simple-ls:1
+
+run mkdir -p /home/student/room
+run printf 'ковёр\n' > /home/student/room/carpet.txt
+run printf 'лампа\n' > /home/student/room/lamp.txt
+run printf 'кот\n' > /home/student/room/cat.txt
+run chown -R student:student /home/student/room
+
+hidden hp
+
+settings
+  pager on
+
+say "Первая команда — самая простая. ls покажет, что вокруг."
+read brief.md
+
+stage "Выведите содержимое /home/student/room и запишите вывод в /home/student/inventory.txt"
+  solve ls /home/student/room > /home/student/inventory.txt
+  observe /home/student/inventory.txt
+  neutral cat pwd
+  on enter say "ls /home/student/room > /home/student/inventory.txt"
+  hint tries 2 say "Точно:  ls /home/student/room > /home/student/inventory.txt"
+
+exec finale

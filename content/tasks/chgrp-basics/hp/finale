@@ -1,0 +1,10 @@
+#!/bin/sh
+cat <<'ART'
+
+        🤘  🤘  🤘
+       ROCK NEVER DIES
+        🤘  🤘  🤘
+
+     * Группа сменена. Rock-файл теперь ваш. *
+
+ART

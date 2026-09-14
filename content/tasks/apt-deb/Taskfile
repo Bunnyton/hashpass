@@ -1,0 +1,25 @@
+# apt-deb — установка .deb напрямую.
+# Задание: понять смысл dpkg -i и апробировать её. Здесь — на макете (создадим фиктивный .deb).
+
+image apt-deb:1
+
+# Даем зачёт по команде — на пул не гоняем сеть, но правильную команду распознаём.
+hidden hp
+
+settings
+  user root
+  pager on
+
+say "Иногда пакет лежит на диске .deb-файлом. apt его тоже установит."
+read brief.md
+
+stage "Скачайте пакет cmatrix и попробуйте установить его через dpkg (или apt install ./file.deb)"
+  accept cmd "dpkg -i"
+  accept cmd "apt install"
+  accept cmd "apt-get install"
+  neutral ls cat pwd
+  on enter say "Классика: wget URL, потом sudo dpkg -i имя.deb (или sudo apt install ./имя.deb)."
+  hint tries 2 say "sudo dpkg -i cmatrix_2.0-3_amd64.deb"
+  hint idle 30 say "Just Google it! (не запускайте cmatrix заранее — потом сами увидите)."
+
+exec finale

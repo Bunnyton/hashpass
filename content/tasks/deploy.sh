@@ -18,7 +18,38 @@ DRY=""
 if [[ "${1:-}" == "--dry" ]]; then DRY="1"; fi
 
 cd "$(dirname "$0")"
-TASKS=(first-steps grep-hunt inventory fruit-store proc-audit showcase)
+TASKS=(
+    intro-hello        # 0 — знакомство, whoami
+    simple-ls          # 1 — ls
+    cat-file           # 2 — cat
+    ls-la              # 3 — ls -la, скрытые файлы
+    help-flag          # 4 — --help
+    man-of-man         # 5 — man man
+    cd-abs             # 6 — cd + pwd, абсолютные пути
+    cp-basics          # 7 — cp одиночный
+    cp-more            # 8 — cp -r, звёздочка
+    mv-basics          # 9 — mv, rename
+    rm-basics          # 10 — rm -rf, скрытые
+    ls-mv-cp           # 11 — обход дерева с whitelist
+    grep-search        # 12 — grep -r
+    find-1             # 13 — find -maxdepth
+    find-2             # 14 — find -mindepth+maxdepth+type
+    find-3             # 15 — find -name
+    find-4             # 16 — find -o (OR)
+    find-5             # 17 — find -not -empty
+    sudo-basics        # 18 — sudo touch/rm
+    apt-update         # 19 — apt install sl
+    apt-remove         # 20 — apt remove sl
+    apt-add-repo       # 21 — добавить репозиторий
+    apt-deb            # 22 — dpkg -i .deb
+    star-wars          # 23 — приз: telnet
+    vim-intro          # 24 — vim / vimtutor
+    chmod-basics       # 25 — chmod NNN
+    chgrp-basics       # 26 — chgrp
+    chmod-evil         # 30 — chmod +/- относительная запись
+    # старые (сохраняем на будущее)
+    first-steps grep-hunt inventory fruit-store proc-audit showcase
+)
 USER_LOGIN="${HASHPASS_USER:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("user",""))' 2>/dev/null || true)}"
 
 if [[ -z "$USER_LOGIN" ]]; then

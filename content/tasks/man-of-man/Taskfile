@@ -1,0 +1,21 @@
+# man-of-man — знакомство с man.
+# Задание: запустить  man man  — и убедиться, что man может заглянуть в самого себя.
+
+image man-of-man:1
+
+hidden hp
+
+settings
+  pager on
+
+say "У всякой команды есть большая справка. Открывается — командой man."
+read brief.md
+
+stage "Откройте страницу руководства самой команды man — наберите  man man"
+  accept cmd "man man"
+  neutral ls cat pwd
+  on enter say "Если man — команда, то может ли она заглянуть внутрь самой себя?"
+  hint tries 2 say "Наберите:  man man"
+  hint idle 25 say "Выход из man — клавиша q."
+
+exec finale

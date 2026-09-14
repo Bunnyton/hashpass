@@ -1,0 +1,29 @@
+# cp-more — рекурсивное копирование.
+# Задание: скопировать всё содержимое dir1 в dir2 одной командой.
+
+image cp-more:1
+
+run mkdir -p /home/student/dir1 /home/student/dir2
+run printf 'Любопытной Варваре...\n' > /home/student/dir1/file1.txt
+run printf '...на базаре нос оторвали\n' > /home/student/dir1/file2.txt
+run printf 'но она вернулась\n' > /home/student/dir1/file3.txt
+run chown -R student:student /home/student/dir1 /home/student/dir2
+
+hidden hp
+
+settings
+  pager on
+
+say "Одна команда — а перекопировать нужно всю директорию. Ключ -r спасёт."
+read brief.md
+
+stage "Скопируйте ВСЁ содержимое /home/student/dir1 в /home/student/dir2 одной командой"
+  solve cp -r /home/student/dir1/. /home/student/dir2/
+  variant cp -r /home/student/dir1/file1.txt /home/student/dir1/file2.txt /home/student/dir1/file3.txt /home/student/dir2/
+  observe /home/student/dir2/file1.txt /home/student/dir2/file2.txt /home/student/dir2/file3.txt
+  neutral ls cat pwd
+  on enter say "cp с последним аргументом-директорией копирует туда все предыдущие."
+  hint tries 2 say "Подсказка:  cp -r /home/student/dir1/. /home/student/dir2/"
+  hint idle 30 say "Ключ -r (recursive) даёт cp повторить обход дерева."
+
+exec finale

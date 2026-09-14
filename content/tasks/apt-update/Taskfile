@@ -1,0 +1,24 @@
+# apt-update — apt update + install.
+# Задание: установить пакет sl (нужен интернет; иначе тест проверит наличие бинаря).
+
+image apt-update:1
+
+hidden hp
+
+settings
+  user root
+  pager on
+
+say "apt — пакетный менеджер Debian/Ubuntu. Настало время установить что-нибудь."
+read brief.md
+
+stage "Обновите список пакетов и установите пакет sl"
+  solve:
+    apt-get update >/dev/null 2>&1
+    apt-get install -y sl >/dev/null 2>&1
+  check exec command -v sl || test -x /usr/games/sl
+  on enter say "Сначала apt update, чтобы список был свежий, потом apt install."
+  hint tries 2 say "sudo apt update ; sudo apt install -y sl"
+  hint idle 30 say "Не смотрите заранее, что делает sl — увидите на следующем этапе."
+
+exec finale

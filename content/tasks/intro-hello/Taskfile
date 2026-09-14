@@ -1,0 +1,22 @@
+# intro-hello — самое первое знакомство с системой HASHPASS.
+# Простое приветствие: студент вводит команду `whoami`, чтобы узнать, кто он.
+
+image intro-hello:1
+
+hidden hp
+
+settings
+  pager on
+
+say "Здравствуй, оператор! Это твоё первое задание в системе HASHPASS."
+read brief.md
+
+stage "Проверьте, под каким пользователем вы вошли. Запишите вывод whoami в /home/student/me.txt"
+  solve whoami > /home/student/me.txt
+  observe /home/student/me.txt
+  neutral ls cat pwd
+  on enter say "Просто:  whoami > /home/student/me.txt"
+  hint tries 2 say "Точно:  whoami > /home/student/me.txt"
+  hint idle 25 say "Команда whoami сама себе скажет, кто вы."
+
+exec finale

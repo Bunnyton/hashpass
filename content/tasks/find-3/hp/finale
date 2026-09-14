@@ -1,0 +1,11 @@
+#!/bin/sh
+cat <<'ART'
+
+       *   ┌────────┐   *
+      *    │level4_*│    *
+       *   └────────┘   *
+         -type d -name
+
+     * find -name — как SQL WHERE, только с шаблонами. *
+
+ART

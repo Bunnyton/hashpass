@@ -1,0 +1,25 @@
+# mv-basics — перемещение и переименование.
+# Задание: переименовать файл file5 в file2.
+
+image mv-basics:1
+
+run mkdir -p /home/student/workspace
+run printf 'У файлов нет расширений????????\n\nВ Linux расширение — это лишь часть имени.\nОпределяет тип файла его сигнатура,\nа не .txt в конце.\n' > /home/student/workspace/file5
+run chown -R student:student /home/student/workspace
+
+hidden hp
+
+settings
+  pager on
+
+say "cp — copy, mv — move. Ещё и переименование в одну команду."
+read brief.md
+
+stage "Переименуйте /home/student/workspace/file5 в /home/student/workspace/file2"
+  solve mv /home/student/workspace/file5 /home/student/workspace/file2
+  observe /home/student/workspace/file2
+  neutral ls cat pwd
+  on enter say "mv <исходное имя> <новое имя> — вот и весь rename."
+  hint tries 2 say "Точно:  mv /home/student/workspace/file5 /home/student/workspace/file2"
+
+exec finale

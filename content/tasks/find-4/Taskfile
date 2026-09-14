@@ -1,0 +1,36 @@
+# find-4 — оператор -o (или).
+# Задание: файлы, чьё имя начинается с level2 ИЛИ содержит "3".
+
+image find-4:1
+
+run mkdir -p /home/student/search/a/b/c
+run touch /home/student/search/level2_alpha.txt
+run touch /home/student/search/level2_beta.log
+run touch /home/student/search/a/level2_deep.txt
+run touch /home/student/search/a/report3.md
+run touch /home/student/search/a/b/lvl_3_data.txt
+run touch /home/student/search/a/b/c/file_with_3_inside.txt
+run touch /home/student/search/plain.txt
+run touch /home/student/search/a/other.log
+run chown -R student:student /home/student/search
+
+hidden hp
+
+settings
+  pager on
+
+say "Несколько условий через -o дают ИЛИ. Скобки — да, но экранированные."
+read brief.md
+
+stage "Найдите файлы с именем level2* ИЛИ содержащим '3' в /home/student/search, запишите в /home/student/or.txt"
+  solve:
+    find /home/student/search -type f \( -name "level2*" -o -name "*3*" \) > /home/student/or.txt
+  variant:
+    find /home/student/search -name "level2*" -type f -o -name "*3*" -type f > /home/student/or.txt
+  observe /home/student/or.txt
+  neutral ls cat pwd cd
+  on enter say "Скобки в find экранируются: \\( ... \\) — иначе шелл возьмёт их себе."
+  hint tries 2 say "find ... -type f \\( -name \"level2*\" -o -name \"*3*\" \\)"
+  hint idle 30 say "-o = OR. Каждое условие можно дополнить -type f, чтобы отсечь директории."
+
+exec finale

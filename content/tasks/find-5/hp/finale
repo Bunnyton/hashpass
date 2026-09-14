@@ -1,0 +1,11 @@
+#!/bin/sh
+cat <<'ART'
+
+     [empty] [full] [empty] [full] [full] [empty]
+                ▲       ▲     ▲
+                └─ отобрано ──┘
+                 -not -empty
+
+     * find умеет фильтровать, а не только искать. *
+
+ART
