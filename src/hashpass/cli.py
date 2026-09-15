@@ -33,7 +33,15 @@ from hashpass.build import build, run_image
 from hashpass.image.base import _base_version_current, build_base
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage
-from hashpass.recipe.model import CopyStep, Recipe, image_ref, is_task
+from hashpass.recipe.model import (
+    Action,
+    CopyStep,
+    ReadAction,
+    Recipe,
+    ShowFileAction,
+    image_ref,
+    is_task,
+)
 from hashpass.recipe.parse import load_recipe
 from hashpass.registry.config import load_config
 from hashpass.registry.creds import CredentialCache
@@ -299,6 +307,7 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     try:
         if task:
             build_task(recipe, store, base=base, workdir=build_work, progress=_progress)
+            _stage_read_assets(recipe, store, ref, taskfile_path.resolve().parent)
             kind = "задание"
         else:
             build(recipe, store, base=base, workdir=build_work, progress=_progress)
@@ -313,6 +322,45 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     else:
         _push_image(env, store, ref, io)
     return 0
+
+
+def _read_asset_paths(recipe: Recipe) -> list[str]:
+    """Every relative path a `read`/`show file` action refers to, in source order (dedup)."""
+    def walk_actions(actions: tuple[Action, ...]) -> list[str]:
+        return [a.path for a in actions
+                if isinstance(a, (ReadAction, ShowFileAction))
+                and not Path(a.path).is_absolute()]
+    seen: set[str] = set()
+    ordered: list[str] = []
+    buckets: list[tuple[Action, ...]] = [recipe.intro, recipe.outro, recipe.react]
+    for stage in recipe.stages:
+        buckets.extend([stage.on_enter, stage.on_pass])
+    for bucket in buckets:
+        for p in walk_actions(bucket):
+            if p not in seen:
+                seen.add(p)
+                ordered.append(p)
+    return ordered
+
+
+def _stage_read_assets(recipe: Recipe, store: ImageStore, ref: str, taskfile_dir: Path) -> None:
+    """
+    Copy every `read <file>` referenced next to the Taskfile into the task's `hp/work/`.
+
+    A `read brief.md` in the recipe expects to find its file at runtime under `/hp/work/brief.md`.
+    Authors keep their briefings next to the Taskfile, not inside `hidden/`, so unless we stage
+    them, the runtime resolver falls back to the system FS -- misses -- and the student sees
+    `(read: файл не найден: brief.md)` instead of the briefing.  Absolute paths are left alone.
+    """
+    tdir = store.get(ref).layer.parent / "task"
+    work = tdir / "hp" / "work"
+    for rel in _read_asset_paths(recipe):
+        src = (taskfile_dir / rel).resolve()
+        if not src.is_file():
+            continue                              # missing files stay visible via the runtime warning
+        dst = work / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(src.read_bytes())
 
 
 def _reset_build_workdir(path: Path) -> None:
