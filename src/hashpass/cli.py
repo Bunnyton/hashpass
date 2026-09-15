@@ -994,26 +994,31 @@ def _login_or_register(env: Home, url: str, user: str, io: Io) -> None:
     io.write(f"\x1b[32m✓ вход выполнен\x1b[0m: {user}\n")
 
 
-def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
+def _cache_hit_or_forget(env: Home, url: str, io: Io) -> str | None:
     """
-    Resolve the registry and ensure a live cached token; prompt only when actually needed.
+    Return the user of a live cached token, or None if the caller must prompt anew.
 
-    Fast path: cached token AND `/me` returns the profile -> no prompts.
-    Cached token but account gone -> drop token, forget the login hint, fall through.
-    No token: pick the login from `pool.json.user` if we have it (silently), else ask
-    it once, then let `_login_or_register` decide -- register-directly for a fresh login,
-    password-only for an existing one.
+    Alive cache -> return the user (caller can skip prompts entirely).
+    Cache exists but /me says 401 -> the account was deleted; drop the token + login hint
+    and return None.  Offline / other errors -> treat cache as valid so a bad network
+    doesn't lock people out.  No cache at all -> return None.
     """
-    url = _prompt_registry(env, registry, io)
     token = _pool_token(env, url)
-    if token is not None:
-        if _pool_account_alive(url, token) is not False:
-            return url                                                # valid or offline -> use cache
-        # Server rejected the token (account deleted).  Clear it and the login hint so we
-        # fall into the register flow below without dragging a dead user around.
+    if token is None:
+        return None
+    if _pool_account_alive(url, token) is False:
         io.write("\x1b[33m⚠ Аккаунт на пуле не найден — регистрируем заново.\x1b[0m\n")
         CredentialCache(env.creds).forget(url)
         save_pool(env, url, "")
+        return None
+    return token_user(token)
+
+
+def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
+    """Resolve the registry and ensure a live cached token; prompt only when actually needed."""
+    url = _prompt_registry(env, registry, io)
+    if _cache_hit_or_forget(env, url, io) is not None:
+        return url                                                # silent fast path
     remembered = str(load_pool(env).get("user", "")).strip()
     user = remembered or (io.read("логин: ") or "").strip()
     if not user:
@@ -1024,10 +1029,17 @@ def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
 
 
 def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> int:
-    """Log in to a registry/pool: prompts login + password inline; on 401 offers sign-up."""
+    """Log in to a registry/pool.  Silently succeeds if a live token is already cached."""
     io = io or _default_io()
     url = _prompt_registry(env, registry, io)
-    user = (io.read("логин: ") or "").strip()
+    # Fast path: `hashengine login "$POOL_URL"` at the top of deploy.sh runs on EVERY loop --
+    # if a cached pool token is still live, we must not prompt for a password again.
+    cached_user = _cache_hit_or_forget(env, url, io)
+    if cached_user is not None:
+        io.write(f"\x1b[2m✓ уже вошли: {cached_user} (токен в кэше)\x1b[0m\n")
+        return 0
+    remembered = str(load_pool(env).get("user", "")).strip()
+    user = remembered or (io.read("логин: ") or "").strip()
     if not user:
         msg = "логин обязателен"
         raise RuntimeError(msg)
