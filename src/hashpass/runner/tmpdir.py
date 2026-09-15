@@ -30,12 +30,14 @@ class TmpdirRunner:
         for low in lowers:
             shutil.copytree(low, self._root, dirs_exist_ok=True)
 
-    def run(self, argv: list[str]) -> RunResult:
+    def run(self, argv: list[str], *, user: str | None = None) -> RunResult:  # noqa: ARG002
         """
         Run a command in the rootfs.
 
         Args:
             argv: Command and arguments to run.
+            user: Accepted for Runner-protocol compatibility; the tmpdir driver has no
+                user isolation, so it is ignored (tests never depend on it).
 
         Returns:
             RunResult with stdout, stderr, and exit code.

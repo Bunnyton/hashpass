@@ -61,7 +61,7 @@ class NspawnRunner:
         overlay_mount(stack, self._upper, self._work, self._mnt, sudo=True)
 
     def run(self, argv: list[str], *, binds: list[tuple[str, str]] | None = None,
-            setenv: dict[str, str] | None = None) -> RunResult:
+            setenv: dict[str, str] | None = None, user: str | None = None) -> RunResult:
         """
         Run a single command inside the container via systemd-nspawn.
 
@@ -74,20 +74,25 @@ class NspawnRunner:
                 for `-D <student mnt>`, which a live foreground console holds. A `binds=None`
                 run has no `/hp` and executes on the student mount directly.
             setenv: Optional environment variables set inside the container.
+            user: Optional container-side user (nspawn `--user=<user>`); default is root.
+                Build passes `settings.user` here so a `solve` derives against the SAME user
+                the live console will run under -- otherwise `whoami` / `$USER` / `id` all
+                bake `root`-flavoured references the student can never match.
 
         Returns:
             RunResult with stdout, stderr, and exit code.
 
         """
         if binds:
-            return self._run_bound(argv, binds, setenv or {})
+            return self._run_bound(argv, binds, setenv or {}, user=user)
+        user_flag = [f"--user={user}"] if user else []
         p = subprocess.run(
             # --console=pipe: connect the command's stdio to our pipes directly. Without it nspawn
             # defaults to --console=interactive and ALLOCATES A PTY per run; derivation does dozens
             # of these per build, so the ptys pile up against the global kernel.pty.max and later
             # starve the interactive console's script(1) ("No space left on device").
             ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no",
-             "-D", str(self._mnt), *argv],
+             *user_flag, "-D", str(self._mnt), *argv],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -97,7 +102,7 @@ class NspawnRunner:
         return RunResult(p.stdout, p.stderr, p.returncode)
 
     def _run_bound(self, argv: list[str], binds: list[tuple[str, str]],
-                   setenv: dict[str, str]) -> RunResult:
+                   setenv: dict[str, str], *, user: str | None = None) -> RunResult:
         """
         Run a bind (/hp handler) on a FRESH throwaway overlay stacked over the student mount.
 
@@ -116,6 +121,8 @@ class NspawnRunner:
         try:
             extra = [f"--bind={host}:{dst}" for host, dst in binds]
             extra += [f"--setenv={key}={val}" for key, val in setenv.items()]
+            if user:
+                extra.append(f"--user={user}")
             p = subprocess.run(
                 # --console=pipe: no per-run pty (see the note in run()); handlers run dozens of
                 # times too, so this keeps them off the kernel.pty.max budget.

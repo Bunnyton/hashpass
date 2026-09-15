@@ -15,13 +15,19 @@ _SYSTEMD_INSTALL = (
     # NSS, so name lookups work regardless of the nspawn machine name. nsswitch (from runtime/)
     # references it as `hosts: files myhostname dns`.
     "&& apt-get install -y systemd systemd-sysv dbus fish sudo libnss-myhostname "
-    # root:hashpass fallback; and a non-root `student` (password student, fish shell, classic
-    # sudoer) -- the default console user, so tasks run unprivileged and students use `sudo`
-    # (typing a password) for root work. A task can override via `settings user`/`sudo`.
+    # root:hashpass fallback; and a non-root `student` (fish shell, sudoer, password `student`
+    # for people who care).  `student` gets NOPASSWD sudo -- otherwise a `solve` that uses
+    # `sudo` at build (nspawn `--user=student`, no tty) would either hang on the password
+    # prompt or fail with "no tty present". The interactive console runs as the same student,
+    # so this trades a real-Linux password step for a container that "just works" both when
+    # authors derive references and when students play.
     "&& echo 'root:hashpass' | chpasswd "
     "&& useradd -m -s /usr/bin/fish student "
     "&& echo 'student:student' | chpasswd "
-    "&& gpasswd -a student sudo"
+    "&& gpasswd -a student sudo "
+    "&& mkdir -p /etc/sudoers.d "
+    "&& echo 'student ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/student "
+    "&& chmod 440 /etc/sudoers.d/student"
 )
 
 

@@ -12,11 +12,8 @@ say "Здравствуй, оператор! Это твоё первое зад
 read brief.md
 
 stage "Проверьте, под каким пользователем вы вошли. Запишите вывод whoami в /home/student/me.txt"
-  # `observe` сравнивал бы содержимое файла с эталоном, но build запускает solve под
-  # root, а живая консоль — под student, поэтому `root\n` в кэше никогда не сходится
-  # со `student\n` у ученика.  Смотрим только сам факт непустой записи.
   solve whoami > /home/student/me.txt
-  check exec test -s /home/student/me.txt
+  observe /home/student/me.txt
   neutral ls cat pwd
   on enter say "Просто:  whoami > /home/student/me.txt"
   hint tries 2 say "Точно:  whoami > /home/student/me.txt"

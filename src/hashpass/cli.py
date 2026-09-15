@@ -290,12 +290,21 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     ref = image_ref(recipe)
     task = is_task(recipe)
     sys.stdout.write(f"\x1b[1m▸ Собираю {ref}\x1b[0m\n")
-    if task:
-        build_task(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
-        kind = "задание"
-    else:
-        build(recipe, store, base=base, workdir=env.work / "build", progress=_progress)
-        kind = "образ"
+    # Unique per-invocation scratch dir. A shared `env.work / "build"` accumulated derive-N
+    # upperdirs across runs (deploy.sh builds 28 tasks in a row): a root-owned `me.txt` left
+    # by task N's solve would deny the next task's student-user solve with EPERM, so the
+    # reference silently derived from an unwritten file. Fresh dir + best-effort cleanup.
+    build_work = env.work / "build" / f"run-{uuid.uuid4().hex[:8]}"
+    build_work.mkdir(parents=True, exist_ok=True)
+    try:
+        if task:
+            build_task(recipe, store, base=base, workdir=build_work, progress=_progress)
+            kind = "задание"
+        else:
+            build(recipe, store, base=base, workdir=build_work, progress=_progress)
+            kind = "образ"
+    finally:
+        _reset_build_workdir(build_work)               # sudo rsync --delete: it may hold root-owned files
     sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} ({kind})\n")
     store.set_taskfile_path(ref, str(taskfile_path.resolve()))   # push attaches it to the card later
     if task:
@@ -304,6 +313,21 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     else:
         _push_image(env, store, ref, io)
     return 0
+
+
+def _reset_build_workdir(path: Path) -> None:
+    """Remove a build's scratch dir, sudo-rsync-style so root-owned files don't leak."""
+    if not path.exists():
+        return
+    empty = path.parent / f".empty-{path.name}"
+    empty.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(subprocess.SubprocessError, OSError):
+        subprocess.run(["sudo", "rsync", "-a", "--delete", str(empty) + "/", str(path) + "/"],
+                       check=False, capture_output=True)
+    with contextlib.suppress(OSError):
+        path.rmdir()
+    with contextlib.suppress(OSError):
+        empty.rmdir()
 
 
 def _announce_stage(session: object, io: Io) -> None:

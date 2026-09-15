@@ -17,7 +17,7 @@ stage "Этап 1/2: создайте файл /home/file.txt (обычному 
   neutral ls cat pwd
   on enter say "В /home обычный пользователь не может создать файл. Нужен sudo."
   hint tries 2 say "Точно:  sudo touch /home/file.txt"
-  hint idle 25 say "Пароль sudo для user 'student' — student."
+  hint idle 25 say "sudo здесь без пароля — просто префиксом даёт root-права на одну команду."
 
 stage "Этап 2/2: удалите /home/file.txt (тоже через sudo)"
   solve sudo rm -f /home/file.txt

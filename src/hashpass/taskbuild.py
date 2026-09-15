@@ -89,7 +89,8 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
                   stage_index: int, exclude: tuple[str, ...], passes: int,
                   progress: Callable[[str], None] | None = None,
                   threshold: float = 1.0, keep_output: bool = False,  # noqa: FBT001, FBT002
-                  variants: tuple[tuple[str, ...], ...] = ()) -> StageChecks:
+                  variants: tuple[tuple[str, ...], ...] = (),
+                  user: str | None = None) -> StageChecks:
     """
     Derive one observed stage: run its solution(s) on FRESH runners, curate, canonicalize.
 
@@ -108,7 +109,7 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
         _report(progress, f"    solution {p + 1}/{len(runs)}")
         runner = factory()
         try:
-            obs = run_stage(runner, deriv_task, stage_index, override=override)
+            obs = run_stage(runner, deriv_task, stage_index, override=override, user=user)
         finally:
             runner.teardown()
         observations.append(_curate(obs, exclude))
@@ -127,8 +128,14 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
 def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task: TaskCode,
                       passes: int,
                       progress: Callable[[str], None] | None = None) -> tuple[list[StageChecks], list[str]]:
-    """Per stage: handler -> sentinel checks; observed -> derived checks. Returns (checks, modes)."""
+    """
+    Per stage: handler -> sentinel checks; observed -> derived checks. Returns (checks, modes).
+
+    Solve prep + target both run under the recipe's `settings.user`, so `whoami`/$USER/id
+    references derive against the SAME user the live console will run under (§7.2).
+    """
     deriv_task = _no_exclude(task)
+    user = recipe.settings.user or None                # None keeps nspawn's default (root)
     checks: list[StageChecks] = []
     acceptance: list[str] = []
     total = len(recipe.stages)
@@ -145,7 +152,7 @@ def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task:
             threshold = recipe.settings.similarity / _PERCENT if stage.match_output else 1.0
             checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes,
                                         progress, threshold, keep_output=stage.match_output,
-                                        variants=stage.variants))
+                                        variants=stage.variants, user=user))
         acceptance.append(mode)
     return checks, acceptance
 
