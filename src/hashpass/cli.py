@@ -1158,8 +1158,37 @@ def _pool_url(env: Home, explicit: str | None = None) -> str | None:
     return explicit or os.environ.get(_ENV_POOL) or load_pool(env).get("url") or None
 
 
+def _url_variants(url: str) -> list[str]:
+    """
+    Equivalent forms of the same pool URL, tried when looking up a cached token.
+
+    The cache key is whatever string was passed to `RemoteRegistry(...)` at login time --
+    but `hashengine login "$POOL_URL"` and `hashengine push` (which falls back to
+    pool.json.url or $HASHPASS_POOL) can each spell the same address slightly
+    differently ("https://IP:8080", "IP:8080", trailing slash).  Try all reasonable
+    forms so a scheme/slash mismatch doesn't lose the token.
+    """
+    stripped = url.rstrip("/")
+    out: list[str] = [stripped, stripped + "/"]
+    if stripped.startswith("https://"):
+        bare = stripped[len("https://"):]
+        out += [bare, "http://" + bare]
+    elif stripped.startswith("http://"):
+        bare = stripped[len("http://"):]
+        out += [bare, "https://" + bare]
+    else:
+        out += ["https://" + stripped, "http://" + stripped]
+    return out
+
+
 def _pool_token(env: Home, url: str) -> str | None:
-    return CredentialCache(env.creds).cached_token(url, now=time.time())
+    cache = CredentialCache(env.creds)
+    now = time.time()
+    for key in _url_variants(url):
+        token = cache.cached_token(key, now=now)
+        if token is not None:
+            return token
+    return None
 
 
 def cmd_config_pool(env: Home, url: str | None = None, io: Io | None = None) -> int:
