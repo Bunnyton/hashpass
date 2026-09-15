@@ -17,10 +17,12 @@ say "У большинства команд есть ключи. Пара бук
 read brief.md
 
 stage "Выведите ВСЕ файлы (включая скрытые) в /home/student/attic и сохраните в /home/student/full-listing.txt"
+  # Проверка семантическая: в листинге должен появиться скрытый файл (.hidden_key).
+  # `observe` на содержимое всего листинга сравнивал бы mtime родительской папки
+  # (строка `..`), а тот меняется при каждой записи в /home/student и делает канон
+  # нестабильным.  Grep же смотрит только на то, чему учит задача.
   solve ls -la /home/student/attic > /home/student/full-listing.txt
-  variant ls -al /home/student/attic > /home/student/full-listing.txt
-  variant ls -a -l /home/student/attic > /home/student/full-listing.txt
-  observe /home/student/full-listing.txt
+  check exec grep -q hidden_key /home/student/full-listing.txt
   neutral cat pwd less
   on enter say "Ключи -l и -a пишутся слитно (-la), раздельно (-l -a) — как удобно."
   hint tries 2 say "Точно:  ls -la /home/student/attic > /home/student/full-listing.txt"

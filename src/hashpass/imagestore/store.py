@@ -110,7 +110,10 @@ class ImageStore:
         else:
             if layer.exists():
                 shutil.rmtree(layer)
-            shutil.copytree(layer_dir, layer)
+            # symlinks=True: an image layer routinely holds symlinks whose targets live in the
+            # BASE image (a dpkg drop), so following them (the shutil default) trips on the
+            # dangling absolute path and blows up unpack.  Keep them as-is.
+            shutil.copytree(layer_dir, layer, symlinks=True)
         meta = {"name": name, "version": version, "parents": list(parents),
                 "build_key": build_key}
         (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
