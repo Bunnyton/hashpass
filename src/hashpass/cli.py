@@ -998,10 +998,16 @@ def _cache_hit_or_forget(env: Home, url: str, io: Io) -> str | None:
     """
     Return the user of a live cached token, or None if the caller must prompt anew.
 
-    Alive cache -> return the user (caller can skip prompts entirely).
-    Cache exists but /me says 401 -> the account was deleted; drop the token + login hint
-    and return None.  Offline / other errors -> treat cache as valid so a bad network
-    doesn't lock people out.  No cache at all -> return None.
+    Alive cache -> return the user AND re-sync pool.json to the URL under which the
+    token is cached, so a later `hashengine push` (which reads pool.json.url as its
+    default registry) hits the SAME cache key and doesn't re-prompt.  This bug was
+    the reason deploy.sh kept asking for a pool password even after login had
+    printed "уже вошли": login used the URL from deploy.sh's $POOL_URL, but push
+    read pool.json.url (possibly stored earlier without a scheme) -> different
+    cache key -> cache miss.
+    Cache exists but /me says 401 -> the account was deleted; drop the token +
+    login hint and return None.  Offline / other errors -> treat cache as valid
+    so a bad network doesn't lock people out.  No cache at all -> return None.
     """
     token = _pool_token(env, url)
     if token is None:
@@ -1011,7 +1017,10 @@ def _cache_hit_or_forget(env: Home, url: str, io: Io) -> str | None:
         CredentialCache(env.creds).forget(url)
         save_pool(env, url, "")
         return None
-    return token_user(token)
+    user = token_user(token)
+    if user:
+        save_pool(env, url, user)                              # keep pool.json in sync
+    return user
 
 
 def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
