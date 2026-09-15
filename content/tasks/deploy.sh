@@ -78,7 +78,7 @@ for name in "${TASKS[@]}"; do
         image_ref=$(grep -E '^image ' Taskfile | head -1 | awk '{print $2}')
         # image_ref = 'first-steps:1'; on the pool it lives under <login>/first-steps:1
         if [[ -z "$DRY" ]]; then
-            hashengine push "$USER_LOGIN/$image_ref" --task 1
+            hashengine push "$USER_LOGIN/$image_ref" --task
         fi
     )
 done

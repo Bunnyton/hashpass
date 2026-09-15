@@ -7,14 +7,14 @@ from hashpass.registry.token import issue_token, token_expiry, token_user, verif
 _KEY = secrets.token_bytes(32)
 _NOW = 1000.0
 _DAY = 24 * 60 * 60
-_WEEK = 7 * _DAY
+_TTL = 60 * _DAY                       # matches _TOKEN_TTL in hashpass.registry.token
 
 
 @pytest.mark.tier1
 def test_token_valid_within_ttl():
     token = issue_token(_KEY, "alice", now=_NOW)
     assert verify_token(_KEY, token, now=_NOW) == "alice"
-    assert verify_token(_KEY, token, now=_NOW + 6 * _DAY) == "alice"
+    assert verify_token(_KEY, token, now=_NOW + _TTL - _DAY) == "alice"
 
 
 @pytest.mark.tier1
@@ -28,8 +28,8 @@ def test_token_user_reads_user_without_verifying():
 @pytest.mark.tier1
 def test_token_expires_at_ttl_boundary():
     token = issue_token(_KEY, "alice", now=_NOW)
-    assert verify_token(_KEY, token, now=_NOW + _WEEK) is None
-    assert verify_token(_KEY, token, now=_NOW + _WEEK + _DAY) is None
+    assert verify_token(_KEY, token, now=_NOW + _TTL) is None
+    assert verify_token(_KEY, token, now=_NOW + _TTL + _DAY) is None
 
 
 @pytest.mark.tier1
@@ -43,7 +43,7 @@ def test_token_rejects_wrong_secret_and_tampering():
 @pytest.mark.tier1
 def test_token_expiry_is_readable_without_secret():
     token = issue_token(_KEY, "alice", now=_NOW)
-    assert token_expiry(token) == int(_NOW) + _WEEK
+    assert token_expiry(token) == int(_NOW) + _TTL
     assert token_expiry("garbage") is None
 
 

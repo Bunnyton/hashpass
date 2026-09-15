@@ -1,10 +1,16 @@
-"""Signed bearer tokens: HMAC(secret, user‖NUL‖expiry) with a 7-day TTL; injectable clock."""
+"""
+Signed bearer tokens: HMAC(secret, user‖NUL‖expiry) with a 60-day TTL; injectable clock.
+
+The TTL is deliberately long: authors log in once per stretch of work and expect the tool to stay
+silent until they take a real break.  A shorter cadence had them typing the pool password on every
+push session; 60 days matches how often people actually come back to teach.
+"""
 import base64
 import hashlib
 import hmac
 
 _TOKEN_ALGO = hashlib.sha256
-_TOKEN_TTL = 7 * 24 * 60 * 60
+_TOKEN_TTL = 60 * 24 * 60 * 60
 _TOKEN_FIELDS = 3
 _NUL = "\x00"
 

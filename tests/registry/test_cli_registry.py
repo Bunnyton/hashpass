@@ -152,6 +152,37 @@ def test_pool_images_lists_stored_refs(registry, tmp_path):
     assert rows[0]["kind"] == "image"
 
 
+@pytest.mark.tier1
+def test_looks_like_registry_url_accepts_urls_and_rejects_junk():
+    """
+    Reject argparse arg-slurp — a stray positional must not be treated as a registry URL.
+
+    Regression for `hashengine push ref --task 1`, where the trailing `1` used to be parsed
+    as the (optional) registry positional, miss the token cache, and trigger a password prompt.
+    """
+    ok = ("http://127.0.0.1:8080", "https://135.106.177.228:8080", "pool.example.com",
+          "127.0.0.1:8080", "10.0.0.1:8080")
+    for value in ok:
+        assert cli._looks_like_registry_url(value), value        # noqa: SLF001
+    for value in ("1", "task", "abcdef", ""):
+        assert not cli._looks_like_registry_url(value), value    # noqa: SLF001
+
+
+@pytest.mark.tier2
+def test_cmd_push_rejects_junk_registry_before_prompting(registry, tmp_path, monkeypatch):
+    """A junk positional (`push ref --task 1` → registry='1') must NOT reach the password prompt."""
+    registry.users.add("dev", "s3cr3t", role="author")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    _seed(ImageStore(env.images), tmp_path, "img", (), "I")
+    def _fail_getpass(_p: str = "") -> str:
+        msg = "password prompt escaped junk-registry sanitizer"
+        raise AssertionError(msg)
+    monkeypatch.setattr("getpass.getpass", _fail_getpass)
+    io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    with pytest.raises(RuntimeError, match="не похож на URL"):
+        cli.cmd_push(env, "img:1", "1", io=io)
+
+
 @pytest.mark.tier2
 def test_cmd_push_prompts_login_when_no_token(registry, tmp_path, monkeypatch):
     # no cached token -> cmd_push logs in inline (io supplies the login) instead of erroring

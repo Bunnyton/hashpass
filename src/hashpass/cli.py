@@ -961,11 +961,26 @@ def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  #
     return 0
 
 
+def _looks_like_registry_url(url: str) -> bool:
+    """
+    Check that the string could plausibly be a registry URL (has a scheme, colon or dot).
+
+    Catches argparse arg-slurp bugs like `push ref --task 1` where a stray `1` becomes `registry`
+    and would otherwise trigger a phantom password prompt against an unreachable "1".
+    """
+    stripped = url.strip()
+    return "://" in stripped or ":" in stripped or "." in stripped
+
+
 def _prompt_registry(env: Home, registry: str | None, io: Io) -> str:
     """Resolve the registry URL: explicit arg → saved (pool.json/$HASHPASS_POOL) → prompt once."""
     url = _pool_url(env, registry) or (io.read("Адрес реестра/пула (URL): ") or "").strip()
     if not url:
         msg = "не задан адрес реестра (укажите URL или задайте один раз через login)"
+        raise RuntimeError(msg)
+    if not _looks_like_registry_url(url):
+        msg = (f"адрес реестра «{url}» не похож на URL "
+               "(ожидается host:port, http(s)://host или host.domain)")
         raise RuntimeError(msg)
     return url
 
