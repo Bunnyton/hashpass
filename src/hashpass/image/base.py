@@ -14,15 +14,23 @@ _SYSTEMD_INSTALL = (
     # libnss-myhostname: resolve the container's own (dynamic, per-run) hostname + localhost via
     # NSS, so name lookups work regardless of the nspawn machine name. nsswitch (from runtime/)
     # references it as `hosts: files myhostname dns`.
-    "&& apt-get install -y systemd systemd-sysv dbus fish sudo libnss-myhostname "
-    # root:hashpass fallback; and a non-root `student` (fish shell, sudoer, password `student`
+    #
+    # bash: interactive shell.  ble.sh (shipped under runtime/opt/ble.sh) sources on top for
+    # syntax highlighting + fish-style autosuggestions -- so students still get the polish
+    # they had under fish, but the runtime shell speaks plain bash syntax (unquoted glob
+    # `find -name x*`, `.[!.]*`, `[[ ]]`, `${var}` — exactly what the tasks' hints assume).
+    # procps: gives `ps`, which ble.sh's environment check requires (v0.4 nightly
+    # refuses to load when `ps` is missing).  Task pedagogy that "installs procps"
+    # (proc-audit) is not affected -- their acceptance runs `ps` and still passes.
+    "&& apt-get install -y systemd systemd-sysv dbus bash sudo libnss-myhostname procps "
+    # root:hashpass fallback; and a non-root `student` (bash shell, sudoer, password `student`
     # for people who care).  `student` gets NOPASSWD sudo -- otherwise a `solve` that uses
     # `sudo` at build (nspawn `--user=student`, no tty) would either hang on the password
     # prompt or fail with "no tty present". The interactive console runs as the same student,
     # so this trades a real-Linux password step for a container that "just works" both when
     # authors derive references and when students play.
     "&& echo 'root:hashpass' | chpasswd "
-    "&& useradd -m -s /usr/bin/fish student "
+    "&& useradd -m -s /bin/bash student "
     "&& echo 'student:student' | chpasswd "
     "&& gpasswd -a student sudo "
     "&& mkdir -p /etc/sudoers.d "

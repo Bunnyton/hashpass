@@ -1,0 +1,25 @@
+#!/bin/sh
+# The interactive login shell for the hashpass console: bash (with ble.sh loaded from
+# /etc/hp-bashrc) so students type real POSIX-shell syntax.  Used as `su -s /usr/local/sbin/hp-bash`.
+#
+# GRADED task (HP_PORT set): EXEC bash under script(1) so hp-bashrc's per-command hook can
+# ship each command's OUTPUT to the host (the only way to see output when the container owns
+# the console).  script is a transparent pty recorder -- input stays lossless; `-f` flushes
+# so the hook sees output at once.  We `exec` it (no wrapper process): when the student's
+# bash exits, script exits, hp-bash is gone, `su` returns and hp-console powers the machine
+# off -- one clean path, so `exit` always ends the session.
+#
+# SHELL=/bin/sh is CRITICAL: script's -c runs the command via $SHELL, and `su -s hp-bash`
+# set $SHELL to hp-bash itself -- without this override script would re-invoke hp-bash
+# (HP_PORT still set) which re-runs script... an infinite fork bomb that exhausts ptys.
+# /bin/sh runs bash directly, once.
+#
+# Image-edit console (no HP_PORT): plain bash with the same rcfile (ble.sh, aliases, prompt)
+# but with the intro banner shown and the grade hooks skipped.
+if [ -n "$HP_PORT" ] && command -v script >/dev/null 2>&1; then
+    log="$HOME/.hp-typescript"
+    : > "$log" 2>/dev/null || true
+    exec env SHELL=/bin/sh \
+        script -q -e -f -c '/bin/bash --rcfile /etc/hp-bashrc -i' "$log"
+fi
+exec /bin/bash --rcfile /etc/hp-bashrc -i

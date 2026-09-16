@@ -1,0 +1,179 @@
+# hashpass base image — a friendly, colourful interactive BASH shell (a straight port of the
+# earlier config.fish).  Bash-native syntax means the tasks' hints (unquoted `find -name x*`,
+# `.[!.]*`, `[[ ... ]]`) work verbatim; ble.sh gives us the fish-style polish on top:
+# syntax highlighting, autosuggestions from history, better completion.  All pure-bash, no
+# daemons, no per-user config -- everything lives here and in /opt/ble.sh.
+
+# Interactive-only.
+case $- in *i*) ;; *) return ;; esac
+
+# Load ble.sh.  --noattach lets us finish configuring hooks/prompt before its line editor
+# takes over the terminal; we call `ble-attach` at the end.
+#
+# TERM=dumb (or HP_NO_BLE set) skips ble.sh: it's meant for headless testing (expect
+# scripts, CI) that cannot answer ble.sh's initial terminal-capability CPR queries.
+# The task grading pipeline stays functional via the DEBUG-trap fallback below.
+if [ -f /opt/ble.sh/ble.sh ] && [ -z "${HP_NO_BLE-}" ] && [ "${TERM-}" != dumb ]; then
+    # shellcheck disable=SC1091
+    source /opt/ble.sh/ble.sh --noattach 2>/dev/null || true
+fi
+
+# Prompt (mirrors fish_prompt).  Under ble.sh we lean on its own `\[` / `\]` handling:
+# cwd in bright blue, then " ❯ " in bright green.  A trailing ✗ marker on non-zero exit
+# is nice to have but complicates ble.sh's syntax-highlight of the prompt itself, so we
+# keep the prompt minimal.  The exit status is still visible via the shell echo.
+PS1='\[\e[94m\]\w\[\e[0m\]\[\e[92m\] ❯ \[\e[0m\]'
+
+# Aliases.
+alias ll='ls -alh --color=auto'
+alias la='ls -A --color=auto'
+alias l='ls -CF --color=auto'
+
+# Welcome banner for the plain image/edit shell.  A graded task (HP_PORT set) drives its own
+# intro over the grade socket, so stay quiet there.
+if [ -z "${HP_PORT-}" ] && [ -r /etc/hp-banner ]; then
+    printf '\e[95m'
+    cat /etc/hp-banner 2>/dev/null
+    printf '\e[0m'
+fi
+
+# `exit` finishes the task: powers the machine off (hp-console takes over) which returns
+# control to hashpass on the host.  In bash `exit` normally leaves on the first try -- the
+# "There are running jobs" warning is off by default when `huponexit` is off, which it is
+# in a non-login-shell.  We add `set +m` in the plain image console to also silence any
+# job-control chatter from a lone stray background job.
+set +m 2>/dev/null || true
+
+# ---------------------------------------------------------------------------------------
+# Live-grade hooks -- ONLY inside a task (HP_PORT set).
+# ---------------------------------------------------------------------------------------
+if [ -n "${HP_PORT-}" ]; then
+    __hp_off=0
+    __hp_shadow=()
+    __hp_prompt_t=""
+    __hp_submit_t=""
+
+    # Called BEFORE the prompt is drawn -- record when the prompt appeared so we can compute
+    # (submit_t - prompt_t) as an approximate typing time and let the host flag pastes.
+    __hp_precmd() {
+        __hp_prompt_t=$(date +%s.%N)
+    }
+
+    # Called BEFORE the student's command runs.  We do two things:
+    #   1. Snapshot the submit time (paired with __hp_prompt_t above).
+    #   2. Query the host for the stage's allow/deny policy and shadow every base command
+    #      that the stage forbids with a function that refuses and returns 1 -- so a `deny cp`
+    #      task truly cannot run `cp`, and `allow ls cd` refuses everything else.  A function
+    #      defined here shadows the binary/builtin for THIS run only; __hp_postexec unsets
+    #      them so the next command is judged fresh against the (possibly changed) policy.
+    __hp_preexec() {
+        # clear last run's shadow first
+        local f
+        for f in "${__hp_shadow[@]}"; do unset -f "$f" 2>/dev/null; done
+        __hp_shadow=()
+
+        __hp_submit_t=$(date +%s.%N)
+
+        local cmd="$1"
+        local pol
+        pol=$(hp-io policy 2>/dev/null) || return
+        [ -z "$pol" ] && return
+
+        local allow_s deny_s neutral_s
+        IFS=';' read -r allow_s deny_s neutral_s <<< "$pol"
+        [ -z "$allow_s" ] && [ -z "$deny_s" ] && return
+
+        local -a allow deny neutral
+        if [ -n "$allow_s" ];   then IFS=',' read -ra allow   <<< "$allow_s";   fi
+        if [ -n "$deny_s" ];    then IFS=',' read -ra deny    <<< "$deny_s";    fi
+        if [ -n "$neutral_s" ]; then IFS=',' read -ra neutral <<< "$neutral_s"; fi
+
+        # Walk each pipeline / && || ; segment; the base command is the first token
+        # (skipping a leading `sudo`).
+        local flat
+        flat=$(printf '%s' "$cmd" | sed -E 's/(\|\||&&|;|\|)/\n/g')
+        local seg base
+        local -a toks
+        while IFS= read -r seg; do
+            # shellcheck disable=SC2206
+            toks=( $seg )
+            [ ${#toks[@]} -eq 0 ] && continue
+            base="${toks[0]}"
+            if [ "$base" = sudo ] && [ ${#toks[@]} -ge 2 ]; then
+                base="${toks[1]}"
+            fi
+            [ -z "$base" ] && continue
+            local blocked=0
+            local d
+            for d in "${deny[@]}"; do [ "$d" = "$base" ] && blocked=1 && break; done
+            if [ "$blocked" -ne 1 ] && [ ${#allow[@]} -gt 0 ]; then
+                local ok=0 a
+                for a in "${allow[@]}" "${neutral[@]}" cd exit; do
+                    [ "$a" = "$base" ] && ok=1 && break
+                done
+                [ "$ok" -eq 0 ] && blocked=1
+            fi
+            if [ "$blocked" -eq 1 ]; then
+                # `builtin echo` so shadowing `echo` doesn't recurse when the message runs.
+                eval "$base() { builtin echo \"Команда «$base» запрещена.\"; return 1; }"
+                __hp_shadow+=("$base")
+            fi
+        done <<< "$flat"
+    }
+
+    # Called AFTER the command has finished.  Reads the delta of the typescript that
+    # script(1) has written since the previous command, base64-encodes it, and ships
+    # `cmd <cmd_b64> <output_b64> <typing_seconds>` to the host.  Cap the output at
+    # 64 KiB to keep the socket message bounded.
+    __hp_postexec() {
+        local cmd="$1"
+        local log="$HOME/.hp-typescript"
+        local size out=""
+        size=$(stat -c %s "$log" 2>/dev/null || echo 0)
+        if [ "$size" -gt "${__hp_off:-0}" ]; then
+            out=$(tail -c +$((__hp_off + 1)) "$log" 2>/dev/null | tail -c 65536 | base64 -w0)
+        fi
+        __hp_off=$size
+
+        local typing=""
+        if [ -n "$__hp_prompt_t" ] && [ -n "$__hp_submit_t" ]; then
+            typing=$(awk -v a="$__hp_prompt_t" -v b="$__hp_submit_t" \
+                     'BEGIN{ printf "%.6f", b - a }' 2>/dev/null)
+        fi
+
+        local cmd_b64
+        cmd_b64=$(printf '%s' "$cmd" | base64 -w0)
+        hp-io "cmd $cmd_b64 $out $typing" 2>/dev/null
+
+        # After hp-io's reply streamed back through the terminal (and was captured by
+        # script(1)), advance the offset past it so the NEXT command doesn't see the reply
+        # as its own output.
+        __hp_off=$(stat -c %s "$log" 2>/dev/null || echo "$size")
+    }
+
+    # Wire the hooks through ble.sh's blehook API -- it mirrors fish's --on-event exactly
+    # and passes the command line as $1 to PREEXEC/POSTEXEC.  If ble.sh failed to load
+    # (base image without procps, etc.) we quietly skip grading rather than shim it with a
+    # broken DEBUG trap that would misidentify PROMPT_COMMAND items as student commands.
+    if type -t blehook >/dev/null 2>&1; then
+        blehook PRECMD+=__hp_precmd
+        blehook PREEXEC+=__hp_preexec
+        blehook POSTEXEC+=__hp_postexec
+    else
+        # No ble.sh: grade via a DEBUG trap that skips PROMPT_COMMAND items.  BASH_COMMAND
+        # is set on every simple command; we snapshot it into $_hp_cmd whenever we're not
+        # already inside our own postexec/precmd chain, so a trailing PROMPT_COMMAND doesn't
+        # clobber it.  Then a two-stage PROMPT_COMMAND fires postexec (with the last real
+        # command) followed by precmd (arms the timing).  Prompt still renders via PS1.
+        __hp_cmd=""
+        trap '[[ $BASH_COMMAND == __hp_* ]] || __hp_cmd="$BASH_COMMAND"' DEBUG
+        PROMPT_COMMAND='__hp_postexec "$__hp_cmd"; __hp_cmd=""; __hp_precmd'
+    fi
+    # Greet the host once so it renders the intro / read / first stage announce.
+    hp-io hello 2>/dev/null
+fi
+
+# Attach ble.sh now that all hooks and PS1 are in place.
+if type -t ble-attach >/dev/null 2>&1 && [[ ${BLE_VERSION-} ]]; then
+    ble-attach
+fi

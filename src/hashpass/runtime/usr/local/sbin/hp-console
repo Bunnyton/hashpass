@@ -25,8 +25,8 @@ if id "$user" >/dev/null 2>&1; then
             *)   gpasswd -a "$user" sudo >/dev/null 2>&1 ;;
         esac
     fi
-    su --whitelist-environment=HP_PORT - "$user" -s /usr/local/sbin/hp-fish
+    su --whitelist-environment=HP_PORT - "$user" -s /usr/local/sbin/hp-bash
 else
-    /usr/local/sbin/hp-fish   # unknown user: fall back to a root shell
+    /usr/local/sbin/hp-bash   # unknown user: fall back to a root shell
 fi
 exec /usr/bin/systemctl poweroff
