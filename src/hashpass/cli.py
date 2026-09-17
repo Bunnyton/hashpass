@@ -313,7 +313,7 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
             build(recipe, store, base=base, workdir=build_work, progress=_progress)
             kind = "образ"
     finally:
-        _reset_build_workdir(build_work)               # sudo rsync --delete: it may hold root-owned files
+        _reset_workdir(build_work)                     # sudo rsync --delete: it may hold root-owned files
     sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} ({kind})\n")
     store.set_taskfile_path(ref, str(taskfile_path.resolve()))   # push attaches it to the card later
     if task:
@@ -363,8 +363,10 @@ def _stage_read_assets(recipe: Recipe, store: ImageStore, ref: str, taskfile_dir
         dst.write_bytes(src.read_bytes())
 
 
-def _reset_build_workdir(path: Path) -> None:
-    """Remove a build's scratch dir, sudo-rsync-style so root-owned files don't leak."""
+def _reset_workdir(path: Path) -> None:
+    # Handles both build workdirs (root's derive artefacts) and run workdirs (~1 GB per booted
+    # session — overlay upper + lower stacks); best-effort, never raises.
+    """Remove a scratch dir, sudo-rsync-style so root-owned overlay files don't leak."""
     if not path.exists():
         return
     empty = path.parent / f".empty-{path.name}"
@@ -735,6 +737,10 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
     finally:
         stop.set()
         session.teardown()
+        # Overlay upper + lower stacks left on disk are ~1 GB per boot and mostly root-owned;
+        # without this every `hashpass run` leaks that much into `env.work/run/` and fills /home
+        # after a handful of tasks.
+        _reset_workdir(workdir)
     if on_complete is not None:
         on_complete(completed, history)
     return 0
@@ -797,13 +803,16 @@ def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, 
 
 def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
     """Edit a bare image live: open a root console, then commit any changes back to the image."""
-    runner = run_image(ref, store, env.work / "run" / uuid.uuid4().hex,   # unique per run
-                       base=ensure_base_image(env, store))
+    workdir = env.work / "run" / uuid.uuid4().hex     # unique per run
+    runner = run_image(ref, store, workdir, base=ensure_base_image(env, store))
     try:
         _interactive_console(runner, user="root")   # a raw root console -- edit the image freely
         _commit_image_edits(env, runner, store, ref, io)
     finally:
         runner.teardown()
+        # Same leak as _run_task -- overlay upper/lower stacks left in workdir/ are heavy and
+        # partly root-owned; sudo-rsync clean rather than let /home fill up over sessions.
+        _reset_workdir(workdir)
     return 0
 
 
