@@ -15,13 +15,12 @@ _SYSTEMD_INSTALL = (
     # NSS, so name lookups work regardless of the nspawn machine name. nsswitch (from runtime/)
     # references it as `hosts: files myhostname dns`.
     #
-    # bash: interactive shell.  ble.sh (shipped under runtime/opt/ble.sh) sources on top for
-    # syntax highlighting + fish-style autosuggestions -- so students still get the polish
-    # they had under fish, but the runtime shell speaks plain bash syntax (unquoted glob
-    # `find -name x*`, `.[!.]*`, `[[ ]]`, `${var}` — exactly what the tasks' hints assume).
-    # procps: gives `ps`, which ble.sh's environment check requires (v0.4 nightly
-    # refuses to load when `ps` is missing).  Task pedagogy that "installs procps"
-    # (proc-audit) is not affected -- their acceptance runs `ps` and still passes.
+    # bash: interactive shell -- POSIX syntax (unquoted glob `find -name x*`, `.[!.]*`,
+    # `[[ ]]`, `${var}`) is what every task's hint assumes.  Plain readline: fast, Cyrillic
+    # input works out of the box, no external line-editor plugin (an earlier ble.sh
+    # experiment lagged and mishandled multi-byte -- back to a stock shell).
+    # procps: gives `ps`, referenced by several hints as a diagnostic; task pedagogy that
+    # "installs procps" (proc-audit) still works with `ps` pre-installed.
     "&& apt-get install -y systemd systemd-sysv dbus bash sudo libnss-myhostname procps "
     # root:hashpass fallback; and a non-root `student` (bash shell, sudoer, password `student`
     # for people who care).  `student` gets NOPASSWD sudo -- otherwise a `solve` that uses

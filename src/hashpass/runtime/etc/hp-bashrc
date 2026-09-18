@@ -1,30 +1,24 @@
 # hashpass base image — a friendly, colourful interactive BASH shell (a straight port of the
 # earlier config.fish).  Bash-native syntax means the tasks' hints (unquoted `find -name x*`,
-# `.[!.]*`, `[[ ... ]]`) work verbatim; ble.sh gives us the fish-style polish on top:
-# syntax highlighting, autosuggestions from history, better completion.  All pure-bash, no
-# daemons, no per-user config -- everything lives here and in /opt/ble.sh.
+# `.[!.]*`, `[[ ... ]]`) work verbatim; no third-party line editor -- readline gives us
+# tab-completion, history and Cyrillic input out of the box.
 
 # Interactive-only.
 case $- in *i*) ;; *) return ;; esac
 
-# Load ble.sh.  --noattach lets us finish configuring hooks/prompt before its line editor
-# takes over the terminal; we call `ble-attach` at the end.
-#
-# TERM=dumb (or HP_NO_BLE set) skips ble.sh: it's meant for headless testing (expect
-# scripts, CI) that cannot answer ble.sh's initial terminal-capability CPR queries.
-# The task grading pipeline stays functional via the DEBUG-trap fallback below.
-if [ -f /opt/ble.sh/ble.sh ] && [ -z "${HP_NO_BLE-}" ] && [ "${TERM-}" != dumb ]; then
-    # shellcheck disable=SC1091
-    source /opt/ble.sh/ble.sh --noattach 2>/dev/null || true
-fi
+# Prompt: cwd in bright blue, then " ❯ " in bright green.  A red ✗ mark on the last non-zero
+# is nice, but simplest is inline via a small helper -- readline reads `$?` fresh at each
+# render, so we snapshot into a var first.
+_hp_last_status=0
+_hp_render_prompt() {
+    _hp_last_status=$?
+    local mark=''
+    (( _hp_last_status != 0 )) && mark=$'\[\e[91m\] ✗\[\e[0m\]'
+    PS1='\[\e[94m\]\w\[\e[0m\]'"$mark"'\[\e[92m\] ❯ \[\e[0m\]'
+}
+PROMPT_COMMAND='_hp_render_prompt'
 
-# Prompt (mirrors fish_prompt).  Under ble.sh we lean on its own `\[` / `\]` handling:
-# cwd in bright blue, then " ❯ " in bright green.  A trailing ✗ marker on non-zero exit
-# is nice to have but complicates ble.sh's syntax-highlight of the prompt itself, so we
-# keep the prompt minimal.  The exit status is still visible via the shell echo.
-PS1='\[\e[94m\]\w\[\e[0m\]\[\e[92m\] ❯ \[\e[0m\]'
-
-# Aliases.
+# Handy aliases.
 alias ll='ls -alh --color=auto'
 alias la='ls -A --color=auto'
 alias l='ls -CF --color=auto'
@@ -37,21 +31,22 @@ if [ -z "${HP_PORT-}" ] && [ -r /etc/hp-banner ]; then
     printf '\e[0m'
 fi
 
-# `exit` finishes the task: powers the machine off (hp-console takes over) which returns
-# control to hashpass on the host.  In bash `exit` normally leaves on the first try -- the
-# "There are running jobs" warning is off by default when `huponexit` is off, which it is
-# in a non-login-shell.  We add `set +m` in the plain image console to also silence any
-# job-control chatter from a lone stray background job.
-set +m 2>/dev/null || true
-
 # ---------------------------------------------------------------------------------------
 # Live-grade hooks -- ONLY inside a task (HP_PORT set).
+#
+# bash lacks a native fish_preexec/fish_postexec pair, so we synthesise one:
+#   - DEBUG trap fires before every simple command; we snapshot BASH_COMMAND into
+#     __hp_cmd whenever it isn't one of our own housekeeping items (a naive trap
+#     would clobber it with PROMPT_COMMAND's own text).
+#   - PROMPT_COMMAND fires BETWEEN commands: it runs postexec with the last real
+#     command, then clears the buffer, then arms precmd for the next round.
 # ---------------------------------------------------------------------------------------
 if [ -n "${HP_PORT-}" ]; then
     __hp_off=0
     __hp_shadow=()
     __hp_prompt_t=""
     __hp_submit_t=""
+    __hp_cmd=""
 
     # Called BEFORE the prompt is drawn -- record when the prompt appeared so we can compute
     # (submit_t - prompt_t) as an approximate typing time and let the host flag pastes.
@@ -67,7 +62,6 @@ if [ -n "${HP_PORT-}" ]; then
     #      defined here shadows the binary/builtin for THIS run only; __hp_postexec unsets
     #      them so the next command is judged fresh against the (possibly changed) policy.
     __hp_preexec() {
-        # clear last run's shadow first
         local f
         for f in "${__hp_shadow[@]}"; do unset -f "$f" 2>/dev/null; done
         __hp_shadow=()
@@ -127,6 +121,7 @@ if [ -n "${HP_PORT-}" ]; then
     # 64 KiB to keep the socket message bounded.
     __hp_postexec() {
         local cmd="$1"
+        [ -z "$cmd" ] && return
         local log="$HOME/.hp-typescript"
         local size out=""
         size=$(stat -c %s "$log" 2>/dev/null || echo 0)
@@ -151,29 +146,18 @@ if [ -n "${HP_PORT-}" ]; then
         __hp_off=$(stat -c %s "$log" 2>/dev/null || echo "$size")
     }
 
-    # Wire the hooks through ble.sh's blehook API -- it mirrors fish's --on-event exactly
-    # and passes the command line as $1 to PREEXEC/POSTEXEC.  If ble.sh failed to load
-    # (base image without procps, etc.) we quietly skip grading rather than shim it with a
-    # broken DEBUG trap that would misidentify PROMPT_COMMAND items as student commands.
-    if type -t blehook >/dev/null 2>&1; then
-        blehook PRECMD+=__hp_precmd
-        blehook PREEXEC+=__hp_preexec
-        blehook POSTEXEC+=__hp_postexec
-    else
-        # No ble.sh: grade via a DEBUG trap that skips PROMPT_COMMAND items.  BASH_COMMAND
-        # is set on every simple command; we snapshot it into $_hp_cmd whenever we're not
-        # already inside our own postexec/precmd chain, so a trailing PROMPT_COMMAND doesn't
-        # clobber it.  Then a two-stage PROMPT_COMMAND fires postexec (with the last real
-        # command) followed by precmd (arms the timing).  Prompt still renders via PS1.
-        __hp_cmd=""
-        trap '[[ $BASH_COMMAND == __hp_* ]] || __hp_cmd="$BASH_COMMAND"' DEBUG
-        PROMPT_COMMAND='__hp_postexec "$__hp_cmd"; __hp_cmd=""; __hp_precmd'
-    fi
+    # Snapshot BASH_COMMAND into __hp_cmd on every simple command, EXCEPT when the current
+    # command is one of our own housekeeping items (PROMPT_COMMAND's __hp_postexec / precmd
+    # / prompt-render / clear).  Without the filter our own PROMPT_COMMAND items would
+    # clobber the student's last command before postexec runs against it.
+    trap '[[ "$BASH_COMMAND" == __hp_* || "$BASH_COMMAND" == _hp_* ]] || \
+          [[ "$BASH_COMMAND" == PROMPT_COMMAND* ]] || \
+          __hp_cmd="$BASH_COMMAND"; __hp_preexec "$__hp_cmd"' DEBUG
+
+    # PROMPT_COMMAND runs BETWEEN commands: ship the last one to the host, blank the
+    # buffer, arm the next timing sample, then render the prompt.
+    PROMPT_COMMAND='__hp_postexec "$__hp_cmd"; __hp_cmd=""; __hp_precmd; _hp_render_prompt'
+
     # Greet the host once so it renders the intro / read / first stage announce.
     hp-io hello 2>/dev/null
-fi
-
-# Attach ble.sh now that all hooks and PS1 are in place.
-if type -t ble-attach >/dev/null 2>&1 && [[ ${BLE_VERSION-} ]]; then
-    ble-attach
 fi
