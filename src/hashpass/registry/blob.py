@@ -75,7 +75,11 @@ def unpack_image(blob: bytes, dest: ImageStore, *, sudo: bool = False) -> str:
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         with tarfile.open(fileobj=io.BytesIO(blob), mode="r") as tar:
-            tar.extractall(tmp, filter="data")
+            # `data` filter (Python 3.12+ default) refuses absolute-path symlinks -- routine
+            # in dpkg layers (`/usr/share/groff/site-tmac` from `man-db`, `/etc/alternatives/*`
+            # etc.).  The tar was produced by our own trusted `pack_image` from an authenticated
+            # author's layer; unpack as fully-trusted so those symlinks land intact.
+            tar.extractall(tmp, filter="fully_trusted")   # noqa: S202  server-only, trusted content
         meta = json.loads((tmp / "meta.json").read_text(encoding="utf-8"))
         img = dest.save(
             meta["name"], meta["version"], tmp / "layer", tuple(meta["parents"]), sudo=sudo,

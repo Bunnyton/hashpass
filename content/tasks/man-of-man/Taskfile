@@ -3,6 +3,12 @@
 
 image man-of-man:1
 
+# man-db не входит в базовый образ (там строго systemd + bash + procps + sudo — всё остальное
+# задачи ставят сами, где это уместно).  Здесь без man нельзя: студент печатает `man man`,
+# и терминал должен показать страницу руководства, а не «command not found».
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y man-db >/dev/null 2>&1
+
 hidden hp
 
 settings
