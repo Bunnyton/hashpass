@@ -155,13 +155,17 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
 
     Paths come from the trusted recipe author (§5 — the student is the threat, not the author).
     """
+    # every action ends with a trailing newline — otherwise consecutive `say`/`exec` actions
+    # concatenate visually ("ls /home/student/roomПервая команда — самая простая…") and each
+    # hint smashes into the shell's next prompt on the same line.
     if isinstance(action, SayAction):
-        render.render(action.text, mode="dramatic" if action.dramatic else None)
+        text = action.text if action.text.endswith("\n") else action.text + "\n"
+        render.render(text, mode="dramatic" if action.dramatic else None)
         return action.text
     if isinstance(action, ShowFileAction):
         resolved = _resolve_asset(action.path, Path(hp_dir), runner.rootfs, workdir)
         if resolved is None:
-            msg = f"(show file: файл не найден: {action.path})"
+            msg = f"(show file: файл не найден: {action.path})\n"
             render.render(msg, mode="instant")
             return msg
         return render.show_file(resolved)
@@ -174,7 +178,8 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
                 pause()                                   # wait for Enter between pages
         return text
     res = run_handler(runner, ExecAction(action.value), ctx, hp_dir=Path(hp_dir))
-    render.render(res.stdout, mode="instant")   # program output (e.g. ASCII art) appears at once, not typed
+    out = res.stdout if res.stdout.endswith("\n") else res.stdout + "\n"
+    render.render(out, mode="instant")   # program output (e.g. ASCII art) appears at once, not typed
     return res.stdout
 
 
@@ -215,16 +220,32 @@ class TaskSession:
 
     def enter(self) -> list[str]:
         """Fire session `voice hello` (first call) then the current stage's `on_enter`; return their text."""
+        # kept as-is for stages > 1 (announce + enter pair happens together at stage advance);
+        # stage 1's initial intro flow uses `greet_once()` / `enter_stage()` separately so the
+        # on_enter fires AFTER the top-level intro + brief + announce (not before them).
         stage = current_stage(self.progress)
-        outs: list[str] = []
-        if not self._greeted:
-            self._greeted = True
-            outs.extend(self._perform_all(self.meta.voice.hello, self._ctx("", 0, stage or 0)))
+        outs: list[str] = self.greet_once()
         if stage is None:
             return outs
         sm = self.meta.stages[stage]
         outs.extend(self._perform_all(sm.on_enter, self._ctx("", self.tries[stage], stage)))
         return outs
+
+    def greet_once(self) -> list[str]:
+        """Fire `voice hello` — only the first time it's called; a no-op afterwards."""
+        if self._greeted:
+            return []
+        self._greeted = True
+        stage = current_stage(self.progress) or 0
+        return self._perform_all(self.meta.voice.hello, self._ctx("", 0, stage))
+
+    def enter_stage(self) -> list[str]:
+        """Fire the current stage's `on_enter` only (no `voice.hello`)."""
+        stage = current_stage(self.progress)
+        if stage is None:
+            return []
+        sm = self.meta.stages[stage]
+        return self._perform_all(sm.on_enter, self._ctx("", self.tries[stage], stage))
 
     def fire_intro(self) -> list[str]:
         """Render the top-level `intro` actions (author opener, before the first stage)."""

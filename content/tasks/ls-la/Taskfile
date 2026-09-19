@@ -18,14 +18,17 @@ read brief.md
 
 stage "Выведите ВСЕ файлы (включая скрытые) в /home/student/attic"
   # observe output здесь неустойчив: ls -la печатает mtime, а он меняется между
-  # проходами канонизации.  Принимаем по факту ВВОДА -la или -a — цель задачи
-  # именно в том, чтобы студент выучил флаги, а не поймал строку в файл.
+  # проходами канонизации.  Принимаем по факту ВВОДА -la или -a — любой естественный
+  # способ (абсолютный или относительный, cwd = /home/student).
   accept cmd "ls -la /home/student/attic"
   accept cmd "ls -al /home/student/attic"
   accept cmd "ls -a /home/student/attic"
+  accept cmd "ls -la attic"
+  accept cmd "ls -al attic"
+  accept cmd "ls -a attic"
   neutral cat pwd less ls
   on enter say "Ключи -l и -a пишутся слитно (-la), раздельно (-l -a) — как удобно."
-  hint tries 2 say "Точно:  ls -la /home/student/attic"
+  hint tries 2 say "Попробуй:  ls -la attic  (или ls -la /home/student/attic)"
   hint idle 25 say "-l — длинный формат, -a — включая скрытые (те, что с точкой)."
 
 exec finale

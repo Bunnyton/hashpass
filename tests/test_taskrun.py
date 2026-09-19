@@ -321,8 +321,10 @@ def test_perform_say_renders_and_returns(tmp_path):
     r = Renderer(Settings(type_mode="instant"), sink=chunks.append, sleep=lambda _s: None)
     out = perform_action(SayAction("hello there"), _CTX, render=r,
                          runner=_FakeRunner(""), hp_dir=tmp_path)
+    # Return value is the RAW text (no trailing newline appended); the render itself
+    # always ends with "\n" so consecutive say actions don't visually smash into each other.
     assert out == "hello there"
-    assert chunks == ["hello there"]
+    assert chunks == ["hello there\n"]
 
 
 @pytest.mark.tier1

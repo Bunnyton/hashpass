@@ -18,13 +18,17 @@ say "Первая команда — самая простая. ls покаже�
 read brief.md
 
 stage "Выведите содержимое /home/student/room"
-  # observe output неустойчив: ls печатает в колонки, когда stdout -- терминал,
-  # и построчно -- в pipe.  Build канонизирует «в колонки», а студент видит те же
-  # файлы в другой раскладке -- similarity разъезжается.  Задача про «первую
-  # команду», а не про точный формат -- принимаем по факту ВВОДА ls.
+  # observe output неустойчив: ls печатает в колонки в терминал, но построчно в pipe;
+  # канон между build (pipe) и runtime (TTY) разъезжается.  Принимаем по ВВОДУ команды --
+  # любое естественное действие студента, которое приводит к просмотру содержимого room.
+  # варианты «естественного» ввода — любой из них принимаем
   accept cmd "ls /home/student/room"
+  accept cmd "ls room"
+  accept cmd "cd /home/student/room"
+  accept cmd "cd room"
   neutral cat pwd
-  on enter say "ls /home/student/room"
-  hint tries 2 say "Точно:  ls /home/student/room"
+  on enter say "Загляните внутрь: ls room  (или ls /home/student/room)"
+  hint tries 2 say "Просто:  ls room"
+  hint idle 25 say "cwd — /home/student.  Внутри есть каталог `room` — покажите его содержимое."
 
 exec finale

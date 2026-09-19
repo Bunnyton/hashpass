@@ -403,8 +403,10 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     if current_stage(session.progress) is None:
         session.fire_outro()   # completion/acceptance wording is the author's (voice bye / outro)
     else:
-        session.enter()
+        # announce the next stage's goal FIRST, THEN fire its on_enter — same reason as the
+        # intro flow: on_enter reads like a targeted hint that closes the announce.
         _announce_stage(session, io)
+        session.enter_stage()
     return True
 
 
@@ -451,12 +453,18 @@ def _recv_request(conn: socket.socket) -> str:
 
 def _render_intro(session: object, readme: str | None, io: Io) -> None:
     """Open the session INSIDE the console: voice hello, the top-level intro, readme, first goal."""
-    session.enter()                          # voice hello (once) + stage 1 on_enter (via the sink)
+    # ORDER MATTERS: voice.hello → top-level intro → readme → announce → stage's on_enter.
+    # The stage-1 on_enter was previously fired at the very start (via `session.enter()`) which
+    # smashed its text in front of the intro that motivates it — students saw "ls /home/student/room"
+    # before the "Первая команда — самая простая" say.  Split it out so on_enter closes the intro
+    # like a targeted hint right before the prompt.
+    session.greet_once()                     # voice hello (once)
     session.fire_intro()                     # top-level `say`/`read`/`exec` before the stages
     if readme:
         session.read_text(readme)            # markdown, paged (Enter), even reveal
     _announce_stage(session, io)
     io.write("(работайте в терминале — проверка после каждой команды; exit — завершить)\n")
+    session.enter_stage()                    # stage-1 on_enter — right before the prompt
 
 
 # Escape sequences + stray control bytes, for cleaning a recorded terminal (script(1)) delta.
