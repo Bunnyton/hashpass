@@ -1,5 +1,5 @@
 # find-2 — точный уровень: -mindepth + -maxdepth + -type.
-# Задание: файлы РОВНО на 3-м уровне, без -name.
+# Задание: файлы РОВНО на 3-м уровне.  Приёмка — по выводу.
 
 image find-2:1
 
@@ -21,12 +21,12 @@ settings
 say "Продолжаем осваивать find. -mindepth — младший брат -maxdepth."
 read brief.md
 
-stage "Найдите файлы РОВНО на 3-м уровне внутри /home/student/search и запишите в /home/student/lvl3.txt"
-  solve find /home/student/search -mindepth 3 -maxdepth 3 -type f > /home/student/lvl3.txt
-  observe /home/student/lvl3.txt
+stage "Найдите файлы РОВНО на 3-м уровне внутри /home/student/search"
+  solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
+  observe output
   neutral ls cat pwd cd
   on enter say "Стенка снизу — -mindepth, стенка сверху — -maxdepth. -type f — только файлы."
-  hint tries 2 say "find /home/student/search -mindepth 3 -maxdepth 3 -type f > /home/student/lvl3.txt"
+  hint tries 2 say "find /home/student/search -mindepth 3 -maxdepth 3 -type f"
   hint idle 30 say "Понимаешь? Чтобы видеть, нужно смотреть. — Джейсон Стэйтем."
 
 exec finale

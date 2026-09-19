@@ -1,5 +1,5 @@
 # ls-la — ключи команд и скрытые файлы.
-# Задание: найти скрытый файл и записать вывод ls -la в артефакт.
+# Задание: увидеть скрытый файл. Приёмка — по команде (учим -la / -a).
 
 image ls-la:1
 
@@ -16,16 +16,16 @@ settings
 say "У большинства команд есть ключи. Пара букв — и поведение меняется."
 read brief.md
 
-stage "Выведите ВСЕ файлы (включая скрытые) в /home/student/attic и сохраните в /home/student/full-listing.txt"
-  # Проверка семантическая: в листинге должен появиться скрытый файл (.hidden_key).
-  # `observe` на содержимое всего листинга сравнивал бы mtime родительской папки
-  # (строка `..`), а тот меняется при каждой записи в /home/student и делает канон
-  # нестабильным.  Grep же смотрит только на то, чему учит задача.
-  solve ls -la /home/student/attic > /home/student/full-listing.txt
-  check exec grep -q hidden_key /home/student/full-listing.txt
-  neutral cat pwd less
+stage "Выведите ВСЕ файлы (включая скрытые) в /home/student/attic"
+  # observe output здесь неустойчив: ls -la печатает mtime, а он меняется между
+  # проходами канонизации.  Принимаем по факту ВВОДА -la или -a — цель задачи
+  # именно в том, чтобы студент выучил флаги, а не поймал строку в файл.
+  accept cmd "ls -la /home/student/attic"
+  accept cmd "ls -al /home/student/attic"
+  accept cmd "ls -a /home/student/attic"
+  neutral cat pwd less ls
   on enter say "Ключи -l и -a пишутся слитно (-la), раздельно (-l -a) — как удобно."
-  hint tries 2 say "Точно:  ls -la /home/student/attic > /home/student/full-listing.txt"
+  hint tries 2 say "Точно:  ls -la /home/student/attic"
   hint idle 25 say "-l — длинный формат, -a — включая скрытые (те, что с точкой)."
 
 exec finale

@@ -1,5 +1,5 @@
 # ls-mv-cp — комбинированный обход дерева ограниченным набором команд.
-# Задание: найти секретную фразу в одном из файлов и записать её.
+# Задание: найти строку phrase:... и напечатать её.  Приёмка — по выводу.
 
 image ls-mv-cp:1
 
@@ -19,15 +19,13 @@ settings
 say "Ограниченный набор команд. Задача — обход дерева руками."
 read brief.md
 
-stage "Найдите строку phrase:... в одном из файлов и запишите её в /home/student/found.txt"
-  solve cat /home/student/subdir_2/lvl1/lvl2/prize.txt | grep phrase > /home/student/found.txt
-  variant:
-    grep -r phrase /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3 > /tmp/g.txt
-    cat /tmp/g.txt | awk -F: '{print $2":"$3}' | head -1 > /home/student/found.txt
-  observe /home/student/found.txt
+stage "Найдите строку phrase:... в одном из файлов и напечатайте её"
+  solve cat /home/student/subdir_2/lvl1/lvl2/prize.txt | grep phrase
+  variant grep -rh phrase /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3
+  observe output
   neutral ls cat pwd cd
   on enter say "Обход руками: ls / cd / cat. Или grep — если совсем невмоготу."
-  hint tries 2 say "Пройдитесь по subdir_1/2/3, найдите файл с phrase: и cat > нужный файл."
+  hint tries 2 say "Пройдитесь по subdir_1/2/3, найдите файл с phrase: и cat его."
   hint idle 30 say "Tab-дополнение — ваш союзник. Ищите файл, где встречается слово phrase."
 
 exec finale

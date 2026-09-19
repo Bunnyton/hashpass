@@ -1,5 +1,5 @@
 # find-5 — критерий -not -empty.
-# Задание: найти непустые файлы.
+# Задание: найти непустые файлы.  Приёмка — по выводу.
 
 image find-5:1
 
@@ -20,12 +20,12 @@ settings
 say "У find десятки критериев. -empty и -not — сегодняшние гости."
 read brief.md
 
-stage "Найдите все НЕпустые файлы в /home/student/search и запишите в /home/student/nonempty.txt"
-  solve find /home/student/search -type f -not -empty > /home/student/nonempty.txt
-  variant find /home/student/search -type f \! -empty > /home/student/nonempty.txt
-  observe /home/student/nonempty.txt
+stage "Найдите все НЕпустые файлы в /home/student/search"
+  solve find /home/student/search -type f -not -empty
+  variant find /home/student/search -type f \! -empty
+  observe output
   neutral ls cat pwd cd
   on enter say "-not (или !) инвертирует следующий критерий. -empty — файл пустой."
-  hint tries 2 say "find /home/student/search -type f -not -empty > /home/student/nonempty.txt"
+  hint tries 2 say "find /home/student/search -type f -not -empty"
 
 exec finale

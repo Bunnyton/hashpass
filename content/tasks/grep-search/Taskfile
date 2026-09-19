@@ -1,5 +1,5 @@
 # grep-search — автоматизация поиска: grep -r.
-# Задание: найти ключ во всём дереве одной командой.
+# Задание: найти ключ во всём дереве одной командой.  Приёмка — по выводу.
 
 image grep-search:1
 
@@ -20,12 +20,11 @@ settings
 say "Руками искать — долго. Настало время grep."
 read brief.md
 
-stage "Найдите строку с 'КЛЮЧ:' во всём дереве /home/student/haystack и запишите её в /home/student/key.txt"
-  solve:
-    grep -r КЛЮЧ /home/student/haystack | grep -o 'КЛЮЧ:.*' > /home/student/key.txt
-  variant:
-    grep -rh КЛЮЧ /home/student/haystack > /home/student/key.txt
-  observe /home/student/key.txt
+stage "Найдите строку с 'КЛЮЧ:' во всём дереве /home/student/haystack"
+  # только -rh (без имени файла) — с обычным -r в выводе есть путь к файлу и канон
+  # между двумя вариантами разъезжается на «пусто».  Кто хочет -r — сам обрежет | grep -o.
+  solve grep -rh КЛЮЧ /home/student/haystack
+  observe output
   neutral ls cat pwd cd
   on enter say "Ключ -r включает рекурсивный обход. grep — тот самый инструмент."
   hint tries 2 say "Подсказка:  grep -r КЛЮЧ /home/student/haystack"

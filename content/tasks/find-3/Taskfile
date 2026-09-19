@@ -1,5 +1,5 @@
 # find-3 — поиск по имени (-name).
-# Задание: найти все директории 4-го уровня.
+# Задание: найти директории 4-го уровня.  Приёмка — по выводу.
 
 image find-3:1
 
@@ -17,12 +17,12 @@ settings
 say "Ключ -name — фильтр по имени. С шаблоном * работает тонко."
 read brief.md
 
-stage "Найдите все директории с именем level4* внутри /home/student/search и запишите в /home/student/level4-dirs.txt"
-  solve find /home/student/search -type d -name "level4*" > /home/student/level4-dirs.txt
-  observe /home/student/level4-dirs.txt
+stage "Найдите все директории с именем level4* внутри /home/student/search"
+  solve find /home/student/search -type d -name "level4*"
+  observe output
   neutral ls cat pwd cd
   on enter say "Кавычки вокруг шаблона нужны, иначе шелл его подставит сам."
-  hint tries 2 say "find /home/student/search -type d -name \"level4*\" > /home/student/level4-dirs.txt"
+  hint tries 2 say "find /home/student/search -type d -name \"level4*\""
   hint idle 30 say "-type d — только директории, -name — по имени, звёздочка — любые символы."
 
 exec finale

@@ -1,5 +1,5 @@
 # cat-file — вторая команда: cat.
-# Задание: прочитать содержимое файла и сохранить пойманный ключ.
+# Задание: прочитать файл и выцепить строку с СЕКРЕТОМ. Приёмка — по выводу.
 
 image cat-file:1
 
@@ -15,13 +15,13 @@ settings
 say "Файлы можно читать прямо в терминале — команда cat это делает."
 read brief.md
 
-stage "Найдите в /home/student/mailbox/key_here.txt строку с СЕКРЕТОМ и сохраните её в /home/student/secret.txt"
-  solve grep СЕКРЕТ /home/student/mailbox/key_here.txt > /home/student/secret.txt
-  variant cat /home/student/mailbox/key_here.txt | grep СЕКРЕТ > /home/student/secret.txt
-  observe /home/student/secret.txt
+stage "Найдите в /home/student/mailbox/key_here.txt строку с СЕКРЕТОМ"
+  solve grep СЕКРЕТ /home/student/mailbox/key_here.txt
+  variant cat /home/student/mailbox/key_here.txt | grep СЕКРЕТ
+  observe output
   neutral ls pwd less
-  on enter say "cat напечатает всё, а нужное — с грепом или руками в файл."
-  hint tries 2 say "Подсказка:  grep СЕКРЕТ /home/student/mailbox/key_here.txt > /home/student/secret.txt"
-  hint idle 25 say "Если файл длинный и убегает — cat | less, а сохранять надо только строку с СЕКРЕТ."
+  on enter say "cat напечатает всё, а нужное — с грепом."
+  hint tries 2 say "Подсказка:  grep СЕКРЕТ /home/student/mailbox/key_here.txt"
+  hint idle 25 say "Если файл длинный и убегает — cat | less, но принять надо строку с СЕКРЕТ."
 
 exec finale
