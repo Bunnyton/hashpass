@@ -37,20 +37,29 @@ def test_dashboard_rows_cells_and_group_filter():
     profiles = [
         {"user": "s1", "role": "student", "group": "ИУ7-31", "comment": "Иван"},
         {"user": "s2", "role": "student", "group": "ИУ7-32", "comment": "Пётр"},
+        {"user": "author1", "role": "author", "group": "", "comment": "Автор"},
         {"user": "adm", "role": "admin", "group": "", "comment": "Админ"},
     ]
     entries = [{"number": 1, "ref": "lab:1", "title": "T1"},
                {"number": 2, "ref": "lab:2", "title": "T2"}]
-    progress = {"s1": {"lab:1": {"status": "passed"}}, "s2": {"lab:1": {"status": "failed"}}}
+    progress = {"s1": {"lab:1": {"status": "passed"}}, "s2": {"lab:1": {"status": "failed"}},
+                "author1": {"lab:1": {"status": "passed"}}}
     html = render_dashboard(profiles, entries, progress)
     assert "Иван" in html
     assert "Пётр" in html
-    assert "Админ" not in html          # admins are not tracked as students
+    assert "Автор" in html           # authors appear too (own `authors` group)
+    assert "Админ" in html           # admins share the `authors` group
+    assert "authors" in html         # synthetic group listed in dropdown
     assert "✓" in html
     assert "✗" in html
     only31 = render_dashboard(profiles, entries, progress, group="ИУ7-31")
     assert "Иван" in only31
     assert "Пётр" not in only31
+    assert "Автор" not in only31
+    only_authors = render_dashboard(profiles, entries, progress, group="authors")
+    assert "Автор" in only_authors
+    assert "Админ" in only_authors
+    assert "Иван" not in only_authors
 
 
 @pytest.mark.tier1

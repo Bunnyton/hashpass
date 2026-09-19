@@ -123,20 +123,34 @@ def _cell(user: str, ref: str, record: dict | None) -> dict:
     return {"mark": "✗", "cls": "c no", "href": href}
 
 
+_AUTHOR_GROUP = "authors"
+
+
+def _dashboard_group_of(profile: dict) -> str:
+    """Synthetic group for the dashboard: authors and admins go into a single `authors` bucket."""
+    if profile.get("role") in ("author", "admin"):
+        return _AUTHOR_GROUP
+    return str(profile.get("group", ""))
+
+
 def render_dashboard(profiles: list[dict], entries: list[dict],
                      progress: dict[str, dict], *, group: str | None = None) -> str:
-    """Progress matrix: students (login + group, comment on hover) × task numbers, cells passed/failed."""
-    students = [p for p in profiles if p.get("role") == "student"]
-    groups = sorted({str(p.get("group", "")) for p in students if p.get("group")})
+    # Students appear under their real class group; authors/admins share a synthetic `authors`
+    # group so they can test-solve alongside (not mixed into) the student roster.
+    """Progress matrix: users (login + group, comment on hover) × task numbers, cells passed/failed."""
+    users = [p for p in profiles if p.get("role") in ("student", "author", "admin")]
+    for p in users:
+        p["_dash_group"] = _dashboard_group_of(p)
+    groups = sorted({p["_dash_group"] for p in users if p["_dash_group"]})
     if group:
-        students = [p for p in students if str(p.get("group", "")) == group]
+        users = [p for p in users if p["_dash_group"] == group]
     rows = []
-    for p in students:
+    for p in users:
         user = str(p["user"])
         done = progress.get(user, {})
         cells = [_cell(user, str(e["ref"]), done.get(str(e["ref"]))) for e in entries]
         passed = sum(1 for e in entries if (done.get(str(e["ref"])) or {}).get("status") == "passed")
-        rows.append({"user": user, "group": str(p.get("group", "")),
+        rows.append({"user": user, "group": p["_dash_group"],
                      "comment": str(p.get("comment", "")),
                      "passed": passed, "total": len(entries), "cells": cells})
     return _env.get_template("dashboard.html.j2").render(
