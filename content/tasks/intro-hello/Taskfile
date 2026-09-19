@@ -1,5 +1,7 @@
 # intro-hello — самое первое знакомство с системой HASHPASS.
-# Простое приветствие: студент вводит команду `whoami`, чтобы узнать, кто он.
+# Простое приветствие: студент вводит `whoami`, а мы читаем ВЫВОД команды (через
+# .hp-typescript / observe output) — никакого редиректа в файл, никаких «искусственных»
+# домашек для приёмки. Эталон (student\n) живёт в скрытом /hp/bundle/checks.json.
 
 image intro-hello:1
 
@@ -11,12 +13,12 @@ settings
 say "Здравствуй, оператор! Это твоё первое задание в системе HASHPASS."
 read brief.md
 
-stage "Проверьте, под каким пользователем вы вошли. Запишите вывод whoami в /home/student/me.txt"
-  solve whoami > /home/student/me.txt
-  observe /home/student/me.txt
+stage "Проверьте, под каким пользователем вы вошли: наберите whoami"
+  solve whoami
+  observe output
   neutral ls cat pwd
-  on enter say "Просто:  whoami > /home/student/me.txt"
-  hint tries 2 say "Точно:  whoami > /home/student/me.txt"
+  on enter say "Просто:  whoami"
+  hint tries 2 say "Точно:  whoami"
   hint idle 25 say "Команда whoami сама себе скажет, кто вы."
 
 exec finale

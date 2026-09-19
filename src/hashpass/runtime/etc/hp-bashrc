@@ -6,9 +6,8 @@
 # Interactive-only.
 case $- in *i*) ;; *) return ;; esac
 
-# Prompt: cwd in bright blue, then " ❯ " in bright green.  A red ✗ mark on the last non-zero
-# is nice, but simplest is inline via a small helper -- readline reads `$?` fresh at each
-# render, so we snapshot into a var first.
+# Prompt: cwd in bright blue, then " ❯ " in bright green, a red ✗ mark on non-zero.
+# Snapshot $? first so PS1 sees the previous command's status, not PROMPT_COMMAND's own.
 _hp_last_status=0
 _hp_render_prompt() {
     _hp_last_status=$?
@@ -16,7 +15,16 @@ _hp_render_prompt() {
     (( _hp_last_status != 0 )) && mark=$'\[\e[91m\] ✗\[\e[0m\]'
     PS1='\[\e[94m\]\w\[\e[0m\]'"$mark"'\[\e[92m\] ❯ \[\e[0m\]'
 }
-PROMPT_COMMAND='_hp_render_prompt'
+
+# OSC 133 semantic prompts (used by `_extract_output` on the host to isolate a command's
+# stdout from the recorded terminal delta -- without them the extraction falls back to the
+# full noisy delta and `observe output` grading refuses valid solves).
+#   \e]133;C\a — output starts (emitted by PS0, expanded just before the command runs)
+#   \e]133;D\a — output ends   (emitted by PROMPT_COMMAND, right after the command returns)
+# `_hp_last_status` is set by _hp_render_prompt above but we compute it up-front here so
+# `;D;$rc` appears with the actual exit code.
+PS0='\[\e]133;C\a\]'
+PROMPT_COMMAND='_hp_render_prompt; printf "\e]133;D;%s\a" "$_hp_last_status"'
 
 # Handy aliases.
 alias ll='ls -alh --color=auto'
