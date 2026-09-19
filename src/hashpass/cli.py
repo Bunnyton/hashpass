@@ -1178,18 +1178,20 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
     io.write(f"\x1b[36m↑ прикреплён Taskfile\x1b[0m: {path.name}\n")
 
 
-def cmd_push(env: Home, ref: str, registry: str | None = None, *,
-             publish: bool = False, io: Io | None = None) -> int:
+def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0913
+             publish: bool = False, force: bool = False, io: Io | None = None) -> int:
     """
     Push a ref (+ its `from` closure); with `publish`, also add it to the catalog (auto-numbered).
 
     Resolves the registry (explicit → saved) and logs in inline if there is no cached token.
+    `force=True` re-uploads even layers the server already holds (needed to overwrite a
+    contaminated server-side blob that HEAD would otherwise dedup-skip).
     """
     io = io or _default_io()
     url = _ensure_registry_login(env, registry, io)
     store = ImageStore(env.images)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
-    copied = client.push(store, ref)
+    copied = client.push(store, ref, force=force)
     sys.stdout.write(f"отправлено {ref} (слоёв: {len(copied)})\n")
     _attach_taskfile(client, store, ref, io)
     if publish:

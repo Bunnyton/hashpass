@@ -178,12 +178,17 @@ class RemoteRegistry:
     def _push_token(self, token: str | None) -> str:
         return self._auth_token(token)
 
-    def push(self, store: ImageStore, ref: str, *, token: str | None = None) -> list[str]:
-        """Push ref + its `from` closure (bottom-up), skipping refs the server already holds."""
+    def push(self, store: ImageStore, ref: str, *, token: str | None = None,
+             force: bool = False) -> list[str]:
+        # `force=False` (default) skips refs the server already holds via a HEAD probe --
+        # the fast path.  `force=True` uploads every layer regardless, needed to overwrite
+        # a contaminated server-side blob (HEAD says the ref exists, so fresh bytes never
+        # reach the store otherwise).
+        """Push ref + its `from` closure (bottom-up)."""
         auth = self._push_token(token)
         copied: list[str] = []
         for item in closure_refs(ref, store):
-            if self._has_image(item):
+            if not force and self._has_image(item):
                 continue
             name, version = split_ref(item)
             self._put_image(name, version, pack_image(store.get(item)), auth)

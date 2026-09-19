@@ -15,7 +15,13 @@
 
 set -euo pipefail
 DRY=""
-if [[ "${1:-}" == "--dry" ]]; then DRY="1"; fi
+FORCE=""
+for a in "$@"; do
+    case "$a" in
+        --dry)   DRY="1" ;;
+        --force) FORCE="--force" ;;
+    esac
+done
 
 cd "$(dirname "$0")"
 TASKS=(
@@ -78,7 +84,7 @@ for name in "${TASKS[@]}"; do
         image_ref=$(grep -E '^image ' Taskfile | head -1 | awk '{print $2}')
         # image_ref = 'first-steps:1'; on the pool it lives under <login>/first-steps:1
         if [[ -z "$DRY" ]]; then
-            hashengine push "$USER_LOGIN/$image_ref" --task
+            hashengine push "$USER_LOGIN/$image_ref" --task $FORCE
         fi
     )
 done
