@@ -40,6 +40,8 @@ def test_pack_unpack_preserves_digest(tmp_path):
 
 @pytest.mark.tier2
 def test_push_task_author_gated_then_pull(registry, tmp_path):
+    # keeps the author role (the point of the test is the student-vs-author gate below);
+    # the ref is namespaced under the author's own login, per the new ownership rule.
     registry.users.add("author1", "pw", role="author")
     student_c = RemoteRegistry(registry.base_url)
     student_tok = student_c.register("stud", "pass123!", group="G")
@@ -47,29 +49,32 @@ def test_push_task_author_gated_then_pull(registry, tmp_path):
     author_tok = author_c.login("author1", "pw")
 
     local = ImageStore(tmp_path / "local")
-    _seed_image(local, tmp_path, "lab")
+    src = tmp_path / "src-lab"
+    src.mkdir()
+    (src / "f").write_text("x", encoding="utf-8")
+    local.save("author1/lab", "1", src, ())
 
     # a student cannot push the image
     with pytest.raises(urllib.error.HTTPError) as exc:
-        student_c.push(local, "lab:1", token=student_tok)
+        student_c.push(local, "author1/lab:1", token=student_tok)
     assert exc.value.code == HTTPStatus.FORBIDDEN
 
     # the author pushes image + task
-    author_c.push(local, "lab:1", token=author_tok)
+    author_c.push(local, "author1/lab:1", token=author_tok)
     task_src = tmp_path / "task"
     task_src.mkdir()
     _make_task_dir(task_src)
-    author_c.push_task(task_src, "lab", "1", token=author_tok)
+    author_c.push_task(task_src, "author1/lab", "1", token=author_tok)
 
     # a logged-in student pulls the task, and the digest survives transport
     dest = tmp_path / "pulled"
-    student_c.pull_task("lab:1", dest, token=student_tok)
+    student_c.pull_task("author1/lab:1", dest, token=student_tok)
     assert task_digest(dest) == task_digest(task_src)
 
 
 @pytest.mark.tier2
 def test_put_task_before_image_is_404(registry, tmp_path):
-    registry.users.add("author1", "pw", role="author")
+    registry.users.add("author1", "pw", role="admin")   # pushes a task for an un-namespaced ref
     c = RemoteRegistry(registry.base_url)
     tok = c.login("author1", "pw")
     task_src = tmp_path / "task"

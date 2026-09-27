@@ -67,7 +67,7 @@ def test_put_requires_valid_token(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_put_then_get_and_closure(registry, tmp_path):
-    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("alice", "pw-correct", role="admin")   # pushes un-namespaced refs
     token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
     auth = {"Authorization": f"Bearer {token}"}
     local = ImageStore(tmp_path / "local")
@@ -90,7 +90,7 @@ def test_put_then_get_and_closure(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_put_rejects_traversing_blob(registry, tmp_path):
-    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("alice", "pw-correct", role="admin")   # pushes an un-namespaced ref
     token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
     auth = {"Authorization": f"Bearer {token}"}
     layer = tmp_path / "layer"
@@ -111,7 +111,7 @@ def test_put_rejects_traversing_blob(registry, tmp_path):
 @pytest.mark.tier2
 def test_put_rejects_missing_layer_directory(registry):
     """Server must reject blobs where 'layer' is a file instead of a directory."""
-    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("alice", "pw-correct", role="admin")   # pushes an un-namespaced ref
     token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
     auth = {"Authorization": f"Bearer {token}"}
     # Build a blob where "layer" is a FILE not a directory
@@ -133,7 +133,7 @@ def test_put_rejects_missing_layer_directory(registry):
 @pytest.mark.tier2
 def test_put_accepts_root_owned_blob(registry):
     """Server accepts blobs with uid=0 members when sudo=False (doesn't preserve ownership, but stores)."""
-    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("alice", "pw-correct", role="admin")   # pushes an un-namespaced ref
     token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
     auth = {"Authorization": f"Bearer {token}"}
     # Build a gzip blob with uid=0 members (following _raw_tar pattern)
@@ -163,7 +163,7 @@ def test_put_accepts_root_owned_blob(registry):
 
 
 def _author_token(registry) -> dict[str, str]:
-    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("alice", "pw-correct", role="admin")   # pushes un-namespaced refs
     _status, body = _login(registry.base_url, "alice", "pw-correct")
     return {"Authorization": f"Bearer {json.loads(body)['token']}"}
 
@@ -333,3 +333,76 @@ def test_get_whose_blob_file_vanished_is_404(registry, tmp_path):
     status, headers, _body = _get(url)
     assert status == HTTPStatus.NOT_FOUND
     assert "X-Image-Digest" not in headers
+
+
+# -- ownership: an author may only write under their own namespace -----------
+
+def _seed_ns(store: ImageStore, tmp_path: Path, name: str) -> None:
+    """Seed a local image whose name may itself carry a namespace segment (`alice/app`)."""
+    src = tmp_path / "src" / name
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "f.txt").write_text(name, encoding="utf-8")
+    store.save(name, "1", src, ())
+
+
+def _push_blob(base_url: str, ref: str, blob: bytes, token: str) -> tuple[int, bytes]:
+    name, version = ref.rsplit(":", 1)
+    return _http("PUT", f"{base_url}/image/{name}/{version}", data=blob,
+                 headers={"Authorization": f"Bearer {token}"})
+
+
+@pytest.mark.tier2
+def test_author_push_is_scoped_to_own_namespace(registry, tmp_path):
+    registry.users.add("alice", "pw-correct", role="author")
+    token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
+    local = ImageStore(tmp_path / "local")
+
+    _seed_ns(local, tmp_path, "alice/app")
+    own = pack_image(local.get("alice/app:1"))
+    status, _ = _push_blob(registry.base_url, "alice/app:1", own, token)
+    assert status == HTTPStatus.CREATED
+
+    _seed_ns(local, tmp_path, "bob/app")
+    others = pack_image(local.get("bob/app:1"))
+    status, body = _push_blob(registry.base_url, "bob/app:1", others, token)
+    assert status == HTTPStatus.FORBIDDEN
+    assert "bob" in json.loads(body)["error"]
+
+    _seed_ns(local, tmp_path, "app")
+    bare = pack_image(local.get("app:1"))
+    status, body = _push_blob(registry.base_url, "app:1", bare, token)
+    assert status == HTTPStatus.FORBIDDEN
+    assert "администратор" in json.loads(body)["error"]
+
+
+@pytest.mark.tier2
+def test_admin_push_is_unrestricted(registry, tmp_path):
+    registry.users.add("root", "pw-correct", role="admin")
+    token = json.loads(_login(registry.base_url, "root", "pw-correct")[1])["token"]
+    local = ImageStore(tmp_path / "local")
+
+    src = tmp_path / "src-debian"
+    src.mkdir()
+    (src / "f.txt").write_text("base", encoding="utf-8")
+    local.save("debian", "trixie-18", src, ())
+    base_blob = pack_image(local.get("debian:trixie-18"))
+    status, _ = _push_blob(registry.base_url, "debian:trixie-18", base_blob, token)
+    assert status == HTTPStatus.CREATED
+
+    _seed_ns(local, tmp_path, "alice/app")
+    app_blob = pack_image(local.get("alice/app:1"))
+    status, _ = _push_blob(registry.base_url, "alice/app:1", app_blob, token)
+    assert status == HTTPStatus.CREATED
+
+
+@pytest.mark.tier2
+def test_author_cannot_push_task_or_attachment_for_others_namespace(registry, tmp_path):
+    _seed_ns(registry.store, tmp_path, "bob/app")           # the ref exists, owned by "bob"
+    registry.users.add("alice", "pw-correct", role="author")
+    token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    status, _ = _http("PUT", f"{registry.base_url}/task/bob/app/1", data=b"junk", headers=auth)
+    assert status == HTTPStatus.FORBIDDEN
+    status, _ = _http("PUT", f"{registry.base_url}/attachment/bob/app/1?name=Taskfile",
+                      data=b"stage x\n", headers=auth)
+    assert status == HTTPStatus.FORBIDDEN

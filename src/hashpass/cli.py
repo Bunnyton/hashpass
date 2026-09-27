@@ -1199,6 +1199,27 @@ def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> i
     return 0
 
 
+def _pool_forbidden_message(exc: urllib.error.HTTPError) -> str:
+    """Turn the pool's 403 body into its Russian `error` message, or a generic fallback."""
+    try:
+        payload = json.loads(exc.read())
+    except (ValueError, UnicodeDecodeError):
+        payload = None
+    if isinstance(payload, dict) and isinstance(payload.get("error"), str) and payload["error"]:
+        return payload["error"]
+    return "пул отклонил push (403): войдите под владельцем образа — hashengine login"
+
+
+def _push_call(fn: Callable[..., object], *args: object, **kwargs: object) -> object:
+    """Call a pool write (push/push_task); turn a 403 into a RuntimeError with the pool's reason."""
+    try:
+        return fn(*args, **kwargs)
+    except urllib.error.HTTPError as exc:
+        if exc.code != HTTPStatus.FORBIDDEN:
+            raise
+        raise RuntimeError(_pool_forbidden_message(exc)) from exc
+
+
 def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io) -> None:
     """On push, upload the Taskfile the image remembers (so its solutions/interactivity are on the pool)."""
     if ref == base_ref():
@@ -1233,7 +1254,7 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
     url = _ensure_registry_login(env, registry, io)
     store = ImageStore(env.images)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
-    copied = client.push(store, ref, force=force)
+    copied = _push_call(client.push, store, ref, force=force)
     sys.stdout.write(f"отправлено {ref} (слоёв: {len(copied)})\n")
     _attach_taskfile(client, store, ref, io)
     if publish:
@@ -1242,7 +1263,7 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
             msg = f"{ref} — не задание (нет артефактов task/); публиковать нечего"
             raise ValueError(msg)
         name, version = split_ref(ref)
-        client.push_task(tdir, name, version, publish=True)
+        _push_call(client.push_task, tdir, name, version, publish=True)
         sys.stdout.write(f"опубликовано в каталог: {ref}\n")
     return 0
 

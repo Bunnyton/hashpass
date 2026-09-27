@@ -26,7 +26,7 @@ def _seed_image(store, tmp_path, name) -> None:
 
 def _publish(registry, tmp_path) -> tuple:
     """Publish author task #1 (lab:1); return (task_dir, author_token)."""
-    registry.users.add("a", "pw", role="author")
+    registry.users.add("a", "pw", role="admin")   # pushes an un-namespaced ref
     ac = RemoteRegistry(registry.base_url)
     atok = ac.login("a", "pw")
     local = ImageStore(tmp_path / "local")
@@ -127,7 +127,7 @@ def test_cmd_pool_run_submits_on_completion(registry, tmp_path, monkeypatch):
 
 def _push_fake_base(registry, tmp_path, marker: str) -> str:
     """Push a tiny 'base' under the CURRENT stamped ref (mirrors tests/registry/test_base_pull.py)."""
-    registry.users.add(f"baseauthor-{marker}", "pw-correct", role="author")
+    registry.users.add(f"baseauthor-{marker}", "pw-correct", role="admin")   # only admins push the base
     local = ImageStore(tmp_path / f"base-local-{marker}")
     src = tmp_path / f"base-src-{marker}"
     src.mkdir()

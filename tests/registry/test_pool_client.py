@@ -83,7 +83,7 @@ def _seed_image(store, tmp_path, name) -> None:
 
 @pytest.mark.tier2
 def test_pull_new_fetches_catalog_tasks_and_is_idempotent(registry, tmp_path):
-    registry.users.add("author1", "pw", role="author")
+    registry.users.add("author1", "pw", role="admin")   # pushes un-namespaced refs
     ac = RemoteRegistry(registry.base_url)
     atok = ac.login("author1", "pw")
     for i, name in enumerate(["lab1", "lab2"], 1):
@@ -113,7 +113,7 @@ def test_pull_new_fetches_catalog_tasks_and_is_idempotent(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_pull_new_refreshes_a_re_pushed_task_image(registry, tmp_path):
-    registry.users.add("author1", "pw", role="author")
+    registry.users.add("author1", "pw", role="admin")   # pushes an un-namespaced ref
     ac = RemoteRegistry(registry.base_url)
     atok = ac.login("author1", "pw")
     local = ImageStore(tmp_path / "loc")

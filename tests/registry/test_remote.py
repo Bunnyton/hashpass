@@ -50,7 +50,7 @@ def test_push_requires_token(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_push_and_pull_closure_via_client(registry, tmp_path):
-    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("alice", "pw-correct", role="admin")   # pushes un-namespaced refs
     local = ImageStore(tmp_path / "local")
     _seed(local, tmp_path, "base", (), "BASE")
     _seed(local, tmp_path, "app", ("base:1",), "APP")
@@ -72,7 +72,7 @@ def test_push_and_pull_closure_via_client(registry, tmp_path):
 @pytest.mark.tier2
 def test_push_pull_namespaced_name(registry, tmp_path):
     # A namespaced ref (`alice/app:1`) survives the multi-segment URL path on push and pull.
-    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("alice", "pw-correct", role="admin")   # push also carries an un-namespaced parent (base:1)
     local = ImageStore(tmp_path / "local")
     _seed(local, tmp_path, "base", (), "BASE")
     _seed(local, tmp_path, "alice/app", ("base:1",), "APP")
@@ -99,7 +99,7 @@ def test_forged_token_rejected_on_push(registry, tmp_path):
 
 
 def _push_seeded(registry, tmp_path, name: str, marker: str) -> tuple[RemoteRegistry, str]:
-    registry.users.add(f"u-{name}", "pw-correct", role="author")
+    registry.users.add(f"u-{name}", "pw-correct", role="admin")   # pushes an un-namespaced ref
     local = ImageStore(tmp_path / f"local-{name}-{marker}")
     src = tmp_path / f"src-{name}-{marker}"
     src.mkdir(exist_ok=True)

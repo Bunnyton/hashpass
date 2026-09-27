@@ -24,7 +24,7 @@ def _seed_image(store, tmp_path, name) -> None:
 
 @pytest.mark.tier2
 def test_push_task_number_shows_in_catalog_with_server_digest(registry, tmp_path):
-    registry.users.add("a", "pw", role="author")
+    registry.users.add("a", "pw", role="admin")   # pushes an un-namespaced ref
     c = RemoteRegistry(registry.base_url)
     tok = c.login("a", "pw")
     local = ImageStore(tmp_path / "local")

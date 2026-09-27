@@ -56,6 +56,9 @@ TASKS=(
     # старые (сохраняем на будущее)
     first-steps grep-hunt inventory fruit-store proc-audit showcase
 )
+# Must equal the namespace the images were built under -- `hashengine build` namespaces images
+# by the LOCAL login, and the pool now rejects a push whose ref namespace differs from the
+# pushing user (author == author): a mismatch here gets a 403, not a silent wrong owner.
 USER_LOGIN="${HASHPASS_USER:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("user",""))' 2>/dev/null || true)}"
 POOL_URL="${HASHPASS_POOL:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("url",""))' 2>/dev/null || true)}"
 

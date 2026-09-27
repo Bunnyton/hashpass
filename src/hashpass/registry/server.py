@@ -135,6 +135,12 @@ def _check_image_ref(info, name: str, version: str) -> None:
         raise ValueError(msg)
 
 
+def _owner_of(name: str) -> str | None:
+    """Return the namespace segment of an image name (`bunnyton/cp-more` -> 'bunnyton'); None if there is none."""
+    head, sep, _rest = name.partition("/")
+    return head if sep else None
+
+
 class PoolServer:
     """Pool registry state (stores, secret, config) + a Flask WSGI app wired to it."""
 
@@ -316,6 +322,24 @@ class PoolServer:
             return None, HTTPStatus.UNAUTHORIZED
         if self.users.role(user) not in roles:
             return None, HTTPStatus.FORBIDDEN
+        return user, None
+
+    def _authorize_write(self, name: str) -> tuple[str | None, Response | None]:
+        """Require author/admin + ownership of `name`'s namespace (admin-only if it has none)."""
+        user, err = self._auth_role(_AUTHOR_ROLES)
+        if err is not None:
+            return None, self._empty(err)
+        if self.users.role(user) == "admin":
+            return user, None
+        owner = _owner_of(name)
+        if owner is None:
+            return None, self._json(HTTPStatus.FORBIDDEN, {
+                "error": f"образ без пространства имён («{name}») может публиковать только "
+                         "администратор"})
+        if owner != user:
+            return None, self._json(HTTPStatus.FORBIDDEN, {
+                "error": f"образ принадлежит другому автору («{owner}»); войдите под ним: "
+                         "hashengine login"})
         return user, None
 
     def _session_user(self) -> str | None:
@@ -533,9 +557,9 @@ class PoolServer:
                 resp.headers["X-Image-Digest"] = img.digest
             return resp
         if request.method == "PUT":
-            _user, err = self._auth_role(("author", "admin"))
+            _user, err = self._authorize_write(name)
             if err is not None:
-                return self._empty(err)
+                return err
             return self._receive_image(name, version)
         return self._serve_image_blob(ref)
 
@@ -617,9 +641,9 @@ class PoolServer:
         name, version = parts
         ref = f"{name}:{version}"
         if request.method == "PUT":
-            _user, err = self._auth_role(("author", "admin"))
+            _user, err = self._authorize_write(name)
             if err is not None:
-                return self._empty(err)
+                return err
             if not self.store.exists(ref):
                 return self._empty(HTTPStatus.NOT_FOUND)
             task_dir = self.store.get(ref).layer.parent / "task"
@@ -657,9 +681,9 @@ class PoolServer:
             return self._empty(HTTPStatus.NOT_FOUND)
         name, version = parts
         ref = f"{name}:{version}"
-        _user, err = self._auth_role(_AUTHOR_ROLES)
+        _user, err = self._authorize_write(name)
         if err is not None:
-            return self._empty(err)
+            return err
         if not self.store.exists(ref):
             return self._empty(HTTPStatus.NOT_FOUND)
         filename = request.args.get("name", "")

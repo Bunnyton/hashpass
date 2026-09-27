@@ -89,7 +89,7 @@ def _seed(registry, ref: str, tmp_path: Path, *, task: bool = False) -> str:
 
 @pytest.mark.tier2
 def test_push_attachment_and_web_download(registry, tmp_path):
-    registry.users.add("dev", "pass123!", role="author", group="")
+    registry.users.add("dev", "pass123!", role="admin", group="")   # attaches to an un-namespaced ref
     _seed(registry, "lab:1", tmp_path)
     c = RemoteRegistry(registry.base_url)
     tok = c.login("dev", "pass123!")

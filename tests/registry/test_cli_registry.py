@@ -52,7 +52,7 @@ def _seed(store, tmp_path, name, parents, marker) -> None:
 
 @pytest.mark.tier2
 def test_login_push_pull_through_localhost(registry, tmp_path, monkeypatch):
-    registry.users.add("dev", "s3cr3t", role="author")   # pushing images requires author role
+    registry.users.add("dev", "s3cr3t", role="admin")   # pushes an un-namespaced ref
     home = tmp_path / "home"
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
     local = ImageStore(env.images)
@@ -123,7 +123,7 @@ def test_login_failure_returns_1(registry, tmp_path, monkeypatch):
 
 @pytest.mark.tier2
 def test_cmd_push_with_task_number_publishes_to_catalog(registry, tmp_path, monkeypatch):
-    registry.users.add("dev", "s3cr3t", role="author")
+    registry.users.add("dev", "s3cr3t", role="admin")   # pushes an un-namespaced ref
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
     store = ImageStore(env.images)
     _seed(store, tmp_path, "lab", (), "L")
@@ -141,7 +141,7 @@ def test_cmd_push_with_task_number_publishes_to_catalog(registry, tmp_path, monk
 
 @pytest.mark.tier2
 def test_pool_images_lists_stored_refs(registry, tmp_path):
-    registry.users.add("dev", "s3cr3t", role="author")
+    registry.users.add("dev", "s3cr3t", role="admin")   # pushes an un-namespaced ref
     c = RemoteRegistry(registry.base_url)
     tok = c.login("dev", "s3cr3t")
     local = ImageStore(tmp_path / "loc")
@@ -186,7 +186,7 @@ def test_cmd_push_rejects_junk_registry_before_prompting(registry, tmp_path, mon
 @pytest.mark.tier2
 def test_cmd_push_prompts_login_when_no_token(registry, tmp_path, monkeypatch):
     # no cached token -> cmd_push logs in inline (io supplies the login) instead of erroring
-    registry.users.add("dev", "s3cr3t", role="author")
+    registry.users.add("dev", "s3cr3t", role="admin")   # pushes an un-namespaced ref
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
     _seed(ImageStore(env.images), tmp_path, "img", (), "I")
     monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
@@ -197,10 +197,26 @@ def test_cmd_push_prompts_login_when_no_token(registry, tmp_path, monkeypatch):
 
 @pytest.mark.tier2
 def test_saved_registry_used_when_omitted(registry, tmp_path, monkeypatch):
-    registry.users.add("dev", "s3cr3t", role="author")
+    registry.users.add("dev", "s3cr3t", role="admin")
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
     _seed(ImageStore(env.images), tmp_path, "img", (), "I")
     monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
     io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
     assert cli.cmd_login(env, registry.base_url, io) == 0     # saves the URL + token
     assert cli.cmd_push(env, "img:1") == 0                    # registry omitted -> uses the saved one
+
+
+@pytest.mark.tier2
+def test_cmd_push_of_others_namespace_raises_ownership_error(registry, tmp_path, monkeypatch):
+    """A logged-in author pushing another author's namespaced ref gets a clear RuntimeError."""
+    registry.users.add("dev", "s3cr3t", role="author")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    store = ImageStore(env.images)
+    src = tmp_path / "src-app"
+    src.mkdir()
+    (src / "f.txt").write_text("X", encoding="utf-8")
+    store.save("other/app", "1", src, ())
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
+    io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    with pytest.raises(RuntimeError, match="принадлежит другому автору"):
+        cli.cmd_push(env, "other/app:1", registry.base_url, io=io)

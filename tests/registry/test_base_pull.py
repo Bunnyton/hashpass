@@ -12,7 +12,7 @@ from hashpass.registry.remote import RemoteRegistry
 
 def _push_fake_base(registry, tmp_path: Path, marker: str) -> str:
     """Push a tiny 'base' under the CURRENT stamped ref (a real base is a 130 MB tier3 thing)."""
-    registry.users.add("author", "pw-correct", role="author")
+    registry.users.add("author", "pw-correct", role="admin")   # only admins push the base
     local = ImageStore(tmp_path / f"local-{marker}")
     src = tmp_path / f"src-{marker}"
     (src / "etc").mkdir(parents=True)
