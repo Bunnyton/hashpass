@@ -470,3 +470,30 @@ def test_author_identity_uses_the_local_registry_only_without_a_pool(tmp_path, m
     io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "")
     assert cli._author_identity(env, io) == "dev"                           # noqa: SLF001
     assert cli._uses_local_service(env)                                     # noqa: SLF001
+
+
+@pytest.mark.tier2
+def test_author_identity_never_registers_an_unknown_login_on_the_pool(registry, tmp_path, monkeypatch):
+    # A typo at the build prompt must not create a student account on the live pool (which could
+    # never push): build only logs an EXISTING login in; registration is `hashpass register`.
+    monkeypatch.setenv("HASHPASS_POOL", registry.base_url)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "pw-correct")
+    io = cli.Io(read=lambda _p: "bunnyton-typo", write=lambda _s: None, clock=lambda: "")
+    with pytest.raises(RuntimeError, match="нет логина «bunnyton-typo»"):
+        cli._author_identity(env, io)                                       # noqa: SLF001
+    assert not registry.users.has("bunnyton-typo")
+
+
+@pytest.mark.tier1
+def test_author_identity_offline_uses_the_remembered_pool_login_without_network(tmp_path, monkeypatch):
+    # Expired token + pool unreachable (a train): the namespace only needs the NAME, and pool.json
+    # remembers the login of the last successful `hashengine login`; the password is asked at push.
+    dead = f"http://127.0.0.1:{_free_port()}"
+    monkeypatch.setenv("HASHPASS_POOL", dead)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    cli.save_pool(env, dead, "bunnyton")
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: pytest.fail("must not prompt"), write=out.append, clock=lambda: "")
+    assert cli._author_identity(env, io) == "bunnyton"                      # noqa: SLF001
+    assert any("bunnyton" in s for s in out)                                # says whose namespace

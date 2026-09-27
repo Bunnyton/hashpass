@@ -868,7 +868,12 @@ def _prompt_save_as(default: str) -> str | None:
 
 
 def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, io: Io) -> None:
-    """Save the console's edits back into an image (its layer + overlay upper), namespaced + pushed."""
+    """
+    Save the console's edits back into an image (its layer + overlay upper) under the owner's namespace.
+
+    Offline (no pool) the result is auto-pushed to the local service; with a pool configured
+    publishing stays an explicit `hashengine push`, and the hint says so.
+    """
     upper = runner.rootfs_upper
     try:
         changed = any(upper.iterdir())
@@ -897,6 +902,8 @@ def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, 
     io.write(f"\x1b[32m✓ сохранено\x1b[0m: {name}:{version}\n")
     if _uses_local_service(env):
         _push_image(env, store, f"{name}:{version}", io)
+    else:
+        io.write(f"\x1b[2m  сохранено локально — на пул: hashengine push {name}:{version}\x1b[0m\n")
 
 
 def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
@@ -1000,15 +1007,27 @@ def _author_identity(env: Home, io: Io) -> str:
     """
     Return the login whose namespace owns the images built here.
 
-    With a pool configured (`hashengine login` / $HASHPASS_POOL) it is the POOL login -- read
-    from the live cached token, or asked for once exactly like `hashengine login` -- and the
-    local registry service is never started, logged into or pushed to. Without a pool
-    (offline authoring, tests) the local service login is used as before.
+    With a pool configured (`hashengine login` / $HASHPASS_POOL) it is the POOL login, and the
+    local registry service is never started, logged into or pushed to. Only the NAME is needed
+    to build (the password matters at push), so no network is touched when possible: a live
+    cached token names the user; else the login pool.json remembers from the last successful
+    `hashengine login` is used (offline-safe); only with neither is the pool login asked for --
+    an EXISTING login, never a registration. Without a pool (offline authoring, tests) the
+    local service login is used as before.
     """
     url = _pool_url(env)
     if url is None:
         return _require_login(env, io)
-    url = _ensure_registry_login(env, url, io)           # silent on a live cached token
+    token = _pool_token(env, url)
+    user = token_user(token) if token else ""
+    if user:
+        return user
+    remembered = str(load_pool(env).get("user", "")).strip()
+    if remembered:
+        io.write(f"\x1b[2mвладелец: {remembered} (сохранённый логин пула; вход понадобится при push)"
+                 "\x1b[0m\n")
+        return remembered
+    url = _ensure_registry_login(env, url, io, register=False)
     token = _pool_token(env, url)
     user = token_user(token) if token else ""
     if not user:
@@ -1197,17 +1216,22 @@ def _prompt_registry(env: Home, registry: str | None, io: Io) -> str:
     return url
 
 
-def _login_or_register(env: Home, url: str, user: str, io: Io) -> None:
+def _login_or_register(env: Home, url: str, user: str, io: Io, *, register: bool = True) -> None:
     """
     Check whether the login exists on the pool; if not, offer registration outright.
 
     Existing account -> prompt for the password, log in, treat 401 as "неверный пароль"
     (no register-loop -- the user is real, they typoed the password).  Missing account ->
     jump straight into `_register_interactive` so we don't burn the student's time
-    asking for a password we already know won't be accepted.
+    asking for a password we already know won't be accepted -- unless `register=False`
+    (author-side `build`): a typo must never create a student account on the pool.
     """
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     if not client.user_exists(user):
+        if not register:
+            msg = (f"на пуле {url} нет логина «{user}» — сначала hashengine login "
+                   "(аккаунт автора заводит администратор пула)")
+            raise RuntimeError(msg)
         _register_interactive(client, user, io)
     else:
         try:
@@ -1271,7 +1295,7 @@ def _ask_relogin(env: Home, url: str, io: Io, cached_user: str) -> str | None:
     return (io.read(f"логин [{cached_user}]: ") or "").strip() or cached_user
 
 
-def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
+def _ensure_registry_login(env: Home, registry: str | None, io: Io, *, register: bool = True) -> str:
     """Resolve the registry and ensure a live cached token; prompt only when actually needed."""
     url = _prompt_registry(env, registry, io)
     if _cache_hit_or_forget(env, url, io) is not None:
@@ -1281,7 +1305,7 @@ def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
     if not user:
         msg = "логин обязателен"
         raise RuntimeError(msg)
-    _login_or_register(env, url, user, io)
+    _login_or_register(env, url, user, io, register=register)
     return url
 
 
