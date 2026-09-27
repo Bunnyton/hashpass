@@ -4,9 +4,12 @@ HTTP client to a pool registry server (stdlib urllib). Anonymous pull; mutations
 Point base_url at your pool (loopback in tests, or the self-hosted pool). It must never be the
 legacy server (no 185.x). Tokens are cached locally and reused until they expire.
 """
+import hashlib
 import json
 import os
+import shutil
 import ssl
+import tempfile
 import threading
 import urllib.error
 import urllib.parse
@@ -16,14 +19,17 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from pathlib import Path
 from time import time
+from typing import BinaryIO
 
 from hashpass.imagestore.store import ImageStore
-from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
+from hashpass.registry.blob import pack_image_to_file, pack_task, unpack_image_file, unpack_task
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.refs import closure_refs, normalize_ref, split_ref
 from hashpass.registry.token import token_expiry
 
 _TIMEOUT = 30
+_DIGEST_HEADER = "X-Image-Digest"
+_COPY_CHUNK = 1 << 20
 
 # The pool is reached directly (loopback in tests), so this client must NOT route through an
 # ambient HTTP(S)_PROXY -- a sandbox/corp proxy would intercept 127.0.0.1 and answer 500. An empty
@@ -76,43 +82,62 @@ class RemoteRegistry:
             return [raw, "https://" + raw[len("http://"):]]
         return ["https://" + raw, "http://" + raw]
 
-    def _open_once(self, req: urllib.request.Request) -> bytes:
-        """Open one request, transparently accepting a self-signed pool certificate."""
+    def _open_once(self, req: urllib.request.Request,
+                   sink: BinaryIO | None = None) -> tuple[bytes, dict[str, str]]:
+        """Open one request; return (body, headers). With `sink`, stream the body there instead."""
+        def _drain(resp) -> tuple[bytes, dict[str, str]]:
+            headers = dict(resp.headers.items())
+            if sink is None:
+                return resp.read(), headers
+            shutil.copyfileobj(resp, sink, _COPY_CHUNK)
+            return b"", headers
         try:
             with _DIRECT.open(req, timeout=_TIMEOUT) as resp:
-                return resp.read()
+                return _drain(resp)
         except urllib.error.HTTPError:
             raise                                   # a real HTTP status -> callers handle it
         except (urllib.error.URLError, ssl.SSLError) as exc:
             if os.environ.get("HASHPASS_TLS_CAFILE") or not _is_cert_error(exc):
                 raise
             with _DIRECT_INSECURE.open(req, timeout=_TIMEOUT) as resp:   # self-signed: trust it
-                return resp.read()
+                return _drain(resp)
 
-    def _send(self, method: str, path: str, *, data: bytes | None = None,
-              headers: dict[str, str] | None = None) -> bytes:
+    def _request(self, method: str, path: str, *, data: bytes | BinaryIO | None = None,
+                 headers: dict[str, str] | None = None,
+                 sink: BinaryIO | None = None) -> tuple[bytes, dict[str, str]]:
         """
-        Send a request, auto-selecting http/https and accepting a self-signed pool cert.
+        Like the old _send, but also returns response headers and can stream to `sink`.
 
-        The first scheme that connects is cached for the rest of this client's life.
+        Auto-selects http/https; the first scheme that connects is cached for the rest of
+        this client's life.
         """
         last: Exception | None = None
         for base in self._bases():
+            if hasattr(data, "seek"):
+                data.seek(0)                        # a retried upload restarts the file
             req = urllib.request.Request(  # noqa: S310  (scheme is http/https by construction)
                 f"{base}{path}", data=data, method=method, headers=dict(headers or {}))
             try:
-                body = self._open_once(req)
+                out = self._open_once(req, sink)
             except urllib.error.HTTPError:
                 self._resolved_base = base          # the server answered -> this scheme is right
                 raise
             except (urllib.error.URLError, ssl.SSLError, ConnectionError) as exc:
                 last = exc                          # this scheme did not connect -> try the next
+                if sink is not None:
+                    sink.seek(0)
+                    sink.truncate()
                 continue
             self._resolved_base = base
-            return body
+            return out
         msg = (f"не удалось подключиться к пулу {self.base_url}: {last}. "
                "Проверьте адрес и что пул запущен.")
         raise RuntimeError(msg) from last
+
+    def _send(self, method: str, path: str, *, data: bytes | None = None,
+              headers: dict[str, str] | None = None) -> bytes:
+        """Send a request, discarding response headers (thin wrapper over `_request`)."""
+        return self._request(method, path, data=data, headers=headers)[0]
 
     def _cache_token(self, token: str) -> None:
         expiry = token_expiry(token)
@@ -178,44 +203,111 @@ class RemoteRegistry:
     def _push_token(self, token: str | None) -> str:
         return self._auth_token(token)
 
-    def push(self, store: ImageStore, ref: str, *, token: str | None = None,
-             force: bool = False) -> list[str]:
-        # `force=False` (default) skips refs the server already holds via a HEAD probe --
-        # the fast path.  `force=True` uploads every layer regardless, needed to overwrite
-        # a contaminated server-side blob (HEAD says the ref exists, so fresh bytes never
-        # reach the store otherwise).
-        """Push ref + its `from` closure (bottom-up)."""
-        auth = self._push_token(token)
-        copied: list[str] = []
-        for item in closure_refs(ref, store):
-            if not force and self._has_image(item):
-                continue
-            name, version = split_ref(item)
-            self._put_image(name, version, pack_image(store.get(item)), auth)
-            copied.append(item)
-        return copied
-
-    def pull(self, ref: str, store: ImageStore) -> list[str]:
-        """Pull ref + its `from` closure (bottom-up) anonymously, skipping refs already local."""
-        copied: list[str] = []
-        for item in self._closure(normalize_ref(ref)):
-            if store.exists(item):
-                continue
-            unpack_image(self._get_image(item), store, sudo=self.sudo)
-            copied.append(item)
-        return copied
-
     def closure(self, ref: str) -> list[str]:
         """Return a ref's bottom-up `from` closure from the pool."""
         return self._closure(normalize_ref(ref))
 
-    def pull_many(self, refs: list[str], store: ImageStore, *, workers: int = 8) -> list[str]:
-        """
-        Pull several refs + their closures concurrently; each missing layer is fetched once.
+    # --- images -----------------------------------------------------------------
 
-        Downloads run in a thread pool; the (fast) local save is serialized under a lock so
-        shared parent layers are never written twice. Returns the layers actually fetched.
+    def has_image(self, ref: str) -> bool:
+        """Whether the pool holds `ref` (HEAD)."""
+        name, version = split_ref(ref)
+        try:
+            self._request("HEAD", f"/image/{name}/{version}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.NOT_FOUND:
+                return False
+            raise
+        return True
+
+    _has_image = has_image   # backwards-compatible name
+
+    def image_digest(self, ref: str) -> str | None:
+        """Return the pool's digest for `ref`; None when absent OR a legacy record without a digest."""
+        name, version = split_ref(ref)
+        try:
+            _body, headers = self._request("HEAD", f"/image/{name}/{version}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.NOT_FOUND:
+                return None
+            raise
+        return headers.get(_DIGEST_HEADER) or None
+
+    def download_image(self, ref: str, dest: Path) -> str:
         """
+        Stream `ref`'s blob into `dest`, verifying sha256 against X-Image-Digest when present.
+
+        Returns the digest ("" for a legacy record). On mismatch `dest` is removed and
+        ValueError("digest mismatch …") is raised -- a torn download must never be unpacked.
+        """
+        name, version = split_ref(ref)
+        with dest.open("wb") as sink:
+            _body, headers = self._request("GET", f"/image/{name}/{version}", sink=sink)
+        expected = headers.get(_DIGEST_HEADER, "")
+        if not expected:
+            return ""
+        h = hashlib.sha256()
+        with dest.open("rb") as f:
+            for chunk in iter(lambda: f.read(_COPY_CHUNK), b""):
+                h.update(chunk)
+        if h.hexdigest() != expected:
+            dest.unlink(missing_ok=True)
+            msg = f"digest mismatch for {ref}: pool says {expected[:12]}…, got {h.hexdigest()[:12]}…"
+            raise ValueError(msg)
+        return expected
+
+    def _get_image(self, ref: str) -> bytes:              # kept for tests / small images
+        name, version = split_ref(ref)
+        return self._send("GET", f"/image/{name}/{version}")
+
+    def _wants(self, ref: str, store: ImageStore, *, refresh: bool) -> bool:
+        """
+        Whether `ref` needs a network round-trip.
+
+        Missing locally, or (`refresh`) present but digest-bearing on the pool. A digest-bearing
+        ref is ALWAYS re-fetched+re-verified under `refresh` (never trusted
+        from a cached HEAD digest alone) -- otherwise a blob corrupted at rest on the pool
+        (server bytes no longer matching its own recorded digest) would never be re-checked,
+        since its advertised digest never changes. `_fetch_into`/`_one` compare the freshly
+        VERIFIED digest against the local `pool_digest` afterwards and skip the unpack when
+        unchanged, so this only costs an extra GET, never an extra unpack.
+        """
+        if not store.exists(ref):
+            return True
+        if not refresh:
+            return False
+        return self.image_digest(ref) is not None
+
+    def _fetch_into(self, ref: str, store: ImageStore) -> bool:
+        """Download+verify+unpack `ref`; return whether it actually changed (False: no-op)."""
+        incoming = store.root / ".incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=incoming, suffix=".tar.gz", delete=False) as tmp:
+            path = Path(tmp.name)
+        try:
+            digest = self.download_image(ref, path)          # verifies against its own header
+            if store.exists(ref) and digest and digest == store.get(ref).pool_digest:
+                return False                                  # verified unchanged
+            unpack_image_file(path, store, sudo=(True if self.sudo else None))
+            if digest:
+                store.set_pool_digest(ref, digest)
+            return True
+        finally:
+            path.unlink(missing_ok=True)
+
+    def pull(self, ref: str, store: ImageStore, *, refresh: bool = False) -> list[str]:
+        """Pull ref + its `from` closure (bottom-up), skipping refs already local (unless stale)."""
+        copied: list[str] = []
+        for item in self._closure(normalize_ref(ref)):
+            if not self._wants(item, store, refresh=refresh):
+                continue
+            if self._fetch_into(item, store):
+                copied.append(item)
+        return copied
+
+    def pull_many(self, refs: list[str], store: ImageStore, *, workers: int = 8,
+                  refresh: bool = False) -> list[str]:
+        """Pull several refs + closures concurrently; `refresh` also re-pulls digest-stale ones."""
         needed: list[str] = []
         seen: set[str] = set()
         for ref in refs:
@@ -223,22 +315,62 @@ class RemoteRegistry:
                 if item not in seen:
                     seen.add(item)
                     needed.append(item)
-        to_fetch = [item for item in needed if not store.exists(item)]
+        to_fetch = [item for item in needed if self._wants(item, store, refresh=refresh)]
         lock = threading.Lock()
         fetched: list[str] = []
 
         def _one(item: str) -> None:
-            blob = self._get_image(item)          # network download (parallel)
-            with lock:                            # local save (serialized: no shared-parent race)
-                if store.exists(item):
-                    return
-                unpack_image(blob, store, sudo=self.sudo)
-                fetched.append(item)
+            incoming = store.root / ".incoming"
+            incoming.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=incoming, suffix=".tar.gz", delete=False) as tmp:
+                path = Path(tmp.name)
+            try:
+                digest = self.download_image(item, path)          # network, parallel; verified
+                with lock:                                        # local unpack, serialized
+                    if store.exists(item) and digest and digest == store.get(item).pool_digest:
+                        return                                     # verified unchanged
+                    unpack_image_file(path, store, sudo=(True if self.sudo else None))
+                    if digest:
+                        store.set_pool_digest(item, digest)
+                    fetched.append(item)
+            finally:
+                path.unlink(missing_ok=True)
 
         if to_fetch:
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 list(pool.map(_one, to_fetch))
         return fetched
+
+    def push(self, store: ImageStore, ref: str, *, token: str | None = None,
+             force: bool = False) -> list[str]:
+        # `force=False` (default) skips refs the server already holds via a HEAD probe --
+        # the fast path.  `force=True` uploads every layer regardless, needed to overwrite
+        # a contaminated server-side blob (HEAD says the ref exists, so fresh bytes never
+        # reach the store otherwise).
+        """Push ref + its `from` closure (bottom-up); each blob is packed to disk and streamed."""
+        auth = self._push_token(token)
+        copied: list[str] = []
+        for item in closure_refs(ref, store):
+            if not force and self.has_image(item):
+                continue
+            name, version = split_ref(item)
+            with tempfile.TemporaryDirectory() as td:
+                blob = pack_image_to_file(store.get(item), Path(td) / "image.tar.gz")
+                self._put_image_file(name, version, blob, auth)
+            copied.append(item)
+        return copied
+
+    def _put_image_file(self, name: str, version: str, blob: Path, token: str) -> None:
+        with blob.open("rb") as f:
+            self._request("PUT", f"/image/{name}/{version}", data=f,
+                          headers={"Authorization": f"Bearer {token}",
+                                   "Content-Type": "application/octet-stream",
+                                   "Content-Length": str(blob.stat().st_size)})
+
+    def _put_image(self, name: str, version: str, blob: bytes, token: str) -> None:   # kept for tests
+        self._send("PUT", f"/image/{name}/{version}", data=blob,
+                   headers={"Authorization": f"Bearer {token}",
+                            "Content-Type": "application/octet-stream"})
 
     def push_task(self, task_dir: Path, name: str, version: str, *,
                   publish: bool = False, token: str | None = None) -> None:
@@ -302,22 +434,3 @@ class RemoteRegistry:
     def _closure(self, ref: str) -> list[str]:
         name, version = split_ref(ref)
         return json.loads(self._send("GET", f"/closure/{name}/{version}").decode("utf-8"))["refs"]
-
-    def _get_image(self, ref: str) -> bytes:
-        name, version = split_ref(ref)
-        return self._send("GET", f"/image/{name}/{version}")
-
-    def _has_image(self, ref: str) -> bool:
-        name, version = split_ref(ref)
-        try:
-            self._send("HEAD", f"/image/{name}/{version}")
-        except urllib.error.HTTPError as exc:
-            if exc.code == HTTPStatus.NOT_FOUND:
-                return False
-            raise
-        return True
-
-    def _put_image(self, name: str, version: str, blob: bytes, token: str) -> None:
-        self._send("PUT", f"/image/{name}/{version}", data=blob,
-                   headers={"Authorization": f"Bearer {token}",
-                            "Content-Type": "application/octet-stream"})
