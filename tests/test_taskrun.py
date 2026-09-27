@@ -392,6 +392,18 @@ def test_e2e_dsl_hint_fires_and_renders(tmp_path, base_tar):
         # type-mode normal types char-by-char, so the hint spans many sink chunks;
         # the rendered STREAM (joined) carries it.
         assert "add -i" in "".join(chunks)
+        # Every hint rule fires ONCE per stage: the same mistake again no longer re-fires the
+        # `cmd` rule; instead the ladder escalates to the next unfired rung (`tries 2`).
+        again = session.feed("grep -rh error /var/log/app > /errors.txt",
+                             ts="2026-08-31T00:00:01")
+        assert again.advanced is False
+        assert again.hint is not None
+        assert "peek" in again.hint
+        # ...and once the ladder is exhausted, a third failure is silent (no hint spam).
+        third = session.feed("grep -rh error /var/log/app > /errors.txt",
+                             ts="2026-08-31T00:00:02")
+        assert third.advanced is False
+        assert third.hint is None
         # the reference solution (case-insensitive) is accepted
         ok = session.feed("grep -rih ERROR /var/log/app > /errors.txt",
                           ts="2026-08-31T00:00:05")

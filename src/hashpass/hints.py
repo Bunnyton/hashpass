@@ -83,16 +83,25 @@ def _cond_matches(cond: Condition, *, tries: int, idle: float,
     raise TypeError(msg)
 
 
-def match_rule(rules: tuple[HintRule, ...], *, tries: int, idle: float,
-               command: str, output: str) -> Action | None:
+def match_rule(rules: tuple[HintRule, ...], *, tries: int, idle: float,  # noqa: PLR0913
+               command: str, output: str, fired: set[int] | None = None) -> Action | None:
     """
     Return the action of the first hint rule whose condition matches, else None (§7.1).
 
     Conditions are explicit atoms (`tries`/`idle`/`cmd`/`output`); first-match-wins in
     source order. `tries` is neutral-excluded; `idle` is seconds since last progress.
+
+    `fired` (rule indexes that already fired on this stage) makes every rule fire ONCE:
+    fired rules are skipped and the matched rule's index is added. Without it a `tries N`
+    rule re-fires on every later command, so a hint ladder written in ascending order
+    (question -> where to look -> concrete) could never escalate past its first rung.
     """
-    for rule in rules:
+    for i, rule in enumerate(rules):
+        if fired is not None and i in fired:
+            continue
         if _cond_matches(rule.condition, tries=tries, idle=idle,
                          command=command, output=output):
+            if fired is not None:
+                fired.add(i)
             return rule.action
     return None

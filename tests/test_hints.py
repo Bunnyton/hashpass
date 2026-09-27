@@ -106,3 +106,29 @@ def test_first_match_wins_and_unparseable_command():
     assert match_rule(rules, **{**_NO, "tries": 5}) == SayAction("first")
     cmd_rules = (HintRule(CmdCond("grep", (), ()), SayAction("c")),)
     assert match_rule(cmd_rules, **{**_NO, "command": 'echo "oops'}) is None  # shlex raises -> no match
+
+
+@pytest.mark.tier1
+def test_fired_rules_are_skipped_so_an_ascending_ladder_escalates_once_per_rung():
+    # A hint ladder written in ascending order: question at 2 tries, pointer at 4. With `fired`
+    # tracking, each rung fires exactly once and the lower rung never re-fires on later commands.
+    rules = (
+        HintRule(TriesCond(2), SayAction("question")),
+        HintRule(TriesCond(4), SayAction("pointer")),
+    )
+    fired: set[int] = set()
+    assert match_rule(rules, **{**_NO, "tries": 1}, fired=fired) is None
+    assert match_rule(rules, **{**_NO, "tries": 2}, fired=fired) == SayAction("question")
+    assert fired == {0}
+    assert match_rule(rules, **{**_NO, "tries": 3}, fired=fired) is None      # rung 0 already fired
+    assert match_rule(rules, **{**_NO, "tries": 4}, fired=fired) == SayAction("pointer")
+    assert fired == {0, 1}
+    assert match_rule(rules, **{**_NO, "tries": 9}, fired=fired) is None      # ladder exhausted
+
+
+@pytest.mark.tier1
+def test_match_rule_without_fired_keeps_repeating():
+    # Backwards-compatible: no `fired` set -> stateless first-match, as before.
+    rules = (HintRule(TriesCond(2), SayAction("again")),)
+    assert match_rule(rules, **{**_NO, "tries": 2}) == SayAction("again")
+    assert match_rule(rules, **{**_NO, "tries": 3}) == SayAction("again")

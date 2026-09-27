@@ -201,6 +201,7 @@ class TaskSession:
         self.nonce = nonce
         self.progress = new_progress(self.task_id, len(stored.meta.stages))
         self.tries = [0] * len(stored.meta.stages)
+        self._fired: list[set[int]] = [set() for _ in stored.meta.stages]  # hint rules fired, per stage
         self.render = Renderer(self.meta.settings, sink=sink, sleep=sleep)
         self._greeted = False
         self._said_bye = False
@@ -330,7 +331,7 @@ class TaskSession:
         elif hint is None:
             action = match_rule(sm.hints, tries=self.tries[stage],
                                 idle=_elapsed(self._last_progress_ts, ts),
-                                command=command, output=out)
+                                command=command, output=out, fired=self._fired[stage])
             if action is not None:
                 hint = perform_action(action, ctx, render=self.render, runner=self.student,
                                       hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
@@ -362,7 +363,7 @@ class TaskSession:
         elif hint is None:
             action = match_rule(sm.hints, tries=self.tries[stage],
                                 idle=_elapsed(self._last_progress_ts, ts),
-                                command=command, output=out)
+                                command=command, output=out, fired=self._fired[stage])
             if action is not None:
                 hint = perform_action(action, ctx, render=self.render, runner=self.student,
                                       hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
