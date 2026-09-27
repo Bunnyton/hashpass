@@ -85,7 +85,7 @@ def build(  # noqa: PLR0913
         recipe: The parsed recipe to build.
         store: Image store to resolve parents from and save the result into.
         base_tar: Rootfs tarball for the bottom base layer (fallback when `base` is None).
-        base: Prebuilt base rootfs layer -- the stamped base image (`debian:trixie-<stamp>`,
+        base: Prebuilt base rootfs layer -- the base image (`bunnyton/debian:trixie`,
             see `cli.base_ref`); when given it is used directly and `base_tar` is ignored
             (built once in the store, reused).
         workdir: Scratch directory for base/upper/work/mnt.
@@ -145,7 +145,7 @@ def run_image(ref: str, store: ImageStore, workdir: Path, *,
         store: Image store holding the image and its ancestors.
         workdir: Scratch directory for base and the runner tree.
         base_tar: Rootfs tarball for the bottom base layer (fallback when `base` is None).
-        base: Prebuilt base rootfs layer -- the stamped base image (`debian:trixie-<stamp>`,
+        base: Prebuilt base rootfs layer -- the base image (`bunnyton/debian:trixie`,
             see `cli.base_ref`); when given it is used directly and `base_tar` is ignored
             (built once in the store, reused).
 

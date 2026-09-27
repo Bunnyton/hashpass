@@ -62,6 +62,23 @@ def _is_cert_error(exc: Exception) -> bool:
     return isinstance(reason, ssl.SSLCertVerificationError)
 
 
+def _not_found_error(exc: urllib.error.HTTPError, ref: str) -> Exception:
+    """
+    Turn a pool 404 into a readable RuntimeError (with the pool's «быть может, вы искали …?»).
+
+    Any other status is returned unchanged so callers' HTTPError handling still applies.
+    """
+    if exc.code != HTTPStatus.NOT_FOUND:
+        return exc
+    try:
+        payload = json.loads(exc.read())
+    except (ValueError, UnicodeDecodeError, OSError):
+        payload = None
+    if isinstance(payload, dict) and isinstance(payload.get("error"), str) and payload["error"]:
+        return RuntimeError(payload["error"])
+    return RuntimeError(f"образ «{ref}» не найден на пуле")
+
+
 @dataclass
 class RemoteRegistry:
     """HTTP pool client: anonymous pull, token-gated push/register/submit. Never point at 185.x."""
@@ -348,16 +365,21 @@ class RemoteRegistry:
             name, version = split_ref(item)
             with tempfile.TemporaryDirectory() as td:
                 blob = pack_image_to_file(store.get(item), Path(td) / "image.tar.gz")
-                self._put_image_file(name, version, blob, auth)
+                digest = self._put_image_file(name, version, blob, auth)
+            if digest:                      # remember what the pool now holds for this ref
+                store.set_pool_digest(item, digest)
             copied.append(item)
         return copied
 
-    def _put_image_file(self, name: str, version: str, blob: Path, token: str) -> None:
+    def _put_image_file(self, name: str, version: str, blob: Path, token: str) -> str | None:
+        """PUT one packed blob; return the digest the pool assigned to it (None on old pools)."""
         with blob.open("rb") as f:
-            self._request("PUT", f"/image/{name}/{version}", data=f,
-                          headers={"Authorization": f"Bearer {token}",
-                                   "Content-Type": "application/octet-stream",
-                                   "Content-Length": str(blob.stat().st_size)})
+            _body, headers = self._request(
+                "PUT", f"/image/{name}/{version}", data=f,
+                headers={"Authorization": f"Bearer {token}",
+                         "Content-Type": "application/octet-stream",
+                         "Content-Length": str(blob.stat().st_size)})
+        return headers.get(_DIGEST_HEADER) or None
 
     def _put_image(self, name: str, version: str, blob: bytes, token: str) -> None:   # kept for tests
         self._send("PUT", f"/image/{name}/{version}", data=blob,
@@ -420,9 +442,16 @@ class RemoteRegistry:
 
     def _get_task(self, ref: str, *, token: str) -> bytes:
         name, version = split_ref(ref)
-        return self._send("GET", f"/task/{name}/{version}",
-                          headers={"Authorization": f"Bearer {token}"})
+        try:
+            return self._send("GET", f"/task/{name}/{version}",
+                              headers={"Authorization": f"Bearer {token}"})
+        except urllib.error.HTTPError as exc:
+            raise _not_found_error(exc, ref) from exc
 
     def _closure(self, ref: str) -> list[str]:
         name, version = split_ref(ref)
-        return json.loads(self._send("GET", f"/closure/{name}/{version}").decode("utf-8"))["refs"]
+        try:
+            body = self._send("GET", f"/closure/{name}/{version}")
+        except urllib.error.HTTPError as exc:
+            raise _not_found_error(exc, ref) from exc
+        return json.loads(body.decode("utf-8"))["refs"]

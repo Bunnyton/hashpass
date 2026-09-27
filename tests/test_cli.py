@@ -335,8 +335,8 @@ def test_resolve_ref(tmp_path):
 
 @pytest.mark.tier3
 def test_ensure_base_image_stores_stamped_base(tmp_path, base_tar):
-    # The single base image is built once from the provided rootfs, stored under its stamped
-    # ref (base_ref(), e.g. "debian:trixie-18"), reused.
+    # The single base image is built once from the provided rootfs, stored under its fixed
+    # ref (base_ref() == "bunnyton/debian:trixie"; the runtime stamp lives INSIDE the layer), reused.
     home = tmp_path / "home"
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
     env.base_tar.parent.mkdir(parents=True, exist_ok=True)
@@ -413,3 +413,17 @@ def test_policy_reply_serializes_current_stage_policy(monkeypatch):
     assert cli._policy_reply(session) == ";rm;\n"                 # noqa: SLF001
     monkeypatch.setattr(cli, "current_stage", lambda _p: None)
     assert cli._policy_reply(session) == ""                       # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_cmd_run_unknown_ref_hints_the_same_name_in_another_namespace(tmp_path):
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    store = ImageStore(env.images)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "f.txt").write_text("x", encoding="utf-8")
+    store.save("bunnyton/debian", "trixie", src, ())
+    out = []
+    io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "t")
+    assert cli.cmd_run(env, "debian:trixie", io) == 1
+    assert out == ["нет такого образа: debian:trixie — быть может, вы искали bunnyton/debian:trixie?\n"]

@@ -30,8 +30,8 @@ from http import HTTPStatus
 from pathlib import Path
 
 from hashpass.build import build, run_image
-from hashpass.image.base import _base_version_current, build_base, runtime_stamp
-from hashpass.imagestore.store import ImageStore
+from hashpass.image.base import _base_version_current, build_base
+from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.progress import current_stage
 from hashpass.recipe.model import (
     Action,
@@ -73,6 +73,7 @@ _DEFAULT_REGISTRY = "http://127.0.0.1:8080"
 _REGISTRY_START_TRIES = 50   # poll the auto-started service ~5s (50 x 0.1s) before giving up
 _BASE_IMAGE = "debian:trixie-slim"  # slim boots + runs machinectl-shell commands reliably;
 # full debian:trixie breaks command execution in the booted machine (and adds no ps/systemd).
+_BASE_OWNER = "bunnyton"   # the base image lives in its author's namespace, like any image
 _BASE_NAME = "debian"
 _BASE_VERSION = "trixie"
 _DEFAULT_STUDENT = "local"
@@ -169,8 +170,13 @@ def ensure_base_tar(dest: Path) -> Path:
 
 
 def base_ref() -> str:
-    """Return the base image ref for THIS runtime: `debian:trixie-<stamp>` (a new stamp = a new ref)."""
-    return f"{_BASE_NAME}:{_BASE_VERSION}-{runtime_stamp()}"
+    """
+    Return the base image ref: `bunnyton/debian:trixie` -- one image, one fixed tag.
+
+    Docker-like: an updated base (new runtime stamp inside it) is re-pushed under the SAME
+    tag; students pick it up by the pool digest, never by a new ref.
+    """
+    return f"{_BASE_OWNER}/{_BASE_NAME}:{_BASE_VERSION}"
 
 
 def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | None = None,
@@ -197,7 +203,7 @@ def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | No
                 pool.pull_many([ref], store)
                 return store.get(ref).layer
             (io or _default_io()).write(
-                f"\x1b[2mбаза для runtime {runtime_stamp()} на пуле не найдена — собираю локально\x1b[0m\n")
+                f"\x1b[2mбаза {ref} на пуле не найдена — собираю локально\x1b[0m\n")
         except (RuntimeError, ValueError, OSError, urllib.error.URLError):
             # Pool unreachable, or a torn download (digest mismatch) -- degrade rather than
             # crash the student's run: reuse a good local base if there is one, else fall
@@ -865,11 +871,17 @@ def cmd_run(env: Home, ref: str, io: Io | None = None, *,  # noqa: PLR0913
     try:
         stored = store.get(ref)
     except KeyError:
-        io.write(f"нет такого образа: {ref}\n")
+        io.write(f"{_no_such_image(store, ref)}\n")
         return 1
     if (stored.layer.parent / "task").exists():
         return _run_task(env, ref, store, io, student_id=student_id, on_complete=on_complete, pool=pool)
     return _run_image(env, ref, store, io)
+
+
+def _no_such_image(store: ImageStore, ref: str) -> str:
+    """«нет такого образа: X», plus «— быть может, вы искали ns/X?» when a namespaced twin exists."""
+    hint = did_you_mean(store.similar(ref))
+    return f"нет такого образа: {ref}" + (f" — {hint}" if hint else "")
 
 
 def _local_registry_url() -> str:
@@ -1308,8 +1320,10 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
     contaminated server-side blob that HEAD would otherwise dedup-skip).
     """
     io = io or _default_io()
-    url = _ensure_registry_login(env, registry, io)
     store = ImageStore(env.images)
+    if not store.exists(ref):                 # before any login prompt: nothing to push
+        raise RuntimeError(_no_such_image(store, ref))
+    url = _ensure_registry_login(env, registry, io)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     copied = _push_call(client.push, store, ref, force=force)
     sys.stdout.write(f"отправлено {ref} (слоёв: {len(copied)})\n")
@@ -1327,11 +1341,30 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
 
 def cmd_push_base(env: Home, registry: str | None = None, *, force: bool = False,
                   io: Io | None = None) -> int:
-    """Build (if needed) and push this runtime's base image so students pull it instead of building."""
+    """
+    Build (if needed) and push the base image under its fixed tag (`bunnyton/debian:trixie`).
+
+    The tag never changes, so "the pool already has it" says nothing: the base is re-uploaded
+    when the LOCAL copy changed since this machine last pushed or pulled it (a rebuild for a
+    new runtime wipes the recorded pool digest), skipped while it matches the pool, and left
+    alone when the pool holds a generation pushed from elsewhere -- unless `force`.
+    """
     io = io or _default_io()
     store = ImageStore(env.images)
     ensure_base_image(env, store)                     # local build path (author machine)
-    return cmd_push(env, base_ref(), registry, publish=False, force=force, io=io)
+    ref = base_ref()
+    url = _ensure_registry_login(env, registry, io)
+    if not force:
+        remote = RemoteRegistry(url, cache=CredentialCache(env.creds)).image_digest(ref)
+        local = store.get(ref).pool_digest
+        if remote is not None and local == remote:
+            io.write(f"\x1b[2mбаза {ref} на пуле актуальна — не отправляю\x1b[0m\n")
+            return 0
+        if remote is not None and local is not None:
+            io.write(f"\x1b[33mна пуле база {ref}, загруженная с другой машины — оставляю; "
+                     f"перезаписать: hashengine push base --force\x1b[0m\n")
+            return 0
+    return cmd_push(env, ref, url, publish=False, force=True, io=io)
 
 
 def cmd_pull(env: Home, ref: str, registry: str | None = None, io: Io | None = None) -> int:

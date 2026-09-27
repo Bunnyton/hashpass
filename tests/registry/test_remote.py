@@ -201,3 +201,29 @@ def test_pull_refuses_blob_declaring_another_ref(registry, tmp_path, via):
         do_pull()
     assert not dest.exists("other:1") and not dest.exists("app:1")
     assert not list((dest.root / ".incoming").glob("*"))
+
+
+@pytest.mark.tier2
+def test_push_records_the_pool_digest_locally(registry, tmp_path):
+    # After a push the local record knows the pool's digest of what it just uploaded, so a
+    # later `push base` can tell "unchanged since my last push" from "rebuilt locally".
+    registry.users.add("alice", "pw-correct", role="admin")
+    local = ImageStore(tmp_path / "local")
+    ref = _seed(local, tmp_path, "img", (), "v1")
+    client = RemoteRegistry(registry.base_url)
+    token = client.login("alice", "pw-correct")
+    assert local.get(ref).pool_digest is None
+    client.push(local, ref, token=token)
+    assert local.get(ref).pool_digest == client.image_digest(ref)
+
+
+@pytest.mark.tier2
+@pytest.mark.parametrize("via", ["pull", "pull_many"])
+def test_pull_unknown_ref_suggests_the_same_name_in_another_namespace(registry, tmp_path, via):
+    _seed(registry.store, tmp_path, "bunnyton/debian", (), "b")      # pool holds bunnyton/debian:1
+    client = RemoteRegistry(registry.base_url)
+    local = ImageStore(tmp_path / "local")
+    fetch = (lambda: client.pull("debian:1", local)) if via == "pull" \
+        else (lambda: client.pull_many(["debian:1"], local))
+    with pytest.raises(RuntimeError, match=r"debian:1.*быть может, вы искали bunnyton/debian:1\?"):
+        fetch()

@@ -382,3 +382,16 @@ def test_web_write_routes_allowed_for_admin_on_others_namespace(registry, tmp_pa
                         data={"ref": "bob/lab:1"})
     assert status in (HTTPStatus.OK, HTTPStatus.SEE_OTHER, HTTPStatus.FOUND)
     assert sc.catalog(token=student) == []
+
+
+@pytest.mark.tier2
+def test_web_card_404_links_the_namespaced_twin(registry, tmp_path):
+    _seed(registry, "bunnyton/debian:1", tmp_path)
+    opener, cookie = _author_cookie(registry)
+    status, _, body = _req(opener, "GET", f"{registry.base_url}/web/image/debian:1", cookie=cookie)
+    assert status == HTTPStatus.NOT_FOUND
+    assert "быть может, вы искали" in body
+    assert 'href="/web/image/bunnyton/debian:1"' in body
+    status, _, body = _req(opener, "GET", f"{registry.base_url}/web/image/ghost:1", cookie=cookie)
+    assert status == HTTPStatus.NOT_FOUND
+    assert "быть может" not in body

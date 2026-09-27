@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,6 +73,35 @@ class StoredImage:
 def _split_ref(ref: str) -> tuple[str, str]:
     name, sep, version = ref.partition(":")
     return name, (version if sep else _DEFAULT_VERSION)
+
+
+_MAX_SUGGESTIONS = 3
+
+
+def similar_refs(refs: Iterable[str], ref: str) -> list[str]:
+    """
+    Return up to three stored refs that share `ref`'s short name under ANOTHER namespace.
+
+    `debian:trixie` against a store holding `bunnyton/debian:trixie` yields exactly that; the
+    same version is listed first, other versions of the same short name after it, each group
+    sorted. The exact ref itself is never a suggestion.
+    """
+    name, version = _split_ref(ref)
+    short = name.rpartition("/")[2]
+    exact, others = [], []
+    for candidate in sorted(set(refs)):
+        c_name, c_version = _split_ref(candidate)
+        if c_name.rpartition("/")[2] != short or (c_name, c_version) == (name, version):
+            continue
+        (exact if c_version == version else others).append(f"{c_name}:{c_version}")
+    return (exact + others)[:_MAX_SUGGESTIONS]
+
+
+def did_you_mean(suggestions: list[str]) -> str:
+    """Russian hint for `similar_refs` output («быть может, вы искали X или Y?»); '' if none."""
+    if not suggestions:
+        return ""
+    return f"быть может, вы искали {' или '.join(suggestions)}?"
 
 
 class ImageStore:
@@ -183,6 +213,10 @@ class ImageStore:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         meta["taskfile_path"] = taskfile_path
         meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    def similar(self, ref: str) -> list[str]:
+        """Return stored refs with `ref`'s short name under another namespace (see `similar_refs`)."""
+        return similar_refs(self.list(), ref)
 
     def exists(self, ref: str) -> bool:
         """Return whether an image is stored under the reference."""

@@ -406,3 +406,39 @@ def test_author_cannot_push_task_or_attachment_for_others_namespace(registry, tm
     status, _ = _http("PUT", f"{registry.base_url}/attachment/bob/app/1?name=Taskfile",
                       data=b"stage x\n", headers=auth)
     assert status == HTTPStatus.FORBIDDEN
+
+
+@pytest.mark.tier2
+def test_unknown_ref_404_suggests_the_same_name_under_another_namespace(registry, tmp_path):
+    _seed_ns(registry.store, tmp_path, "bunnyton/debian")            # -> bunnyton/debian:1
+    base = registry.base_url
+    status, body = _http("GET", f"{base}/image/debian/1")
+    assert status == HTTPStatus.NOT_FOUND
+    payload = json.loads(body)
+    assert payload["suggestions"] == ["bunnyton/debian:1"]
+    assert "быть может, вы искали bunnyton/debian:1?" in payload["error"]
+    status, body = _http("GET", f"{base}/closure/debian/1")
+    assert status == HTTPStatus.NOT_FOUND
+    assert json.loads(body)["suggestions"] == ["bunnyton/debian:1"]
+    # HEAD carries no body: the hint travels in a header
+    req = urllib.request.Request(f"{base}/image/debian/1", method="HEAD")  # noqa: S310
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        urllib.request.urlopen(req, timeout=_TIMEOUT)  # noqa: S310
+    assert exc.value.code == HTTPStatus.NOT_FOUND
+    assert exc.value.headers["X-Image-Suggest"] == "bunnyton/debian:1"
+    # a name nobody published stays a plain 404 (no suggestions)
+    status, body = _http("GET", f"{base}/image/ghost/1")
+    assert status == HTTPStatus.NOT_FOUND
+    assert json.loads(body)["suggestions"] == []
+
+
+@pytest.mark.tier2
+def test_forbidden_push_hints_the_namespaced_twin(registry, tmp_path):
+    _seed_ns(registry.store, tmp_path, "bunnyton/debian")
+    registry.users.add("alice", "pw-correct", role="author")
+    token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "debian", ())
+    status, body = _push_blob(registry.base_url, "debian:1", pack_image(local.get("debian:1")), token)
+    assert status == HTTPStatus.FORBIDDEN
+    assert "быть может, вы искали bunnyton/debian:1?" in json.loads(body)["error"]

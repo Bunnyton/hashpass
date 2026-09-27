@@ -8,6 +8,7 @@ at or used to touch the legacy server (no 185.x).
 """
 import contextlib
 import hashlib
+import html
 import json
 import os
 import re
@@ -24,7 +25,7 @@ from flask import Flask, Response, request, send_file
 from werkzeug.serving import WSGIRequestHandler
 from werkzeug.serving import make_server as _wsgi_make_server
 
-from hashpass.imagestore.store import ImageStore
+from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
 from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
@@ -340,14 +341,39 @@ class PoolServer:
         """Whether `user` may write image `name`: admin -> always; author -> owns its namespace."""
         return self.users.role(user) == "admin" or _owner_of(name) == user
 
-    def _authorize_write(self, name: str) -> tuple[str | None, Response | None]:
-        """Require author/admin + ownership of `name`'s namespace (admin-only if it has none)."""
+    def _authorize_write(self, name: str, version: str) -> tuple[str | None, Response | None]:
+        """
+        Require author/admin + ownership of `name`'s namespace (admin-only if it has none).
+
+        The 403 reason also names an existing twin of the ref under another namespace
+        (`debian:trixie` refused -> «быть может, вы искали bunnyton/debian:trixie?»).
+        """
         user, err = self._auth_role(_AUTHOR_ROLES)
         if err is not None:
             return None, self._empty(err)
         if self._may_write(user, name):
             return user, None
-        return None, self._json(HTTPStatus.FORBIDDEN, {"error": _ownership_message(name)})
+        suggestions = self.store.similar(f"{name}:{version}")
+        reason = _ownership_message(name)
+        if suggestions:
+            reason = f"{reason}; {did_you_mean(suggestions)}"
+        return None, self._json(HTTPStatus.FORBIDDEN, {"error": reason, "suggestions": suggestions})
+
+    def _not_found(self, ref: str) -> Response:
+        """JSON 404 for an unknown ref, naming its twins under other namespaces (if any)."""
+        suggestions = self.store.similar(ref)
+        reason = f"образ «{ref}» не найден на пуле"
+        if suggestions:
+            reason = f"{reason}; {did_you_mean(suggestions)}"
+        return self._json(HTTPStatus.NOT_FOUND, {"error": reason, "suggestions": suggestions})
+
+    def _not_found_head(self, ref: str) -> Response:
+        """Bodiless 404 (HEAD): the twins travel in `X-Image-Suggest`, comma-separated."""
+        resp = self._empty(HTTPStatus.NOT_FOUND)
+        suggestions = self.store.similar(ref)
+        if suggestions:
+            resp.headers["X-Image-Suggest"] = ", ".join(suggestions)
+        return resp
 
     def _session_user(self) -> str | None:
         token = request.cookies.get("hp_session")
@@ -558,13 +584,13 @@ class PoolServer:
             try:
                 img = self.store.get(ref)
             except KeyError:
-                return self._empty(HTTPStatus.NOT_FOUND)
+                return self._not_found_head(ref)
             resp = self._empty(HTTPStatus.OK)
             if img.digest:
                 resp.headers["X-Image-Digest"] = img.digest
             return resp
         if request.method == "PUT":
-            _user, err = self._authorize_write(name)
+            _user, err = self._authorize_write(name, version)
             if err is not None:
                 return err
             return self._receive_image(name, version)
@@ -580,7 +606,7 @@ class PoolServer:
         try:
             img = self.store.get(ref)
         except KeyError:
-            return self._empty(HTTPStatus.NOT_FOUND)
+            return self._not_found(ref)
         if not img.blob:                      # legacy record (layer/ only): pack on the fly
             return self._blob(HTTPStatus.OK, pack_image(img))
         path = self.store.blob_path_of(img)
@@ -648,7 +674,7 @@ class PoolServer:
         name, version = parts
         ref = f"{name}:{version}"
         if request.method == "PUT":
-            _user, err = self._authorize_write(name)
+            _user, err = self._authorize_write(name, version)
             if err is not None:
                 return err
             if not self.store.exists(ref):
@@ -665,7 +691,7 @@ class PoolServer:
         if self._token_user() is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         if not self.store.exists(ref):
-            return self._empty(HTTPStatus.NOT_FOUND)
+            return self._not_found(ref)
         task_dir = self.store.get(ref).layer.parent / "task"
         if not task_dir.exists():
             return self._empty(HTTPStatus.NOT_FOUND)
@@ -679,7 +705,7 @@ class PoolServer:
         try:
             refs = closure_refs(f"{name}:{version}", self.store)
         except KeyError:
-            return self._empty(HTTPStatus.NOT_FOUND)
+            return self._not_found(f"{name}:{version}")
         return self._json(HTTPStatus.OK, {"refs": refs})
 
     def _route_attachment_put(self, tail: str) -> Response:
@@ -688,7 +714,7 @@ class PoolServer:
             return self._empty(HTTPStatus.NOT_FOUND)
         name, version = parts
         ref = f"{name}:{version}"
-        _user, err = self._authorize_write(name)
+        _user, err = self._authorize_write(name, version)
         if err is not None:
             return err
         if not self.store.exists(ref):
@@ -733,7 +759,7 @@ class PoolServer:
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
         if not self.store.exists(ref):
-            return self._empty(HTTPStatus.NOT_FOUND)
+            return self._web_not_found(ref)
         row = next((r for r in self._pool_image_rows() if r["ref"] == ref), None)
         if row is None:
             return self._empty(HTTPStatus.NOT_FOUND)
@@ -906,6 +932,16 @@ class PoolServer:
     def _card_url(ref: str) -> str:
         """Path to the image card page for one ref (URL-encoded, matches the /web/image/<ref> route)."""
         return f"/web/image/{quote(ref, safe='/:')}" if ref else "/web/images"
+
+    def _web_not_found(self, ref: str) -> Response:
+        """404 card page; links the ref's twins under other namespaces when there are any."""
+        body = f"<p>образ «{html.escape(ref)}» не найден.</p>"
+        suggestions = self.store.similar(ref)
+        if suggestions:
+            links = " или ".join(f'<a href="{html.escape(self._card_url(s))}">{html.escape(s)}</a>'
+                                 for s in suggestions)
+            body += f"<p>быть может, вы искали {links}?</p>"
+        return self._html(body, status=HTTPStatus.NOT_FOUND)
 
     def _web_forbidden(self, name: str) -> Response:
         """Render a 403 page for a card/catalog write denied by ownership (same reason as the API)."""

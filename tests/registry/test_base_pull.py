@@ -31,9 +31,11 @@ def _env(tmp_path: Path) -> cli.Home:
 
 
 @pytest.mark.tier1
-def test_base_ref_carries_runtime_stamp():
-    assert cli.base_ref() == f"debian:trixie-{runtime_stamp()}"
-    assert runtime_stamp().isdigit()
+def test_base_ref_is_a_fixed_owner_namespaced_tag():
+    # Docker-like: the base is ONE image with a fixed tag, owned by its author; an updated
+    # base is re-pushed under the same tag and reaches students by digest, never by a new ref.
+    assert cli.base_ref() == "bunnyton/debian:trixie"
+    assert runtime_stamp().isdigit()          # the stamp still marks a locally built base
 
 
 @pytest.mark.tier2

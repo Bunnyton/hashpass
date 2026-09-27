@@ -413,3 +413,16 @@ def test_require_pool_identity_purges_ghost_token_under_every_url_spelling(regis
     # the old "dev" ghost token must be gone under every spelling -- the bare spelling now
     # resolves to the freshly registered "dev2" session, never to the stale "dev" one.
     assert token_user(cli._pool_token(env, bare)) == "dev2"                    # noqa: SLF001
+
+
+@pytest.mark.tier2
+def test_cmd_push_unknown_local_ref_hints_the_namespaced_twin_before_any_login(registry, tmp_path):
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    local = ImageStore(env.images)
+    src = tmp_path / "src-lab"
+    src.mkdir()
+    (src / "f.txt").write_text("x", encoding="utf-8")
+    local.save("bunnyton/lab", "1", src, ())
+    io = cli.Io(read=lambda _p: pytest.fail("must not prompt"), write=lambda _s: None, clock=lambda: "")
+    with pytest.raises(RuntimeError, match=r"нет такого образа: lab:1 — быть может, вы искали bunnyton/lab:1\?"):
+        cli.cmd_push(env, "lab:1", registry.base_url, io=io)
