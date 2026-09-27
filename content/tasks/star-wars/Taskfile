@@ -1,7 +1,10 @@
-# star-wars — призовое задание. Классика: telnet towel.blinkenlights.nl / telehack.
-# В нашем контейнере telnet вряд ли пробьёт, но команда сама зачётна.
+# star-wars — призовое задание: telnet-мультики. Зачёт по самой команде.
 
 image star-wars:1
+
+# telnet в базе нет — без него приз не запустится.
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y telnet >/dev/null 2>&1
 
 hidden hp
 
@@ -11,11 +14,10 @@ settings
 say "Ты добил модуль базовых команд. Держи приз, оператор."
 read brief.md
 
-stage "Запустите  telnet telehack.com  (или towel.blinkenlights.nl) и представьте себя в далёкой галактике"
+stage "Подключись к telehack.com по telnet и посмотри «Звёздные войны» в ASCII"
   accept cmd "telnet"
   neutral ls cat pwd
-  on enter say "Классика ASCII-развлечений: старые Star Wars идут по telnet."
-  hint tries 2 say "Просто наберите:  telnet telehack.com"
-  hint idle 25 say "Если что — Ctrl+] и quit, чтобы выйти из telnet."
+  on enter say "Никаких проверок. Просто смотри."
+  hint idle 300 say "Команда — в брифе. Выход из telnet: Ctrl+], потом quit."
 
 exec finale

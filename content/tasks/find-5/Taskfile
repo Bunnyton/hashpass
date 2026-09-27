@@ -1,5 +1,4 @@
-# find-5 — критерий -not -empty.
-# Задание: найти непустые файлы.  Приёмка — по выводу.
+# find-5 — критерий -not -empty. Приёмка — по выводу.
 
 image find-5:1
 
@@ -20,12 +19,15 @@ settings
 say "У find десятки критериев. -empty и -not — сегодняшние гости."
 read brief.md
 
-stage "Найдите все НЕпустые файлы в /home/student/search"
+stage "Найди в /home/student/search все непустые файлы"
   solve find /home/student/search -type f -not -empty
   variant find /home/student/search -type f \! -empty
   observe output
   neutral ls cat pwd cd
-  on enter say "-not (или !) инвертирует следующий критерий. -empty — файл пустой."
-  hint tries 2 say "find /home/student/search -type f -not -empty"
+  on enter say "Половина файлов — пустышки. Нужны те, в которых что-то есть."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
+  hint tries 3 say "В выводе есть пустые файлы или каталоги? Проверь размеры: ls -lR search. Какой предикат из теории отвечает за пустоту — и как его перевернуть?"
+  hint tries 6 say "man find: «empty», «not». Или загугли: «find непустые файлы»."
+  hint idle 240 say "Перечитай цель: файлы (не каталоги), НЕпустые."
 
 exec finale

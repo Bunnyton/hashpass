@@ -1,0 +1,7 @@
+#!/bin/sh
+# Принято, если вывод последней команды показал содержимое room — все три вещи.
+out=${HP_LAST_OUT:-}
+for f in carpet.txt lamp.txt cat.txt; do
+  case "$out" in *"$f"*) ;; *) exit 1 ;; esac
+done
+exit 0

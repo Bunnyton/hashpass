@@ -1,9 +1,7 @@
-# apt-remove — удалить пакет через apt.
-# Задание: удалить sl (в реальной жизни — потому что запарил ls-опечатки).
+# apt-remove — удалить пакет через apt (sl поставлен заранее, чтобы было что удалять).
 
 image apt-remove:1
 
-# Установим sl заранее, чтобы было что удалять.
 run apt-get update >/dev/null 2>&1
 run apt-get install -y sl >/dev/null 2>&1 || true
 
@@ -13,13 +11,17 @@ settings
   user root
   pager on
 
-say "sl оказался слишком настойчив. Верните всё, как было."
+say "sl оказался слишком настойчив. Верни всё, как было."
 read brief.md
 
-stage "Удалите пакет sl из системы"
+stage "Удали пакет sl из системы — ls снова должен быть просто ls"
   solve apt-get remove -y sl
   check exec sh -c '! command -v sl >/dev/null 2>&1 && ! test -x /usr/games/sl'
-  on enter say "apt remove — обратная сторона apt install."
-  hint tries 2 say "sudo apt remove -y sl"
+  neutral ls cat pwd
+  on enter say "Поезд ходит на каждую опечатку. Пора закрыть станцию."
+  hint output "Permission denied" say "apt нужны права администратора. Ты root? Проверь: whoami."
+  hint tries 3 say "sl всё ещё запускается? Проверь: command -v sl. Установка была через apt — удаление через него же, только другое действие."
+  hint tries 6 say "apt --help перечисляет действия. Или загугли: «apt удалить пакет»."
+  hint idle 240 say "Перечитай теорию из прошлого задания: у install есть обратное действие."
 
 exec finale

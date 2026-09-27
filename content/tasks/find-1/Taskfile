@@ -1,5 +1,4 @@
-# find-1 — знакомство с find: ключ -maxdepth.
-# Задание: перечислить всё в /home/student/search не глубже 3-го уровня.  Приёмка — по выводу.
+# find-1 — знакомство с find: -maxdepth. Приёмка — по выводу.
 
 image find-1:1
 
@@ -20,12 +19,15 @@ settings
 say "find — швейцарский нож поиска. Ключей — вагон."
 read brief.md
 
-stage "Перечислите всё внутри /home/student/search не глубже 3-го уровня"
+stage "Перечисли всё внутри /home/student/search, но не глубже 3-го уровня вложенности"
   solve find /home/student/search -maxdepth 3
   observe output
   neutral ls cat pwd cd
-  on enter say "find <where> -maxdepth <N> — ограничивает поиск по глубине."
-  hint tries 2 say "Точно:  find /home/student/search -maxdepth 3"
-  hint idle 30 say "У find ключи с одним дефисом, даже длинные: -maxdepth, -mindepth, -name."
+  on enter say "Дерево глубокое. Нужны не все этажи — только верхние три."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ искать, потом — критерии. Прочитай его сообщение ещё раз."
+  hint output "unknown predicate" say "find не знает такого ключа. Присмотрись к дефисам: у find даже длинные ключи пишутся с одним."
+  hint tries 3 say "Вывод слишком длинный или слишком короткий? Сравни с деревом (ls -R search): сколько уровней ты показал?"
+  hint tries 6 say "man find — ищи слово «depth». Или загугли: «find ограничить глубину поиска»."
+  hint idle 240 say "Перечитай цель: всё, но не глубже трёх уровней. Сам каталог search — уровень 0."
 
 exec finale

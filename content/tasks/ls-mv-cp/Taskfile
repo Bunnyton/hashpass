@@ -1,5 +1,4 @@
-# ls-mv-cp — комбинированный обход дерева ограниченным набором команд.
-# Задание: найти строку phrase:... и напечатать её.  Приёмка — по выводу.
+# ls-mv-cp — обход дерева руками (ls/cd/cat) или grep -r. Приёмка — по выводу (строка phrase:…).
 
 image ls-mv-cp:1
 
@@ -16,16 +15,18 @@ hidden hp
 settings
   pager on
 
-say "Ограниченный набор команд. Задача — обход дерева руками."
+say "Три подвала, в каждом — этажи. Карту не дали."
 read brief.md
 
-stage "Найдите строку phrase:... в одном из файлов и напечатайте её"
+stage "Где-то в /home/student/subdir_1, subdir_2 или subdir_3 лежит файл со строкой phrase:… — найди и покажи эту строку"
   solve cat /home/student/subdir_2/lvl1/lvl2/prize.txt | grep phrase
   variant grep -rh phrase /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3
   observe output
-  neutral ls cat pwd cd
-  on enter say "Обход руками: ls / cd / cat. Или grep — если совсем невмоготу."
-  hint tries 2 say "Пройдитесь по subdir_1/2/3, найдите файл с phrase: и cat его."
-  hint idle 30 say "Tab-дополнение — ваш союзник. Ищите файл, где встречается слово phrase."
+  neutral ls cd pwd
+  on enter say "Инструменты: ls, cd, cat. И клавиша Tab, чтобы не набирать имена целиком."
+  hint cmd cat say "Файл открыт — а нужная строка внутри? Если да, покажи ТОЛЬКО её. Если нет — ищи дальше."
+  hint tries 4 say "Ты обошёл все три subdir до самого дна? В одном из них глубже, чем кажется."
+  hint tries 8 say "Обходить руками — честно, но долго. У grep есть ключ для поиска по всем подкаталогам сразу: man grep, слово «recursive»."
+  hint idle 300 say "Перечитай цель: показать нужно ТОЛЬКО строку phrase:…, а не весь файл."
 
 exec finale

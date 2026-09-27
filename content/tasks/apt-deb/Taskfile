@@ -1,25 +1,31 @@
-# apt-deb — установка .deb напрямую.
-# Задание: понять смысл dpkg -i и апробировать её. Здесь — на макете (создадим фиктивный .deb).
+# apt-deb — установка .deb напрямую (dpkg -i / apt install ./file.deb). Зачёт по команде.
 
 image apt-deb:1
 
-# Даем зачёт по команде — на пул не гоняем сеть, но правильную команду распознаём.
+# В базе нет ни wget, ни curl — без них .deb не скачать.
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y wget curl >/dev/null 2>&1
+
 hidden hp
 
 settings
   user root
   pager on
 
-say "Иногда пакет лежит на диске .deb-файлом. apt его тоже установит."
+say "Иногда пакет лежит на диске .deb-файлом. Ставится и такой."
 read brief.md
 
-stage "Скачайте пакет cmatrix и попробуйте установить его через dpkg (или apt install ./file.deb)"
+stage "Скачай пакет cmatrix (.deb по ссылке из брифа) и установи его из файла — не из репозитория"
   accept cmd "dpkg -i"
-  accept cmd "apt install"
-  accept cmd "apt-get install"
+  accept cmd "apt install ./"
+  accept cmd "apt install /"
+  accept cmd "apt-get install ./"
+  accept cmd "apt-get install /"
   neutral ls cat pwd
-  on enter say "Классика: wget URL, потом sudo dpkg -i имя.deb (или sudo apt install ./имя.deb)."
-  hint tries 2 say "sudo dpkg -i cmatrix_2.0-3_amd64.deb"
-  hint idle 30 say "Just Google it! (не запускайте cmatrix заранее — потом сами увидите)."
+  on enter say "Файл .deb — это уже пакет. Ему не нужен репозиторий, нужен установщик."
+  hint output "command not found" say "Скачивалки под таким именем нет. Какие ещё бывают? Загугли: «скачать файл из терминала linux» — их как минимум две."
+  hint tries 3 say "Файл скачался? ls покажет. Дальше — по теории: чем ставят .deb напрямую."
+  hint tries 6 say "man dpkg — ищи «install». Или загугли: «установить deb файл вручную debian»."
+  hint idle 240 say "Перечитай бриф: ссылка там есть. cmatrix пока не запускай."
 
 exec finale

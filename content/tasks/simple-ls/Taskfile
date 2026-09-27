@@ -1,5 +1,7 @@
 # simple-ls — первая настоящая команда: ls.
-# Задание: посмотреть, что лежит в /home/student/room. Приёмка — по выводу ls.
+# Приёмка — по ВЫВОДУ: студент любым способом увидел содержимое room (ls room, ls -l room,
+# cd room и ls …). `observe output` для ls нестабилен (колонки в TTY vs строки в pipe),
+# поэтому судит скрытый грейдер по HP_LAST_OUT.
 
 image simple-ls:1
 
@@ -14,21 +16,15 @@ hidden hp
 settings
   pager on
 
-say "Первая команда — самая простая. ls покажет, что вокруг."
+say "Первая команда — самая простая. Она показывает, что вокруг."
 read brief.md
 
-stage "Выведите содержимое /home/student/room"
-  # observe output неустойчив: ls печатает в колонки в терминал, но построчно в pipe;
-  # канон между build (pipe) и runtime (TTY) разъезжается.  Принимаем по ВВОДУ команды --
-  # любое естественное действие студента, которое приводит к просмотру содержимого room.
-  # варианты «естественного» ввода — любой из них принимаем
-  accept cmd "ls /home/student/room"
-  accept cmd "ls room"
-  accept cmd "cd /home/student/room"
-  accept cmd "cd room"
+stage "Посмотри, что лежит в /home/student/room"
+  solve ls /home/student/room
+  check exec grade
   neutral cat pwd
-  on enter say "Загляните внутрь: ls room  (или ls /home/student/room)"
-  hint tries 2 say "Просто:  ls room"
-  hint idle 25 say "cwd — /home/student.  Внутри есть каталог `room` — покажите его содержимое."
+  on enter say "Ты стоишь в /home/student. Комната — прямо здесь, рядом."
+  hint tries 4 say "В теории одна-единственная команда. Ей можно сказать, КУДА смотреть — именем каталога."
+  hint idle 240 say "Долго. Перечитай теорию: команда там одна, и она короткая."
 
 exec finale

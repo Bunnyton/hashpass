@@ -1,7 +1,10 @@
-# vim-intro — знакомство с vim.
-# Задание: запустить vimtutor хотя бы раз. Зачёт по команде.
+# vim-intro — знакомство с vim: запустить vimtutor. Зачёт по команде.
 
 image vim-intro:1
+
+# vim (и vimtutor) в базе нет.
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y vim >/dev/null 2>&1
 
 hidden hp
 
@@ -11,11 +14,10 @@ settings
 say "Те самые три буквы. VIM. Мощнее, чем кажется."
 read brief.md
 
-stage "Запустите vimtutor — краткий обучающий курс по vim"
+stage "Пройди хотя бы первый урок встроенного учебника vim"
   accept cmd "vimtutor"
   neutral ls cat pwd
-  on enter say "vimtutor — встроенный урок vim. Есть даже русская версия: vimtutor ru"
-  hint tries 2 say "Просто:  vimtutor"
-  hint idle 25 say "Выход из vim — :q  (или :q! если что-то отредактировали и не хотите сохранять)."
+  on enter say "Учебник живёт внутри редактора и запускается одной командой из брифа."
+  hint idle 300 say "Выход из vim — :q. Если не отпускает — Esc, потом :q! и Enter."
 
 exec finale

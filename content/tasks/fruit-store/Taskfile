@@ -1,4 +1,4 @@
-# fruit-store — тема: фруктовый ларёк, считаем уникальные позиции. Три этапа.
+# fruit-store — фруктовый ларёк: sort → uniq → wc, три этапа, каждый — файл для следующего.
 
 image fruit-store:1
 
@@ -15,25 +15,31 @@ settings
 say "Утро в ларьке. Пора разобрать вчерашний журнал продаж."
 read brief.md
 
-stage "Этап 1/3: отсортируйте /home/student/store/sold.txt и сохраните в /home/student/store/sorted.txt"
+stage "Отсортируй журнал /home/student/store/sold.txt и сохрани результат в /home/student/store/sorted.txt"
   solve sort /home/student/store/sold.txt > /home/student/store/sorted.txt
   observe /home/student/store/sorted.txt
   neutral ls cat pwd less
-  on enter say "sort умеет перенаправлять вывод в файл через `>`."
-  hint tries 2 say "Точно:  sort /home/student/store/sold.txt > /home/student/store/sorted.txt"
+  on enter say "Хозяин ларька сортировать не умеет. Зато умеет шелл."
+  hint tries 3 say "Отсортированный список у тебя на экране? Осталось положить его в файл — ты это уже делал."
+  hint tries 6 say "Загугли: «linux отсортировать строки файла» и «bash вывод команды в файл»."
+  hint idle 240 say "Перечитай цель: из какого файла, в какой файл, в каком порядке."
 
-stage "Этап 2/3: оставьте только уникальные строки — /home/student/store/unique.txt"
+stage "Оставь в отсортированном списке только уникальные строки — результат в /home/student/store/unique.txt"
   solve uniq /home/student/store/sorted.txt > /home/student/store/unique.txt
   observe /home/student/store/unique.txt
   neutral ls cat pwd less
-  on enter say "uniq выбрасывает соседние дубли — потому и нужен предварительный sort."
-  hint tries 2 say "Точно:  uniq /home/student/store/sorted.txt > /home/student/store/unique.txt"
+  on enter say "В отсортированном списке одинаковые строки стоят рядом. Это не случайно."
+  hint tries 3 say "Проверь unique.txt: дубли ещё есть? Какая команда убирает повторы — и почему ей нужен именно отсортированный вход?"
+  hint tries 6 say "Загугли: «linux удалить повторяющиеся строки из файла». Название команды очень короткое."
+  hint idle 240 say "Перечитай цель: вход — sorted.txt, выход — unique.txt."
 
-stage "Этап 3/3: посчитайте строки в unique.txt и запишите число в /home/student/store/howmany.txt"
+stage "Посчитай, сколько строк в unique.txt, и запиши число в /home/student/store/howmany.txt"
   solve wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt
   observe /home/student/store/howmany.txt
   neutral ls cat pwd less
-  on enter say "wc -l считает строки. `< file` — читать из файла, `> other` — писать в файл."
-  hint tries 2 say "Точно:  wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt"
+  on enter say "Хозяину нужно одно число. Без имени файла рядом."
+  hint tries 3 say "cat howmany.txt — там только число? Если рядом имя файла, подумай, как отдать команде содержимое, а не имя."
+  hint tries 6 say "Загугли: «wc посчитать строки без имени файла» или «bash перенаправление ввода»."
+  hint idle 240 say "Перечитай цель: число строк, одно число, в файл."
 
 exec finale

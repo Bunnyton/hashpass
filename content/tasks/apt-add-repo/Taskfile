@@ -1,5 +1,4 @@
-# apt-add-repo — добавить сторонний репозиторий (упрощённая версия).
-# Задание: добавить строку в /etc/apt/sources.list.d/custom.list и обновить список.
+# apt-add-repo — добавить репозиторий: строка в sources.list.d + apt update.
 
 image apt-add-repo:1
 
@@ -12,18 +11,24 @@ settings
 say "Список пакетов apt берёт из репозиториев. Можно добавить свой."
 read brief.md
 
-stage "Этап 1/2: создайте /etc/apt/sources.list.d/custom.list с одной строкой репозитория"
+stage "Создай файл /etc/apt/sources.list.d/custom.list с одной строкой — описанием репозитория из брифа"
   solve:
     echo 'deb http://deb.debian.org/debian trixie main' > /etc/apt/sources.list.d/custom.list
   observe /etc/apt/sources.list.d/custom.list
-  on enter say "Обычно строка вида:  deb <URL> <кодовое имя дистрибутива> main"
-  hint tries 2 say "echo 'deb http://deb.debian.org/debian trixie main' > /etc/apt/sources.list.d/custom.list"
+  neutral ls cat pwd
+  on enter say "Источники apt — обычные текстовые файлы. Добавить свой — значит положить рядом ещё один."
+  hint output "command not found" say "Такой программы тут нет. Файл из одной строки можно сделать и без редактора — вспомни, как ты создавал hello.txt."
+  hint tries 3 say "Файл есть? cat его: строка должна совпадать с брифом символ в символ, и она одна."
+  hint tries 8 say "Загугли: «bash создать файл с одной строкой без редактора»."
+  hint idle 240 say "Перечитай бриф: путь к файлу и строка — оба даны."
 
-stage "Этап 2/2: обновите список пакетов после добавления репозитория"
+stage "Дай apt узнать о новом репозитории"
   solve apt-get update >/dev/null 2>&1
   accept cmd "apt update"
   accept cmd "apt-get update"
-  on enter say "После нового репозитория apt должен пересчитать индексы. Как?"
-  hint tries 2 say "sudo apt update"
+  neutral ls cat pwd
+  on enter say "apt пока не в курсе. Какой командой он перечитывает свои источники?"
+  hint tries 3 say "Ты делал это в задании про установку sl — первый из двух шагов."
+  hint idle 240 say "apt --help — там есть действие, которое обновляет список пакетов."
 
 exec finale

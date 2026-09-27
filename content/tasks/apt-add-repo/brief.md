@@ -13,10 +13,10 @@
 
 Два этапа:
 
-1. Создайте файл `/etc/apt/sources.list.d/custom.list` со строкой:
+1. Создай файл `/etc/apt/sources.list.d/custom.list` со строкой:
 
        deb http://deb.debian.org/debian trixie main
 
-2. Обновите список пакетов.
+2. Дай apt узнать о новом репозитории.
 
-Нажмите **Enter**.
+Нажми **Enter**.

@@ -1,5 +1,5 @@
-# cp-basics — команда cp: копирование одного файла.
-# Задание: скопировать copy_me.txt в директорию wait_file.
+# cp-basics — команда cp: копирование одного файла в каталог.
+# Наблюдаем и копию, и оригинал: mv вместо cp не проходит.
 
 image cp-basics:1
 
@@ -15,13 +15,16 @@ settings
 say "Копия — вторая жизнь файла. Знакомимся с cp."
 read brief.md
 
-stage "Скопируйте /home/student/copy_me.txt в директорию /home/student/wait_file/"
+stage "Положи копию /home/student/copy_me.txt в каталог /home/student/wait_file — оригинал должен остаться на месте"
   solve cp /home/student/copy_me.txt /home/student/wait_file/
   variant cp /home/student/copy_me.txt /home/student/wait_file/copy_me.txt
-  observe /home/student/wait_file/copy_me.txt
+  observe /home/student/wait_file/copy_me.txt /home/student/copy_me.txt
   neutral ls cat pwd
-  on enter say "cp <откуда> <куда>. Второй аргумент может быть директорией."
-  hint tries 2 say "Точно:  cp /home/student/copy_me.txt /home/student/wait_file/"
-  hint idle 25 say "Не забудьте слеш в конце — тогда cp сохранит имя файла."
+  on enter say "Файл ждут в wait_file. Оригинал пусть остаётся, где был."
+  hint output "No such file or directory" say "cp говорит, что чего-то не нашёл. Прочитай, чего именно — и проверь путь через ls."
+  hint cmd mv say "Файл переехал, а не скопировался. Оригинал должен остаться — верни его и подумай, чем cp отличается от mv."
+  hint tries 3 say "Загляни в wait_file: появилось ли там что-нибудь? Что cp принимает первым аргументом, а что вторым?"
+  hint tries 6 say "man cp — первые две строки SYNOPSIS. Или загугли: «cp скопировать файл в папку linux»."
+  hint idle 240 say "Перечитай цель: откуда — куда. Оба пути есть в тексте задания."
 
 exec finale

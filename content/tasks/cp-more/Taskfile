@@ -1,5 +1,4 @@
-# cp-more — рекурсивное копирование.
-# Задание: скопировать всё содержимое dir1 в dir2 одной командой.
+# cp-more — рекурсивное копирование: всё содержимое dir1 → dir2 одной командой.
 
 image cp-more:1
 
@@ -14,16 +13,20 @@ hidden hp
 settings
   pager on
 
-say "Одна команда — а перекопировать нужно всю директорию. Ключ -r спасёт."
+say "Одна команда — а перенести нужно целый каталог. cp это умеет, если попросить правильно."
 read brief.md
 
-stage "Скопируйте ВСЁ содержимое /home/student/dir1 в /home/student/dir2 одной командой"
+stage "Скопируй всё содержимое /home/student/dir1 в /home/student/dir2 одной командой"
   solve cp -r /home/student/dir1/. /home/student/dir2/
   variant cp -r /home/student/dir1/file1.txt /home/student/dir1/file2.txt /home/student/dir1/file3.txt /home/student/dir2/
   observe /home/student/dir2/file1.txt /home/student/dir2/file2.txt /home/student/dir2/file3.txt
   neutral ls cat pwd
-  on enter say "cp с последним аргументом-директорией копирует туда все предыдущие."
-  hint tries 2 say "Подсказка:  cp -r /home/student/dir1/. /home/student/dir2/"
-  hint idle 30 say "Ключ -r (recursive) даёт cp повторить обход дерева."
+  on enter say "В dir2 пока пусто. После твоей команды там должно лежать всё то же, что в dir1."
+  hint output "omitting directory" say "Прочитай ответ cp целиком: он сам сказал, чего ему не хватило."
+  hint cmd cp has -r say "Скопировалось — но КУДА именно? Загляни в dir2 и сравни с целью: содержимое dir1 должно лежать прямо в dir2, а не каталогом внутри."
+  hint tries 3 say "Загляни в dir2: что там оказалось? Всё, что было в dir1, или только часть?"
+  hint tries 6 say "man cp — найди слово recursive. Или загугли: «cp скопировать каталог со всем содержимым»."
+  hint tries 10 say "Каталог — не файл; cp обходит его только с ключом рекурсии. Какая это буква — ты уже знаешь."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
 
 exec finale

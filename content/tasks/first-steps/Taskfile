@@ -1,5 +1,4 @@
-# first-steps — вводное задание. Один этап: создать файл hello.txt.
-# Ставит студента в живой Debian, показывает как приёмка ловит только что созданный артефакт.
+# first-steps — вводное задание: создать файл hello.txt. Показывает живую приёмку по артефакту.
 
 image first-steps:1
 
@@ -11,12 +10,13 @@ settings
 say "Здравствуй, оператор. Первое поручение — простое."
 read intro.md
 
-stage "Создайте файл hello.txt со словом hello."
+stage "Создай в домашнем каталоге файл hello.txt, внутри — слово hello"
   solve echo hello > hello.txt
   observe hello.txt
   neutral ls cat pwd
-  on enter say "Наберите:  echo hello > hello.txt   (Enter — выполнить)"
-  hint tries 2 say "Точная команда:  echo hello > hello.txt"
-  hint idle 25 say "Не спешите. Загляните в подсказку сверху."
+  on enter say "Файл появляется, когда в него что-то записали. Даже одно слово."
+  hint tries 3 say "Файла ещё нет? Как в шелле отправить вывод команды в файл вместо экрана? В теории был символ для этого."
+  hint tries 6 say "Загугли: «bash записать строку в файл». Или man bash, раздел REDIRECTION."
+  hint idle 240 say "Перечитай цель: имя файла и одно слово внутри. Проверь через cat."
 
 exec finale

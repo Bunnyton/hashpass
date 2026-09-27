@@ -1,0 +1,5 @@
+#!/bin/sh
+# Принято: вывод показывает скрытый файл И длинный формат (строки прав вида -rw…).
+out=${HP_LAST_OUT:-}
+case "$out" in *.hidden_key*) ;; *) exit 1 ;; esac
+case "$out" in *-rw*) exit 0 ;; *) exit 1 ;; esac

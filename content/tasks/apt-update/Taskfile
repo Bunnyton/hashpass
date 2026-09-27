@@ -1,5 +1,4 @@
-# apt-update — apt update + install.
-# Задание: установить пакет sl (нужен интернет; иначе тест проверит наличие бинаря).
+# apt-update — apt update + install: поставить пакет sl (нужна сеть; проверка — наличие бинаря).
 
 image apt-update:1
 
@@ -12,13 +11,17 @@ settings
 say "apt — пакетный менеджер Debian/Ubuntu. Настало время установить что-нибудь."
 read brief.md
 
-stage "Обновите список пакетов и установите пакет sl"
+stage "Установи пакет sl — самую свежую версию из репозитория"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y sl >/dev/null 2>&1
   check exec command -v sl || test -x /usr/games/sl
-  on enter say "Сначала apt update, чтобы список был свежий, потом apt install."
-  hint tries 2 say "sudo apt update ; sudo apt install -y sl"
-  hint idle 30 say "Не смотрите заранее, что делает sl — увидите на следующем этапе."
+  neutral ls cat pwd
+  on enter say "Ты root, apt — твой. Пакета sl в системе пока нет."
+  hint output "Unable to locate package" say "apt не нашёл пакет. Когда список пакетов обновлялся в последний раз? В теории было два шага, не один."
+  hint output "Permission denied" say "apt нужны права администратора. Кто ты сейчас — whoami — и что делать, если не root?"
+  hint tries 3 say "Пакет ещё не стоит? Прочитай, что ответил apt — обычно он говорит прямым текстом, чего хочет."
+  hint tries 6 say "Загугли: «apt установить пакет debian». Или apt --help."
+  hint idle 240 say "Перечитай теорию: сначала обновить список, потом установить."
 
 exec finale

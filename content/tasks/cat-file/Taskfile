@@ -1,5 +1,4 @@
-# cat-file — вторая команда: cat.
-# Задание: прочитать файл и выцепить строку с СЕКРЕТОМ. Приёмка — по выводу.
+# cat-file — читаем файлы: cat, и первый grep. Приёмка — по выводу (одна строка с СЕКРЕТ).
 
 image cat-file:1
 
@@ -12,16 +11,18 @@ hidden hp
 settings
   pager on
 
-say "Файлы можно читать прямо в терминале — команда cat это делает."
+say "Файлы можно читать прямо в терминале. Иногда — целиком, иногда — только нужное."
 read brief.md
 
-stage "Найдите в /home/student/mailbox/key_here.txt строку с СЕКРЕТОМ"
+stage "Найди в /home/student/mailbox/key_here.txt строку с СЕКРЕТОМ и выведи только её"
   solve grep СЕКРЕТ /home/student/mailbox/key_here.txt
   variant cat /home/student/mailbox/key_here.txt | grep СЕКРЕТ
   observe output
-  neutral ls pwd less
-  on enter say "cat напечатает всё, а нужное — с грепом."
-  hint tries 2 say "Подсказка:  grep СЕКРЕТ /home/student/mailbox/key_here.txt"
-  hint idle 25 say "Если файл длинный и убегает — cat | less, но принять надо строку с СЕКРЕТ."
+  neutral ls pwd
+  on enter say "Пять писем в ящике, одно — важное. Остальное — реклама."
+  hint cmd cat say "Вот и секрет — между рекламой. Но задача — показать ТОЛЬКО его строку."
+  hint tries 3 say "cat показывает файл целиком. В теории был второй инструмент — для строк с нужным словом."
+  hint tries 6 say "man grep — или загугли: «вывести из файла строки содержащие слово linux»."
+  hint idle 240 say "Перечитай цель: нужна одна строка, а не весь файл."
 
 exec finale

@@ -1,5 +1,4 @@
-# cd-abs — навигация: абсолютные и относительные пути.
-# Задание: дойти до глубокого каталога, напечатать текущий путь.  Приёмка — по выводу pwd.
+# cd-abs — навигация: абсолютные и относительные пути. Приёмка — по выводу pwd.
 
 image cd-abs:1
 
@@ -12,17 +11,19 @@ hidden hp
 settings
   pager on
 
-say "Файлы — половина мира. Вторая половина — директории."
+say "Файлы — половина мира. Вторая половина — каталоги."
 read brief.md
 
-stage "Дойдите до /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и напечатайте pwd"
+stage "Доберись до /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и покажи абсолютный путь, где ты оказался"
   solve:
     cd /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
     pwd
   observe output
-  neutral ls cat pwd
-  on enter say "Клавиша Tab дополняет длинные имена — не набирайте их руками целиком."
-  hint tries 2 say "cd /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me ; pwd"
-  hint idle 30 say "pwd печатает АБСОЛЮТНЫЙ путь текущей директории."
+  neutral ls cat
+  on enter say "Девять этажей вниз. Лифта нет, зато есть клавиша Tab."
+  hint output "No such file or directory" say "bash говорит: такого каталога нет. Проверь имя — и откуда ты идёшь: путь относительный или от корня?"
+  hint tries 5 say "Ты уже внутри cd_to_me? Проверь — в теории есть команда, которая печатает, где ты."
+  hint tries 9 say "Можно набрать путь целиком от корня, а можно спускаться по одному каталогу. И везде работает Tab: cd d<Tab>."
+  hint idle 240 say "Перечитай цель: два действия — добраться и показать путь."
 
 exec finale

@@ -1,5 +1,5 @@
-# mv-basics — перемещение и переименование.
-# Задание: переименовать файл file5 в file2.
+# mv-basics — перемещение и переименование. Наблюдаем новое имя И отсутствие старого:
+# cp вместо mv не проходит.
 
 image mv-basics:1
 
@@ -12,14 +12,19 @@ hidden hp
 settings
   pager on
 
-say "cp — copy, mv — move. Ещё и переименование в одну команду."
+say "cp — copy, mv — move. А ещё mv умеет то, о чём не говорит его имя."
 read brief.md
 
-stage "Переименуйте /home/student/workspace/file5 в /home/student/workspace/file2"
+stage "В /home/student/workspace файл file5 должен называться file2"
   solve mv /home/student/workspace/file5 /home/student/workspace/file2
   observe /home/student/workspace/file2
+  observe bool /home/student/workspace/file5
   neutral ls cat pwd
-  on enter say "mv <исходное имя> <новое имя> — вот и весь rename."
-  hint tries 2 say "Точно:  mv /home/student/workspace/file5 /home/student/workspace/file2"
+  on enter say "Кто-то перепутал цифру. Содержимое верное — имя нет."
+  hint output "No such file or directory" say "Команда не нашла файл. Прочитай, какой именно — и сверь с ls: ты точно в workspace?"
+  hint cmd cp say "Теперь файлов два, а нужен один с новым именем. Копировать — не то же самое, что переименовать."
+  hint tries 3 say "Переименование в Linux — это перемещение на новое имя. Какая команда из теории перемещает?"
+  hint tries 6 say "man mv — второй абзац DESCRIPTION. Или загугли: «переименовать файл в терминале linux»."
+  hint idle 240 say "Перечитай цель: старое имя, новое имя, один каталог."
 
 exec finale

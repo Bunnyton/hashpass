@@ -6,6 +6,6 @@ cat <<'ART'
        *   └────────┘   *
          -type d -name
 
-     * find -name — как SQL WHERE, только с шаблонами. *
+     * -name — как WHERE в SQL, только звёздочки вместо процентов. *
 
 ART

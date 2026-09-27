@@ -1,5 +1,4 @@
-# rm-basics — удаление файлов.
-# Задание: удалить всё содержимое workdir одной командой (включая скрытые файлы).
+# rm-basics — удаление: всё содержимое workdir, включая скрытое; сам каталог остаётся.
 
 image rm-basics:1
 
@@ -18,14 +17,17 @@ settings
 say "rm — remove. Крушить, ломать! Но по правилам."
 read brief.md
 
-stage "Удалите ВСЁ содержимое /home/student/workdir (включая скрытые файлы) одной командой"
+stage "Очисти /home/student/workdir до нуля — включая скрытое, — но сам каталог оставь"
   solve:
     rm -rf /home/student/workdir/*
     rm -rf /home/student/workdir/.[!.]*
   check exec sh -c 'test -d /home/student/workdir && test -z "$(ls -A /home/student/workdir 2>/dev/null)"'
   neutral ls cat pwd
-  on enter say "rm -rf стирает и файлы, и директории. Но * прячет от него скрытые!"
-  hint tries 2 say "* берёт только обычные. Скрытые — .[!.]* (те, что с точкой, но не . и ..)"
-  hint idle 25 say "Две команды одна за другой:  rm -rf ...workdir/* ; rm -rf ...workdir/.[!.]*"
+  on enter say "Мусор бывает на виду, а бывает — с точкой в начале имени."
+  hint output "Is a directory" say "rm отказался: это каталог. Прочитай его ответ — и вспомни из теории, какой ключ делает удаление рекурсивным."
+  hint tries 3 say "Проверь, что осталось: ls показывает пусто? А ls -a?"
+  hint tries 6 say "Звёздочка в шелле не подставляет имена с точкой. Загугли: «bash glob скрытые файлы» — или man bash, раздел Pathname Expansion."
+  hint tries 10 say "Скрытое удаляется отдельным шаблоном (или через find). Каталог workdir при этом должен уцелеть — а если снёс, пересоздай."
+  hint idle 240 say "Перечитай цель: ВСЁ содержимое, каталог остаётся. Проверяй через ls -A."
 
 exec finale

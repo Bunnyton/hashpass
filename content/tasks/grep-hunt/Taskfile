@@ -1,4 +1,4 @@
-# grep-hunt — тема: junior разбирает legacy-код, ищет TODO. Один этап.
+# grep-hunt — junior разбирает legacy: собрать TODO в файл.
 
 image grep-hunt:1
 
@@ -11,16 +11,18 @@ hidden hp
 settings
   pager on
 
-say "Вам достался устаревший проект. Разгребайте techdebt."
+say "Тебе достался устаревший проект. Разгребай techdebt."
 read brief.md
 
-stage "Найдите все строки с TODO в /home/student/legacy/notes.txt и запишите их в /home/student/todos.txt"
+stage "Собери все строки с TODO из /home/student/legacy/notes.txt в файл /home/student/todos.txt"
   solve grep TODO /home/student/legacy/notes.txt > /home/student/todos.txt
   variant grep -F TODO /home/student/legacy/notes.txt > /home/student/todos.txt
   observe /home/student/todos.txt
   neutral ls cat less pwd
-  on enter say "grep + перенаправление в файл. Совсем тривиально."
-  hint tries 2 say "Подсказка:  grep TODO /home/student/legacy/notes.txt > /home/student/todos.txt"
-  hint cmd grep missing TODO say "Ищем именно строку TODO."
+  on enter say "Тимлид в отпуске. Заметки — твои. TODO — тоже."
+  hint cmd grep missing TODO say "Ищем именно строки с TODO — проверь, что ты просишь у grep."
+  hint tries 3 say "Строки на экране уже видишь? Тогда осталось отправить их в файл, а не на экран."
+  hint tries 6 say "Загугли: «grep вывод в файл» или «bash перенаправление вывода»."
+  hint idle 240 say "Перечитай цель: какие строки, из какого файла, в какой файл."
 
 exec finale

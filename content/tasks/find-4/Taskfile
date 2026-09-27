@@ -1,5 +1,4 @@
-# find-4 — оператор -o (или).
-# Задание: файлы, чьё имя начинается с level2 ИЛИ содержит "3".  Приёмка — по выводу.
+# find-4 — оператор -o (ИЛИ) и экранированные скобки. Приёмка — по выводу.
 
 image find-4:1
 
@@ -19,16 +18,19 @@ hidden hp
 settings
   pager on
 
-say "Несколько условий через -o дают ИЛИ. Скобки — да, но экранированные."
+say "Несколько условий — и подходит любое из них. По умолчанию find думает иначе."
 read brief.md
 
-stage "Найдите файлы с именем level2* ИЛИ содержащим '3' в /home/student/search"
+stage "Найди в /home/student/search файлы, чьё имя начинается с level2 ИЛИ содержит цифру 3"
   solve find /home/student/search -type f \( -name "level2*" -o -name "*3*" \)
   variant find /home/student/search -name "level2*" -type f -o -name "*3*" -type f
   observe output
   neutral ls cat pwd cd
-  on enter say "Скобки в find экранируются: \\( ... \\) — иначе шелл возьмёт их себе."
-  hint tries 2 say "find ... -type f \\( -name \"level2*\" -o -name \"*3*\" \\)"
-  hint idle 30 say "-o = OR. Каждое условие можно дополнить -type f, чтобы отсечь директории."
+  on enter say "Два условия. Как find объединяет их без твоего участия — И или ИЛИ?"
+  hint output "syntax error near unexpected token" say "Ругается bash, а не find: скобки он забрал себе. Прочитай сообщение — и вспомни из теории, как отдать скобки find'у."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
+  hint tries 3 say "Сравни свой вывод с ls -R search: чего не хватает — файлов с level2 или с тройкой?"
+  hint tries 6 say "man find, раздел OPERATORS: «-o» и скобки. Или загугли: «find несколько условий или»."
+  hint idle 240 say "Перечитай цель: ИЛИ, а не И. И только файлы."
 
 exec finale

@@ -1,7 +1,5 @@
-# intro-hello — самое первое знакомство с системой HASHPASS.
-# Простое приветствие: студент вводит `whoami`, а мы читаем ВЫВОД команды (через
-# .hp-typescript / observe output) — никакого редиректа в файл, никаких «искусственных»
-# домашек для приёмки. Эталон (student\n) живёт в скрытом /hp/bundle/checks.json.
+# intro-hello — первое знакомство: студент узнаёт, кто он в системе.
+# Приёмка — по ВЫВОДУ (student), любым способом: whoami / id -un.
 
 image intro-hello:1
 
@@ -10,15 +8,16 @@ hidden hp
 settings
   pager on
 
-say "Здравствуй, оператор! Это твоё первое задание в системе HASHPASS."
+say "Здравствуй, оператор. Это твоё первое задание в HASHPASS."
 read brief.md
 
-stage "Проверьте, под каким пользователем вы вошли: наберите whoami"
+stage "Узнай у системы, под каким именем ты в неё вошёл"
   solve whoami
+  variant id -un
   observe output
   neutral ls cat pwd
-  on enter say "Просто:  whoami"
-  hint tries 2 say "Точно:  whoami"
-  hint idle 25 say "Команда whoami сама себе скажет, кто вы."
+  on enter say "Ты внутри настоящего Debian. Первое, что делает админ на чужой машине — спрашивает, кто он здесь."
+  hint tries 4 say "В теории была команда, которая отвечает ровно на этот вопрос. Перечитай — она там одна."
+  hint idle 240 say "Не спеши. Ответ — одно слово, и его знает система. Спроси её."
 
 exec finale

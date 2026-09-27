@@ -14,7 +14,7 @@
 
 ## Задание
 
-Скопируйте файл `/home/student/copy_me.txt` в директорию
-`/home/student/wait_file/`.
+Положи копию файла `/home/student/copy_me.txt` в директорию
+`/home/student/wait_file/`. Оригинал должен остаться на месте.
 
-Нажмите **Enter**.
+Нажми **Enter**.

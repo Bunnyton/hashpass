@@ -1,5 +1,4 @@
-# chgrp-basics — сменить группу файла.
-# Задание: назначить студентовскую группу файлу rock.txt в .secret/.
+# chgrp-basics — сменить группу файла, чтобы получить к нему доступ.
 
 image chgrp-basics:1
 
@@ -15,15 +14,18 @@ hidden hp
 settings
   pager on
 
-say "Права держат тебя за пределами. Но группу можно сменить — и войти."
+say "Права держат тебя снаружи. Но группу можно сменить — и войти."
 read brief.md
 
-stage "Смените группу файла /home/student/.secret/rock.txt на 'student', чтобы получить доступ"
+stage "Смени группу файла /home/student/.secret/rock.txt на student — тогда файл откроется"
   solve sudo chgrp student /home/student/.secret/rock.txt
   check exec sh -c 'test "$(stat -c %G /home/student/.secret/rock.txt)" = "student"'
   neutral ls cat pwd cd
-  on enter say "chgrp <новая группа> <файл>. Только sudo — обычному user'у не по силам."
-  hint tries 2 say "Точно:  sudo chgrp student /home/student/.secret/rock.txt"
-  hint idle 30 say "Проверить группу файла:  ls -l /home/student/.secret/rock.txt"
+  on enter say "Файл принадлежит root и группе FiveFingerDeathPunch. Ты не в группе. Пока."
+  hint output "Operation not permitted" say "Система не дала сменить группу. Чей файл — того и право менять. Кто может действовать от его имени?"
+  hint output "Permission denied" say "Читать пока нельзя — группа не твоя. Но задача и не прочитать, а сменить группу. Какой командой из теории?"
+  hint tries 3 say "Проверь текущую группу: ls -l .secret/rock.txt. Какая команда меняет именно группу, а какая — владельца?"
+  hint tries 6 say "man chgrp — SYNOPSIS. Или загугли: «изменить группу файла linux»."
+  hint idle 240 say "Перечитай цель: группа — student, файл — в .secret."
 
 exec finale

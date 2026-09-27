@@ -6,6 +6,6 @@ cat <<'ART'
                             ^
                         только этот слой
 
-     * -mindepth + -maxdepth = точная стрельба. *
+     * -mindepth + -maxdepth = снайпер. -name — для тех, кто стреляет очередями. *
 
 ART

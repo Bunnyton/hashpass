@@ -1,6 +1,5 @@
 # proc-audit — двухэтапка: установить пакет через apt, потом посчитать процессы.
-# База минимальная (systemd + fish, без ps/pgrep), поэтому установить procps — реально нужный шаг,
-# который разблокирует второй этап.
+# В базе уже есть procps (ps/pgrep), поэтому ставим то, чего реально нет: psmisc (pstree/killall).
 
 image proc-audit:1
 
@@ -11,25 +10,32 @@ settings
 
 hidden hp
 
-say "Вас позвали на аудит системы. Инструментов нет — только руки и apt."
+say "Тебя позвали на аудит системы. Инструментов нет — только руки и apt."
 read brief.md
 
-stage "Этап 1/2: поставьте пакет procps через apt и запишите его dpkg-статус в /install-status.txt"
+stage "Поставь пакет psmisc (в нём pstree и killall) и сохрани строку Status: из его dpkg-статуса в /install-status.txt"
   solve:
     apt-get update >/dev/null 2>&1
-    apt-get install -y procps >/dev/null 2>&1
-    dpkg -s procps | grep '^Status:' > /install-status.txt
+    apt-get install -y psmisc >/dev/null 2>&1
+    dpkg -s psmisc | grep '^Status:' > /install-status.txt
   observe /install-status.txt
-  on enter say "Стандартный apt: сначала update, потом install -y procps."
-  hint tries 2 say "apt-get update && apt-get install -y procps"
+  neutral ls cat pwd
+  on enter say "Инструментов для аудита нет. Зато есть apt и root."
+  hint output "Unable to locate package" say "apt не знает такого пакета. Когда он в последний раз обновлял список? Два шага."
+  hint tries 3 say "Пакет стоит? dpkg -s psmisc расскажет — и там же та самая строка Status:. Осталось оставить только её и положить в файл."
+  hint tries 6 say "Загугли: «dpkg проверить установлен ли пакет» и «grep строка начинающаяся с»."
+  hint idle 300 say "Перечитай цель: установить, спросить dpkg, одну строку — в файл."
 
-stage "Этап 2/2: запустите фоновый `sleep 600 &`, потом посчитайте sleep-процессы и запишите число в /proc-count.txt"
+stage "Запусти ОДИН фоновый sleep 600, посчитай, сколько процессов sleep сейчас работает, и запиши число в /proc-count.txt"
   solve:
     sleep 600 &
     sleep 0.3
     pgrep -x sleep | wc -l > /proc-count.txt
   observe /proc-count.txt
-  on enter say "`sleep 600 &` в фон, дайте секунду улечься, потом pgrep + wc."
-  hint tries 2 say "sleep 600 & ; sleep 0.3 ; pgrep -x sleep | wc -l > /proc-count.txt"
+  neutral ls cat pwd
+  on enter say "Фон — это когда команда работает, а промпт уже вернулся. Один символ в конце строки."
+  hint tries 3 say "sleep ушёл в фон (ты видел [1] и номер)? Как найти процесс по имени — теория показывала pgrep. Как посчитать строки — ты уже умеешь."
+  hint tries 6 say "Загугли: «bash запустить команду в фоне» и «pgrep посчитать процессы»."
+  hint idle 300 say "Перечитай цель: три действия — запустить, посчитать, записать число."
 
 exec finale

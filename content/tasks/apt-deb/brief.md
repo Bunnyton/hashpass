@@ -6,21 +6,23 @@
 - скриптами установки/удаления;
 - собственно файлами.
 
-Установить из готового `.deb`:
+Установить из готового `.deb` умеет `dpkg` — низкоуровневый установщик,
+на котором стоит apt:
 
     sudo dpkg -i пакет.deb
     # или новее:
     sudo apt install ./пакет.deb
 
+Скачать файл из терминала можно `wget` или `curl -O`.
+
 ## Задание
 
-Скачайте пакет **cmatrix** и попробуйте установить его вручную:
+Скачай пакет **cmatrix** и установи его из файла:
 
-    wget http://ftp.debian.org/debian/pool/main/c/cmatrix/cmatrix_2.0-3_amd64.deb
-    sudo dpkg -i cmatrix_2.0-3_amd64.deb
+    http://ftp.debian.org/debian/pool/main/c/cmatrix/cmatrix_2.0-3_amd64.deb
 
 Just Google it!
 
-> Не запускайте `cmatrix` заранее — сюрприз пропадёт.
+> Не запускай `cmatrix` заранее — сюрприз пропадёт.
 
-Нажмите **Enter**.
+Нажми **Enter**.

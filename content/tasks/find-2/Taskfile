@@ -1,5 +1,4 @@
-# find-2 — точный уровень: -mindepth + -maxdepth + -type.
-# Задание: файлы РОВНО на 3-м уровне.  Приёмка — по выводу.
+# find-2 — точный уровень: -mindepth + -maxdepth + -type. Приёмка — по выводу.
 
 image find-2:1
 
@@ -21,12 +20,14 @@ settings
 say "Продолжаем осваивать find. -mindepth — младший брат -maxdepth."
 read brief.md
 
-stage "Найдите файлы РОВНО на 3-м уровне внутри /home/student/search"
+stage "Найди файлы (только файлы), лежащие ровно на 3-м уровне вложенности внутри /home/student/search"
   solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
   observe output
   neutral ls cat pwd cd
-  on enter say "Стенка снизу — -mindepth, стенка сверху — -maxdepth. -type f — только файлы."
-  hint tries 2 say "find /home/student/search -mindepth 3 -maxdepth 3 -type f"
-  hint idle 30 say "Понимаешь? Чтобы видеть, нужно смотреть. — Джейсон Стэйтем."
+  on enter say "Стенка снизу, стенка сверху — и в щели между ними ровно один этаж."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
+  hint tries 3 say "В выводе есть каталоги? Или файлы с других этажей? Сравни с ls -R search — какой предикат отсекает лишнее?"
+  hint tries 6 say "man find: слова «mindepth», «maxdepth», «type». Или загугли: «find файлы на определённой глубине»."
+  hint idle 240 say "Перечитай цель: ровно третий уровень и только файлы. Это три условия."
 
 exec finale

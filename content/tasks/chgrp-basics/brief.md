@@ -12,7 +12,7 @@
 ## Задание
 
 В `/home/student/.secret/rock.txt` лежит секретный ключ, но группа файла —
-`FiveFingerDeathPunch`, а вы не в ней. Cмените группу файла на `student` —
+`FiveFingerDeathPunch`, а ты не в ней. Смени группу файла на `student` —
 тогда `cat` откроет содержимое.
 
-Нажмите **Enter**.
+Нажми **Enter**.

@@ -1,5 +1,4 @@
-# find-3 — поиск по имени (-name).
-# Задание: найти директории 4-го уровня.  Приёмка — по выводу.
+# find-3 — поиск по имени (-name). Приёмка — по выводу.
 
 image find-3:1
 
@@ -17,12 +16,15 @@ settings
 say "Ключ -name — фильтр по имени. С шаблоном * работает тонко."
 read brief.md
 
-stage "Найдите все директории с именем level4* внутри /home/student/search"
+stage "Найди внутри /home/student/search все каталоги, чьё имя начинается с level4"
   solve find /home/student/search -type d -name "level4*"
+  variant find /home/student/search -name "level4*"
   observe output
   neutral ls cat pwd cd
-  on enter say "Кавычки вокруг шаблона нужны, иначе шелл его подставит сам."
-  hint tries 2 say "find /home/student/search -type d -name \"level4*\""
-  hint idle 30 say "-type d — только директории, -name — по имени, звёздочка — любые символы."
+  on enter say "Три каталога затерялись на четвёртом этаже. Имена у них похожие."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
+  hint tries 3 say "По имени find ищет одним предикатом, а «начинается с…» — это имя плюс звёздочка. Теория показывала такой пример."
+  hint tries 6 say "man find — предикат «name». Или загугли: «find найти каталоги по имени с шаблоном»."
+  hint idle 240 say "Перечитай цель: имя начинается с level4 — значит, после него может быть что угодно."
 
 exec finale
