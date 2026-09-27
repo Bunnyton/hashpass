@@ -10,6 +10,7 @@ import contextlib
 import json
 import re
 import socket
+import ssl
 import tarfile
 import time
 from http import HTTPStatus
@@ -17,6 +18,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from flask import Flask, Response, request
+from werkzeug.serving import WSGIRequestHandler
 from werkzeug.serving import make_server as _wsgi_make_server
 
 from hashpass.imagestore.store import ImageStore
@@ -903,6 +905,33 @@ class PoolServer:
         return self._redirect("/web/images")
 
 
+_TLS_HANDSHAKE_TIMEOUT = 10.0   # seconds a client gets to finish its ClientHello/handshake
+
+
+class _HandshakeInWorker(WSGIRequestHandler):
+    """
+    Request handler that performs the TLS handshake on the connection's OWN thread.
+
+    Werkzeug wraps the listening socket with `do_handshake_on_connect=True`, so the handshake
+    runs inside `accept()` -- on the single serving thread. One client that opens TCP and never
+    sends a ClientHello (port scanners, half-open mobile connections: routine on a public IP)
+    then blocks accept() forever; the backlog fills and every other login times out (that was
+    the production hang: Recv-Q 129 on :8080). `make_server` turns handshake-on-accept off, and
+    this handler does it here, bounded by a timeout, dropping only the offending client.
+    """
+
+    def handle(self) -> None:
+        conn = self.connection
+        if isinstance(conn, ssl.SSLSocket):
+            try:
+                conn.settimeout(_TLS_HANDSHAKE_TIMEOUT)
+                conn.do_handshake()
+                conn.settimeout(None)
+            except OSError:           # SSLError / TimeoutError / ConnectionError: this client only
+                return
+        super().handle()
+
+
 def make_server(store: ImageStore, users: UserStore, secret: bytes, *,   # noqa: PLR0913
                 host: str = "127.0.0.1", port: int = 0,
                 config: ServerConfig | None = None,
@@ -928,6 +957,11 @@ def make_server(store: ImageStore, users: UserStore, secret: bytes, *,   # noqa:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind((host, port))
-    server = _wsgi_make_server(host, port, pool.app, threaded=True, ssl_context=ssl_context)
+    server = _wsgi_make_server(host, port, pool.app, threaded=True, ssl_context=ssl_context,
+                               request_handler=_HandshakeInWorker if ssl_context else None)
+    if ssl_context is not None:
+        # Accepted sockets are handed to the worker thread UN-handshaken; _HandshakeInWorker
+        # finishes them there (see its docstring) -- the accept loop never waits on a client.
+        server.socket.do_handshake_on_connect = False
     server.pool = pool         # let callers/tests reach the state directly (matches the old attrs)
     return server
