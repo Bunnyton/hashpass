@@ -704,8 +704,9 @@ class PoolServer:
         name, version = parts
         try:
             refs = closure_refs(f"{name}:{version}", self.store)
-        except KeyError:
-            return self._not_found(f"{name}:{version}")
+        except KeyError as exc:                 # the ref itself OR one of its parents is missing
+            missing = str(exc.args[0]) if exc.args else f"{name}:{version}"
+            return self._not_found(missing)
         return self._json(HTTPStatus.OK, {"refs": refs})
 
     def _route_attachment_put(self, tail: str) -> Response:

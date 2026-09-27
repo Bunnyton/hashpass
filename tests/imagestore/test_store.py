@@ -75,3 +75,22 @@ def test_get_missing_raises_keyerror(tmp_path):
     store = ImageStore(tmp_path / "images")
     with pytest.raises(KeyError):
         store.get("ghost:1")
+
+
+@pytest.mark.tier1
+def test_set_pool_digest_records_per_registry_and_write_meta_keeps_it(tmp_path):
+    # One image may be pushed to / pulled from several pools (local registry, prod): the digest
+    # each pool holds is remembered per registry; `pool_digest` stays the last one seen.
+    store = ImageStore(tmp_path / "images")
+    src = _make_layer(tmp_path, "b")
+    ref = "bunnyton/debian:trixie"
+    store.save("bunnyton/debian", "trixie", src, ())
+    store.set_pool_digest(ref, "d1", registry="http://a:1")
+    store.set_pool_digest(ref, "d2", registry="HTTP://B:2/")
+    img = store.get(ref)
+    assert img.pool_digest == "d2"
+    assert img.pool_digests == {"a:1": "d1", "b:2": "d2"}
+    store.write_meta("bunnyton/debian", "trixie", parents=())      # a pull's meta rewrite keeps them
+    assert store.get(ref).pool_digests == {"a:1": "d1", "b:2": "d2"}
+    store.save("bunnyton/debian", "trixie", src, ())               # a rebuild forgets them all
+    assert store.get(ref).pool_digests == {} and store.get(ref).pool_digest is None

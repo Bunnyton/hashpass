@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _DEFAULT_VERSION = "latest"
@@ -68,6 +68,7 @@ class StoredImage:
     digest: str | None = None          # server: sha256 of the blob this generation serves
     blob: str | None = None            # server: file name of that blob inside the image dir
     pool_digest: str | None = None     # client: digest of the blob this copy was pulled from
+    pool_digests: dict[str, str] = field(default_factory=dict)   # client: per registry_key(url)
 
 
 def _split_ref(ref: str) -> tuple[str, str]:
@@ -78,13 +79,19 @@ def _split_ref(ref: str) -> tuple[str, str]:
 _MAX_SUGGESTIONS = 3
 
 
+def registry_key(url: str) -> str:
+    """Normalize a pool URL to its `host[:port]` key (scheme, trailing slash and case dropped)."""
+    return url.strip().partition("://")[2].rstrip("/").lower() if "://" in url \
+        else url.strip().rstrip("/").lower()
+
+
 def similar_refs(refs: Iterable[str], ref: str) -> list[str]:
     """
-    Return up to three stored refs that share `ref`'s short name under ANOTHER namespace.
+    Return up to three stored refs sharing `ref`'s short name (last `/` segment), the ref excluded.
 
-    `debian:trixie` against a store holding `bunnyton/debian:trixie` yields exactly that; the
-    same version is listed first, other versions of the same short name after it, each group
-    sorted. The exact ref itself is never a suggestion.
+    `debian:trixie` against a store holding `bunnyton/debian:trixie` yields exactly that. Twins
+    with the same version (other namespaces) come first, then other versions of the same short
+    name (any namespace, including none -- e.g. a legacy `debian:trixie-18`), each group sorted.
     """
     name, version = _split_ref(ref)
     short = name.rpartition("/")[2]
@@ -202,7 +209,8 @@ class ImageStore:
         return StoredImage(name, version, dest / "layer", tuple(meta["parents"]),
                            meta.get("build_key"), meta.get("taskfile_path"),
                            digest=meta.get("digest"), blob=meta.get("blob"),
-                           pool_digest=meta.get("pool_digest"))
+                           pool_digest=meta.get("pool_digest"),
+                           pool_digests=dict(meta.get("pool_digests") or {}))
 
     def set_taskfile_path(self, ref: str, taskfile_path: str) -> None:
         """Record (in meta.json) the Taskfile an image was built from, for push to attach later."""
@@ -309,13 +317,25 @@ class ImageStore:
         meta = {"name": name, "version": version, "parents": list(parents), "build_key": build_key}
         if old.get("pool_digest"):
             meta["pool_digest"] = old["pool_digest"]
+        if old.get("pool_digests"):
+            meta["pool_digests"] = old["pool_digests"]
         if old.get("taskfile_path"):
             meta["taskfile_path"] = old["taskfile_path"]
         _write_json_atomic(dest / "meta.json", meta)
 
-    def set_pool_digest(self, ref: str, digest: str) -> None:
-        """Record the pool digest this local copy was pulled from (staleness reference)."""
+    def set_pool_digest(self, ref: str, digest: str, *, registry: str | None = None) -> None:
+        """
+        Record the pool digest this local copy was pulled from / pushed as (staleness reference).
+
+        `pool_digest` is the last digest seen from any pool (what `pull --refresh` compares);
+        with `registry`, the digest is also remembered per pool under `registry_key(registry)`,
+        so a push to the local registry never masquerades as the state of prod.
+        """
         name, version = _split_ref(ref)
         meta = self._read_meta(name, version)          # KeyError if absent
         meta["pool_digest"] = digest
+        if registry is not None:
+            per_pool = dict(meta.get("pool_digests") or {})
+            per_pool[registry_key(registry)] = digest
+            meta["pool_digests"] = per_pool
         _write_json_atomic(self._dir(name, version) / "meta.json", meta)

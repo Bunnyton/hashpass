@@ -1,4 +1,4 @@
-"""Tier2: the base image is pulled from the pool under its stamped ref instead of being built."""
+"""Tier2: the base image is pulled from the pool under its fixed tag instead of being built."""
 from pathlib import Path
 
 import pytest
@@ -137,3 +137,55 @@ def test_ensure_base_builds_locally_when_pool_unreachable_and_nothing_local(tmp_
     layer = cli.ensure_base_image(env, store, pool=RemoteRegistry("http://127.0.0.1:1"), io=io)
     assert built and store.exists(cli.base_ref()) and layer == store.get(cli.base_ref()).layer
     assert any("пул недоступен" in s for s in out)
+
+
+def _push_fake_ref(registry, tmp_path: Path, ref: str, marker: str) -> None:
+    """Push a tiny fake base under an arbitrary ref (an admin pushes it)."""
+    if not registry.users.has("author"):
+        registry.users.add("author", "pw-correct", role="admin")
+    local = ImageStore(tmp_path / f"local-{marker}")
+    src = tmp_path / f"src-{marker}"
+    (src / "etc").mkdir(parents=True)
+    (src / "etc" / "hp-base-version").write_text(runtime_stamp() + "\n", encoding="utf-8")
+    (src / "marker.txt").write_text(marker, encoding="utf-8")
+    name, version = ref.split(":")
+    local.save(name, version, src, ())
+    client = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / f"c-{marker}.json"))
+    client.login("author", "pw-correct")
+    client.push(local, ref, force=True)
+
+
+@pytest.mark.tier2
+def test_ensure_base_falls_back_to_the_legacy_stamped_ref_on_the_pool(registry, tmp_path, monkeypatch):
+    # Cutover: the pool is not yet re-deployed and holds only the old `debian:trixie-<stamp>`.
+    # A new client must pull THAT, not "build locally" (students have no rootfs tarball).
+    monkeypatch.setattr(cli, "build_base", lambda *_a, **_k: pytest.fail("must not build"))
+    legacy = f"debian:trixie-{runtime_stamp()}"
+    _push_fake_ref(registry, tmp_path, legacy, "legacy")
+    env = _env(tmp_path)
+    store = ImageStore(env.images)
+    out: list[str] = []
+    io = cli.Io(read=lambda _p="": "", write=out.append, clock=lambda: "t")
+    layer = cli.ensure_base_image(env, store, pool=RemoteRegistry(registry.base_url), io=io)
+    assert layer == store.get(legacy).layer
+    assert (layer / "marker.txt").read_text(encoding="utf-8") == "legacy"
+    assert not store.exists(cli.base_ref())
+    assert not any("собираю локально" in s for s in out)
+
+
+@pytest.mark.tier2
+def test_ensure_base_uses_a_current_local_legacy_base_when_the_pool_has_neither(registry, tmp_path, monkeypatch):
+    # A student who already has the old stamped base locally keeps working after the client
+    # update even while the pool has no base at all under either name.
+    monkeypatch.setattr(cli, "build_base", lambda *_a, **_k: pytest.fail("must not build"))
+    legacy = f"debian:trixie-{runtime_stamp()}"
+    env = _env(tmp_path)
+    store = ImageStore(env.images)
+    src = tmp_path / "src-local-legacy"
+    (src / "etc").mkdir(parents=True)
+    (src / "etc" / "hp-base-version").write_text(runtime_stamp() + "\n", encoding="utf-8")
+    name, version = legacy.split(":")
+    store.save(name, version, src, ())
+    io = cli.Io(read=lambda _p="": "", write=lambda _s: None, clock=lambda: "t")
+    layer = cli.ensure_base_image(env, store, pool=RemoteRegistry(registry.base_url), io=io)
+    assert layer == store.get(legacy).layer

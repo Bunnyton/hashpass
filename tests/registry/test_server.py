@@ -442,3 +442,14 @@ def test_forbidden_push_hints_the_namespaced_twin(registry, tmp_path):
     status, body = _push_blob(registry.base_url, "debian:1", pack_image(local.get("debian:1")), token)
     assert status == HTTPStatus.FORBIDDEN
     assert "быть может, вы искали bunnyton/debian:1?" in json.loads(body)["error"]
+
+
+@pytest.mark.tier2
+def test_closure_404_names_the_missing_parent_not_the_requested_image(registry, tmp_path):
+    src = tmp_path / "src-orphan"
+    src.mkdir()
+    (src / "f.txt").write_text("x", encoding="utf-8")
+    registry.store.save("app", "1", src, ("base:1",))          # its parent was never pushed
+    status, body = _http("GET", f"{registry.base_url}/closure/app/1")
+    assert status == HTTPStatus.NOT_FOUND
+    assert "«base:1»" in json.loads(body)["error"]

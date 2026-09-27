@@ -62,14 +62,14 @@ def _is_cert_error(exc: Exception) -> bool:
     return isinstance(reason, ssl.SSLCertVerificationError)
 
 
-def _not_found_error(exc: urllib.error.HTTPError, ref: str) -> Exception:
+def _not_found_error(exc: urllib.error.HTTPError, ref: str) -> RuntimeError | None:
     """
     Turn a pool 404 into a readable RuntimeError (with the pool's «быть может, вы искали …?»).
 
-    Any other status is returned unchanged so callers' HTTPError handling still applies.
+    Any other status yields None: the caller re-raises its HTTPError untouched.
     """
     if exc.code != HTTPStatus.NOT_FOUND:
-        return exc
+        return None
     try:
         payload = json.loads(exc.read())
     except (ValueError, UnicodeDecodeError, OSError):
@@ -320,7 +320,7 @@ class RemoteRegistry:
                     return False
                 unpack_image_file(path, store, sudo=(True if self.sudo else None))
                 if digest:
-                    store.set_pool_digest(item, digest)
+                    store.set_pool_digest(item, digest, registry=self.base_url)
             return True
         finally:
             path.unlink(missing_ok=True)
@@ -366,8 +366,8 @@ class RemoteRegistry:
             with tempfile.TemporaryDirectory() as td:
                 blob = pack_image_to_file(store.get(item), Path(td) / "image.tar.gz")
                 digest = self._put_image_file(name, version, blob, auth)
-            if digest:                      # remember what the pool now holds for this ref
-                store.set_pool_digest(item, digest)
+            if digest:                      # remember what THIS pool now holds for this ref
+                store.set_pool_digest(item, digest, registry=self.base_url)
             copied.append(item)
         return copied
 
@@ -446,12 +446,18 @@ class RemoteRegistry:
             return self._send("GET", f"/task/{name}/{version}",
                               headers={"Authorization": f"Bearer {token}"})
         except urllib.error.HTTPError as exc:
-            raise _not_found_error(exc, ref) from exc
+            err = _not_found_error(exc, ref)
+            if err is None:
+                raise
+            raise err from exc
 
     def _closure(self, ref: str) -> list[str]:
         name, version = split_ref(ref)
         try:
             body = self._send("GET", f"/closure/{name}/{version}")
         except urllib.error.HTTPError as exc:
-            raise _not_found_error(exc, ref) from exc
+            err = _not_found_error(exc, ref)
+            if err is None:
+                raise
+            raise err from exc
         return json.loads(body.decode("utf-8"))["refs"]

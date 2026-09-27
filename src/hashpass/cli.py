@@ -30,8 +30,8 @@ from http import HTTPStatus
 from pathlib import Path
 
 from hashpass.build import build, run_image
-from hashpass.image.base import _base_version_current, build_base
-from hashpass.imagestore.store import ImageStore, did_you_mean
+from hashpass.image.base import _base_version_current, build_base, runtime_stamp
+from hashpass.imagestore.store import ImageStore, did_you_mean, registry_key
 from hashpass.progress import current_stage
 from hashpass.recipe.model import (
     Action,
@@ -179,39 +179,53 @@ def base_ref() -> str:
     return f"{_BASE_OWNER}/{_BASE_NAME}:{_BASE_VERSION}"
 
 
+def _legacy_base_ref() -> str:
+    """Return the pre-2026-09-27 stamped, un-namespaced base ref (`debian:trixie-<stamp>`)."""
+    return f"{_BASE_NAME}:{_BASE_VERSION}-{runtime_stamp()}"
+
+
+def _local_base_layer(store: ImageStore) -> Path | None:
+    """Return a usable local base layer: the tagged base, else a legacy stamped one that is current."""
+    if store.exists(base_ref()):
+        return store.get(base_ref()).layer
+    legacy = _legacy_base_ref()
+    if store.exists(legacy) and _base_layer_current(store.get(legacy).layer):
+        return store.get(legacy).layer
+    return None
+
+
+def _legacy_base_from_pool(store: ImageStore, pool: RemoteRegistry) -> Path | None:
+    """
+    Cutover fallback: while a pool still holds only the old `debian:trixie-<stamp>`, use that.
+
+    A client updated before the pool was re-deployed would otherwise "build locally" -- and
+    students have no rootfs tarball. A current local copy of the legacy base wins; else it is
+    pulled from the pool; None when the pool has neither name.
+    """
+    legacy = _legacy_base_ref()
+    if store.exists(legacy) and _base_layer_current(store.get(legacy).layer):
+        return store.get(legacy).layer
+    if pool.has_image(legacy):
+        pool.pull_many([legacy], store)
+        return store.get(legacy).layer
+    return None
+
+
 def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | None = None,
                       io: Io | None = None) -> Path:
     """
-    Ensure the base image for this runtime exists locally; return its layer directory.
+    Ensure the base image exists locally; return its layer directory.
 
     With a `pool`, the base is an ordinary pool image under `base_ref()`: it is pulled when
-    missing, re-pulled when the pool's digest changed, and never rebuilt here. Without a pool
-    (author machines, tests) -- or when the pool has no base for this runtime yet -- it is
-    built once from the out-of-band rootfs tarball, exactly as before.
+    missing, re-pulled when the pool's digest changed, and never rebuilt here (see
+    `_base_from_pool`). Without a pool (author machines, tests) -- or when the pool has no
+    base at all -- it is built once from the out-of-band rootfs tarball, exactly as before.
     """
     ref = base_ref()
     if pool is not None:
-        try:
-            remote = pool.image_digest(ref)
-            if remote is not None:
-                if not store.exists(ref) or store.get(ref).pool_digest != remote:
-                    pool.pull_many([ref], store, refresh=True)
-                return store.get(ref).layer
-            if store.exists(ref):
-                return store.get(ref).layer
-            if pool.has_image(ref):                       # legacy record without a digest
-                pool.pull_many([ref], store)
-                return store.get(ref).layer
-            (io or _default_io()).write(
-                f"\x1b[2mбаза {ref} на пуле не найдена — собираю локально\x1b[0m\n")
-        except (RuntimeError, ValueError, OSError, urllib.error.URLError):
-            # Pool unreachable, or a torn download (digest mismatch) -- degrade rather than
-            # crash the student's run: reuse a good local base if there is one, else fall
-            # through to the local-build tail below (same as "pool has no such base" above).
-            if store.exists(ref):
-                return store.get(ref).layer
-            (io or _default_io()).write(
-                "\x1b[2mпул недоступен — собираю базу локально\x1b[0m\n")
+        layer = _base_from_pool(store, pool, ref, io or _default_io())
+        if layer is not None:
+            return layer
     with contextlib.suppress(KeyError):
         layer = store.get(ref).layer
         if _base_layer_current(layer):
@@ -222,6 +236,40 @@ def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | No
     name, version = ref.split(":", 1)
     store.save(name, version, built, (), sudo=True)     # root-owned rootfs -> sudo rsync
     return store.get(ref).layer
+
+
+def _base_from_pool(store: ImageStore, pool: RemoteRegistry, ref: str, io: Io) -> Path | None:
+    """
+    Return the base layer via the pool; None means "fall back to a local build".
+
+    Pull when missing, re-pull when the pool digest differs, take the legacy stamped ref while
+    the pool is not yet re-deployed; on a pool error degrade to any good local base rather than
+    crash the student's run.
+    """
+    try:
+        remote = pool.image_digest(ref)
+        if remote is not None:
+            if not store.exists(ref) or store.get(ref).pool_digest != remote:
+                pool.pull_many([ref], store, refresh=True)
+            return store.get(ref).layer
+        if store.exists(ref):
+            return store.get(ref).layer
+        if pool.has_image(ref):                       # legacy record without a digest
+            pool.pull_many([ref], store)
+            return store.get(ref).layer
+        fallback = _legacy_base_from_pool(store, pool)
+        if fallback is not None:
+            return fallback
+        io.write(f"\x1b[2mбаза {ref} на пуле не найдена — собираю локально\x1b[0m\n")
+    except (RuntimeError, ValueError, OSError, urllib.error.URLError):
+        # Pool unreachable, or a torn download (digest mismatch) -- degrade rather than
+        # crash the student's run: reuse a good local base if there is one, else fall
+        # through to the local-build tail (same as "pool has no such base" above).
+        local = _local_base_layer(store)
+        if local is not None:
+            return local
+        io.write("\x1b[2mпул недоступен — собираю базу локально\x1b[0m\n")
+    return None
 
 
 def _base_layer_current(layer: Path) -> bool:
@@ -1356,7 +1404,7 @@ def cmd_push_base(env: Home, registry: str | None = None, *, force: bool = False
     url = _ensure_registry_login(env, registry, io)
     if not force:
         remote = RemoteRegistry(url, cache=CredentialCache(env.creds)).image_digest(ref)
-        local = store.get(ref).pool_digest
+        local = store.get(ref).pool_digests.get(registry_key(url))   # what THIS pool got from us
         if remote is not None and local == remote:
             io.write(f"\x1b[2mбаза {ref} на пуле актуальна — не отправляю\x1b[0m\n")
             return 0
