@@ -1,12 +1,31 @@
 """Blob (tar) pack/unpack for HTTP transfer: images (meta + layer/) and tasks (bundle/hp/meta)."""
 import io
 import json
+import stat
 import subprocess
 import tarfile
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from hashpass.imagestore.store import ImageStore, StoredImage
+
+_READ_CHUNK = 1 << 20
+
+
+@dataclass(frozen=True)
+class ImageBlobInfo:
+    """What a blob declares (meta.json) and whether extracting it faithfully needs root."""
+
+    name: str
+    version: str
+    parents: tuple[str, ...]
+    needs_root: bool
+
+
+def _member_is_unsafe(name: str) -> bool:
+    parts = name.split("/")
+    return name.startswith("/") or ".." in parts
 
 
 def _layer_has_unreadable(layer: Path) -> bool:
@@ -24,67 +43,118 @@ def _layer_has_unreadable(layer: Path) -> bool:
     return False
 
 
-def pack_image(img: StoredImage) -> bytes:
+def inspect_image_blob(path: Path) -> ImageBlobInfo:
     """
-    Pack a stored image (meta.json + layer/ tree) into a tar byte blob.
+    Validate a blob's structure WITHOUT extracting it; return its declared identity.
 
-    Some image layers hold root-owned files with restrictive modes (`apt` locks,
-    `/etc/shadow`, `/root/…`); pure-Python `tarfile` opens each file itself and
-    trips on those.  When the layer isn't fully readable as the current user, we
-    delegate the tar build to `sudo tar`, then read it back.
+    Accepted shape: a `meta.json` member plus a `layer` directory tree (every other member
+    lives under `layer/`); no absolute or `..` paths; a safe name/version. `needs_root` is
+    True when any member is root-owned or setuid/setgid -- extracting such a layer as an
+    unprivileged user would silently drop ownership (fatal for a base image).
     """
+    with tarfile.open(path, mode="r") as tar:           # auto-detects gzip / plain
+        meta_member: tarfile.TarInfo | None = None
+        has_layer = False
+        needs_root = False
+        for m in tar:
+            if m.name == "meta.json":
+                meta_member = m
+                continue
+            if _member_is_unsafe(m.name):
+                msg = f"image blob: unsafe member path {m.name!r}"
+                raise ValueError(msg)
+            if m.name == "layer" or m.name.startswith("layer/"):
+                has_layer = True
+            else:
+                msg = f"image blob: member outside layer/: {m.name!r}"
+                raise ValueError(msg)
+            if m.uid == 0 or m.mode & (stat.S_ISUID | stat.S_ISGID):
+                needs_root = True
+        if meta_member is None:
+            msg = "image blob: no meta.json member"
+            raise ValueError(msg)
+        if not has_layer:
+            msg = "image blob: no layer/ member"
+            raise ValueError(msg)
+        f = tar.extractfile(meta_member)
+        meta = json.loads((f.read() if f else b"{}").decode("utf-8"))
+    name, version = str(meta.get("name", "")), str(meta.get("version", ""))
+    ImageStore.validate_ref(name, version)               # "unsafe image name/version"
+    return ImageBlobInfo(name, version, tuple(meta.get("parents", ())), needs_root)
+
+
+def blob_needs_root(path: Path) -> bool:
+    """Whether faithful extraction of this blob needs root (see inspect_image_blob)."""
+    return inspect_image_blob(path).needs_root
+
+
+def pack_image_to_file(img: StoredImage, dest: Path) -> Path:
+    """Pack a stored image (meta.json + layer/) into a gzip tar file at `dest`; return dest."""
     meta = json.dumps(
         {"name": img.name, "version": img.version, "parents": list(img.parents)},
     ).encode("utf-8")
     if _layer_has_unreadable(img.layer):
-        return _pack_via_sudo_tar(img.layer, meta)
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w") as tar:
+        _pack_via_sudo_tar(img.layer, meta, dest)
+        return dest
+    with tarfile.open(dest, mode="w:gz") as tar:
         info = tarfile.TarInfo("meta.json")
         info.size = len(meta)
         tar.addfile(info, io.BytesIO(meta))
         tar.add(img.layer, arcname="layer")
-    return buf.getvalue()
+    return dest
 
 
-def _pack_via_sudo_tar(layer: Path, meta: bytes) -> bytes:
-    """
-    Build the image blob using `sudo tar` when the layer holds root-only files.
+def pack_image(img: StoredImage) -> bytes:
+    """Pack a stored image into gzip tar bytes (thin wrapper over pack_image_to_file)."""
+    with tempfile.TemporaryDirectory() as td:
+        return pack_image_to_file(img, Path(td) / "image.tar.gz").read_bytes()
 
-    sudo/NOPASSWD only grants `tar`, not `chown` — so we avoid creating a root-owned
-    output file entirely by writing meta.json to a user-owned staging dir and
-    streaming the tar to stdout, which sudo hands back to the calling process.
-    """
+
+def _pack_via_sudo_tar(layer: Path, meta: bytes, dest: Path) -> None:
+    """Build the gzip blob with `sudo tar` (root-only files in the layer), streaming into `dest`."""
     with tempfile.TemporaryDirectory() as td:
         staging = Path(td)
         (staging / "meta.json").write_bytes(meta)
-        # Tell tar to include meta.json (from staging) and layer/ (from the store, renamed).
-        # `--transform` rewrites the on-disk path prefix so the archive holds `layer/...`.
-        proc = subprocess.run(
-            ["sudo", "tar", "-cf", "-",
-             "-C", str(staging), "meta.json",
-             "--transform", f"s|^{str(layer).lstrip('/')}|layer|",
-             "-C", "/", str(layer).lstrip("/")],
-            check=True, capture_output=True,
-        )
-        return proc.stdout
+        with dest.open("wb") as out:
+            subprocess.run(
+                ["sudo", "tar", "-czf", "-",
+                 "-C", str(staging), "meta.json",
+                 "--transform", f"s|^{str(layer).lstrip('/')}|layer|",
+                 "-C", "/", str(layer).lstrip("/")],
+                check=True, stdout=out, stderr=subprocess.PIPE,
+            )
 
 
-def unpack_image(blob: bytes, dest: ImageStore, *, sudo: bool = False) -> str:
-    """Unpack a tar blob into dest, save it, and return the stored `name:version` ref."""
+def unpack_image_file(path: Path, dest: ImageStore, *, sudo: bool | None = None) -> str:
+    """
+    Unpack a blob FILE into the store; return the stored `name:version` ref.
+
+    `sudo=None` decides by the archive: root-owned/setuid members are extracted with
+    `sudo tar` so ownership survives (Task 5); otherwise plain tarfile extraction as today.
+    """
+    info = inspect_image_blob(path)
+    use_sudo = info.needs_root if sudo is None else sudo
+    if use_sudo:
+        return _unpack_root_owned(path, dest, info)
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        with tarfile.open(fileobj=io.BytesIO(blob), mode="r") as tar:
-            # `data` filter (Python 3.12+ default) refuses absolute-path symlinks -- routine
-            # in dpkg layers (`/usr/share/groff/site-tmac` from `man-db`, `/etc/alternatives/*`
-            # etc.).  The tar was produced by our own trusted `pack_image` from an authenticated
-            # author's layer; unpack as fully-trusted so those symlinks land intact.
-            tar.extractall(tmp, filter="fully_trusted")   # noqa: S202  server-only, trusted content
-        meta = json.loads((tmp / "meta.json").read_text(encoding="utf-8"))
-        img = dest.save(
-            meta["name"], meta["version"], tmp / "layer", tuple(meta["parents"]), sudo=sudo,
-        )
+        with tarfile.open(path, mode="r") as tar:
+            tar.extractall(tmp, filter="fully_trusted")   # noqa: S202  validated by inspect_image_blob
+        img = dest.save(info.name, info.version, tmp / "layer", info.parents)
     return f"{img.name}:{img.version}"
+
+
+def _unpack_root_owned(path: Path, dest: ImageStore, info: ImageBlobInfo) -> str:
+    msg = "root-owned blob extraction is implemented in Task 5"
+    raise NotImplementedError(msg)
+
+
+def unpack_image(blob: bytes, dest: ImageStore, *, sudo: bool | None = None) -> str:
+    """Unpack tar bytes into dest (wrapper: writes a temp file, then unpack_image_file)."""
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "image.blob"
+        p.write_bytes(blob)
+        return unpack_image_file(p, dest, sudo=sudo)
 
 
 def pack_task(task_dir: Path) -> bytes:
