@@ -153,6 +153,7 @@ hashpass run <id>:1                                    # живая консол
 hashengine images                                      # что собрано
 python3 -m pytest tests/content/test_bundled_taskfiles_parse.py -q   # все Taskfile парсятся, ссылки на файлы целы
 content/tasks/deploy.sh --dry                          # собрать ВСЕ задания без пуша
+hashengine push base                                   # базовый образ этого runtime на пул
 ```
 
 Пуш на пул (`hashengine push … --task [--force]`) — только по явной просьбе автора курса

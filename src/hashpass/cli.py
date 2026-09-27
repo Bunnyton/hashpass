@@ -1201,6 +1201,8 @@ def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> i
 
 def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io) -> None:
     """On push, upload the Taskfile the image remembers (so its solutions/interactivity are on the pool)."""
+    if ref == base_ref():
+        return   # the base has no Taskfile -- stay silent instead of "Taskfile не найден"
     try:
         taskfile = store.get(ref).taskfile_path
     except KeyError:
@@ -1243,6 +1245,15 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
         client.push_task(tdir, name, version, publish=True)
         sys.stdout.write(f"опубликовано в каталог: {ref}\n")
     return 0
+
+
+def cmd_push_base(env: Home, registry: str | None = None, *, force: bool = False,
+                  io: Io | None = None) -> int:
+    """Build (if needed) and push this runtime's base image so students pull it instead of building."""
+    io = io or _default_io()
+    store = ImageStore(env.images)
+    ensure_base_image(env, store)                     # local build path (author machine)
+    return cmd_push(env, base_ref(), registry, publish=False, force=force, io=io)
 
 
 def cmd_pull(env: Home, ref: str, registry: str | None = None, io: Io | None = None) -> int:
@@ -1506,7 +1517,7 @@ def pull_new(env: Home, url: str, token: str, *, workers: int = 8) -> tuple[int,
     store = ImageStore(env.images)
     client = RemoteRegistry(url)
     entries = [e for e in client.catalog(token=token) if e.get("available", True)]  # skip locked
-    layers = client.pull_many([str(e["ref"]) for e in entries], store, workers=workers)
+    layers = client.pull_many([str(e["ref"]) for e in entries], store, workers=workers, refresh=True)
 
     def _task(entry: dict[str, object]) -> str | None:
         ref = str(entry["ref"])
@@ -1719,9 +1730,13 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
         io.write("\x1b[33mзадание сейчас недоступно\x1b[0m\n")   # visible in the list, but locked
         return 0
     store = ImageStore(env.images)
-    if not store.exists(ref):
-        # Fetch just THIS ref (and its closure), not the whole catalog -- nothing else downloads.
-        RemoteRegistry(url).pull_many([ref], store, workers=4)
+    client = RemoteRegistry(url)
+    # The task image AND this runtime's base are ordinary pool images: fetch what is missing,
+    # refresh what the pool has since re-published (digest changed). Nothing else downloads.
+    # A pool that has no base yet would 404 its closure lookup -- skip it in that case;
+    # ensure_base_image(pool=...) below still copes with a missing/legacy/unreachable base.
+    refs = [ref, base_ref()] if client.has_image(base_ref()) else [ref]
+    client.pull_many(refs, store, workers=4, refresh=True)
     tdir = task_dir(ref, store)
     server_digest = str(entry.get("digest")) if entry else ""
     # Re-pull the task bundle if it's missing OR its digest no longer matches the pool's.
@@ -1752,7 +1767,7 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
             io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"
                      "\x1b[0m\n")
 
-    return cmd_run(env, ref, io, student_id=user, on_complete=_submit)
+    return cmd_run(env, ref, io, student_id=user, on_complete=_submit, pool=client)
 
 
 def task_mode(env: Home, io: Io | None = None) -> int:

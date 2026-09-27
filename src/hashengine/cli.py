@@ -29,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_build.add_argument("taskfile")
     p_build.add_argument("-t", "--tag", help="имя[:версия] (переопределяет строку image в Taskfile)")
     p_push = sub.add_parser("push", help="отправить образ/задание на пул")
-    p_push.add_argument("ref")
+    p_push.add_argument("ref", help="образ/задание, или `base` — базовый образ этого runtime")
     p_push.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
     p_push.add_argument("--task", action="store_true",
                         help="добавить задание в каталог (номер назначится автоматически)")
@@ -66,6 +66,8 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
     if command == "build":
         return cli.cmd_build(env, args.taskfile, args.tag)
     if command == "push":
+        if args.ref == "base":
+            return cli.cmd_push_base(env, args.registry, force=args.force)
         return cli.cmd_push(env, args.ref, args.registry, publish=args.task, force=args.force)
     if command == "serve":
         return cli.cmd_serve(env, args.host, args.port, certfile=args.tls_cert,

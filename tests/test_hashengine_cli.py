@@ -39,3 +39,15 @@ def test_build_error_boundary_uses_engine_prog(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))
     assert engine_cli.main(["build", str(tmp_path / "nope.Taskfile")]) == 1
     assert capsys.readouterr().err.startswith("hashengine:")
+
+
+@pytest.mark.tier1
+def test_push_base_dispatches_to_cmd_push_base(monkeypatch):
+    from hashengine import cli as engine  # noqa: PLC0415
+    calls = []
+    monkeypatch.setattr(engine.cli, "cmd_push_base",
+                        lambda env, registry=None, *, force=False:  # noqa: ARG005
+                        calls.append((registry, force)) or 0)
+    monkeypatch.setattr(engine, "_engine_enabled", lambda: True)
+    assert engine.main(["push", "base", "--force"]) == 0
+    assert calls == [(None, True)]

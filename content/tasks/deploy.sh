@@ -75,6 +75,11 @@ if [[ -z "$DRY" ]]; then
     }
 fi
 
+if [[ -z "$DRY" ]]; then
+    echo "── базовый образ (debian:trixie-<стамп>) ──"
+    hashengine push base $FORCE
+fi
+
 for name in "${TASKS[@]}"; do
     echo
     echo "=== $name ==="

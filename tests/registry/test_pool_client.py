@@ -109,3 +109,32 @@ def test_pull_new_fetches_catalog_tasks_and_is_idempotent(registry, tmp_path):
     assert cli.task_dir("lab1:1", store).exists()
 
     assert cli.pull_new(env, registry.base_url, stok) == (0, 0)  # nothing new the second time
+
+
+@pytest.mark.tier2
+def test_pull_new_refreshes_a_re_pushed_task_image(registry, tmp_path):
+    registry.users.add("author1", "pw", role="author")
+    ac = RemoteRegistry(registry.base_url)
+    atok = ac.login("author1", "pw")
+    local = ImageStore(tmp_path / "loc")
+    _seed_image(local, tmp_path, "lab")
+    ac.push(local, "lab:1", token=atok)
+    td = tmp_path / "t"
+    td.mkdir()
+    _make_task_dir(td, marker="1")
+    ac.push_task(td, "lab", "1", publish=True, token=atok)
+
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud")}, default_home=tmp_path)
+    sc = RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds))
+    stok = sc.register("stud", "pass123!", group="G")
+    assert cli.pull_new(env, registry.base_url, stok) == (1, 1)
+    assert cli.pull_new(env, registry.base_url, stok) == (0, 0)           # nothing new
+
+    # The author re-publishes the SAME ref with a changed layer (no version bump).
+    (tmp_path / "src-lab" / "f").write_text("changed", encoding="utf-8")
+    local.save("lab", "1", tmp_path / "src-lab", ())
+    ac.push(local, "lab:1", token=atok, force=True)
+    layers, tasks = cli.pull_new(env, registry.base_url, stok)
+    assert layers == 1 and tasks == 0                                     # image re-pulled by digest
+    got = ImageStore(env.images).get("lab:1")
+    assert (got.layer / "f").read_text(encoding="utf-8") == "changed"

@@ -102,7 +102,16 @@ def test_cmd_pool_run_submits_on_completion(registry, tmp_path, monkeypatch):
     RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds)).register(
         "stud", "pass123!", group="G")
 
-    def fake_run(_env, _ref, _io, *, student_id, on_complete) -> int:  # noqa: ARG001
+    pulls: list[tuple[list[str], bool]] = []
+    orig = RemoteRegistry.pull_many
+
+    def spy_pull_many(self, refs, store, *, workers=8, refresh=False) -> list[str]:
+        pulls.append((list(refs), refresh))
+        return orig(self, refs, store, workers=workers, refresh=refresh)
+
+    monkeypatch.setattr(RemoteRegistry, "pull_many", spy_pull_many)
+
+    def fake_run(_env, _ref, _io, *, student_id, on_complete, pool=None) -> int:  # noqa: ARG001
         on_complete(True, [])   # noqa: FBT003  (pretend every stage passed; no history)
         return 0
 
@@ -112,3 +121,53 @@ def test_cmd_pool_run_submits_on_completion(registry, tmp_path, monkeypatch):
     token = cli._pool_token(env, registry.base_url)  # noqa: SLF001
     prog = RemoteRegistry(registry.base_url).progress(token=token)
     assert prog["stud"]["lab:1"]["status"] == "passed"
+    # The task pull is always refreshed by digest; this pool has no base yet, so the base ref
+    # is not force-fetched here (has_image(base_ref()) is False -- see the 404-tolerant test below).
+    assert pulls and pulls[0][1] is True and "lab:1" in pulls[0][0]
+    assert cli.base_ref() not in pulls[0][0]
+
+
+def _push_fake_base(registry, tmp_path, marker: str) -> str:
+    """Push a tiny 'base' under the CURRENT stamped ref (mirrors tests/registry/test_base_pull.py)."""
+    registry.users.add(f"baseauthor-{marker}", "pw-correct", role="author")
+    local = ImageStore(tmp_path / f"base-local-{marker}")
+    src = tmp_path / f"base-src-{marker}"
+    src.mkdir()
+    (src / "marker.txt").write_text(marker, encoding="utf-8")
+    name, version = cli.base_ref().split(":")
+    local.save(name, version, src, ())
+    client = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / f"base-c-{marker}.json"))
+    client.login(f"baseauthor-{marker}", "pw-correct")
+    client.push(local, cli.base_ref(), force=True)
+    return cli.base_ref()
+
+
+@pytest.mark.tier2
+def test_cmd_pool_run_refreshes_base_when_pool_has_one(registry, tmp_path, monkeypatch):
+    # When the pool DOES hold a base for this runtime, cmd_pool_run's refresh-pull must
+    # include it (this is how a re-published base reaches students without a rebuild).
+    monkeypatch.setenv("HASHPASS_POOL", registry.base_url)
+    _publish(registry, tmp_path)
+    _push_fake_base(registry, tmp_path, "v1")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud2")}, default_home=tmp_path)
+    RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds)).register(
+        "stud2", "pass123!", group="G")
+
+    pulls: list[tuple[list[str], bool]] = []
+    orig = RemoteRegistry.pull_many
+
+    def spy_pull_many(self, refs, store, *, workers=8, refresh=False) -> list[str]:
+        pulls.append((list(refs), refresh))
+        return orig(self, refs, store, workers=workers, refresh=refresh)
+
+    monkeypatch.setattr(RemoteRegistry, "pull_many", spy_pull_many)
+
+    def fake_run(_env, _ref, _io, *, student_id, on_complete, pool=None) -> int:  # noqa: ARG001
+        on_complete(True, [])   # noqa: FBT003
+        return 0
+
+    monkeypatch.setattr(cli, "cmd_run", fake_run)
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "t")
+    assert cli.cmd_pool_run(env, "1", io) == 0
+    assert pulls and pulls[0][1] is True
+    assert "lab:1" in pulls[0][0] and cli.base_ref() in pulls[0][0]

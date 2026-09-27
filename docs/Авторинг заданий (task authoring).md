@@ -253,6 +253,7 @@ hashengine build <Taskfile> [-t name:ver]        # собрать; имя: -t > 
 hashengine images                                # список собранного (name:ver + kind: task|image)
 hashengine login <registry-url>                  # логин/пароль → токен (кэш 7 дней)
 hashengine push <name:ver> --task <N> --title "…"  # опубликовать задание в пул под номером N
+hashengine push base [--force]  # базовый образ этого runtime на пул (студенты его скачивают, а не собирают)
 hashengine serve                                 # поднять пул (реестр + веб-панель)
 # студент (hashpass):
 hashpass                        # без аргументов → подтянуть каталог и показать задания по номерам
