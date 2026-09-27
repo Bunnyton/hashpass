@@ -30,7 +30,7 @@ from http import HTTPStatus
 from pathlib import Path
 
 from hashpass.build import build, run_image
-from hashpass.image.base import _base_version_current, build_base
+from hashpass.image.base import _base_version_current, build_base, runtime_stamp
 from hashpass.imagestore.store import ImageStore
 from hashpass.progress import current_stage
 from hashpass.recipe.model import (
@@ -168,15 +168,35 @@ def ensure_base_tar(dest: Path) -> Path:
     raise RuntimeError(msg)
 
 
-def ensure_base_image(env: Home, store: ImageStore) -> Path:
-    """
-    Ensure the single base image `debian:trixie` exists in the store; build it once.
+def base_ref() -> str:
+    """Return the base image ref for THIS runtime: `debian:trixie-<stamp>` (a new stamp = a new ref)."""
+    return f"{_BASE_NAME}:{_BASE_VERSION}-{runtime_stamp()}"
 
-    Takes the provided Debian rootfs tarball (see ensure_base_tar), bakes it bootable +
-    interactive (systemd, procps, fish, runtime) via build_base, and stores it as the parentless
-    `debian:trixie` image that every build/run stacks on. Returns the stored base layer directory.
+
+def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | None = None,
+                      io: Io | None = None) -> Path:
     """
-    ref = f"{_BASE_NAME}:{_BASE_VERSION}"
+    Ensure the base image for this runtime exists locally; return its layer directory.
+
+    With a `pool`, the base is an ordinary pool image under `base_ref()`: it is pulled when
+    missing, re-pulled when the pool's digest changed, and never rebuilt here. Without a pool
+    (author machines, tests) -- or when the pool has no base for this runtime yet -- it is
+    built once from the out-of-band rootfs tarball, exactly as before.
+    """
+    ref = base_ref()
+    if pool is not None:
+        remote = pool.image_digest(ref)
+        if remote is not None:
+            if not store.exists(ref) or store.get(ref).pool_digest != remote:
+                pool.pull_many([ref], store, refresh=True)
+            return store.get(ref).layer
+        if store.exists(ref):
+            return store.get(ref).layer
+        if pool.has_image(ref):                       # legacy record without a digest
+            pool.pull_many([ref], store)
+            return store.get(ref).layer
+        (io or _default_io()).write(
+            f"\x1b[2mбаза для runtime {runtime_stamp()} на пуле не найдена — собираю локально\x1b[0m\n")
     with contextlib.suppress(KeyError):
         layer = store.get(ref).layer
         if _base_layer_current(layer):
@@ -184,7 +204,8 @@ def ensure_base_image(env: Home, store: ImageStore) -> Path:
         # else: a STALE stored base (e.g. built before the runtime filled /etc/hosts) -- rebuild it.
     ensure_base_tar(env.base_tar)
     built = build_base(env.work / "base-build", from_tar=env.base_tar)
-    store.save(_BASE_NAME, _BASE_VERSION, built, (), sudo=True)  # root-owned rootfs -> sudo rsync
+    name, version = ref.split(":", 1)
+    store.save(name, version, built, (), sudo=True)     # root-owned rootfs -> sudo rsync
     return store.get(ref).layer
 
 
@@ -714,14 +735,15 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR0913
               student_id: str = _DEFAULT_STUDENT,
-              on_complete: Callable[[bool, list[dict[str, object]]], None] | None = None) -> int:
+              on_complete: Callable[[bool, list[dict[str, object]]], None] | None = None,
+              pool: RemoteRegistry | None = None) -> int:
     """Boot the task console; grade live, then report pass + command history via on_complete."""
     # Unique workdir per run: a fresh overlay each session (no stale files -> no false
     # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
     workdir = env.work / "run" / uuid.uuid4().hex
     router = _Router(io.write)                         # narrative + announces start on host stdout
     task_io = Io(read=io.read, write=router.write, clock=io.clock)
-    session = run_task(ref, store, workdir, base=ensure_base_image(env, store),
+    session = run_task(ref, store, workdir, base=ensure_base_image(env, store, pool=pool, io=io),
                        student_id=student_id, nonce=uuid.uuid4().hex,
                        sink=router.write, sleep=time.sleep)
     stop = threading.Event()
@@ -824,9 +846,10 @@ def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
     return 0
 
 
-def cmd_run(env: Home, ref: str, io: Io | None = None, *,
+def cmd_run(env: Home, ref: str, io: Io | None = None, *,  # noqa: PLR0913
             student_id: str = _DEFAULT_STUDENT,
-            on_complete: Callable[[bool, list[dict[str, object]]], None] | None = None) -> int:
+            on_complete: Callable[[bool, list[dict[str, object]]], None] | None = None,
+            pool: RemoteRegistry | None = None) -> int:
     """Run a task (interactive student session) or a bare image (interactive shell)."""
     io = io or _default_io()
     store = ImageStore(env.images)
@@ -836,7 +859,7 @@ def cmd_run(env: Home, ref: str, io: Io | None = None, *,
         io.write(f"нет такого образа: {ref}\n")
         return 1
     if (stored.layer.parent / "task").exists():
-        return _run_task(env, ref, store, io, student_id=student_id, on_complete=on_complete)
+        return _run_task(env, ref, store, io, student_id=student_id, on_complete=on_complete, pool=pool)
     return _run_image(env, ref, store, io)
 
 

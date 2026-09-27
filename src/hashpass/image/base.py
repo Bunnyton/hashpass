@@ -47,6 +47,11 @@ def _base_version_current(dest: Path) -> bool:
         return False
 
 
+def runtime_stamp() -> str:
+    """Return the runtime version stamp baked into every base (`etc/hp-base-version`, e.g. '18')."""
+    return (_RUNTIME / "etc" / "hp-base-version").read_text(encoding="utf-8").strip()
+
+
 def _wipe_tree(path: Path) -> None:
     """Empty a possibly root-owned dir tree using only granted-sudo commands (no sudo rm)."""
     empty = path.parent / f".empty-{path.name}"

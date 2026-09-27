@@ -334,15 +334,16 @@ def test_resolve_ref(tmp_path):
 
 
 @pytest.mark.tier3
-def test_ensure_base_image_stores_debian_trixie(tmp_path, base_tar):
-    # The single base image is built once from the provided rootfs, stored as `debian:trixie`, reused.
+def test_ensure_base_image_stores_stamped_base(tmp_path, base_tar):
+    # The single base image is built once from the provided rootfs, stored under its stamped
+    # ref (base_ref(), e.g. "debian:trixie-18"), reused.
     home = tmp_path / "home"
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
     env.base_tar.parent.mkdir(parents=True, exist_ok=True)
     env.base_tar.write_bytes(base_tar.read_bytes())     # rootfs provided out-of-band (no docker)
     store = ImageStore(env.images)
     layer = cli.ensure_base_image(env, store)
-    assert "debian:trixie" in store.list()
+    assert cli.base_ref() in store.list()
     assert (layer / "lib/systemd/systemd").exists()
     assert (layer / "usr/bin/fish").exists()
     assert cli.ensure_base_image(env, store) == layer  # second call reuses, no rebuild
