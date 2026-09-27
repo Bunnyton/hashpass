@@ -9,9 +9,12 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+from werkzeug.exceptions import ClientDisconnected
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.blob import pack_image, pack_image_to_file, unpack_image
+from hashpass.registry.passwords import UserStore
+from hashpass.registry.server import make_server
 
 _TIMEOUT = 10
 
@@ -244,3 +247,38 @@ def test_images_rows_carry_digest(registry, tmp_path):
     rows = {r["ref"]: r for r in json.loads(body)["images"]}
     assert rows["img:1"]["digest"] == hashlib.sha256(blob).hexdigest()
     assert rows["old:1"]["digest"] is None
+
+
+@pytest.mark.tier2
+def test_receive_image_sweeps_tmp_on_client_disconnect(tmp_path):
+    """
+    A client that declares a Content-Length and then stops sending must not leak a tmp file.
+
+    That trips werkzeug's ClientDisconnected (an HTTPException, not an OSError) mid-stream;
+    `incoming-*.tmp` must still be swept, and a previous generation must still be served.
+    """
+    store = ImageStore(tmp_path / "srv")
+    users = UserStore(tmp_path / "users.json")
+    server = make_server(store, users, b"0" * 32, catalog_path=tmp_path / "catalog.json")
+    pool = server.pool
+    try:
+        local = ImageStore(tmp_path / "local")
+        _seed(local, tmp_path, "img", ())
+        good = pack_image_to_file(local.get("img:1"), tmp_path / "good.tar.gz").read_bytes()
+        good_digest = hashlib.sha256(good).hexdigest()
+        seed_tmp = tmp_path / "seed.tmp"
+        seed_tmp.write_bytes(good)
+        store.publish_blob("img", "1", seed_tmp, parents=(), digest=good_digest)
+
+        partial = good[:16]     # far shorter than the Content-Length the client declared
+        with pool.app.test_request_context(
+            "/image/img/1", method="PUT", input_stream=io.BytesIO(partial),
+            environ_overrides={"CONTENT_LENGTH": str(len(good) * 2)},
+        ), pytest.raises(ClientDisconnected):
+            pool._receive_image("img", "1")  # noqa: SLF001  (exercising the private method directly)
+
+        assert not list(store.dir("img", "1").glob("incoming-*.tmp"))   # swept, not leaked
+        assert store.get("img:1").digest == good_digest                 # previous generation intact
+        assert store.blob_path("img:1").read_bytes() == good
+    finally:
+        server.server_close()

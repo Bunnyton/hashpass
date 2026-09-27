@@ -564,6 +564,12 @@ class PoolServer:
         dest.mkdir(parents=True, exist_ok=True)
         tmp = dest / f"incoming-{uuid.uuid4().hex}.tmp"
         digest = hashlib.sha256()
+        # `finally` guarantees the temp file is swept on EVERY failure path, not just the
+        # ones we recognize below -- e.g. a client that declares a Content-Length and then
+        # stops sending data trips werkzeug's ClientDisconnected (an HTTPException, not an
+        # OSError), which would otherwise slip past the `except` and leak `incoming-*.tmp`
+        # forever. On success `publish_blob` has already moved `tmp` to its final blob path,
+        # so the unlink below is a harmless no-op (missing_ok=True).
         try:
             with tmp.open("wb") as out:
                 while chunk := request.stream.read(self._UPLOAD_CHUNK):
@@ -574,8 +580,9 @@ class PoolServer:
             img = self.store.publish_blob(name, version, tmp, parents=info.parents,
                                           digest=digest.hexdigest())
         except (ValueError, KeyError, OSError, tarfile.TarError):
-            tmp.unlink(missing_ok=True)
             return self._empty(HTTPStatus.BAD_REQUEST)
+        finally:
+            tmp.unlink(missing_ok=True)
         resp = self._empty(HTTPStatus.CREATED)
         resp.headers["X-Image-Digest"] = img.digest or ""
         return resp
