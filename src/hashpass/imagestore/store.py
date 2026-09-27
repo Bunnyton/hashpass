@@ -249,13 +249,19 @@ class ImageStore:
 
     def blob_path(self, ref: str) -> Path | None:
         """Path of the blob file this ref's current generation serves; None for layer-only records."""
-        name, version = _split_ref(ref)
-        meta = self._read_meta(name, version)
-        blob = meta.get("blob")
-        if not blob or not _is_blob_name(blob):
+        path = self.blob_path_of(self.get(ref))
+        return path if path is not None and path.exists() else None
+
+    def blob_path_of(self, img: StoredImage) -> Path | None:
+        """
+        Path of the blob an ALREADY-READ record names (no second meta.json read, no exists check).
+
+        Use this when the digest and the file must come from one meta read (a concurrent publish
+        swaps both); None when the record names no blob or a name that is not `blob-*.tar.gz`.
+        """
+        if not img.blob or not _is_blob_name(img.blob) or "/" in img.blob:
             return None
-        path = self._dir(name, version) / blob
-        return path if path.exists() else None
+        return self._dir(img.name, img.version) / img.blob
 
     def write_meta(self, name: str, version: str, *, parents: tuple[str, ...],
                    build_key: str | None = None) -> None:

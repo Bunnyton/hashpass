@@ -9,6 +9,7 @@ at or used to touch the legacy server (no 185.x).
 import contextlib
 import hashlib
 import json
+import os
 import re
 import socket
 import ssl
@@ -516,7 +517,7 @@ class PoolServer:
 
     _UPLOAD_CHUNK = 1 << 20
 
-    def _route_image_blob(self, tail: str) -> Response:   # noqa: PLR0911
+    def _route_image_blob(self, tail: str) -> Response:
         parts = self._split_ref(tail)
         if parts is None:
             return self._empty(HTTPStatus.NOT_FOUND)
@@ -536,16 +537,33 @@ class PoolServer:
             if err is not None:
                 return self._empty(err)
             return self._receive_image(name, version)
-        # GET
+        return self._serve_image_blob(ref)
+
+    def _serve_image_blob(self, ref: str) -> Response:
+        """
+        GET an image blob: ONE meta read gives both the digest and the file.
+
+        The file is opened before answering, so a publish racing this request can unlink it
+        only after we hold the fd -- the body always matches the `X-Image-Digest` sent with it.
+        """
         try:
             img = self.store.get(ref)
         except KeyError:
             return self._empty(HTTPStatus.NOT_FOUND)
-        blob = self.store.blob_path(ref)
-        if blob is None:                      # legacy record (layer/ only): pack on the fly
+        if not img.blob:                      # legacy record (layer/ only): pack on the fly
             return self._blob(HTTPStatus.OK, pack_image(img))
-        resp = send_file(blob, mimetype="application/octet-stream", conditional=False)
-        resp.headers["X-Image-Digest"] = img.digest or ""
+        path = self.store.blob_path_of(img)
+        try:
+            f = path.open("rb") if path is not None else None
+        except FileNotFoundError:
+            f = None
+        if f is None:                         # meta names a blob that is not (or no longer) there
+            return self._empty(HTTPStatus.NOT_FOUND)
+        size = os.fstat(f.fileno()).st_size
+        resp = send_file(f, mimetype="application/octet-stream", conditional=False)
+        resp.content_length = size
+        if img.digest:
+            resp.headers["X-Image-Digest"] = img.digest
         return resp
 
     def _receive_image(self, name: str, version: str) -> Response:
@@ -558,11 +576,15 @@ class PoolServer:
         stays published untouched.
         """
         try:
-            dest = self.store.dir(name, version)
+            self.store.dir(name, version)                 # validates name/version only
         except ValueError:
             return self._empty(HTTPStatus.BAD_REQUEST)
-        dest.mkdir(parents=True, exist_ok=True)
-        tmp = dest / f"incoming-{uuid.uuid4().hex}.tmp"
+        # Stream into the store root's `.incoming/`, not the image dir: a rejected PUT to a
+        # new ref must not leave an empty `<name>/<ver>/` behind. publish_blob creates the
+        # image dir and moves the file in (same filesystem, so a plain rename).
+        incoming = Path(self.store.root) / ".incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        tmp = incoming / f"{uuid.uuid4().hex}.tmp"
         digest = hashlib.sha256()
         # `finally` guarantees the temp file is swept on EVERY failure path, not just the
         # ones we recognize below -- e.g. a client that declares a Content-Length and then
@@ -579,12 +601,13 @@ class PoolServer:
             _check_image_ref(info, name, version)
             img = self.store.publish_blob(name, version, tmp, parents=info.parents,
                                           digest=digest.hexdigest())
-        except (ValueError, KeyError, OSError, tarfile.TarError):
+        except (ValueError, OSError, tarfile.TarError):
             return self._empty(HTTPStatus.BAD_REQUEST)
         finally:
             tmp.unlink(missing_ok=True)
         resp = self._empty(HTTPStatus.CREATED)
-        resp.headers["X-Image-Digest"] = img.digest or ""
+        if img.digest:
+            resp.headers["X-Image-Digest"] = img.digest
         return resp
 
     def _route_task_blob(self, tail: str) -> Response:   # noqa: PLR0911

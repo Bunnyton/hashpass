@@ -145,6 +145,9 @@ def inspect_image_blob(path: Path) -> ImageBlobInfo:
             raise ValueError(msg)
         f = tar.extractfile(meta_member)
         meta = json.loads((f.read() if f else b"{}").decode("utf-8"))
+    if not isinstance(meta, dict):
+        msg = "image blob: meta.json is not an object"
+        raise ValueError(msg)                           # noqa: TRY004  one error type for callers
     name, version = str(meta.get("name", "")), str(meta.get("version", ""))
     ImageStore.validate_ref(name, version)               # "unsafe image name/version"
     return ImageBlobInfo(name, version, _check_parents(meta.get("parents", [])), needs_root)

@@ -220,6 +220,12 @@ def test_put_malformed_blob_keeps_previous_generation(registry, tmp_path):
     assert _head(url)[1]["X-Image-Digest"] == old_digest
     assert registry.store.blob_path("img:1").read_bytes() == good
     assert not list(registry.store.dir("img", "1").glob("incoming-*.tmp"))  # temp files cleaned
+    assert not list((registry.store.root / ".incoming").glob("*"))
+    # a rejected PUT to a brand-new ref leaves no directory behind for it
+    assert _http("PUT", f"{registry.base_url}/image/fresh/1", data=buf.getvalue(),
+                 headers=auth)[0] == HTTPStatus.BAD_REQUEST
+    assert not (registry.store.root / "fresh").exists()
+    assert not (registry.store.root / "other").exists()
 
 
 @pytest.mark.tier2
@@ -228,7 +234,9 @@ def test_legacy_layer_record_is_served_without_digest(registry, tmp_path):
     url = f"{registry.base_url}/image/old/1"
     status, headers = _head(url)
     assert status == HTTPStatus.OK and "X-Image-Digest" not in headers
-    status, body = _http("GET", url)
+    with urllib.request.urlopen(urllib.request.Request(url), timeout=_TIMEOUT) as resp:  # noqa: S310
+        status, body = resp.status, resp.read()
+        assert "X-Image-Digest" not in resp.headers            # never an empty digest header
     assert status == HTTPStatus.OK
     dst = ImageStore(tmp_path / "dst")
     assert unpack_image(body, dst) == "old:1"
@@ -278,7 +286,50 @@ def test_receive_image_sweeps_tmp_on_client_disconnect(tmp_path):
             pool._receive_image("img", "1")  # noqa: SLF001  (exercising the private method directly)
 
         assert not list(store.dir("img", "1").glob("incoming-*.tmp"))   # swept, not leaked
+        assert not list((store.root / ".incoming").glob("*"))
         assert store.get("img:1").digest == good_digest                 # previous generation intact
         assert store.blob_path("img:1").read_bytes() == good
     finally:
         server.server_close()
+
+
+def _get(url: str) -> tuple[int, dict[str, str], bytes]:
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url), timeout=_TIMEOUT) as resp:  # noqa: S310
+            return resp.status, dict(resp.headers), resp.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, dict(exc.headers), exc.read()
+
+
+@pytest.mark.tier2
+def test_get_digest_header_names_the_served_bytes_after_republish(registry, tmp_path):
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "img", ())
+    auth = _author_token(registry)
+    url = f"{registry.base_url}/image/img/1"
+    first = pack_image_to_file(local.get("img:1"), tmp_path / "g1.tar.gz").read_bytes()
+    assert _http("PUT", url, data=first, headers=auth)[0] == HTTPStatus.CREATED
+    (tmp_path / "src-img" / "more.txt").write_text("gen2", encoding="utf-8")
+    local.save("img", "1", tmp_path / "src-img", ())
+    second = pack_image_to_file(local.get("img:1"), tmp_path / "g2.tar.gz").read_bytes()
+    assert second != first
+    assert _http("PUT", url, data=second, headers=auth)[0] == HTTPStatus.CREATED
+    status, headers, body = _get(url)
+    assert status == HTTPStatus.OK
+    assert headers["X-Image-Digest"] == hashlib.sha256(body).hexdigest()
+    assert body == second
+    assert headers["Content-Length"] == str(len(second))       # streamed from an fd, size still sent
+
+
+@pytest.mark.tier2
+def test_get_whose_blob_file_vanished_is_404(registry, tmp_path):
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "img", ())
+    auth = _author_token(registry)
+    url = f"{registry.base_url}/image/img/1"
+    blob = pack_image_to_file(local.get("img:1"), tmp_path / "img.tar.gz").read_bytes()
+    assert _http("PUT", url, data=blob, headers=auth)[0] == HTTPStatus.CREATED
+    registry.store.blob_path("img:1").unlink()              # meta still names it
+    status, headers, _body = _get(url)
+    assert status == HTTPStatus.NOT_FOUND
+    assert "X-Image-Digest" not in headers
