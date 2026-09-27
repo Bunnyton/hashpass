@@ -1,4 +1,5 @@
 """Tier2: image cards over the live server — attachments, description, and catalog management."""
+import hashlib
 import json
 import urllib.error
 import urllib.parse
@@ -8,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from hashpass.imagestore.store import ImageStore
+from hashpass.registry.blob import pack_image_to_file
 from hashpass.registry.catalog import Catalog
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.server import _parse_multipart
@@ -200,3 +203,41 @@ def test_web_images_is_author_only(registry):
     status, headers, _ = _req(_opener(), "GET", f"{registry.base_url}/web/images")
     assert status == HTTPStatus.SEE_OTHER
     assert headers["Location"] == "/web/login"
+
+
+def _seed_blob(registry, ref: str, tmp_path: Path, *, parents: tuple[str, ...] = ()) -> str:
+    """Seed the SERVER store the way a new-client push does: a blob generation, no layer/."""
+    name, _, version = ref.partition(":")
+    slug = f"{name.replace('/', '_')}-{version}"
+    local = ImageStore(tmp_path / f"local-{slug}")
+    src = tmp_path / f"src-{slug}"
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "f.txt").write_text("x", encoding="utf-8")
+    img = local.save(name, version, src, parents)
+    blob_bytes = pack_image_to_file(img, tmp_path / f"{slug}.tar.gz").read_bytes()
+    tmp = tmp_path / f"incoming-{slug}.tmp"
+    tmp.write_bytes(blob_bytes)
+    digest = hashlib.sha256(blob_bytes).hexdigest()
+    registry.store.publish_blob(name, version, tmp, parents=parents, digest=digest)
+    return ref
+
+
+@pytest.mark.tier2
+def test_blob_only_record_works_in_web_card_task_and_closure(registry, tmp_path):
+    opener, cookie = _author_cookie(registry)              # registers + logs in the author "teacher"
+    _seed_blob(registry, "base:1", tmp_path)
+    _seed_blob(registry, "lab:1", tmp_path, parents=("base:1",))
+    client = RemoteRegistry(registry.base_url)
+    atok = client.login("teacher", "pass123!")
+    assert client.closure("lab:1") == ["base:1", "lab:1"]  # parents come from meta.json alone
+    tdir = tmp_path / "task"
+    (tdir / "bundle").mkdir(parents=True)
+    (tdir / "task-meta.json").write_text('{"image_ref":"lab:1"}', encoding="utf-8")
+    client.push_task(tdir, "lab", "1", publish=True, token=atok)          # task next to a blob-only image
+    assert any(e["ref"] == "lab:1" for e in client.catalog(token=atok))
+    client.push_attachment("lab", "1", "Taskfile", b"image lab:1\n", taskfile=True, token=atok)
+    status, _headers, body = _req(opener, "GET", f"{registry.base_url}/web/image/lab:1", cookie=cookie)
+    assert status == HTTPStatus.OK
+    assert "lab:1" in body and "Taskfile" in body
+    # /images is a bearer-token JSON API (like /catalog, /progress) -- not a cookie-session route
+    assert any("digest" in row for row in client.pool_images(token=atok))

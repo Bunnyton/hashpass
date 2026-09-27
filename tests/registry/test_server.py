@@ -1,4 +1,5 @@
 """Tier2: drive the localhost registry server's HTTP contract directly via urllib."""
+import hashlib
 import io
 import json
 import tarfile
@@ -10,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from hashpass.imagestore.store import ImageStore
-from hashpass.registry.blob import pack_image
+from hashpass.registry.blob import pack_image, pack_image_to_file, unpack_image
 
 _TIMEOUT = 10
 
@@ -156,3 +157,90 @@ def test_put_accepts_root_owned_blob(registry):
     assert status == HTTPStatus.CREATED
     # Verify the image was stored (even without root ownership preservation)
     assert registry.store.exists("rooty:1")
+
+
+def _author_token(registry) -> dict[str, str]:
+    registry.users.add("alice", "pw-correct", role="author")
+    _status, body = _login(registry.base_url, "alice", "pw-correct")
+    return {"Authorization": f"Bearer {json.loads(body)['token']}"}
+
+
+def _head(url: str) -> tuple[int, dict[str, str]]:
+    req = urllib.request.Request(url, method="HEAD")  # noqa: S310
+    try:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:  # noqa: S310
+            return resp.status, dict(resp.headers)
+    except urllib.error.HTTPError as exc:
+        return exc.code, dict(exc.headers)
+
+
+@pytest.mark.tier2
+def test_put_stores_blob_verbatim_and_serves_digest(registry, tmp_path):
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "img", ())
+    blob = pack_image_to_file(local.get("img:1"), tmp_path / "img.tar.gz").read_bytes()
+    digest = hashlib.sha256(blob).hexdigest()
+    auth = _author_token(registry)
+    url = f"{registry.base_url}/image/img/1"
+    status, _ = _http("PUT", url, data=blob, headers=auth)
+    assert status == HTTPStatus.CREATED
+    assert registry.store.blob_path("img:1").read_bytes() == blob          # verbatim, not repacked
+    assert not (registry.store.dir("img", "1") / "layer").exists()         # never unpacked
+    status, headers = _head(url)
+    assert status == HTTPStatus.OK and headers["X-Image-Digest"] == digest
+    req = urllib.request.Request(url)  # noqa: S310
+    with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:  # noqa: S310
+        assert resp.headers["X-Image-Digest"] == digest
+        assert resp.read() == blob                                          # same bytes back
+
+
+@pytest.mark.tier2
+def test_put_malformed_blob_keeps_previous_generation(registry, tmp_path):
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "img", ())
+    good = pack_image_to_file(local.get("img:1"), tmp_path / "good.tar.gz").read_bytes()
+    auth = _author_token(registry)
+    url = f"{registry.base_url}/image/img/1"
+    assert _http("PUT", url, data=good, headers=auth)[0] == HTTPStatus.CREATED
+    old_digest = _head(url)[1]["X-Image-Digest"]
+    # meta.json only, no layer/  -> refused; the old generation is still served
+    buf = io.BytesIO()
+    meta = json.dumps({"name": "img", "version": "1", "parents": []}).encode("utf-8")
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        info = tarfile.TarInfo("meta.json")
+        info.size = len(meta)
+        tar.addfile(info, io.BytesIO(meta))
+    assert _http("PUT", url, data=buf.getvalue(), headers=auth)[0] == HTTPStatus.BAD_REQUEST
+    # name in meta != URL -> refused too
+    wrong = pack_image_to_file(local.get("img:1"), tmp_path / "wrong.tar.gz").read_bytes()
+    assert _http("PUT", f"{registry.base_url}/image/other/1", data=wrong, headers=auth)[0] == HTTPStatus.BAD_REQUEST
+    assert _head(url)[1]["X-Image-Digest"] == old_digest
+    assert registry.store.blob_path("img:1").read_bytes() == good
+    assert not list(registry.store.dir("img", "1").glob("incoming-*.tmp"))  # temp files cleaned
+
+
+@pytest.mark.tier2
+def test_legacy_layer_record_is_served_without_digest(registry, tmp_path):
+    _seed(registry.store, tmp_path, "old", ())          # a layer/-only record, as pre-change servers made
+    url = f"{registry.base_url}/image/old/1"
+    status, headers = _head(url)
+    assert status == HTTPStatus.OK and "X-Image-Digest" not in headers
+    status, body = _http("GET", url)
+    assert status == HTTPStatus.OK
+    dst = ImageStore(tmp_path / "dst")
+    assert unpack_image(body, dst) == "old:1"
+    assert (dst.get("old:1").layer / "old.txt").read_text(encoding="utf-8") == "old"
+
+
+@pytest.mark.tier2
+def test_images_rows_carry_digest(registry, tmp_path):
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "img", ())
+    auth = _author_token(registry)
+    blob = pack_image_to_file(local.get("img:1"), tmp_path / "img.tar.gz").read_bytes()
+    _http("PUT", f"{registry.base_url}/image/img/1", data=blob, headers=auth)
+    _seed(registry.store, tmp_path, "old", ())
+    _status, body = _http("GET", f"{registry.base_url}/images", headers=auth)
+    rows = {r["ref"]: r for r in json.loads(body)["images"]}
+    assert rows["img:1"]["digest"] == hashlib.sha256(blob).hexdigest()
+    assert rows["old:1"]["digest"] is None

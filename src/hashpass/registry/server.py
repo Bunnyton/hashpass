@@ -7,24 +7,26 @@ endpoints check the caller's role. It may be self-hosted as the pool; it must st
 at or used to touch the legacy server (no 185.x).
 """
 import contextlib
+import hashlib
 import json
 import re
 import socket
 import ssl
 import tarfile
 import time
+import uuid
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import quote
 
-from flask import Flask, Response, request
+from flask import Flask, Response, request, send_file
 from werkzeug.serving import WSGIRequestHandler
 from werkzeug.serving import make_server as _wsgi_make_server
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.key import global_key
 from hashpass.registry.attachments import AttachmentStore, safe_filename
-from hashpass.registry.blob import pack_image, pack_task, unpack_image, unpack_task
+from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
 from hashpass.registry.catalog import Catalog
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.passwords import ROLES, UserStore, WeakPasswordError, validate_password
@@ -123,6 +125,13 @@ def _sanitize_authenticity(raw: object) -> dict[str, object] | None:
     return {"verdict": verdict if verdict in _AUTH_VERDICTS else "unknown",
             "typed": int(raw["typed"]) if isinstance(raw.get("typed"), (int, float)) else 0,
             "pasted": int(raw["pasted"]) if isinstance(raw.get("pasted"), (int, float)) else 0}
+
+
+def _check_image_ref(info, name: str, version: str) -> None:
+    """Reject an uploaded blob whose declared meta.json name/version differs from the PUT URL."""
+    if (info.name, info.version) != (name, version):
+        msg = "meta name/version does not match the URL"
+        raise ValueError(msg)
 
 
 class PoolServer:
@@ -485,7 +494,8 @@ class PoolServer:
         att = self.attachments()
         rows: list[dict[str, object]] = []
         for ref in self.store.list():
-            is_task = (self.store.get(ref).layer.parent / "task").exists()
+            img = self.store.get(ref)
+            is_task = (img.layer.parent / "task").exists()
             entry = entries.get(ref)
             info = att.describe(ref)
             rows.append({"ref": ref, "kind": "task" if is_task else "image",
@@ -493,7 +503,8 @@ class PoolServer:
                          "block_id": entry.block_id if entry else None,
                          "block_name": entry.block_name if entry else "",
                          "available": entry.available if entry else None,
-                         "description": info["description"], "files": info["files"]})
+                         "description": info["description"], "files": info["files"],
+                         "digest": img.digest})
         return rows
 
     def _route_images(self) -> Response:
@@ -503,6 +514,8 @@ class PoolServer:
 
     # -- routes: blobs (image / task / closure / attachment) ----------------
 
+    _UPLOAD_CHUNK = 1 << 20
+
     def _route_image_blob(self, tail: str) -> Response:   # noqa: PLR0911
         parts = self._split_ref(tail)
         if parts is None:
@@ -510,22 +523,62 @@ class PoolServer:
         name, version = parts
         ref = f"{name}:{version}"
         if request.method == "HEAD":
-            return self._empty(HTTPStatus.OK if self.store.exists(ref) else HTTPStatus.NOT_FOUND)
+            try:
+                img = self.store.get(ref)
+            except KeyError:
+                return self._empty(HTTPStatus.NOT_FOUND)
+            resp = self._empty(HTTPStatus.OK)
+            if img.digest:
+                resp.headers["X-Image-Digest"] = img.digest
+            return resp
         if request.method == "PUT":
             _user, err = self._auth_role(("author", "admin"))
             if err is not None:
                 return self._empty(err)
-            try:
-                unpack_image(request.get_data(cache=False, as_text=False), self.store, sudo=False)
-            except (ValueError, KeyError, OSError, tarfile.TarError):
-                return self._empty(HTTPStatus.BAD_REQUEST)
-            return self._empty(HTTPStatus.CREATED)
+            return self._receive_image(name, version)
         # GET
         try:
             img = self.store.get(ref)
         except KeyError:
             return self._empty(HTTPStatus.NOT_FOUND)
-        return self._blob(HTTPStatus.OK, pack_image(img))
+        blob = self.store.blob_path(ref)
+        if blob is None:                      # legacy record (layer/ only): pack on the fly
+            return self._blob(HTTPStatus.OK, pack_image(img))
+        resp = send_file(blob, mimetype="application/octet-stream", conditional=False)
+        resp.headers["X-Image-Digest"] = img.digest or ""
+        return resp
+
+    def _receive_image(self, name: str, version: str) -> Response:
+        """
+        Stream an uploaded image blob to disk, validate it, publish it as the new generation.
+
+        The blob is kept verbatim (never unpacked here) so the digest names exactly the bytes
+        later GETs serve, and root-owned members keep their ownership for the client's
+        `sudo tar`. A malformed archive is refused with 400 and the previous generation
+        stays published untouched.
+        """
+        try:
+            dest = self.store.dir(name, version)
+        except ValueError:
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        dest.mkdir(parents=True, exist_ok=True)
+        tmp = dest / f"incoming-{uuid.uuid4().hex}.tmp"
+        digest = hashlib.sha256()
+        try:
+            with tmp.open("wb") as out:
+                while chunk := request.stream.read(self._UPLOAD_CHUNK):
+                    digest.update(chunk)
+                    out.write(chunk)
+            info = inspect_image_blob(tmp)
+            _check_image_ref(info, name, version)
+            img = self.store.publish_blob(name, version, tmp, parents=info.parents,
+                                          digest=digest.hexdigest())
+        except (ValueError, KeyError, OSError, tarfile.TarError):
+            tmp.unlink(missing_ok=True)
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        resp = self._empty(HTTPStatus.CREATED)
+        resp.headers["X-Image-Digest"] = img.digest or ""
+        return resp
 
     def _route_task_blob(self, tail: str) -> Response:   # noqa: PLR0911
         parts = self._split_ref(tail)

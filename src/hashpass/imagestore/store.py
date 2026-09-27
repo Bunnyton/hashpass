@@ -210,6 +210,9 @@ class ImageStore:
         the new one, never a mix. Older generations' blobs are removed best-effort afterwards.
         """
         self.validate_ref(name, version)
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            msg = f"unsafe image digest: {digest!r}"
+            raise ValueError(msg)
         dest = self._dir(name, version)
         dest.mkdir(parents=True, exist_ok=True)
         final = dest / f"{_BLOB_PREFIX}{digest}{_BLOB_SUFFIX}"
