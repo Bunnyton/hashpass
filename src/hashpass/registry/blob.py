@@ -1,10 +1,12 @@
 """Blob (tar) pack/unpack for HTTP transfer: images (meta + layer/) and tasks (bundle/hp/meta)."""
+import contextlib
 import io
 import json
 import stat
 import subprocess
 import tarfile
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -149,9 +151,55 @@ def unpack_image_file(path: Path, dest: ImageStore, *, sudo: bool | None = None)
     return f"{img.name}:{img.version}"
 
 
+def _cleanup_old_layers(image_dir: Path) -> None:
+    """Remove every `layer.old-*` (root-owned) tree with granted-sudo rsync; ignore failures."""
+    for old in sorted(image_dir.glob("layer.old-*")):
+        empty = image_dir / f".empty-{old.name}"
+        try:
+            empty.mkdir(exist_ok=True)
+            subprocess.run(["sudo", "rsync", "-a", "--delete", str(empty) + "/", str(old) + "/"],
+                           check=True, capture_output=True)
+            old.rmdir()
+        except (subprocess.CalledProcessError, OSError):
+            continue                                   # next pull retries; the live layer is fine
+        finally:
+            with contextlib.suppress(OSError):
+                empty.rmdir()
+
+
 def _unpack_root_owned(path: Path, dest: ImageStore, info: ImageBlobInfo) -> str:
-    msg = "root-owned blob extraction is implemented in Task 5"
-    raise NotImplementedError(msg)
+    """
+    Extract a root-owned blob with `sudo tar` and swap it in as the ref's layer atomically.
+
+    The archive's `layer/…` members are extracted (owners and setuid preserved, since tar
+    runs as root) into a user-created `layer.incoming-<uuid>` directory; two same-parent
+    renames then publish it -- both allowed to the owner of the image directory. The
+    previous layer is removed with `sudo rsync --delete` from an empty dir (the only
+    granted way to delete root-owned trees); if that fails, the new layer is already live
+    and the next pull sweeps `layer.old-*`.
+    """
+    image_dir = dest.dir(info.name, info.version)
+    image_dir.mkdir(parents=True, exist_ok=True)
+    tag = uuid.uuid4().hex
+    incoming = image_dir / f"layer.incoming-{tag}"
+    incoming.mkdir()
+    try:
+        subprocess.run(
+            ["sudo", "tar", "-xpf", str(path), "--same-owner", "--strip-components=1",
+             "-C", str(incoming), "layer"],
+            check=True, capture_output=True,
+        )
+    except subprocess.CalledProcessError:
+        with contextlib.suppress(OSError):
+            incoming.rmdir()                            # only if tar left it empty
+        raise
+    layer = image_dir / "layer"
+    if layer.exists():
+        layer.rename(image_dir / f"layer.old-{tag}")
+    incoming.rename(layer)
+    dest.write_meta(info.name, info.version, parents=info.parents)
+    _cleanup_old_layers(image_dir)
+    return f"{info.name}:{info.version}"
 
 
 def unpack_image(blob: bytes, dest: ImageStore, *, sudo: bool | None = None) -> str:

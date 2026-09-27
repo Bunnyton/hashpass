@@ -2,12 +2,14 @@ import gzip
 import io
 import json
 import stat
+import subprocess
 import tarfile
 from pathlib import Path
 
 import pytest
 
 from hashpass.imagestore.store import ImageStore
+from hashpass.registry import blob as blobmod
 from hashpass.registry.blob import (
     ImageBlobInfo,
     inspect_image_blob,
@@ -149,3 +151,58 @@ def test_inspect_needs_root_on_uid0_or_setuid(tmp_path):
     suid = _raw_tar(tmp_path, [("layer", None, 0o755, 1000),
                                ("layer/sudo", b"", 0o755 | stat.S_ISUID, 1000)], gz=True)
     assert inspect_image_blob(suid).needs_root is True
+
+
+def _fake_run_factory(calls: list[list[str]], *, fail_rsync: bool = False):  # noqa: ANN202
+    def fake_run(cmd, **kwargs):  # noqa: ANN202, ANN003, ARG001
+        calls.append(list(cmd))
+        if cmd[:2] == ["sudo", "tar"]:
+            # emulate `tar -x ... --strip-components=1 -C <incoming> layer`: create a file there
+            incoming = Path(cmd[cmd.index("-C") + 1])
+            (incoming / "from-tar.txt").write_text("root-owned in real life", encoding="utf-8")
+        if cmd[:2] == ["sudo", "rsync"]:
+            if fail_rsync:
+                raise subprocess.CalledProcessError(1, cmd)
+            target = Path(cmd[-1].rstrip("/"))
+            for child in target.iterdir():          # emulate `--delete` from an empty source
+                child.unlink()
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+    return fake_run
+
+
+@pytest.mark.tier1
+def test_sudo_unpack_swaps_layer_atomically_and_cleans_old(tmp_path, monkeypatch):
+    blob = _raw_tar(tmp_path, [("layer", None, 0o755, 0), ("layer/f", b"", 0o644, 0)], gz=True)
+    store = ImageStore(tmp_path / "dst")
+    old_layer = store.dir("app", "1") / "layer"
+    old_layer.mkdir(parents=True)
+    (old_layer / "stale.txt").write_text("old", encoding="utf-8")
+    store.write_meta("app", "1", parents=())
+    calls: list[list[str]] = []
+    monkeypatch.setattr(blobmod.subprocess, "run", _fake_run_factory(calls))
+    assert unpack_image_file(blob, store, sudo=True) == "app:1"
+    layer = store.dir("app", "1") / "layer"
+    assert (layer / "from-tar.txt").exists() and not (layer / "stale.txt").exists()
+    assert calls[0][:4] == ["sudo", "tar", "-xpf", str(blob)]
+    assert "--same-owner" in calls[0] and "--strip-components=1" in calls[0] and calls[0][-1] == "layer"
+    assert calls[1][:3] == ["sudo", "rsync", "-a"] and "--delete" in calls[1]
+    assert not list(store.dir("app", "1").glob("layer.old-*"))         # removed after rsync-empty
+    assert not list(store.dir("app", "1").glob("layer.incoming-*"))
+
+
+@pytest.mark.tier1
+def test_leftover_old_layers_are_cleaned_on_next_unpack(tmp_path, monkeypatch):
+    blob = _raw_tar(tmp_path, [("layer", None, 0o755, 0), ("layer/f", b"", 0o644, 0)], gz=True)
+    store = ImageStore(tmp_path / "dst")
+    (store.dir("app", "1") / "layer").mkdir(parents=True)
+    store.write_meta("app", "1", parents=())
+    calls: list[list[str]] = []
+    monkeypatch.setattr(blobmod.subprocess, "run", _fake_run_factory(calls, fail_rsync=True))
+    unpack_image_file(blob, store, sudo=True)                          # cleanup fails, unpack succeeds
+    leftovers = list(store.dir("app", "1").glob("layer.old-*"))
+    assert len(leftovers) == 1 and (store.dir("app", "1") / "layer" / "from-tar.txt").exists()
+    calls.clear()
+    monkeypatch.setattr(blobmod.subprocess, "run", _fake_run_factory(calls))
+    unpack_image_file(blob, store, sudo=True)                          # next pull sweeps both old dirs
+    assert not list(store.dir("app", "1").glob("layer.old-*"))
+    assert sum(1 for c in calls if c[:2] == ["sudo", "rsync"]) == 2  # noqa: PLR2004
