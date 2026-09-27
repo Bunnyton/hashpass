@@ -124,3 +124,35 @@ def test_put_rejects_missing_layer_directory(registry):
     # Should get 400 BAD_REQUEST (not 500 or 201)
     status, _body = _http("PUT", f"{registry.base_url}/image/badimg/1", data=buf.getvalue(), headers=auth)
     assert status == HTTPStatus.BAD_REQUEST
+
+
+@pytest.mark.tier2
+def test_put_accepts_root_owned_blob(registry):
+    """Server accepts blobs with uid=0 members when sudo=False (doesn't preserve ownership, but stores)."""
+    registry.users.add("alice", "pw-correct", role="author")
+    token = json.loads(_login(registry.base_url, "alice", "pw-correct")[1])["token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    # Build a gzip blob with uid=0 members (following _raw_tar pattern)
+    buf = io.BytesIO()
+    meta = json.dumps({"name": "rooty", "version": "1", "parents": []}).encode("utf-8")
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        info = tarfile.TarInfo("meta.json")
+        info.size = len(meta)
+        tar.addfile(info, io.BytesIO(meta))
+        # Layer directory with uid=0
+        layer_info = tarfile.TarInfo("layer")
+        layer_info.type = tarfile.DIRTYPE
+        layer_info.uid = 0
+        layer_info.mode = 0o755
+        tar.addfile(layer_info)
+        # File member with uid=0 and readable mode
+        file_info = tarfile.TarInfo("layer/f")
+        file_info.size = 4
+        file_info.uid = 0
+        file_info.mode = 0o644
+        tar.addfile(file_info, io.BytesIO(b"test"))
+    # PUT should succeed (201) — sudo=False prevents NotImplementedError on uid=0 members
+    status, _body = _http("PUT", f"{registry.base_url}/image/rooty/1", data=buf.getvalue(), headers=auth)
+    assert status == HTTPStatus.CREATED
+    # Verify the image was stored (even without root ownership preservation)
+    assert registry.store.exists("rooty:1")
