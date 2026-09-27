@@ -1,5 +1,6 @@
 """Client-side credential cache: reuse a login token per registry until it expires."""
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 
@@ -40,3 +41,21 @@ class CredentialCache:
         if data.pop(registry, None) is not None:
             self._path.write_text(json.dumps(data, indent=2), encoding="utf-8")
             self._path.chmod(0o600)
+
+    def forget_variants(self, registries: Iterable[str]) -> int:
+        """
+        Drop the cached token under every one of these registry-URL spellings.
+
+        The same pool is often cached under more than one spelling (scheme / trailing slash --
+        see `cli._url_variants`); a plain `forget(url)` with one exact spelling can silently
+        leave a live token behind under another. Returns how many entries were actually removed.
+        """
+        data = self._load()
+        removed = 0
+        for registry in registries:
+            if data.pop(registry, None) is not None:
+                removed += 1
+        if removed:
+            self._path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            self._path.chmod(0o600)
+        return removed

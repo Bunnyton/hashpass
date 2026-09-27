@@ -1174,7 +1174,9 @@ def _ask_relogin(env: Home, url: str, io: Io, cached_user: str) -> str | None:
                       "[y/N] ") or "").strip()
     if answer not in _RELOGIN_YES:
         return None
-    CredentialCache(env.creds).forget(url)
+    # `url` may not be the exact spelling the token is cached under (scheme / trailing slash --
+    # see `_url_variants`); forget every equivalent spelling so the old session is really gone.
+    CredentialCache(env.creds).forget_variants(_url_variants(url))
     return (io.read(f"логин [{cached_user}]: ") or "").strip() or cached_user
 
 
@@ -1241,10 +1243,11 @@ def cmd_logout(env: Home, registry: str | None = None, io: Io | None = None) -> 
     if not url:
         io.write("пул не задан — выходить не из чего\n")
         return 0
-    cache = CredentialCache(env.creds)
-    token = cache.cached_token(url, now=time.time())
+    # `url` may not be the exact spelling the token is cached under (scheme / trailing slash --
+    # see `_url_variants`); look up and forget across every equivalent spelling, not just this one.
+    token = _pool_token(env, url)
     user = token_user(token) if token else None
-    cache.forget(url)
+    CredentialCache(env.creds).forget_variants(_url_variants(url))
     save_pool(env, url, "")
     if user:
         io.write(f"\x1b[32m✓ вышли\x1b[0m: {user} ({url})\n")

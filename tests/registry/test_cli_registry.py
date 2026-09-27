@@ -337,3 +337,39 @@ def test_cmd_pool_login_declines_relogin_keeps_session(registry, tmp_path, monke
     io2 = cli.Io(read=lambda _p: next(answers), write=out.append, clock=lambda: "")
     assert cli.cmd_pool_login(env, registry.base_url, io2) == 0
     assert "остаёмся" in "".join(out)
+
+
+@pytest.mark.tier2
+def test_cmd_logout_forgets_token_under_every_url_spelling(registry, tmp_path):
+    """A token cached under a different spelling of the same pool URL must not survive logout."""
+    registry.users.add("dev", "s3cr3t", role="admin")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    bare = registry.base_url.removeprefix("http://")           # e.g. pool.json without a scheme
+    token = RemoteRegistry(registry.base_url).login("dev", "s3cr3t")
+    CredentialCache(env.creds).save(bare, token, int(time.time()) + 3600)
+
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
+    assert cli.cmd_logout(env, registry.base_url, io) == 0
+    assert "вышли" in "".join(out) and "dev" in "".join(out)
+    assert cli._pool_token(env, bare) is None                   # noqa: SLF001 -- the variant is gone too
+
+
+@pytest.mark.tier2
+def test_cmd_login_relogin_forgets_old_token_under_every_url_spelling(registry, tmp_path, monkeypatch):
+    """Accepting re-login must drop the old token even when it was cached under a variant spelling."""
+    registry.users.add("dev", "s3cr3t", role="admin")
+    registry.users.add("bob", "b0bpass!", role="admin")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    bare = registry.base_url.removeprefix("http://")
+    token = RemoteRegistry(registry.base_url).login("dev", "s3cr3t")
+    CredentialCache(env.creds).save(bare, token, int(time.time()) + 3600)
+
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "b0bpass!")
+    answers = iter(["y", "bob"])
+    io = cli.Io(read=lambda _p: next(answers), write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io) == 0
+    # the old "dev" token must be gone under EVERY spelling -- looking it up via either the
+    # bare or the full URL now resolves to the new session, never to the stale "dev" one.
+    assert token_user(cli._pool_token(env, bare)) == "bob"                     # noqa: SLF001
+    assert token_user(cli._pool_token(env, registry.base_url)) == "bob"        # noqa: SLF001
