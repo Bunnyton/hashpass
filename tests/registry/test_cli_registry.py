@@ -1,13 +1,16 @@
 import socket
 import threading
+import time
 
 import pytest
 
 from hashpass import cli
 from hashpass.imagestore.store import ImageStore
+from hashpass.registry.creds import CredentialCache
 from hashpass.registry.passwords import UserStore
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.server import make_server
+from hashpass.registry.token import token_user
 
 
 def _free_port() -> int:
@@ -220,3 +223,117 @@ def test_cmd_push_of_others_namespace_raises_ownership_error(registry, tmp_path,
     io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
     with pytest.raises(RuntimeError, match="принадлежит другому автору"):
         cli.cmd_push(env, "other/app:1", registry.base_url, io=io)
+
+
+# -- logout / re-login -------------------------------------------------------
+
+@pytest.mark.tier2
+def test_cmd_login_declines_relogin_keeps_session(registry, tmp_path, monkeypatch):
+    registry.users.add("dev", "s3cr3t", role="admin")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
+    io1 = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io1) == 0
+    cache = CredentialCache(env.creds)
+    before = cache.cached_token(registry.base_url, now=time.time())
+    assert before is not None
+
+    def _fail_getpass(_p: str = "") -> str:
+        msg = "declining re-login must not re-prompt for a password"
+        raise AssertionError(msg)
+    monkeypatch.setattr("getpass.getpass", _fail_getpass)
+    answers = iter(["n"])
+    out: list[str] = []
+    io2 = cli.Io(read=lambda _p: next(answers), write=out.append, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io2) == 0
+    assert cache.cached_token(registry.base_url, now=time.time()) == before
+    assert "остаёмся" in "".join(out)
+
+
+@pytest.mark.tier2
+def test_cmd_login_relogin_switches_user(registry, tmp_path, monkeypatch):
+    registry.users.add("dev", "s3cr3t", role="admin")
+    registry.users.add("bob", "b0bpass!", role="admin")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
+    io1 = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io1) == 0
+
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "b0bpass!")
+    answers = iter(["y", "bob"])
+    io2 = cli.Io(read=lambda _p: next(answers), write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io2) == 0
+    cache = CredentialCache(env.creds)
+    token = cache.cached_token(registry.base_url, now=time.time())
+    assert token_user(token) == "bob"
+    assert cli.load_pool(env)["user"] == "bob"
+
+
+@pytest.mark.tier2
+def test_cmd_login_if_needed_skips_relogin_question(registry, tmp_path, monkeypatch):
+    registry.users.add("dev", "s3cr3t", role="admin")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
+    io1 = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io1) == 0
+
+    def _fail_read(_p: str = "") -> str:
+        msg = "--if-needed must not prompt"
+        raise AssertionError(msg)
+    out: list[str] = []
+    io2 = cli.Io(read=_fail_read, write=out.append, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io2, if_needed=True) == 0
+    assert "уже вошли" in "".join(out)
+
+
+@pytest.mark.tier2
+def test_cmd_logout_forgets_token_keeps_url(registry, tmp_path, monkeypatch):
+    registry.users.add("dev", "s3cr3t", role="admin")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "s3cr3t")
+    io = cli.Io(read=lambda _p: "dev", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io) == 0
+
+    out: list[str] = []
+    io2 = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
+    assert cli.cmd_logout(env, registry.base_url, io2) == 0
+    cache = CredentialCache(env.creds)
+    assert cache.cached_token(registry.base_url, now=time.time()) is None
+    pool = cli.load_pool(env)
+    assert pool["url"] == registry.base_url
+    assert pool["user"] == ""
+    assert "вышли" in "".join(out) and "dev" in "".join(out)
+
+    out2: list[str] = []
+    io3 = cli.Io(read=lambda _p: None, write=out2.append, clock=lambda: "")
+    assert cli.cmd_logout(env, registry.base_url, io3) == 0
+    assert "не было" in "".join(out2)
+
+
+@pytest.mark.tier2
+def test_cmd_logout_with_no_known_pool(tmp_path, monkeypatch):
+    monkeypatch.delenv("HASHPASS_POOL", raising=False)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
+    assert cli.cmd_logout(env, None, io) == 0
+    assert "не задан" in "".join(out)
+
+
+@pytest.mark.tier2
+def test_cmd_pool_login_declines_relogin_keeps_session(registry, tmp_path, monkeypatch):
+    registry.users.add("stud", "pass123!", role="student")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "pass123!")
+    io1 = cli.Io(read=lambda _p: "stud", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_pool_login(env, registry.base_url, io1) == 0
+
+    def _fail_getpass(_p: str = "") -> str:
+        msg = "declining re-login must not re-prompt for a password"
+        raise AssertionError(msg)
+    monkeypatch.setattr("getpass.getpass", _fail_getpass)
+    answers = iter(["n"])
+    out: list[str] = []
+    io2 = cli.Io(read=lambda _p: next(answers), write=out.append, clock=lambda: "")
+    assert cli.cmd_pool_login(env, registry.base_url, io2) == 0
+    assert "остаёмся" in "".join(out)

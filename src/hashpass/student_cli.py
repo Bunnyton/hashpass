@@ -16,6 +16,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_reg.add_argument("--pool", help="адрес пула (иначе $HASHPASS_POOL или сохранённый)")
     p_login = sub.add_parser("login", help="вход на пул")
     p_login.add_argument("--pool", help="адрес пула (иначе $HASHPASS_POOL или сохранённый)")
+    p_logout = sub.add_parser("logout", help="выйти с пула (забыть токен, оставить адрес)")
+    p_logout.add_argument("--pool", help="адрес пула (иначе $HASHPASS_POOL или сохранённый)")
     sub.add_parser("pull", help="подтянуть новые/обновлённые задания с пула")
     p_run = sub.add_parser("run", help="запустить задание по номеру или ref")
     p_run.add_argument("task", help="номер из каталога (напр. 1) или ref (имя:версия)")
@@ -26,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:
+def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911
     """Route a parsed student sub-command (no sub-command → pool home: pull + list)."""
     command = args.command
     if command is None:
@@ -35,6 +37,8 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:
         return cli.cmd_register(env, args.pool)
     if command == "login":
         return cli.cmd_pool_login(env, args.pool)
+    if command == "logout":
+        return cli.cmd_logout(env, args.pool)
     if command == "pull":
         return cli.cmd_pool_pull(env)
     if command == "config":

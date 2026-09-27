@@ -3,7 +3,8 @@ Tier2: replay ./deploy.sh — one login must silence every subsequent push.
 
 `test_pool_token_variants` covers _pool_token in isolation.  These tests drive the real
 cli.cmd_* code paths through the live registry fixture, which is what the user actually
-runs from content/tasks/deploy.sh.
+runs from content/tasks/deploy.sh. deploy.sh's own `hashengine login` call passes
+`--if-needed` (a live token must not even ask to re-login) -- these tests mirror that.
 """
 import getpass as _getpass
 import time
@@ -46,7 +47,7 @@ class _RecordingIo:
 
 @pytest.mark.tier2
 def test_second_login_is_silent_and_leaves_pool_json_synced(registry, tmp_path, monkeypatch):
-    """cmd_login twice against the same URL: run #2 must ask nothing and print `уже вошли`."""
+    """cmd_login twice, the 2nd with if_needed=True (deploy.sh's --if-needed): run #2 asks nothing."""
     registry.users.add("bunnyton", "pass123!", role="admin", group="G")
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
 
@@ -59,10 +60,10 @@ def test_second_login_is_silent_and_leaves_pool_json_synced(registry, tmp_path, 
     # sanity: token cached, pool.json holds the URL under which the token lives.
     assert cli._pool_token(env, registry.base_url) is not None                       # noqa: SLF001
 
-    # run #2: same URL. MUST NOT ask login, MUST NOT ask password.
+    # run #2: same URL, --if-needed (as deploy.sh calls it). MUST NOT ask login/re-login/password.
     recorder = _RecordingIo()
     monkeypatch.setattr(_getpass, "getpass", _fail_password)
-    assert cli.cmd_login(env, registry.base_url, recorder.as_io()) == 0
+    assert cli.cmd_login(env, registry.base_url, recorder.as_io(), if_needed=True) == 0
     joined = "".join(recorder.writes)
     assert "уже вошли" in joined, f"expected fast-path message, got: {joined!r}"
 

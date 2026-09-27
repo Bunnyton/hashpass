@@ -57,6 +57,17 @@ def test_config_pool_dispatch(monkeypatch):
 
 
 @pytest.mark.tier1
+@pytest.mark.usefixtures("fake_env")
+def test_logout_dispatch(monkeypatch):
+    calls = []
+    monkeypatch.setattr(student_cli.cli, "cmd_logout",
+                        lambda _env, pool: calls.append(pool) or 0)
+    assert student_cli.main(["logout", "--pool", "http://p"]) == 0
+    assert student_cli.main(["logout"]) == 0
+    assert calls == ["http://p", None]
+
+
+@pytest.mark.tier1
 def test_unknown_command_exits_nonzero():
     with pytest.raises(SystemExit) as exc:
         student_cli.main(["frobnicate"])

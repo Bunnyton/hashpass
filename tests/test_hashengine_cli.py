@@ -51,3 +51,28 @@ def test_push_base_dispatches_to_cmd_push_base(monkeypatch):
     monkeypatch.setattr(engine, "_engine_enabled", lambda: True)
     assert engine.main(["push", "base", "--force"]) == 0
     assert calls == [(None, True)]
+
+
+@pytest.mark.tier1
+def test_login_if_needed_dispatches_the_flag(monkeypatch):
+    from hashengine import cli as engine  # noqa: PLC0415
+    calls = []
+    monkeypatch.setattr(engine.cli, "cmd_login",
+                        lambda env, registry=None, *, if_needed=False:  # noqa: ARG005
+                        calls.append((registry, if_needed)) or 0)
+    monkeypatch.setattr(engine, "_engine_enabled", lambda: True)
+    assert engine.main(["login", "http://p", "--if-needed"]) == 0
+    assert engine.main(["login", "http://p"]) == 0
+    assert calls == [("http://p", True), ("http://p", False)]
+
+
+@pytest.mark.tier1
+def test_logout_dispatches_to_cmd_logout(monkeypatch):
+    from hashengine import cli as engine  # noqa: PLC0415
+    calls = []
+    monkeypatch.setattr(engine.cli, "cmd_logout",
+                        lambda env, registry=None: calls.append(registry) or 0)  # noqa: ARG005
+    monkeypatch.setattr(engine, "_engine_enabled", lambda: True)
+    assert engine.main(["logout", "http://p"]) == 0
+    assert engine.main(["logout"]) == 0
+    assert calls == ["http://p", None]

@@ -1159,6 +1159,25 @@ def _cache_hit_or_forget(env: Home, url: str, io: Io) -> str | None:
     return user
 
 
+_RELOGIN_YES = ("y", "Y", "д", "Д")
+
+
+def _ask_relogin(env: Home, url: str, io: Io, cached_user: str) -> str | None:
+    """
+    Ask whether to re-login when a live token exists.
+
+    Returns the login to use next (empty answer keeps `cached_user`) after forgetting the
+    cached token, or None if the caller declined -- the caller should then just report that
+    it's keeping the session and return 0.
+    """
+    answer = (io.read(f"уже вошли как {cached_user} — перезайти под другим логином? "
+                      "[y/N] ") or "").strip()
+    if answer not in _RELOGIN_YES:
+        return None
+    CredentialCache(env.creds).forget(url)
+    return (io.read(f"логин [{cached_user}]: ") or "").strip() or cached_user
+
+
 def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
     """Resolve the registry and ensure a live cached token; prompt only when actually needed."""
     url = _prompt_registry(env, registry, io)
@@ -1173,18 +1192,29 @@ def _ensure_registry_login(env: Home, registry: str | None, io: Io) -> str:
     return url
 
 
-def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> int:
-    """Log in to a registry/pool.  Silently succeeds if a live token is already cached."""
+def cmd_login(env: Home, registry: str | None = None, io: Io | None = None, *,
+             if_needed: bool = False) -> int:
+    """
+    Log in to a registry/pool.
+
+    A live cached token asks whether to re-login under a different login (declining keeps the
+    session silently); `if_needed=True` (deploy.sh's `--if-needed`, run on EVERY loop) skips the
+    question outright and just confirms the cached session, so scripted runs never block on input.
+    """
     io = io or _default_io()
     url = _prompt_registry(env, registry, io)
-    # Fast path: `hashengine login "$POOL_URL"` at the top of deploy.sh runs on EVERY loop --
-    # if a cached pool token is still live, we must not prompt for a password again.
     cached_user = _cache_hit_or_forget(env, url, io)
     if cached_user is not None:
-        io.write(f"\x1b[2m✓ уже вошли: {cached_user} (токен в кэше)\x1b[0m\n")
-        return 0
-    remembered = str(load_pool(env).get("user", "")).strip()
-    user = remembered or (io.read("логин: ") or "").strip()
+        if if_needed:
+            io.write(f"\x1b[2m✓ уже вошли: {cached_user} (токен в кэше)\x1b[0m\n")
+            return 0
+        user = _ask_relogin(env, url, io, cached_user)
+        if user is None:
+            io.write(f"\x1b[2m✓ остаёмся: {cached_user}\x1b[0m\n")
+            return 0
+    else:
+        remembered = str(load_pool(env).get("user", "")).strip()
+        user = remembered or (io.read("логин: ") or "").strip()
     if not user:
         msg = "логин обязателен"
         raise RuntimeError(msg)
@@ -1196,6 +1226,30 @@ def cmd_login(env: Home, registry: str | None = None, io: Io | None = None) -> i
     except RuntimeError as exc:
         io.write(f"{exc}\n")
         return 1
+    return 0
+
+
+def cmd_logout(env: Home, registry: str | None = None, io: Io | None = None) -> int:
+    """
+    Forget the cached pool token; keep the saved pool URL, but clear the remembered login.
+
+    URL resolution mirrors `login` (explicit arg -> $HASHPASS_POOL -> saved pool.json), but never
+    prompts: with no URL known there's nothing to log out of.
+    """
+    io = io or _default_io()
+    url = _pool_url(env, registry)
+    if not url:
+        io.write("пул не задан — выходить не из чего\n")
+        return 0
+    cache = CredentialCache(env.creds)
+    token = cache.cached_token(url, now=time.time())
+    user = token_user(token) if token else None
+    cache.forget(url)
+    save_pool(env, url, "")
+    if user:
+        io.write(f"\x1b[32m✓ вышли\x1b[0m: {user} ({url})\n")
+    else:
+        io.write(f"токена для {url} не было\n")
     return 0
 
 
@@ -1420,13 +1474,25 @@ def cmd_register(env: Home, pool_url: str | None = None, io: Io | None = None) -
 
 
 def cmd_pool_login(env: Home, pool_url: str | None = None, io: Io | None = None) -> int:
-    """Log in to the pool; cache the token and save the pool config."""
+    """
+    Log in to the pool; cache the token and save the pool config.
+
+    A live cached token asks whether to re-login under a different login (declining keeps the
+    session silently); with no cached token it prompts for login + password directly, as before.
+    """
     io = io or _default_io()
     url = _pool_url(env, pool_url) or (io.read("Адрес пула (URL): ") or "").strip()
     if not url:
         msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
         raise RuntimeError(msg)
-    user = (io.read("логин: ") or "").strip()
+    cached_user = _cache_hit_or_forget(env, url, io)
+    if cached_user is not None:
+        user = _ask_relogin(env, url, io, cached_user)
+        if user is None:
+            io.write(f"\x1b[2m✓ остаёмся: {cached_user}\x1b[0m\n")
+            return 0
+    else:
+        user = (io.read("логин: ") or "").strip()
     password = getpass.getpass("пароль: ")
     try:
         RemoteRegistry(url, cache=CredentialCache(env.creds)).login(user, password)

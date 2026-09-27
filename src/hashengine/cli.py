@@ -48,6 +48,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="перегенерировать пароль администратора при старте и вывести его")
     p_login = sub.add_parser("login", help="вход на пул (запросит логин + пароль)")
     p_login.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
+    p_login.add_argument("--if-needed", action="store_true",
+                         help="ничего не спрашивать, если токен уже в кэше (для скриптов/deploy.sh)")
+    p_logout = sub.add_parser("logout", help="выйти с пула (забыть токен, оставить адрес)")
+    p_logout.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
     p_pull = sub.add_parser("pull", help="подтянуть образ/задание с пула")
     p_pull.add_argument("ref")
     p_pull.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
@@ -74,7 +78,9 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
                              keyfile=args.tls_key, self_signed=args.tls_self_signed,
                              reset_admin=args.reset_admin)
     if command == "login":
-        return cli.cmd_login(env, args.registry)
+        return cli.cmd_login(env, args.registry, if_needed=args.if_needed)
+    if command == "logout":
+        return cli.cmd_logout(env, args.registry)
     if command == "pull":
         return cli.cmd_pull(env, args.ref, args.registry)
     if command == "remote":
