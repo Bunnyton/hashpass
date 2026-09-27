@@ -375,7 +375,7 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     recipe = load_recipe(taskfile_path)
     recipe = _rebase_paths(recipe, taskfile_path.resolve().parent)   # paths relative to the Taskfile
     name, version = resolve_ref(recipe, tag, taskfile_path)
-    user = _require_login(env, io)                       # image creation requires a login
+    user = _author_identity(env, io)                     # images are namespaced by their owner
     recipe = replace(recipe, name=_namespace_name(name, user), version=version)
     store = ImageStore(env.images)
     base = ensure_base_image(env, store)
@@ -400,7 +400,11 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
         _reset_workdir(build_work)                     # sudo rsync --delete: it may hold root-owned files
     sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} ({kind})\n")
     store.set_taskfile_path(ref, str(taskfile_path.resolve()))   # push attaches it to the card later
-    if task:
+    if not _uses_local_service(env):
+        # A pool is configured: publishing is an explicit `hashengine push` (never automatic).
+        flag = " --task" if task else ""
+        io.write(f"\x1b[2m  сохранено локально — на пул: hashengine push {ref}{flag}\x1b[0m\n")
+    elif task:
         # The registry blob carries an image's layer, not a task's hidden grader -- keep tasks local.
         io.write("\x1b[2m  задание сохранено локально (на сервис отправляются образы)\x1b[0m\n")
     else:
@@ -873,7 +877,7 @@ def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, 
     if not changed:
         io.write("Изменений нет.\n")
         return
-    user = _require_login(env, io)   # image creation requires a login (asked once, then cached)
+    user = _author_identity(env, io)   # the owner's namespace (asked once, then cached)
     rname, _, rversion = ref.partition(":")
     default = f"{_namespace_name(rname, user)}:{rversion or 'latest'}"
     target = _prompt_save_as(default)
@@ -891,7 +895,8 @@ def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, 
     subprocess.run(["sudo", "rsync", "-a", str(upper) + "/", str(tmp) + "/"], check=True)
     store.save(name, version, tmp, stored.parents, sudo=True)
     io.write(f"\x1b[32m✓ сохранено\x1b[0m: {name}:{version}\n")
-    _push_image(env, store, f"{name}:{version}", io)
+    if _uses_local_service(env):
+        _push_image(env, store, f"{name}:{version}", io)
 
 
 def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
@@ -984,6 +989,32 @@ def _ensure_registry(env: Home, io: Io) -> str:
         time.sleep(0.1)
     msg = f"не удалось запустить локальный реестр ({url}); см. {env.registry / 'serve.log'}"
     raise RuntimeError(msg)
+
+
+def _uses_local_service(env: Home) -> bool:
+    """Whether authoring is offline (no pool configured) -- only then the local registry service is used."""
+    return _pool_url(env) is None
+
+
+def _author_identity(env: Home, io: Io) -> str:
+    """
+    Return the login whose namespace owns the images built here.
+
+    With a pool configured (`hashengine login` / $HASHPASS_POOL) it is the POOL login -- read
+    from the live cached token, or asked for once exactly like `hashengine login` -- and the
+    local registry service is never started, logged into or pushed to. Without a pool
+    (offline authoring, tests) the local service login is used as before.
+    """
+    url = _pool_url(env)
+    if url is None:
+        return _require_login(env, io)
+    url = _ensure_registry_login(env, url, io)           # silent on a live cached token
+    token = _pool_token(env, url)
+    user = token_user(token) if token else ""
+    if not user:
+        msg = "не удалось определить логин на пуле — выполните hashengine login"
+        raise RuntimeError(msg)
+    return user
 
 
 def _require_login(env: Home, io: Io) -> str:

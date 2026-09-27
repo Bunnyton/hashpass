@@ -426,3 +426,47 @@ def test_cmd_push_unknown_local_ref_hints_the_namespaced_twin_before_any_login(r
     io = cli.Io(read=lambda _p: pytest.fail("must not prompt"), write=lambda _s: None, clock=lambda: "")
     with pytest.raises(RuntimeError, match=r"нет такого образа: lab:1 — быть может, вы искали bunnyton/lab:1\?"):
         cli.cmd_push(env, "lab:1", registry.base_url, io=io)
+
+
+@pytest.mark.tier2
+def test_author_identity_is_the_pool_login_and_never_touches_the_local_registry(registry, tmp_path, monkeypatch):
+    # With a pool configured, `build` namespaces images by the POOL login: no second login, no
+    # local registry process on 127.0.0.1:8080, no auto-push to it.
+    monkeypatch.setenv("HASHPASS_REGISTRY", f"http://127.0.0.1:{_free_port()}")   # nothing listens there
+    monkeypatch.setattr(cli, "_ensure_registry",
+                        lambda *_a, **_k: pytest.fail("local registry must not be started"))
+    monkeypatch.setattr(cli, "_require_login",
+                        lambda *_a, **_k: pytest.fail("local registry login must not be asked"))
+    registry.users.add("bunnyton", "pw-correct", role="author")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "pw-correct")
+    io = cli.Io(read=lambda _p: "bunnyton", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_login(env, registry.base_url, io) == 0                   # pool.json + token
+    silent = cli.Io(read=lambda _p: pytest.fail("must not prompt"), write=lambda _s: None,
+                    clock=lambda: "")
+    assert cli._author_identity(env, silent) == "bunnyton"                  # noqa: SLF001
+    assert not cli._uses_local_service(env)                                 # noqa: SLF001
+
+
+@pytest.mark.tier2
+def test_author_identity_asks_the_pool_login_once_when_no_token_is_cached(registry, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "_require_login",
+                        lambda *_a, **_k: pytest.fail("local registry login must not be asked"))
+    registry.users.add("bunnyton", "pw-correct", role="author")
+    monkeypatch.setenv("HASHPASS_POOL", registry.base_url)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "pw-correct")
+    answers = iter(["bunnyton"])                       # a second prompt would exhaust it
+    io = cli.Io(read=lambda _p: next(answers), write=lambda _s: None, clock=lambda: "")
+    assert cli._author_identity(env, io) == "bunnyton"                      # noqa: SLF001
+    assert cli._author_identity(env, io) == "bunnyton"   # cached                # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_author_identity_uses_the_local_registry_only_without_a_pool(tmp_path, monkeypatch):
+    monkeypatch.delenv("HASHPASS_POOL", raising=False)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr(cli, "_require_login", lambda _env, _io: "dev")
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "")
+    assert cli._author_identity(env, io) == "dev"                           # noqa: SLF001
+    assert cli._uses_local_service(env)                                     # noqa: SLF001
