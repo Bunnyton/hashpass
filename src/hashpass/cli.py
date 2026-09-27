@@ -1150,7 +1150,7 @@ def _cache_hit_or_forget(env: Home, url: str, io: Io) -> str | None:
         return None
     if _pool_account_alive(url, token) is False:
         io.write("\x1b[33m⚠ Аккаунт на пуле не найден — регистрируем заново.\x1b[0m\n")
-        CredentialCache(env.creds).forget(url)
+        CredentialCache(env.creds).forget_variants(_url_variants(url))
         save_pool(env, url, "")
         return None
     user = token_user(token)
@@ -1576,7 +1576,7 @@ def _require_pool_identity(env: Home, io: Io) -> tuple[str, str]:
         if alive is False:
             io.write(f"\x1b[33m⚠ Аккаунт «{user}» больше не существует на пуле.\x1b[0m\n"
                      "\x1b[2m  Требуется повторный вход или регистрация — сейчас предложу.\x1b[0m\n")
-            CredentialCache(env.creds).forget(url)      # stop reusing a ghost token
+            CredentialCache(env.creds).forget_variants(_url_variants(url))  # stop reusing a ghost token
             save_pool(env, url, "")                     # keep the URL, drop the login hint
         else:
             return url, user

@@ -186,6 +186,39 @@ def test_web_catalog_layout_reorders(registry, tmp_path):
 
 
 @pytest.mark.tier2
+def test_web_catalog_layout_is_admin_only(registry, tmp_path):
+    """The whole-catalog drag-reorder is an administrative op; an author gets 403, admin succeeds."""
+    for name in ("a", "b"):
+        _seed(registry, f"{name}:1", tmp_path, task=True)
+    admin_opener, admin_cookie = _author_cookie(registry)   # "teacher", admin
+    base = registry.base_url
+    _req(admin_opener, "POST", f"{base}/web/catalog/add", cookie=admin_cookie, data={"ref": "a:1"})
+    _req(admin_opener, "POST", f"{base}/web/catalog/add", cookie=admin_cookie, data={"ref": "b:1"})
+    student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
+    sc = RemoteRegistry(registry.base_url)
+    block_id = sc.catalog(token=student)[0]["block_id"]
+    before = [e["ref"] for e in sc.catalog(token=student)]
+
+    author_opener, author_cookie = _login_cookie(registry, "alice", "pass123!")
+    payload = json.dumps({"blocks": [{"id": block_id, "tasks": ["b:1", "a:1"]}]}).encode()
+    req = urllib.request.Request(  # noqa: S310
+        f"{base}/web/catalog/layout", method="POST", data=payload,
+        headers={"Cookie": author_cookie, "Content-Type": "application/json"})
+    try:
+        status = author_opener.open(req, timeout=10).status
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+    assert status == HTTPStatus.FORBIDDEN
+    assert [e["ref"] for e in sc.catalog(token=student)] == before   # layout untouched
+
+    req2 = urllib.request.Request(  # noqa: S310
+        f"{base}/web/catalog/layout", method="POST", data=payload,
+        headers={"Cookie": admin_cookie, "Content-Type": "application/json"})
+    admin_opener.open(req2, timeout=10)
+    assert [e["ref"] for e in sc.catalog(token=student)] == ["b:1", "a:1"]
+
+
+@pytest.mark.tier2
 def test_web_multipart_upload_and_list(registry, tmp_path):
     _seed(registry, "lab:1", tmp_path)
     opener, cookie = _author_cookie(registry)

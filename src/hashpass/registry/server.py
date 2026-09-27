@@ -149,6 +149,10 @@ def _ownership_message(name: str) -> str:
     return f"образ принадлежит другому автору («{owner}»); войдите под ним: hashengine login"
 
 
+_LAYOUT_ADMIN_ONLY = ("раскладку каталога меняет только администратор; своё задание автор "
+                     "добавляет/убирает через карточку")
+
+
 class PoolServer:
     """Pool registry state (stores, secret, config) + a Flask WSGI app wired to it."""
 
@@ -1008,7 +1012,15 @@ class PoolServer:
         return self._redirect("/web/images")
 
     def _web_catalog_layout(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
+        """
+        Rewrite the whole catalog layout (blocks + task order); an administrative operation.
+
+        It can move or de-list ANY task, including ones an author doesn't own, so (unlike the
+        per-ref add/remove/toggle routes, which stay `_may_write`-gated) this one is admin-only.
+        """
+        if self._session_role(("admin",)) is None:
+            if self._session_role(_AUTHOR_ROLES) is not None:
+                return self._html(_LAYOUT_ADMIN_ONLY, status=HTTPStatus.FORBIDDEN)
             return self._empty(HTTPStatus.UNAUTHORIZED)
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict) or not isinstance(data.get("blocks"), list):

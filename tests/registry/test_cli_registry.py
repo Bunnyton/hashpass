@@ -373,3 +373,43 @@ def test_cmd_login_relogin_forgets_old_token_under_every_url_spelling(registry, 
     # bare or the full URL now resolves to the new session, never to the stale "dev" one.
     assert token_user(cli._pool_token(env, bare)) == "bob"                     # noqa: SLF001
     assert token_user(cli._pool_token(env, registry.base_url)) == "bob"        # noqa: SLF001
+
+
+@pytest.mark.tier2
+def test_cache_hit_or_forget_purges_ghost_token_under_every_url_spelling(registry, tmp_path):
+    """A deleted account's ghost token must be dropped under every cached spelling, not just one."""
+    registry.users.add("dev", "s3cr3t", role="admin")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    bare = registry.base_url.removeprefix("http://")           # token cached under a variant...
+    token = RemoteRegistry(registry.base_url).login("dev", "s3cr3t")
+    CredentialCache(env.creds).save(bare, token, int(time.time()) + 3600)
+    registry.users.delete("dev")                                # ...but the account is now gone
+
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
+    # called with the FULL url (not the bare spelling the token actually lives under)
+    assert cli._cache_hit_or_forget(env, registry.base_url, io) is None        # noqa: SLF001
+    assert cli._pool_token(env, bare) is None                                  # noqa: SLF001
+
+
+@pytest.mark.tier2
+def test_require_pool_identity_purges_ghost_token_under_every_url_spelling(registry, tmp_path, monkeypatch):
+    """Same ghost-account cleanup, exercised via _require_pool_identity's own forget call."""
+    registry.users.add("dev", "s3cr3t", role="admin")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    bare = registry.base_url.removeprefix("http://")
+    token = RemoteRegistry(registry.base_url).login("dev", "s3cr3t")
+    CredentialCache(env.creds).save(bare, token, int(time.time()) + 3600)
+    cli.save_pool(env, registry.base_url, "dev")
+    registry.users.delete("dev")
+
+    monkeypatch.setenv("HASHPASS_POOL", registry.base_url)
+    monkeypatch.setattr("getpass.getpass", lambda _p="": "newpass123!")
+
+    def _read(prompt: str) -> str:
+        return "dev2" if "логин" in prompt else ""      # group/comment left blank
+    io = cli.Io(read=_read, write=lambda _s: None, clock=lambda: "")
+    cli._require_pool_identity(env, io)                                       # noqa: SLF001
+    # the old "dev" ghost token must be gone under every spelling -- the bare spelling now
+    # resolves to the freshly registered "dev2" session, never to the stale "dev" one.
+    assert token_user(cli._pool_token(env, bare)) == "dev2"                    # noqa: SLF001
