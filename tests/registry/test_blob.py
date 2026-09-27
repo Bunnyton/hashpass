@@ -206,3 +206,126 @@ def test_leftover_old_layers_are_cleaned_on_next_unpack(tmp_path, monkeypatch):
     unpack_image_file(blob, store, sudo=True)                          # next pull sweeps both old dirs
     assert not list(store.dir("app", "1").glob("layer.old-*"))
     assert sum(1 for c in calls if c[:2] == ["sudo", "rsync"]) == 2  # noqa: PLR2004
+
+
+def _link_tar(tmp_path: Path, members: list[tarfile.TarInfo | tuple[str, bytes | None]],
+              meta: dict | None = None) -> Path:
+    """Build a blob from ready TarInfos (links, devices) and (name, data|None-for-dir) tuples."""
+    path = tmp_path / "links.tar"
+    meta_b = json.dumps(meta or {"name": "app", "version": "1", "parents": []}).encode("utf-8")
+    with tarfile.open(path, mode="w") as tar:
+        info = tarfile.TarInfo("meta.json")
+        info.size = len(meta_b)
+        tar.addfile(info, io.BytesIO(meta_b))
+        layer = tarfile.TarInfo("layer")
+        layer.type, layer.mode, layer.uid = tarfile.DIRTYPE, 0o755, 1000
+        tar.addfile(layer)
+        for m in members:
+            if isinstance(m, tarfile.TarInfo):
+                tar.addfile(m)
+                continue
+            name, data = m
+            ti = tarfile.TarInfo(name)
+            ti.mode, ti.uid = 0o644, 1000
+            if data is None:
+                ti.type, ti.mode = tarfile.DIRTYPE, 0o755
+                tar.addfile(ti)
+            else:
+                ti.size = len(data)
+                tar.addfile(ti, io.BytesIO(data))
+    return path
+
+
+def _link(name: str, target: str, kind: bytes = tarfile.SYMTYPE) -> tarfile.TarInfo:
+    ti = tarfile.TarInfo(name)
+    ti.type, ti.linkname, ti.mode, ti.uid = kind, target, 0o777, 1000
+    return ti
+
+
+@pytest.mark.tier1
+def test_inspect_rejects_member_under_symlink_ancestor(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    blob = _link_tar(tmp_path, [_link("layer/d", str(outside)), ("layer/d/owned.txt", b"pwned")])
+    with pytest.raises(ValueError, match="symlink ancestor"):
+        inspect_image_blob(blob)
+    store = ImageStore(tmp_path / "images")
+    with pytest.raises(ValueError, match="symlink ancestor"):
+        unpack_image_file(blob, store)                  # non-sudo (tarfile) path
+    assert not (outside / "owned.txt").exists()
+    assert not list(outside.iterdir())
+    assert not store.exists("app:1")
+
+
+@pytest.mark.tier1
+def test_inspect_rejects_regular_file_over_a_symlink_member(tmp_path):
+    # Same name twice: the file would be written THROUGH the already-extracted symlink.
+    blob = _link_tar(tmp_path, [_link("layer/f", "/opt/x"), ("layer/f", b"pwned")])
+    with pytest.raises(ValueError, match="symlink ancestor"):
+        inspect_image_blob(blob)
+
+
+@pytest.mark.tier1
+def test_inspect_rejects_member_under_hardlink(tmp_path):
+    blob = _link_tar(tmp_path, [("layer/a", b"x"), _link("layer/h", "layer/a", tarfile.LNKTYPE),
+                                ("layer/h/x", b"y")])
+    with pytest.raises(ValueError, match="symlink ancestor"):
+        inspect_image_blob(blob)
+
+
+@pytest.mark.tier1
+def test_inspect_rejects_escaping_hardlink(tmp_path):
+    for target in ("/etc/shadow", "etc/passwd", "layer/../../x", "layerx/y"):
+        blob = _link_tar(tmp_path, [_link("layer/h", target, tarfile.LNKTYPE)])
+        with pytest.raises(ValueError, match="hardlink"):
+            inspect_image_blob(blob)
+
+
+@pytest.mark.tier1
+def test_inspect_rejects_hardlink_to_a_symlink_member(tmp_path):
+    # os.link follows symlinks: a hardlink to layer/s would pin whatever s points at.
+    blob = _link_tar(tmp_path, [_link("layer/s", "/home/student/.bashrc"),
+                                _link("layer/h", "layer/s", tarfile.LNKTYPE)])
+    with pytest.raises(ValueError, match="hardlink"):
+        inspect_image_blob(blob)
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("kind", [tarfile.CHRTYPE, tarfile.BLKTYPE, tarfile.FIFOTYPE])
+def test_inspect_rejects_device_and_fifo_members(tmp_path, kind):
+    dev = tarfile.TarInfo("layer/dev")
+    dev.type, dev.mode, dev.uid, dev.devmajor, dev.devminor = kind, 0o666, 0, 1, 3
+    with pytest.raises(ValueError, match="device"):
+        inspect_image_blob(_link_tar(tmp_path, [dev]))
+
+
+@pytest.mark.tier1
+def test_absolute_symlink_without_children_is_accepted(tmp_path):
+    # dpkg ships absolute symlinks (/etc/alternatives/*): they stay allowed.
+    blob = _link_tar(tmp_path, [("layer/usr", None), ("layer/usr/bin", None),
+                                _link("layer/usr/bin/editor", "/etc/alternatives/editor"),
+                                _link("layer/usr/bin/vi", "editor"),
+                                ("layer/a", b"x"), _link("layer/b", "layer/a", tarfile.LNKTYPE)])
+    assert inspect_image_blob(blob).name == "app"
+    store = ImageStore(tmp_path / "images")
+    assert unpack_image_file(blob, store) == "app:1"
+    link = store.get("app:1").layer / "usr" / "bin" / "editor"
+    assert link.is_symlink() and str(link.readlink()) == "/etc/alternatives/editor"
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("parent", ["../x:1", "a/../../b", "ok:../1", "/abs:1"])
+def test_inspect_rejects_unsafe_parents(tmp_path, parent):
+    blob = _link_tar(tmp_path, [("layer/a", b"x")],
+                     meta={"name": "app", "version": "1", "parents": ["base:1", parent]})
+    with pytest.raises(ValueError, match="unsafe image"):
+        inspect_image_blob(blob)
+
+
+@pytest.mark.tier1
+def test_overlay_whiteout_char_device_is_accepted(tmp_path):
+    # A layer is an overlay upperdir: a deleted base file is a 0:0 char device (whiteout).
+    wh = tarfile.TarInfo("layer/gone")
+    wh.type, wh.mode, wh.uid, wh.devmajor, wh.devminor = tarfile.CHRTYPE, 0o644, 0, 0, 0
+    info = inspect_image_blob(_link_tar(tmp_path, [wh]))
+    assert info.name == "app" and info.needs_root is True

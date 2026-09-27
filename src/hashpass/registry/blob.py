@@ -12,8 +12,6 @@ from pathlib import Path
 
 from hashpass.imagestore.store import ImageStore, StoredImage
 
-_READ_CHUNK = 1 << 20
-
 
 @dataclass(frozen=True)
 class ImageBlobInfo:
@@ -28,6 +26,69 @@ class ImageBlobInfo:
 def _member_is_unsafe(name: str) -> bool:
     parts = name.split("/")
     return name.startswith("/") or ".." in parts
+
+
+def _norm(name: str) -> str:
+    """Canonical member path: drop empty and `.` segments (`layer/./d/` == `layer/d`)."""
+    return "/".join(p for p in name.split("/") if p not in ("", "."))
+
+
+def _under_link(name: str, links: set[str]) -> bool:
+    """Whether `name` itself, or any of its ancestors, is an already-seen symlink/hardlink member."""
+    parts = name.split("/")
+    return any("/".join(parts[:i]) in links for i in range(1, len(parts) + 1))
+
+
+def _check_member(m: tarfile.TarInfo, name: str, links: set[str]) -> None:
+    """
+    Reject a member that would write outside the extraction root or create a device node.
+
+    Names alone are not enough: a symlink `layer/d -> /home/student` followed by
+    `layer/d/.bashrc` makes the extractor write THROUGH the link. So any member at or below a
+    previously seen symlink/hardlink is refused; a hardlink must point inside `layer/` (and not
+    at/through a link, since os.link follows symlinks). Absolute symlink TARGETS stay allowed
+    -- dpkg ships `/etc/alternatives/*` -- they are never followed during extraction once
+    nothing is written beneath them. Devices/FIFOs are refused: as root the sudo path would
+    create real device nodes. The one exception is a 0:0 character device -- the overlayfs
+    whiteout a layer (an overlay upperdir) uses to record a deleted file; it is inert.
+    """
+    if _under_link(name, links):
+        msg = f"image blob: member under a symlink ancestor {m.name!r}"
+        raise ValueError(msg)
+    whiteout = m.ischr() and m.devmajor == 0 and m.devminor == 0     # overlay deletion marker
+    if (m.ischr() and not whiteout) or m.isblk() or m.isfifo():
+        msg = f"image blob: device/fifo member {m.name!r}"
+        raise ValueError(msg)
+    if m.islnk():
+        target = _norm(m.linkname)
+        if (not m.linkname.startswith("layer/") or _member_is_unsafe(m.linkname)
+                or _under_link(target, links)):
+            msg = f"image blob: hardlink {m.name!r} -> {m.linkname!r} escapes layer/"
+            raise ValueError(msg)
+
+
+def _check_in_layer(m: tarfile.TarInfo) -> None:
+    """Every non-meta member is the `layer` directory itself or lives under `layer/`."""
+    if m.name == "layer":
+        if not m.isdir():
+            msg = "image blob: no layer/ member (layer is not a directory)"
+            raise ValueError(msg)
+    elif not m.name.startswith("layer/"):
+        msg = f"image blob: member outside layer/: {m.name!r}"
+        raise ValueError(msg)
+
+
+def _check_parents(parents: object) -> tuple[str, ...]:
+    """Validate the declared parent refs (`name[:version]`, default `latest`) as safe refs."""
+    if not isinstance(parents, list | tuple):
+        msg = f"unsafe image parents: {parents!r}"
+        raise ValueError(msg)                           # noqa: TRY004  one error type for callers
+    out: list[str] = []
+    for p in parents:
+        name, sep, version = str(p).partition(":")
+        ImageStore.validate_ref(name, version if sep else "latest")   # "unsafe image …"
+        out.append(str(p))
+    return tuple(out)
 
 
 def _layer_has_unreadable(layer: Path) -> bool:
@@ -50,14 +111,17 @@ def inspect_image_blob(path: Path) -> ImageBlobInfo:
     Validate a blob's structure WITHOUT extracting it; return its declared identity.
 
     Accepted shape: a `meta.json` member plus a `layer` directory tree (every other member
-    lives under `layer/`); no absolute or `..` paths; a safe name/version. `needs_root` is
-    True when any member is root-owned or setuid/setgid -- extracting such a layer as an
-    unprivileged user would silently drop ownership (fatal for a base image).
+    lives under `layer/`); no absolute or `..` paths; nothing at or below a symlink/hardlink
+    member; hardlinks only inside `layer/`; no devices/FIFOs (bar overlay whiteouts); a safe
+    name/version and safe parent refs. `needs_root` is True when any member is root-owned or
+    setuid/setgid -- extracting such a layer as an unprivileged user would silently drop
+    ownership (fatal for a base image).
     """
     with tarfile.open(path, mode="r") as tar:           # auto-detects gzip / plain
         meta_member: tarfile.TarInfo | None = None
         has_layer = False
         needs_root = False
+        links: set[str] = set()                         # normalized names of symlink/hardlink members
         for m in tar:
             if m.name == "meta.json":
                 meta_member = m
@@ -65,16 +129,12 @@ def inspect_image_blob(path: Path) -> ImageBlobInfo:
             if _member_is_unsafe(m.name):
                 msg = f"image blob: unsafe member path {m.name!r}"
                 raise ValueError(msg)
-            if m.name == "layer":
-                if not m.isdir():
-                    msg = "image blob: no layer/ member (layer is not a directory)"
-                    raise ValueError(msg)
-                has_layer = True
-            elif m.name.startswith("layer/"):
-                has_layer = True
-            else:
-                msg = f"image blob: member outside layer/: {m.name!r}"
-                raise ValueError(msg)
+            _check_in_layer(m)
+            has_layer = True
+            name = _norm(m.name)
+            _check_member(m, name, links)
+            if m.issym() or m.islnk():
+                links.add(name)
             if m.uid == 0 or m.mode & (stat.S_ISUID | stat.S_ISGID):
                 needs_root = True
         if meta_member is None:
@@ -87,7 +147,7 @@ def inspect_image_blob(path: Path) -> ImageBlobInfo:
         meta = json.loads((f.read() if f else b"{}").decode("utf-8"))
     name, version = str(meta.get("name", "")), str(meta.get("version", ""))
     ImageStore.validate_ref(name, version)               # "unsafe image name/version"
-    return ImageBlobInfo(name, version, tuple(meta.get("parents", ())), needs_root)
+    return ImageBlobInfo(name, version, _check_parents(meta.get("parents", [])), needs_root)
 
 
 def blob_needs_root(path: Path) -> bool:
