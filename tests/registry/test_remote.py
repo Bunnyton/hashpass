@@ -177,3 +177,27 @@ def test_push_streams_file_and_server_digest_matches_local_pack(registry, tmp_pa
     body = pusher._get_image(ref)                                     # noqa: SLF001
     assert hashlib.sha256(body).hexdigest() == pusher.image_digest(ref)
     assert body[:2] == b"\x1f\x8b"
+
+
+@pytest.mark.tier2
+@pytest.mark.parametrize("via", ["pull", "pull_many"])
+def test_pull_refuses_blob_declaring_another_ref(registry, tmp_path, via):
+    # The server validates name/version only on PUT; a tampered/hostile pool could serve a blob
+    # whose meta declares a different ref -- it must not land in the store under that name.
+    from hashpass.registry.blob import pack_image_to_file  # noqa: PLC0415
+
+    _push_seeded(registry, tmp_path, "app", "v1")
+    other = ImageStore(tmp_path / "other")
+    _seed(other, tmp_path, "other", (), "EVIL")
+    blob = pack_image_to_file(other.get("other:1"), tmp_path / "other.tar.gz")
+    digest = hashlib.sha256(blob.read_bytes()).hexdigest()
+    registry.store.publish_blob("app", "1", blob, parents=(), digest=digest)
+    dest = ImageStore(tmp_path / "dest")
+    anon = RemoteRegistry(registry.base_url)
+    def do_pull() -> list[str]:
+        return anon.pull("app:1", dest) if via == "pull" else anon.pull_many(["app:1"], dest)
+
+    with pytest.raises(ValueError, match="pool served other:1 for app:1"):
+        do_pull()
+    assert not dest.exists("other:1") and not dest.exists("app:1")
+    assert not list((dest.root / ".incoming").glob("*"))

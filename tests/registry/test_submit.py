@@ -121,10 +121,8 @@ def test_cmd_pool_run_submits_on_completion(registry, tmp_path, monkeypatch):
     token = cli._pool_token(env, registry.base_url)  # noqa: SLF001
     prog = RemoteRegistry(registry.base_url).progress(token=token)
     assert prog["stud"]["lab:1"]["status"] == "passed"
-    # The task pull is always refreshed by digest; this pool has no base yet, so the base ref
-    # is not force-fetched here (has_image(base_ref()) is False -- see the 404-tolerant test below).
-    assert pulls and pulls[0][1] is True and "lab:1" in pulls[0][0]
-    assert cli.base_ref() not in pulls[0][0]
+    # cmd_pool_run refreshes the TASK ref only (by digest); the base is ensure_base_image's job.
+    assert pulls == [(["lab:1"], True)]
 
 
 def _push_fake_base(registry, tmp_path, marker: str) -> str:
@@ -142,17 +140,33 @@ def _push_fake_base(registry, tmp_path, marker: str) -> str:
     return cli.base_ref()
 
 
-@pytest.mark.tier2
-def test_cmd_pool_run_refreshes_base_when_pool_has_one(registry, tmp_path, monkeypatch):
-    # When the pool DOES hold a base for this runtime, cmd_pool_run's refresh-pull must
-    # include it (this is how a re-published base reaches students without a rebuild).
+def _student_env(registry, tmp_path, monkeypatch, who: str):  # noqa: ANN202
     monkeypatch.setenv("HASHPASS_POOL", registry.base_url)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / who)}, default_home=tmp_path)
+    RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds)).register(
+        who, "pass123!", group="G")
+    return env
+
+
+def _stub_cmd_run(monkeypatch) -> list[str]:
+    ran: list[str] = []
+
+    def fake_run(_env, ref, _io, *, student_id, on_complete, pool=None) -> int:  # noqa: ARG001
+        ran.append(ref)
+        on_complete(True, [])   # noqa: FBT003
+        return 0
+
+    monkeypatch.setattr(cli, "cmd_run", fake_run)
+    return ran
+
+
+@pytest.mark.tier2
+def test_cmd_pool_run_pulls_only_the_task_even_when_pool_has_a_base(registry, tmp_path, monkeypatch):
+    # The base is fetched/refreshed by ensure_base_image(pool=client) inside _run_task, which
+    # degrades to a good local base on a torn/failed download; cmd_pool_run must not pull it.
     _publish(registry, tmp_path)
     _push_fake_base(registry, tmp_path, "v1")
-    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud2")}, default_home=tmp_path)
-    RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds)).register(
-        "stud2", "pass123!", group="G")
-
+    env = _student_env(registry, tmp_path, monkeypatch, "stud2")
     pulls: list[tuple[list[str], bool]] = []
     orig = RemoteRegistry.pull_many
 
@@ -161,13 +175,39 @@ def test_cmd_pool_run_refreshes_base_when_pool_has_one(registry, tmp_path, monke
         return orig(self, refs, store, workers=workers, refresh=refresh)
 
     monkeypatch.setattr(RemoteRegistry, "pull_many", spy_pull_many)
-
-    def fake_run(_env, _ref, _io, *, student_id, on_complete, pool=None) -> int:  # noqa: ARG001
-        on_complete(True, [])   # noqa: FBT003
-        return 0
-
-    monkeypatch.setattr(cli, "cmd_run", fake_run)
+    ran = _stub_cmd_run(monkeypatch)
     io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "t")
     assert cli.cmd_pool_run(env, "1", io) == 0
-    assert pulls and pulls[0][1] is True
-    assert "lab:1" in pulls[0][0] and cli.base_ref() in pulls[0][0]
+    assert pulls == [(["lab:1"], True)] and ran == ["lab:1"]
+
+
+@pytest.mark.tier2
+def test_cmd_pool_run_survives_failing_base_download_with_local_base(registry, tmp_path, monkeypatch):
+    _publish(registry, tmp_path)
+    _push_fake_base(registry, tmp_path, "v1")
+    env = _student_env(registry, tmp_path, monkeypatch, "stud3")
+    # A good local base exists, but it is digest-stale vs the pool (so a refresh WOULD fetch it).
+    local = ImageStore(env.images)
+    src = tmp_path / "local-base"
+    src.mkdir()
+    (src / "marker.txt").write_text("local", encoding="utf-8")
+    name, version = cli.base_ref().split(":")
+    local.save(name, version, src, ())
+    local.set_pool_digest(cli.base_ref(), "0" * 64)
+    orig_download = RemoteRegistry.download_image
+
+    def failing_download(self, ref, dest):  # noqa: ANN202
+        if ref == cli.base_ref():
+            msg = f"digest mismatch for {ref}: torn"
+            raise ValueError(msg)
+        return orig_download(self, ref, dest)
+
+    monkeypatch.setattr(RemoteRegistry, "download_image", failing_download)
+    ran = _stub_cmd_run(monkeypatch)
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "t")
+    assert cli.cmd_pool_run(env, "1", io) == 0                      # no raise
+    assert ran == ["lab:1"]
+    assert (local.get(cli.base_ref()).layer / "marker.txt").read_text(encoding="utf-8") == "local"
+    # and the base path itself degrades to that local base instead of raising
+    client = RemoteRegistry(registry.base_url)
+    assert cli.ensure_base_image(env, local, pool=client, io=io) == local.get(cli.base_ref()).layer

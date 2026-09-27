@@ -181,7 +181,13 @@ def pack_image(img: StoredImage) -> bytes:
 
 
 def _pack_via_sudo_tar(layer: Path, meta: bytes, dest: Path) -> None:
-    """Build the gzip blob with `sudo tar` (root-only files in the layer), streaming into `dest`."""
+    """
+    Build the gzip blob with `sudo tar` (root-only files in the layer), streaming into `dest`.
+
+    Only `tar` runs as root: the NOPASSWD grant covers tar, not chown -- that is why the
+    unprivileged caller opens `dest` itself and hands tar the fd as stdout, so the blob file
+    is owned by the caller and needs no chown afterwards.
+    """
     with tempfile.TemporaryDirectory() as td:
         staging = Path(td)
         (staging / "meta.json").write_bytes(meta)
@@ -214,20 +220,36 @@ def unpack_image_file(path: Path, dest: ImageStore, *, sudo: bool | None = None)
     return f"{img.name}:{img.version}"
 
 
+def _sweep_root_tree(image_dir: Path, tree: Path) -> bool:
+    """
+    Delete a possibly root-owned `tree` inside `image_dir`; return whether it is gone.
+
+    `sudo rsync -a --delete <empty>/ tree/` is the only granted way to empty a root-owned
+    tree; the (now empty, user-owned-dir) `tree` is then removed with a plain rmdir.
+    """
+    empty = image_dir / f".empty-{tree.name}"
+    try:
+        empty.mkdir(exist_ok=True)
+        subprocess.run(["sudo", "rsync", "-a", "--delete", str(empty) + "/", str(tree) + "/"],
+                       check=True, capture_output=True)
+        tree.rmdir()
+    except (subprocess.CalledProcessError, OSError):
+        return False                                   # next pull retries; the live layer is fine
+    finally:
+        with contextlib.suppress(OSError):
+            empty.rmdir()
+    return True
+
+
 def _cleanup_old_layers(image_dir: Path) -> None:
-    """Remove every `layer.old-*` (root-owned) tree with granted-sudo rsync; ignore failures."""
-    for old in sorted(image_dir.glob("layer.old-*")):
-        empty = image_dir / f".empty-{old.name}"
-        try:
-            empty.mkdir(exist_ok=True)
-            subprocess.run(["sudo", "rsync", "-a", "--delete", str(empty) + "/", str(old) + "/"],
-                           check=True, capture_output=True)
-            old.rmdir()
-        except (subprocess.CalledProcessError, OSError):
-            continue                                   # next pull retries; the live layer is fine
-        finally:
-            with contextlib.suppress(OSError):
-                empty.rmdir()
+    """
+    Sweep every leftover `layer.old-*` (replaced layers) and `layer.incoming-*` (torn extracts).
+
+    Called before a new `layer.incoming-<uuid>` is created and after the swap, so it never
+    touches the tree currently being populated. Failures are ignored (retried next pull).
+    """
+    for leftover in sorted([*image_dir.glob("layer.old-*"), *image_dir.glob("layer.incoming-*")]):
+        _sweep_root_tree(image_dir, leftover)
 
 
 def _unpack_root_owned(path: Path, dest: ImageStore, info: ImageBlobInfo) -> str:
@@ -239,10 +261,12 @@ def _unpack_root_owned(path: Path, dest: ImageStore, info: ImageBlobInfo) -> str
     renames then publish it -- both allowed to the owner of the image directory. The
     previous layer is removed with `sudo rsync --delete` from an empty dir (the only
     granted way to delete root-owned trees); if that fails, the new layer is already live
-    and the next pull sweeps `layer.old-*`.
+    and the next pull sweeps `layer.old-*`. A failed extract sweeps its partial incoming
+    tree the same way (and any `layer.incoming-*` a crash left is swept by the next pull).
     """
     image_dir = dest.dir(info.name, info.version)
     image_dir.mkdir(parents=True, exist_ok=True)
+    _cleanup_old_layers(image_dir)                     # before the new incoming exists
     tag = uuid.uuid4().hex
     incoming = image_dir / f"layer.incoming-{tag}"
     incoming.mkdir()
@@ -252,10 +276,11 @@ def _unpack_root_owned(path: Path, dest: ImageStore, info: ImageBlobInfo) -> str
              "-C", str(incoming), "layer"],
             check=True, capture_output=True,
         )
-    except subprocess.CalledProcessError:
-        with contextlib.suppress(OSError):
-            incoming.rmdir()                            # only if tar left it empty
-        raise
+    except subprocess.CalledProcessError as exc:
+        _sweep_root_tree(image_dir, incoming)          # a partial tree may be root-owned
+        stderr = (exc.stderr or b"").decode("utf-8", "replace").strip()   # e.g. "No space left"
+        msg = f"sudo tar failed to extract {info.name}:{info.version} (exit {exc.returncode})"
+        raise RuntimeError(f"{msg}: {stderr}" if stderr else msg) from exc
     layer = image_dir / "layer"
     if layer.exists():
         layer.rename(image_dir / f"layer.old-{tag}")

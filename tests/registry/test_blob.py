@@ -1,6 +1,7 @@
 import gzip
 import io
 import json
+import shutil
 import stat
 import subprocess
 import tarfile
@@ -153,19 +154,26 @@ def test_inspect_needs_root_on_uid0_or_setuid(tmp_path):
     assert inspect_image_blob(suid).needs_root is True
 
 
-def _fake_run_factory(calls: list[list[str]], *, fail_rsync: bool = False):  # noqa: ANN202
+def _fake_run_factory(calls: list[list[str]], *, fail_rsync: bool = False,  # noqa: ANN202
+                      fail_tar: bool = False):
     def fake_run(cmd, **kwargs):  # noqa: ANN202, ANN003, ARG001
         calls.append(list(cmd))
         if cmd[:2] == ["sudo", "tar"]:
             # emulate `tar -x ... --strip-components=1 -C <incoming> layer`: create a file there
             incoming = Path(cmd[cmd.index("-C") + 1])
             (incoming / "from-tar.txt").write_text("root-owned in real life", encoding="utf-8")
+            if fail_tar:                            # a partial tree is left behind, like ENOSPC
+                raise subprocess.CalledProcessError(
+                    2, cmd, b"", b"tar: layer/big: Cannot write: No space left on device\n")
         if cmd[:2] == ["sudo", "rsync"]:
             if fail_rsync:
                 raise subprocess.CalledProcessError(1, cmd)
             target = Path(cmd[-1].rstrip("/"))
             for child in target.iterdir():          # emulate `--delete` from an empty source
-                child.unlink()
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
         return subprocess.CompletedProcess(cmd, 0, b"", b"")
     return fake_run
 
@@ -329,3 +337,46 @@ def test_overlay_whiteout_char_device_is_accepted(tmp_path):
     wh.type, wh.mode, wh.uid, wh.devmajor, wh.devminor = tarfile.CHRTYPE, 0o644, 0, 0, 0
     info = inspect_image_blob(_link_tar(tmp_path, [wh]))
     assert info.name == "app" and info.needs_root is True
+
+
+@pytest.mark.tier1
+def test_sudo_unpack_without_a_previous_layer(tmp_path, monkeypatch):
+    blob = _raw_tar(tmp_path, [("layer", None, 0o755, 0), ("layer/f", b"", 0o644, 0)], gz=True)
+    store = ImageStore(tmp_path / "dst")                                # nothing stored yet
+    calls: list[list[str]] = []
+    monkeypatch.setattr(blobmod.subprocess, "run", _fake_run_factory(calls))
+    assert unpack_image_file(blob, store, sudo=True) == "app:1"
+    image_dir = store.dir("app", "1")
+    assert (image_dir / "layer" / "from-tar.txt").exists()
+    assert store.get("app:1").parents == ()
+    assert not list(image_dir.glob("layer.old-*"))
+    assert not list(image_dir.glob("layer.incoming-*"))
+
+
+@pytest.mark.tier1
+def test_stale_incoming_dirs_are_swept_on_next_unpack(tmp_path, monkeypatch):
+    blob = _raw_tar(tmp_path, [("layer", None, 0o755, 0), ("layer/f", b"", 0o644, 0)], gz=True)
+    store = ImageStore(tmp_path / "dst")
+    stale = store.dir("app", "1") / "layer.incoming-stale"
+    (stale / "sub").mkdir(parents=True)                                 # a torn earlier extract
+    (stale / "sub" / "half.bin").write_bytes(b"x")
+    calls: list[list[str]] = []
+    monkeypatch.setattr(blobmod.subprocess, "run", _fake_run_factory(calls))
+    assert unpack_image_file(blob, store, sudo=True) == "app:1"
+    assert not list(store.dir("app", "1").glob("layer.incoming-*"))
+    assert (store.dir("app", "1") / "layer" / "from-tar.txt").exists()
+    assert any(c[:2] == ["sudo", "rsync"] and c[-1].rstrip("/") == str(stale) for c in calls)
+
+
+@pytest.mark.tier1
+def test_failing_sudo_tar_leaves_no_incoming_and_reports_stderr(tmp_path, monkeypatch):
+    blob = _raw_tar(tmp_path, [("layer", None, 0o755, 0), ("layer/f", b"", 0o644, 0)], gz=True)
+    store = ImageStore(tmp_path / "dst")
+    calls: list[list[str]] = []
+    monkeypatch.setattr(blobmod.subprocess, "run", _fake_run_factory(calls, fail_tar=True))
+    with pytest.raises(RuntimeError, match="No space left on device"):
+        unpack_image_file(blob, store, sudo=True)
+    image_dir = store.dir("app", "1")
+    assert not list(image_dir.glob("layer.incoming-*"))                 # partial tree swept
+    assert not list(image_dir.glob(".empty-*"))
+    assert not (image_dir / "layer").exists() and not store.exists("app:1")

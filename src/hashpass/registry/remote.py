@@ -22,7 +22,13 @@ from time import time
 from typing import BinaryIO
 
 from hashpass.imagestore.store import ImageStore
-from hashpass.registry.blob import pack_image_to_file, pack_task, unpack_image_file, unpack_task
+from hashpass.registry.blob import (
+    inspect_image_blob,
+    pack_image_to_file,
+    pack_task,
+    unpack_image_file,
+    unpack_task,
+)
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.refs import closure_refs, normalize_ref, split_ref
 from hashpass.registry.token import token_expiry
@@ -64,6 +70,9 @@ class RemoteRegistry:
     cache: CredentialCache | None = None
     sudo: bool = False
     _resolved_base: str | None = field(default=None, init=False, repr=False, compare=False)
+    # Downloads run in parallel (pull_many); the local unpack+meta write is serialized.
+    _unpack_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False,
+                                         compare=False)
 
     def _bases(self) -> list[str]:
         """
@@ -269,28 +278,42 @@ class RemoteRegistry:
         remote = self.image_digest(ref)
         return remote is not None and remote != store.get(ref).pool_digest
 
-    def _fetch_into(self, ref: str, store: ImageStore) -> None:
+    def _pull_one(self, item: str, store: ImageStore, *, refresh: bool) -> bool:
+        """
+        Download one ref's blob into `<store>/.incoming/`, check it, unpack it; True if stored.
+
+        The blob must declare exactly the requested ref (the server validates this only on
+        PUT; a tampered pool could otherwise plant another name in the store). The temp file
+        is removed on every path. Without `refresh`, a ref another worker stored meanwhile is
+        skipped.
+        """
         incoming = store.root / ".incoming"
         incoming.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(dir=incoming, suffix=".tar.gz", delete=False) as tmp:
             path = Path(tmp.name)
         try:
-            digest = self.download_image(ref, path)
-            unpack_image_file(path, store, sudo=(True if self.sudo else None))
-            if digest:
-                store.set_pool_digest(ref, digest)
+            digest = self.download_image(item, path)          # network (parallel in pull_many)
+            info = inspect_image_blob(path)                   # structure only, no extraction
+            declared, requested = f"{info.name}:{info.version}", normalize_ref(item)
+            if declared != requested:
+                msg = f"pool served {declared} for {requested}"
+                raise ValueError(msg)
+            with self._unpack_lock:                           # local unpack, serialized
+                if not refresh and store.exists(item):
+                    return False
+                unpack_image_file(path, store, sudo=(True if self.sudo else None))
+                if digest:
+                    store.set_pool_digest(item, digest)
+            return True
         finally:
             path.unlink(missing_ok=True)
 
     def pull(self, ref: str, store: ImageStore, *, refresh: bool = False) -> list[str]:
         """Pull ref + its `from` closure (bottom-up), skipping refs already local (unless stale)."""
-        copied: list[str] = []
-        for item in self._closure(normalize_ref(ref)):
-            if not self._wants(item, store, refresh=refresh):
-                continue
-            self._fetch_into(item, store)
-            copied.append(item)
-        return copied
+        # sequential and in closure order: each item is checked and fetched before the next
+        return [item for item in self._closure(normalize_ref(ref))
+                if self._wants(item, store, refresh=refresh)
+                and self._pull_one(item, store, refresh=True)]
 
     def pull_many(self, refs: list[str], store: ImageStore, *, workers: int = 8,
                   refresh: bool = False) -> list[str]:
@@ -303,30 +326,12 @@ class RemoteRegistry:
                     seen.add(item)
                     needed.append(item)
         to_fetch = [item for item in needed if self._wants(item, store, refresh=refresh)]
-        lock = threading.Lock()
-        fetched: list[str] = []
-
-        def _one(item: str) -> None:
-            incoming = store.root / ".incoming"
-            incoming.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(dir=incoming, suffix=".tar.gz", delete=False) as tmp:
-                path = Path(tmp.name)
-            try:
-                digest = self.download_image(item, path)          # network, parallel
-                with lock:                                        # local unpack, serialized
-                    if not refresh and store.exists(item):
-                        return
-                    unpack_image_file(path, store, sudo=(True if self.sudo else None))
-                    if digest:
-                        store.set_pool_digest(item, digest)
-                    fetched.append(item)
-            finally:
-                path.unlink(missing_ok=True)
-
-        if to_fetch:
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                list(pool.map(_one, to_fetch))
-        return fetched
+        if not to_fetch:
+            return []
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            stored = list(pool.map(lambda item: self._pull_one(item, store, refresh=refresh),
+                                   to_fetch))
+        return [item for item, ok in zip(to_fetch, stored, strict=True) if ok]
 
     def push(self, store: ImageStore, ref: str, *, token: str | None = None,
              force: bool = False) -> list[str]:

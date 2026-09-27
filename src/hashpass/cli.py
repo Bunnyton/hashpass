@@ -1731,12 +1731,10 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
         return 0
     store = ImageStore(env.images)
     client = RemoteRegistry(url)
-    # The task image AND this runtime's base are ordinary pool images: fetch what is missing,
-    # refresh what the pool has since re-published (digest changed). Nothing else downloads.
-    # A pool that has no base yet would 404 its closure lookup -- skip it in that case;
-    # ensure_base_image(pool=...) below still copes with a missing/legacy/unreachable base.
-    refs = [ref, base_ref()] if client.has_image(base_ref()) else [ref]
-    client.pull_many(refs, store, workers=4, refresh=True)
+    # Fetch the task image if missing, refresh it if the pool re-published it (digest changed).
+    # The base is NOT pulled here: ensure_base_image(pool=client) inside _run_task fetches or
+    # refreshes it and degrades to a good local base when the download fails or is torn.
+    client.pull_many([ref], store, workers=4, refresh=True)
     tdir = task_dir(ref, store)
     server_digest = str(entry.get("digest")) if entry else ""
     # Re-pull the task bundle if it's missing OR its digest no longer matches the pool's.
