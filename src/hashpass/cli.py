@@ -185,18 +185,27 @@ def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | No
     """
     ref = base_ref()
     if pool is not None:
-        remote = pool.image_digest(ref)
-        if remote is not None:
-            if not store.exists(ref) or store.get(ref).pool_digest != remote:
-                pool.pull_many([ref], store, refresh=True)
-            return store.get(ref).layer
-        if store.exists(ref):
-            return store.get(ref).layer
-        if pool.has_image(ref):                       # legacy record without a digest
-            pool.pull_many([ref], store)
-            return store.get(ref).layer
-        (io or _default_io()).write(
-            f"\x1b[2mбаза для runtime {runtime_stamp()} на пуле не найдена — собираю локально\x1b[0m\n")
+        try:
+            remote = pool.image_digest(ref)
+            if remote is not None:
+                if not store.exists(ref) or store.get(ref).pool_digest != remote:
+                    pool.pull_many([ref], store, refresh=True)
+                return store.get(ref).layer
+            if store.exists(ref):
+                return store.get(ref).layer
+            if pool.has_image(ref):                       # legacy record without a digest
+                pool.pull_many([ref], store)
+                return store.get(ref).layer
+            (io or _default_io()).write(
+                f"\x1b[2mбаза для runtime {runtime_stamp()} на пуле не найдена — собираю локально\x1b[0m\n")
+        except (RuntimeError, ValueError, OSError, urllib.error.URLError):
+            # Pool unreachable, or a torn download (digest mismatch) -- degrade rather than
+            # crash the student's run: reuse a good local base if there is one, else fall
+            # through to the local-build tail below (same as "pool has no such base" above).
+            if store.exists(ref):
+                return store.get(ref).layer
+            (io or _default_io()).write(
+                "\x1b[2mпул недоступен — собираю базу локально\x1b[0m\n")
     with contextlib.suppress(KeyError):
         layer = store.get(ref).layer
         if _base_layer_current(layer):

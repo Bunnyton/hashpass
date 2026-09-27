@@ -96,3 +96,42 @@ def test_ensure_base_falls_back_to_local_build_when_pool_lacks_it(registry, tmp_
     layer = cli.ensure_base_image(env, store, pool=RemoteRegistry(registry.base_url), io=io)
     assert built and store.exists(cli.base_ref()) and layer == store.get(cli.base_ref()).layer
     assert any("на пуле не найдена" in s for s in out)
+
+
+@pytest.mark.tier2
+def test_ensure_base_reuses_local_base_when_pool_unreachable(registry, tmp_path, monkeypatch):
+    # A pool that is merely down must not crash a run when a perfectly good base is already
+    # local -- reuse it silently instead of propagating the connection error.
+    ref = _push_fake_base(registry, tmp_path, "v1")
+    env = _env(tmp_path)
+    store = ImageStore(env.images)
+    pool = RemoteRegistry(registry.base_url)
+    layer = cli.ensure_base_image(env, store, pool=pool)          # first pull: pool is up
+    assert store.exists(ref)
+    monkeypatch.setattr(RemoteRegistry, "image_digest",
+                        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("не удалось подключиться")))
+    monkeypatch.setattr(cli, "build_base", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("built locally")))
+    assert cli.ensure_base_image(env, store, pool=pool) == layer   # pool down now: reuse local, no raise
+
+
+@pytest.mark.tier2
+def test_ensure_base_builds_locally_when_pool_unreachable_and_nothing_local(tmp_path, monkeypatch):
+    built: list[Path] = []
+
+    def fake_build(dest: Path, *, from_tar: Path) -> Path:  # noqa: ARG001
+        (dest / "etc").mkdir(parents=True, exist_ok=True)
+        (dest / "etc" / "hp-base-version").write_text(runtime_stamp() + "\n", encoding="utf-8")
+        built.append(dest)
+        return dest
+
+    monkeypatch.setattr(cli, "build_base", fake_build)
+    monkeypatch.setattr(cli, "ensure_base_tar", lambda p: p)
+    monkeypatch.setattr(RemoteRegistry, "image_digest",
+                        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("не удалось подключиться")))
+    env = _env(tmp_path)
+    store = ImageStore(env.images)
+    out: list[str] = []
+    io = cli.Io(read=lambda _p="": "", write=out.append, clock=lambda: "t")
+    layer = cli.ensure_base_image(env, store, pool=RemoteRegistry("http://127.0.0.1:1"), io=io)
+    assert built and store.exists(cli.base_ref()) and layer == store.get(cli.base_ref()).layer
+    assert any("пул недоступен" in s for s in out)
