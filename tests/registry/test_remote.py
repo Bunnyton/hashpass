@@ -112,7 +112,7 @@ def _push_seeded(registry, tmp_path, name: str, marker: str) -> tuple[RemoteRegi
 
 
 @pytest.mark.tier2
-def test_pull_records_pool_digest_and_refresh_repulls_only_when_changed(registry, tmp_path):
+def test_pull_records_pool_digest_and_refresh_repulls_only_when_changed(registry, tmp_path, monkeypatch):
     _pusher, ref = _push_seeded(registry, tmp_path, "app", "v1")
     anon = RemoteRegistry(registry.base_url)
     dest = ImageStore(tmp_path / "dest")
@@ -120,7 +120,17 @@ def test_pull_records_pool_digest_and_refresh_repulls_only_when_changed(registry
     d1 = anon.image_digest(ref)
     assert d1 and dest.get(ref).pool_digest == d1
     assert (dest.get(ref).layer / "marker.txt").read_text(encoding="utf-8") == "v1"
+    calls: list[str] = []
+    original_download = RemoteRegistry.download_image
+
+    def _counting_download(self, ref, dest) -> str:
+        calls.append(ref)
+        return original_download(self, ref, dest)
+
+    monkeypatch.setattr(RemoteRegistry, "download_image", _counting_download)
     assert anon.pull_many([ref], dest, refresh=True) == []            # same digest -> nothing
+    assert calls == []                                                # no GET for an unchanged digest
+    monkeypatch.setattr(RemoteRegistry, "download_image", original_download)
     _push_seeded(registry, tmp_path, "app", "v2")                      # author re-pushes :1
     assert anon.pull_many([ref], dest) == []                          # legacy rule: present -> skip
     assert anon.pull_many([ref], dest, refresh=True) == [ref]         # digest changed -> re-pull
@@ -135,11 +145,15 @@ def test_download_digest_mismatch_leaves_store_untouched(registry, tmp_path):
     dest = ImageStore(tmp_path / "dest")
     anon.pull_many([ref], dest)
     before = dest.get(ref)
+    dest.set_pool_digest(ref, "0" * 64)          # bogus local digest -> refresh legitimately re-fetches
     # Corrupt the served body: make the server's blob file differ from its published digest.
     registry.store.blob_path(ref).write_bytes(b"garbage")
     with pytest.raises(ValueError, match="digest mismatch"):
         anon.pull_many([ref], dest, refresh=True)
-    assert dest.get(ref) == before                                    # meta untouched
+    after = dest.get(ref)
+    assert (after.layer / "marker.txt").read_text(encoding="utf-8") == \
+        (before.layer / "marker.txt").read_text(encoding="utf-8") == "v1"
+    assert after.parents == before.parents                            # meta/layer untouched
     assert not list((dest.root / ".incoming").glob("*")) if (dest.root / ".incoming").exists() else True
 
 

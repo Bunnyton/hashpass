@@ -261,37 +261,24 @@ class RemoteRegistry:
         return self._send("GET", f"/image/{name}/{version}")
 
     def _wants(self, ref: str, store: ImageStore, *, refresh: bool) -> bool:
-        """
-        Whether `ref` needs a network round-trip.
-
-        Missing locally, or (`refresh`) present but digest-bearing on the pool. A digest-bearing
-        ref is ALWAYS re-fetched+re-verified under `refresh` (never trusted
-        from a cached HEAD digest alone) -- otherwise a blob corrupted at rest on the pool
-        (server bytes no longer matching its own recorded digest) would never be re-checked,
-        since its advertised digest never changes. `_fetch_into`/`_one` compare the freshly
-        VERIFIED digest against the local `pool_digest` afterwards and skip the unpack when
-        unchanged, so this only costs an extra GET, never an extra unpack.
-        """
+        """Whether `ref` needs fetching: missing locally, or (`refresh`) present but digest-stale."""
         if not store.exists(ref):
             return True
         if not refresh:
             return False
-        return self.image_digest(ref) is not None
+        remote = self.image_digest(ref)
+        return remote is not None and remote != store.get(ref).pool_digest
 
-    def _fetch_into(self, ref: str, store: ImageStore) -> bool:
-        """Download+verify+unpack `ref`; return whether it actually changed (False: no-op)."""
+    def _fetch_into(self, ref: str, store: ImageStore) -> None:
         incoming = store.root / ".incoming"
         incoming.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(dir=incoming, suffix=".tar.gz", delete=False) as tmp:
             path = Path(tmp.name)
         try:
-            digest = self.download_image(ref, path)          # verifies against its own header
-            if store.exists(ref) and digest and digest == store.get(ref).pool_digest:
-                return False                                  # verified unchanged
+            digest = self.download_image(ref, path)
             unpack_image_file(path, store, sudo=(True if self.sudo else None))
             if digest:
                 store.set_pool_digest(ref, digest)
-            return True
         finally:
             path.unlink(missing_ok=True)
 
@@ -301,8 +288,8 @@ class RemoteRegistry:
         for item in self._closure(normalize_ref(ref)):
             if not self._wants(item, store, refresh=refresh):
                 continue
-            if self._fetch_into(item, store):
-                copied.append(item)
+            self._fetch_into(item, store)
+            copied.append(item)
         return copied
 
     def pull_many(self, refs: list[str], store: ImageStore, *, workers: int = 8,
@@ -325,10 +312,10 @@ class RemoteRegistry:
             with tempfile.NamedTemporaryFile(dir=incoming, suffix=".tar.gz", delete=False) as tmp:
                 path = Path(tmp.name)
             try:
-                digest = self.download_image(item, path)          # network, parallel; verified
+                digest = self.download_image(item, path)          # network, parallel
                 with lock:                                        # local unpack, serialized
-                    if store.exists(item) and digest and digest == store.get(item).pool_digest:
-                        return                                     # verified unchanged
+                    if not refresh and store.exists(item):
+                        return
                     unpack_image_file(path, store, sudo=(True if self.sudo else None))
                     if digest:
                         store.set_pool_digest(item, digest)
