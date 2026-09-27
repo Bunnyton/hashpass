@@ -77,7 +77,11 @@ fi
 
 if [[ -z "$DRY" ]]; then
     echo "── базовый образ (debian:trixie-<стамп>) ──"
-    hashengine push base $FORCE
+    # БЕЗ $FORCE: новый стамп runtime — это новый ref, он уходит на пул и так (HEAD его
+    # не находит). --force перезалил бы базу и заставил КАЖДОГО студента заново скачать
+    # ~57 МБ; если это действительно нужно (повреждённый блоб) — вручную:
+    #   hashengine push base --force
+    hashengine push base
 fi
 
 for name in "${TASKS[@]}"; do

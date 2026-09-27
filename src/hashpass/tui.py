@@ -255,15 +255,17 @@ class PoolTUI(App):
                 self._flash(f"Не удалось загрузить {row.ref}: {row.state}")
                 return
         from hashpass.cli import Io, _now_iso, cmd_pool_run  # noqa: PLC0415
-        # Silent io: don't let cmd_pool_run's post-run status messages ("решено",
-        # "зачтено") flash on the terminal between the task's exit and Textual's
-        # alt-screen resume -- the same info is already in the tree after reload.
-        # `clock` must be a zero-arg callable returning an ISO stamp -- reuse cli._now_iso;
-        # earlier attempt at `time.strftime` blew up because strftime needs a format string.
-        silent = Io(read=lambda _p: None, write=lambda _s: None, clock=_now_iso)
+        # The run happens inside suspend(), where the real terminal is visible: messages go to
+        # sys.stdout so the student sees «пул недоступен …» / «собираю локально» before a long
+        # local base build (a silent Io hid them). `write` looks sys.stdout up per call --
+        # Textual swaps sys.stdout while the app runs, so it must not be bound up front.
+        # Input stays disabled, as before. `clock` must be a zero-arg callable returning an
+        # ISO stamp -- reuse cli._now_iso (time.strftime needs a format string).
+        io = Io(read=lambda _p: None, write=lambda s: sys.stdout.write(s),  # noqa: PLW0108
+                clock=_now_iso)
         with self.suspend():
             self._task_frame_start(row)
-            cmd_pool_run(self.env, row.ref, silent)
+            cmd_pool_run(self.env, row.ref, io)
         # Textual's alt-screen buffer resumes on __exit__ — TUI is instantly back
         self._reload_catalog()
 

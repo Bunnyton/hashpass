@@ -208,8 +208,9 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
         recipe: A task recipe (must declare stages).
         store: Image store to build into and resolve the chain from.
         base_tar: Rootfs tarball for the bottom base layer (fallback when `base` is None).
-        base: Prebuilt base rootfs layer (the `debian:trixie` image); when given it is
-            used directly and `base_tar` is ignored (built once in the store, reused).
+        base: Prebuilt base rootfs layer -- the stamped base image (`debian:trixie-<stamp>`,
+            see `cli.base_ref`); when given it is used directly and `base_tar` is ignored
+            (built once in the store, reused).
         workdir: Scratch dir for the image build, base, and per-pass runners.
         passes: Derivation passes per observed stage (>= 2).
         sudo: Whether overlay mounts use sudo (True for real nspawn).

@@ -412,8 +412,9 @@ def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
         store: Image store holding the task and its image chain.
         workdir: Scratch dir for the base, the student runner tree, and the /hp copy.
         base_tar: Rootfs tarball for the bottom base layer (fallback when `base` is None).
-        base: Prebuilt base rootfs layer (the `debian:trixie` image); when given it is
-            used directly and `base_tar` is ignored (built once in the store, reused).
+        base: Prebuilt base rootfs layer -- the stamped base image (`debian:trixie-<stamp>`,
+            see `cli.base_ref`); when given it is used directly and `base_tar` is ignored
+            (built once in the store, reused).
         student_id: Student identity (folded into evidence for derived stages).
         nonce: Per-session nonce for local keys.
         sink: Where rendered text is emitted (default stdout write).
