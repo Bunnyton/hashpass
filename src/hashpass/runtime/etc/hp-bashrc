@@ -158,8 +158,11 @@ if [ -n "${HP_PORT-}" ]; then
     # command is one of our own housekeeping items (PROMPT_COMMAND's __hp_postexec / precmd
     # / prompt-render / clear).  Without the filter our own PROMPT_COMMAND items would
     # clobber the student's last command before postexec runs against it.
+    # `hp-io*` is ours too: without it the greeting below lands in __hp_cmd and the FIRST
+    # PROMPT_COMMAND ships "hp-io hello" as a student command -- one phantom try per session
+    # (every `hint tries N` fired a rung early) and a bogus first entry in the history.
     trap '[[ "$BASH_COMMAND" == __hp_* || "$BASH_COMMAND" == _hp_* ]] || \
-          [[ "$BASH_COMMAND" == PROMPT_COMMAND* ]] || \
+          [[ "$BASH_COMMAND" == PROMPT_COMMAND* || "$BASH_COMMAND" == hp-io* ]] || \
           __hp_cmd="$BASH_COMMAND"; __hp_preexec "$__hp_cmd"' DEBUG
 
     # PROMPT_COMMAND runs BETWEEN commands: ship the last one to the host, blank the
@@ -168,4 +171,5 @@ if [ -n "${HP_PORT-}" ]; then
 
     # Greet the host once so it renders the intro / read / first stage announce.
     hp-io hello 2>/dev/null
+    __hp_cmd=""
 fi
