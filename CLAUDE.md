@@ -15,6 +15,8 @@
 - **`superpowers:verification-before-completion`** — перед словами «готово»,
   «зелёное», «работает», перед `git commit` / `git push`.
 - **`superpowers:test-driven-development`** — новая логика / фикс, тест до кода.
+- **`task-authoring`** (skill проекта, `.claude/skills/task-authoring/`) — любое
+  задание в `content/tasks/`: подсказки, brief, финал, DSL.
 
 ### 2. Evidence перед словами
 Никаких «готово / должно работать / зелёное» без свежего вывода прогона:

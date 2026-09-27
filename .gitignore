@@ -27,7 +27,8 @@ update.sh
 .idea/workspace.xml
 
 .superpowers/
-.claude/
+.claude/*
+!.claude/skills/
 __pycache__/
 *.egg-info/
 src/*.egg-info/
