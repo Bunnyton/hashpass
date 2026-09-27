@@ -141,6 +141,14 @@ def _owner_of(name: str) -> str | None:
     return head if sep else None
 
 
+def _ownership_message(name: str) -> str:
+    """Return the Russian 403 reason for `name`: no namespace -> admin-only; else -> wrong-author."""
+    owner = _owner_of(name)
+    if owner is None:
+        return f"образ без пространства имён («{name}») может публиковать только администратор"
+    return f"образ принадлежит другому автору («{owner}»); войдите под ним: hashengine login"
+
+
 class PoolServer:
     """Pool registry state (stores, secret, config) + a Flask WSGI app wired to it."""
 
@@ -324,23 +332,18 @@ class PoolServer:
             return None, HTTPStatus.FORBIDDEN
         return user, None
 
+    def _may_write(self, user: str, name: str) -> bool:
+        """Whether `user` may write image `name`: admin -> always; author -> owns its namespace."""
+        return self.users.role(user) == "admin" or _owner_of(name) == user
+
     def _authorize_write(self, name: str) -> tuple[str | None, Response | None]:
         """Require author/admin + ownership of `name`'s namespace (admin-only if it has none)."""
         user, err = self._auth_role(_AUTHOR_ROLES)
         if err is not None:
             return None, self._empty(err)
-        if self.users.role(user) == "admin":
+        if self._may_write(user, name):
             return user, None
-        owner = _owner_of(name)
-        if owner is None:
-            return None, self._json(HTTPStatus.FORBIDDEN, {
-                "error": f"образ без пространства имён («{name}») может публиковать только "
-                         "администратор"})
-        if owner != user:
-            return None, self._json(HTTPStatus.FORBIDDEN, {
-                "error": f"образ принадлежит другому автору («{owner}»); войдите под ним: "
-                         "hashengine login"})
-        return user, None
+        return None, self._json(HTTPStatus.FORBIDDEN, {"error": _ownership_message(name)})
 
     def _session_user(self) -> str | None:
         token = request.cookies.get("hp_session")
@@ -900,20 +903,32 @@ class PoolServer:
         """Path to the image card page for one ref (URL-encoded, matches the /web/image/<ref> route)."""
         return f"/web/image/{quote(ref, safe='/:')}" if ref else "/web/images"
 
+    def _web_forbidden(self, name: str) -> Response:
+        """Render a 403 page for a card/catalog write denied by ownership (same reason as the API)."""
+        return self._html(_ownership_message(name), status=HTTPStatus.FORBIDDEN)
+
     def _web_image_describe(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
+        user = self._session_role(_AUTHOR_ROLES)
+        if user is None:
             return self._redirect("/web/login")
         ref = request.form.get("ref", "")
         if not ref or not self.store.exists(ref):
             return self._redirect("/web/images")
+        name = ref.partition(":")[0]
+        if not self._may_write(user, name):
+            return self._web_forbidden(name)
         with contextlib.suppress(ValueError, OSError):
             self.attachments().set_description(ref, request.form.get("description", "")[:_MAX_DESC])
         return self._redirect(self._card_url(ref))
 
     def _web_image_attach(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
+        user = self._session_role(_AUTHOR_ROLES)
+        if user is None:
             return self._redirect("/web/login")
         ref = request.form.get("ref", "")
+        name = ref.partition(":")[0]
+        if ref and not self._may_write(user, name):
+            return self._web_forbidden(name)
         upload = request.files.get("file")
         if ref and self.store.exists(ref) and upload and upload.filename:
             data = upload.read()
@@ -923,11 +938,15 @@ class PoolServer:
         return self._redirect(self._card_url(ref))
 
     def _web_image_attach_delete(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
+        user = self._session_role(_AUTHOR_ROLES)
+        if user is None:
             return self._redirect("/web/login")
         ref = request.form.get("ref", "")
         if not ref or not self.store.exists(ref):
             return self._redirect("/web/images")
+        name = ref.partition(":")[0]
+        if not self._may_write(user, name):
+            return self._web_forbidden(name)
         with contextlib.suppress(ValueError, OSError):
             self.attachments().delete_file(ref, request.form.get("name", ""))
         return self._redirect(self._card_url(ref))
@@ -946,11 +965,15 @@ class PoolServer:
         return resp
 
     def _web_catalog_add(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
+        user = self._session_role(_AUTHOR_ROLES)
+        if user is None:
             return self._redirect("/web/login")
         ref = request.form.get("ref", "")
         if not ref or not self.store.exists(ref):
             return self._redirect("/web/images")
+        name = ref.partition(":")[0]
+        if not self._may_write(user, name):
+            return self._web_forbidden(name)
         task_dir = self.store.get(ref).layer.parent / "task"
         if not task_dir.exists():   # only a task image (with a grader) can join the catalog
             return self._redirect("/web/images")
@@ -959,20 +982,28 @@ class PoolServer:
         return self._redirect("/web/images")
 
     def _web_catalog_remove(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
+        user = self._session_role(_AUTHOR_ROLES)
+        if user is None:
             return self._redirect("/web/login")
         ref = request.form.get("ref", "")
         if not ref or not self.store.exists(ref):
             return self._redirect("/web/images")
+        name = ref.partition(":")[0]
+        if not self._may_write(user, name):
+            return self._web_forbidden(name)
         self.catalog().remove_task(ref)
         return self._redirect("/web/images")
 
     def _web_task_toggle(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
+        user = self._session_role(_AUTHOR_ROLES)
+        if user is None:
             return self._redirect("/web/login")
         ref = request.form.get("ref", "")
         if not ref:
             return self._redirect("/web/images")
+        name = ref.partition(":")[0]
+        if not self._may_write(user, name):
+            return self._web_forbidden(name)
         self.catalog().set_task_hidden(ref, hidden=request.form.get("hidden", "") == "1")
         return self._redirect("/web/images")
 

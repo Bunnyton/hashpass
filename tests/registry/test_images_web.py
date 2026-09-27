@@ -74,6 +74,15 @@ def _author_cookie(registry) -> tuple:
     return opener, headers["Set-Cookie"].split(";")[0]
 
 
+def _login_cookie(registry, user: str, password: str, *, role: str = "author") -> tuple:
+    """Register (role=author by default) and log in via /web/login; return (opener, cookie)."""
+    registry.users.add(user, password, role=role, group="")
+    opener = _opener()
+    _, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
+                         data={"user": user, "password": password})
+    return opener, headers["Set-Cookie"].split(";")[0]
+
+
 def _seed(registry, ref: str, tmp_path: Path, *, task: bool = False) -> str:
     name, _, version = ref.partition(":")
     src = tmp_path / f"src-{name.replace('/', '_')}-{version}"
@@ -241,3 +250,102 @@ def test_blob_only_record_works_in_web_card_task_and_closure(registry, tmp_path)
     assert "lab:1" in body and "Taskfile" in body
     # /images is a bearer-token JSON API (like /catalog, /progress) -- not a cookie-session route
     assert any("digest" in row for row in client.pool_images(token=atok))
+
+
+# -- web ownership: an author's card/catalog writes are scoped to their own namespace -------
+
+@pytest.mark.tier2
+def test_web_write_routes_denied_for_other_authors_namespace(registry, tmp_path):
+    """Alice (author) gets 403 on every card/catalog write route for bob's namespaced image."""
+    _seed(registry, "bob/lab:1", tmp_path, task=True)
+    opener, cookie = _login_cookie(registry, "alice", "pass123!")
+    base = registry.base_url
+
+    status, _, _ = _req(opener, "POST", f"{base}/web/images/describe", cookie=cookie,
+                        data={"ref": "bob/lab:1", "description": "x"})
+    assert status == HTTPStatus.FORBIDDEN
+    status, _, _ = _req(opener, "POST", f"{base}/web/images/attach-delete", cookie=cookie,
+                        data={"ref": "bob/lab:1", "name": "nope"})
+    assert status == HTTPStatus.FORBIDDEN
+    status, _, _ = _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie,
+                        data={"ref": "bob/lab:1"})
+    assert status == HTTPStatus.FORBIDDEN
+    status, _, _ = _req(opener, "POST", f"{base}/web/catalog/remove", cookie=cookie,
+                        data={"ref": "bob/lab:1"})
+    assert status == HTTPStatus.FORBIDDEN
+    status, _, _ = _req(opener, "POST", f"{base}/web/tasks/toggle", cookie=cookie,
+                        data={"ref": "bob/lab:1", "hidden": "1"})
+    assert status == HTTPStatus.FORBIDDEN
+
+    # multipart attach (the real upload path)
+    b = "----hpTEST"
+    body = "".join([
+        f'--{b}\r\nContent-Disposition: form-data; name="ref"\r\n\r\nbob/lab:1\r\n',
+        f'--{b}\r\nContent-Disposition: form-data; name="file"; filename="notes.txt"\r\n\r\n',
+        "privet\r\n",
+        f"--{b}--\r\n",
+    ]).encode()
+    req = urllib.request.Request(  # noqa: S310
+        f"{base}/web/images/attach", data=body, method="POST",
+        headers={"Cookie": cookie, "Content-Type": f"multipart/form-data; boundary={b}"})
+    try:
+        resp = opener.open(req, timeout=10)
+        status = resp.status
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+    assert status == HTTPStatus.FORBIDDEN
+
+
+@pytest.mark.tier2
+def test_web_write_routes_allowed_for_own_namespace(registry, tmp_path):
+    """Alice (author) can still describe/attach/catalog her own namespaced image."""
+    _seed(registry, "alice/lab:1", tmp_path, task=True)
+    opener, cookie = _login_cookie(registry, "alice", "pass123!")
+    base = registry.base_url
+    student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
+    sc = RemoteRegistry(registry.base_url)
+
+    _req(opener, "POST", f"{base}/web/images/describe", cookie=cookie,
+         data={"ref": "alice/lab:1", "description": "Описание образа"})
+    _, _, body = _req(opener, "GET", f"{base}/web/image/{urllib.parse.quote('alice/lab:1')}",
+                      cookie=cookie)
+    assert "Описание образа" in body
+
+    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "alice/lab:1"})
+    cat = sc.catalog(token=student)
+    assert [(e["number"], e["available"]) for e in cat] == [(1, True)]
+    block_id = cat[0]["block_id"]
+
+    _req(opener, "POST", f"{base}/web/blocks/toggle", cookie=cookie,
+         data={"block_id": block_id, "open": "0"})
+    assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, False)]
+
+    _req(opener, "POST", f"{base}/web/catalog/remove", cookie=cookie, data={"ref": "alice/lab:1"})
+    assert sc.catalog(token=student) == []
+
+
+@pytest.mark.tier2
+def test_web_write_routes_allowed_for_admin_on_others_namespace(registry, tmp_path):
+    """Teacher (admin, via _author_cookie) may still write bob's namespaced image."""
+    _seed(registry, "bob/lab:1", tmp_path, task=True)
+    opener, cookie = _author_cookie(registry)
+    base = registry.base_url
+
+    status, _, _ = _req(opener, "POST", f"{base}/web/images/describe", cookie=cookie,
+                        data={"ref": "bob/lab:1", "description": "Описание образа"})
+    assert status in (HTTPStatus.OK, HTTPStatus.SEE_OTHER, HTTPStatus.FOUND)
+    _, _, body = _req(opener, "GET", f"{base}/web/image/{urllib.parse.quote('bob/lab:1')}",
+                      cookie=cookie)
+    assert "Описание образа" in body
+
+    status, _, _ = _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie,
+                        data={"ref": "bob/lab:1"})
+    assert status in (HTTPStatus.OK, HTTPStatus.SEE_OTHER, HTTPStatus.FOUND)
+    student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
+    sc = RemoteRegistry(registry.base_url)
+    assert [e["ref"] for e in sc.catalog(token=student)] == ["bob/lab:1"]
+
+    status, _, _ = _req(opener, "POST", f"{base}/web/catalog/remove", cookie=cookie,
+                        data={"ref": "bob/lab:1"})
+    assert status in (HTTPStatus.OK, HTTPStatus.SEE_OTHER, HTTPStatus.FOUND)
+    assert sc.catalog(token=student) == []
