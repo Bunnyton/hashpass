@@ -516,7 +516,7 @@ class PoolServer:
             if err is not None:
                 return self._empty(err)
             try:
-                unpack_image(request.get_data(cache=False, as_text=False), self.store)
+                unpack_image(request.get_data(cache=False, as_text=False), self.store, sudo=False)
             except (ValueError, KeyError, OSError, tarfile.TarError):
                 return self._empty(HTTPStatus.BAD_REQUEST)
             return self._empty(HTTPStatus.CREATED)

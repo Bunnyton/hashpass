@@ -63,7 +63,12 @@ def inspect_image_blob(path: Path) -> ImageBlobInfo:
             if _member_is_unsafe(m.name):
                 msg = f"image blob: unsafe member path {m.name!r}"
                 raise ValueError(msg)
-            if m.name == "layer" or m.name.startswith("layer/"):
+            if m.name == "layer":
+                if not m.isdir():
+                    msg = "image blob: no layer/ member (layer is not a directory)"
+                    raise ValueError(msg)
+                has_layer = True
+            elif m.name.startswith("layer/"):
                 has_layer = True
             else:
                 msg = f"image blob: member outside layer/: {m.name!r}"

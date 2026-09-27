@@ -113,10 +113,30 @@ def test_inspect_rejects_missing_layer_and_members_outside_layer(tmp_path):
     with pytest.raises(ValueError, match="unsafe image"):
         inspect_image_blob(_raw_tar(tmp_path, [("layer", None, 0o755, 0)],
                                     meta={"name": "../evil", "version": "1", "parents": []}))
+    # Test no meta.json with valid layer directory
     path = tmp_path / "nometa.tar"
     with tarfile.open(path, "w") as tar:
-        tar.addfile(tarfile.TarInfo("layer"))
+        layer_info = tarfile.TarInfo("layer")
+        layer_info.type = tarfile.DIRTYPE
+        tar.addfile(layer_info)
     with pytest.raises(ValueError, match="no meta"):
+        inspect_image_blob(path)
+
+
+@pytest.mark.tier1
+def test_inspect_rejects_layer_as_file(tmp_path):
+    """A blob with a FILE member named 'layer' (not directory) must be rejected."""
+    path = tmp_path / "bad_layer.tar"
+    meta_b = json.dumps({"name": "app", "version": "1", "parents": []}).encode("utf-8")
+    with tarfile.open(path, mode="w") as tar:
+        info = tarfile.TarInfo("meta.json")
+        info.size = len(meta_b)
+        tar.addfile(info, io.BytesIO(meta_b))
+        # Add a FILE named "layer" instead of a directory
+        layer_info = tarfile.TarInfo("layer")
+        layer_info.size = 4
+        tar.addfile(layer_info, io.BytesIO(b"test"))
+    with pytest.raises(ValueError, match="no layer"):
         inspect_image_blob(path)
 
 
