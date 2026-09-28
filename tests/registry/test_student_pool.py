@@ -36,15 +36,6 @@ def test_status_badge_and_menu_render():
 
 
 @pytest.mark.tier1
-def test_next_number_prefers_uncredited_ahead():
-    rows = [{"number": 1, "server": "passed"}, {"number": 2, "server": None},
-            {"number": 3, "server": None}]
-    # after 1 -> first uncredited ahead (2); after 2 -> 3; after 3 -> wrap to first uncredited (2)
-    assert [cli._next_number(rows, after=a) for a in (1, 2, 3)] == [2, 3, 2]  # noqa: SLF001
-    assert cli._next_number([{"number": 1, "server": "passed"}], after=1) is None  # noqa: SLF001
-
-
-@pytest.mark.tier1
 def test_set_taskfile_path_roundtrip(tmp_path):
     store = ImageStore(tmp_path / "img")
     src = tmp_path / "src"
@@ -115,21 +106,16 @@ def test_pool_status_local_vs_server(registry, tmp_path):
 
 
 @pytest.mark.tier1
-def test_run_from_menu_offers_next_until_done(tmp_path, monkeypatch):
+def test_run_from_menu_delegates_to_pool_run_which_chains_itself(tmp_path, monkeypatch):
+    # The verdict + «следующее задание / в меню» prompt live in cmd_pool_run now; the text
+    # menu must not add a second prompt loop of its own.
     env = _env(tmp_path)
     ran: list[str] = []
     monkeypatch.setattr(cli, "cmd_pool_run", lambda _env, arg, _io=None: ran.append(arg) or 0)
-    statuses = iter([
-        [{"number": 1, "server": None}, {"number": 2, "server": None}],   # after task 1 -> next 2
-        [{"number": 1, "server": "passed"}, {"number": 2, "server": "passed"}],  # after 2 -> done
-    ])
-    monkeypatch.setattr(cli, "pool_status", lambda *_a, **_k: next(statuses))
-    out: list[str] = []
-    answers = iter([""])   # Enter = accept the offered next task
-    io = cli.Io(read=lambda _p: next(answers), write=out.append, clock=lambda: "")
+    io = cli.Io(read=lambda _p: pytest.fail("the menu must not prompt"), write=lambda _s: None,
+                clock=lambda: "")
     cli._run_from_menu(env, "http://p", "stud", "tok", 1, io)   # noqa: SLF001
-    assert ran == ["1", "2"]
-    assert "зачтены" in "".join(out)
+    assert ran == ["1"]
 
 
 @pytest.mark.tier1

@@ -1956,15 +1956,24 @@ def _verdict_banner(*, solved: bool) -> str:
     return "\n" + color + _big_text("РЕШЕНО" if solved else "НЕ РЕШЕНО") + "\x1b[0m\n"
 
 
-def _next_entry(entries: list[dict[str, object]], current_ref: str) -> dict[str, object] | None:
-    """Return the next catalog entry after `current_ref` (by number) a student may open, else None."""
+def _next_entry(entries: list[dict[str, object]], current_ref: str,
+                solved: frozenset[str] = frozenset()) -> dict[str, object] | None:
+    """
+    Return the next catalog task worth doing after `current_ref`, else None.
+
+    Open (available, not hidden) and not yet solved here; by number, the first one ahead of the
+    current task, else -- wrapping around -- the first one before it. None when the current
+    task is not in the catalog or nothing is left.
+    """
     current = next((e for e in entries if str(e.get("ref")) == current_ref), None)
     if current is None:
         return None
-    later = [e for e in entries
-             if int(e.get("number") or 0) > int(current.get("number") or 0)
-             and e.get("available", True) and not e.get("hidden", False)]
-    return min(later, key=lambda e: int(e.get("number") or 0)) if later else None
+    todo = sorted((e for e in entries
+                   if e.get("available", True) and not e.get("hidden", False)
+                   and str(e.get("ref")) not in solved and e is not current),
+                  key=lambda e: int(e.get("number") or 0))
+    ahead = [e for e in todo if int(e.get("number") or 0) > int(current.get("number") or 0)]
+    return (ahead or todo)[0] if (ahead or todo) else None
 
 
 def _ask_after_task(io: Io, nxt: dict[str, object] | None) -> bool:
@@ -1998,7 +2007,7 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
         io.write(_verdict_banner(solved=solved))
         if not solved and ref in load_solved(env):
             io.write("\x1b[2m(ранее уже зачтено — прогресс сохранён)\x1b[0m\n")
-        nxt = _next_entry(client0.catalog(token=token), ref)
+        nxt = _next_entry(client0.catalog(token=token), ref, frozenset(load_solved(env)))
         if not _ask_after_task(io, nxt):
             return rc
         ref = str(nxt["ref"])

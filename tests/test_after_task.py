@@ -24,7 +24,9 @@ def test_next_entry_is_the_next_available_number():
         {"number": 6, "ref": "b/f:1", "available": True, "hidden": False},
     ]
     assert cli._next_entry(entries, "b/c:1")["ref"] == "b/f:1"            # noqa: SLF001
-    assert cli._next_entry(entries, "b/f:1") is None                     # noqa: SLF001
+    assert cli._next_entry(entries, "b/f:1")["ref"] == "b/c:1"            # wraps to the first open  # noqa: SLF001
+    assert cli._next_entry(entries, "b/f:1", frozenset({"b/c:1"})) is None   # nothing left  # noqa: SLF001
+    assert cli._next_entry(entries, "b/c:1", frozenset({"b/f:1"})) is None   # solved ones skipped  # noqa: SLF001
     assert cli._next_entry(entries, "ghost:1") is None                   # noqa: SLF001
 
 
@@ -72,14 +74,13 @@ def test_pool_run_chains_to_the_next_task_until_menu(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "RemoteRegistry", _FakePool)
     monkeypatch.setattr(cli, "task_dir", lambda _ref, _store: tmp_path)      # exists -> no pull_task
     monkeypatch.setattr(cli, "task_digest", lambda _p: "")
-    monkeypatch.setattr(cli, "mark_solved", lambda _env, _ref: None)
     monkeypatch.setattr(cli, "cmd_run", fake_cmd_run)
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
-    answers = iter(["", "q"])                          # Enter -> next; q -> menu
     out: list[str] = []
-    io = cli.Io(read=lambda _p: next(answers), write=out.append, clock=lambda: "")
+    io = cli.Io(read=lambda _p: "", write=out.append, clock=lambda: "")   # Enter: next, always
     assert cli.cmd_pool_run(env, "1", io) == 0
-    assert runs == ["b/a:1", "b/b:1"]
+    assert runs == ["b/a:1", "b/b:1"]                   # both solved -> nothing left -> stops
+    assert any("последнее" in s for s in out)
     assert sum("█" in s for s in out) >= len(runs)     # a verdict banner after each run
 
 
@@ -97,7 +98,6 @@ def test_text_menu_asks_once_per_task(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "RemoteRegistry", _FakePool)
     monkeypatch.setattr(cli, "task_dir", lambda _ref, _store: tmp_path)
     monkeypatch.setattr(cli, "task_digest", lambda _p: "")
-    monkeypatch.setattr(cli, "mark_solved", lambda _env, _ref: None)
     monkeypatch.setattr(cli, "cmd_run", fake_cmd_run)
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
     prompts: list[str] = []
