@@ -18,6 +18,7 @@ stage "Подключись к telehack.com по telnet и посмотри «З
   accept cmd "telnet"
   neutral ls cat pwd
   on enter say "Никаких проверок. Просто смотри."
+  on pass say "На telehack.com есть ещё игры: набери help после входа."
   hint idle 300 say "Команда — в брифе. Выход из telnet: Ctrl+], потом quit."
 
 exec finale

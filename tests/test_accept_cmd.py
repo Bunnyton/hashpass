@@ -24,7 +24,11 @@ def _stage(*patterns: str, ok: bool = False) -> StageMeta:
     ("sl", "sl -l", True),
     ("sl", "sleep 600 &", False),                      # word boundary, not a prefix
     ("ls --help", "ls --help | head", True),
+    ("ls --help", "ls --color=auto --help", True),     # alias from a fresh user's ~/.bashrc
+    ("grep -r ERROR", "grep --color=auto -r ERROR /var/log", True),
     ("ls --help", "ls --hepl", False),
+    ("ls --help", "ls", False),
+    ("man man", "man manpages", False),
     ("man man", "man man", True),
     ("apt update", "sudo apt update", True),
     ("apt-get update", "sudo -E apt-get update", True),

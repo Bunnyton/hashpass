@@ -22,9 +22,10 @@ stage "Смени группу файла /home/student/.secret/rock.txt на st
   check exec sh -c 'test "$(stat -c %G /home/student/.secret/rock.txt)" = "student"'
   neutral ls cat pwd cd
   on enter say "Файл принадлежит root и группе FiveFingerDeathPunch. Ты не в группе. Пока."
-  hint output "Operation not permitted" say "Система не дала сменить группу. Чей файл — того и право менять. Кто может действовать от его имени?"
-  hint output "Permission denied" say "Читать пока нельзя — группа не твоя. Но задача и не прочитать, а сменить группу. Какой командой из теории?"
-  hint tries 3 say "Проверь текущую группу: ls -l .secret/rock.txt. Какая команда меняет именно группу, а какая — владельца?"
+  on pass say "Группы пользователя: команда groups. Ты в sudo? А в FiveFingerDeathPunch — уже нет нужды."
+  hint output "Operation not permitted" say "Чей файл — того и право менять. Одолжи права."
+  hint output "Permission denied" say "Читать пока нельзя. Задача — не прочитать, а сменить группу."
+  hint tries 3 say "ls -l .secret/rock.txt — какая там группа? Какая команда меняет именно её?"
   hint tries 6 say "man chgrp — SYNOPSIS. Или загугли: «изменить группу файла linux»."
   hint idle 240 say "Перечитай цель: группа — student, файл — в .secret."
 

@@ -17,7 +17,7 @@ read brief.md
 stage "Пройди хотя бы первый урок встроенного учебника vim"
   accept cmd "vimtutor" ok
   neutral ls cat pwd
-  on enter say "Учебник живёт внутри редактора и запускается одной командой из брифа."
-  hint idle 300 say "Выход из vim — :q. Если не отпускает — Esc, потом :q! и Enter."
+  on pass say "Секрет выживания: Esc, потом :q!. Теперь ты знаешь то, о чём шутит весь интернет."
+  hint idle 300 say "Выход из vim — Esc, потом :q! и Enter."
 
 exec finale

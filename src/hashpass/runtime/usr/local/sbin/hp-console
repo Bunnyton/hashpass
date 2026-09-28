@@ -18,6 +18,14 @@ mount -o remount,gid=5,mode=620,ptmxmode=666,max=4096 /dev/pts 2>/dev/null \
 [ -e /dev/pts/ptmx ] && ln -sf pts/ptmx /dev/ptmx 2>/dev/null || true
 
 user="${HP_USER:-student}"
+# /run/hp holds the transcript and the grade port, readable by EVERY user: nested shells
+# (`su - other`, `sudo -i`, a user the student just created) load the same hooks from
+# /etc/bash.bashrc (see image/base.py) and find the host through /run/hp/port, so grading and
+# hints never disappear when the student changes identity.
+mkdir -p /run/hp && chmod 755 /run/hp && chown "$user" /run/hp 2>/dev/null || true
+if [ -n "${HP_PORT-}" ]; then
+    printf '%s\n' "$HP_PORT" > /run/hp/port && chmod 644 /run/hp/port
+fi
 # UTF-8 for the whole console session (readline needs it BEFORE bash starts, or Cyrillic
 # input is echoed as \320\277… octal escapes). /etc/default/locale is there too, but
 # pam_env did not deliver it through `su -` in the booted container -- pass it explicitly.
@@ -25,12 +33,17 @@ export LANG=C.UTF-8
 # The console transcript (script(1) in hp-bash) lives in /run/hp -- tmpfs, OUTSIDE the home
 # directory, so `ls -a ~` never shows engine internals. Owned by the console user (script
 # runs as them), 0700 so it is theirs alone.
-mkdir -p /run/hp && chmod 700 /run/hp && chown "$user" /run/hp 2>/dev/null || true
-# The machine has booted: greet before any shell (graded task or plain image console alike).
-if [ -r /etc/hp-banner ]; then
+# The machine has booted: greet before any shell (graded task or plain image console alike) --
+# one of several looks and a random one-liner, metasploit-style.
+banner=$(ls /etc/hp-banners/*.txt 2>/dev/null | shuf -n1)
+if [ -n "$banner" ]; then
     printf '\033[1;31m'
-    cat /etc/hp-banner
+    cat "$banner"
     printf '\033[0m'
+fi
+phrase=$(shuf -n1 /etc/hp-phrases.txt 2>/dev/null)
+if [ -n "$phrase" ]; then
+    printf '   \033[1;33m%s\033[0m\n\n' "$phrase"
 fi
 if id "$user" >/dev/null 2>&1; then
     if [ "$user" != root ]; then

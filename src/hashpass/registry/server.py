@@ -210,6 +210,8 @@ class PoolServer:
         app.add_url_rule("/users/<user>/exists", "user_exists",
                          self._route_user_exists, methods=["GET"])
         app.add_url_rule("/catalog", "catalog_api", self._route_catalog, methods=["GET"])
+        app.add_url_rule("/catalog/layout", "catalog_layout_api", self._route_catalog_layout,
+                         methods=["PUT"])
         app.add_url_rule("/progress", "progress_api", self._route_progress, methods=["GET"])
         app.add_url_rule("/images", "images_api", self._route_images, methods=["GET"])
         # blobs (name may be multi-segment; last segment is the version)
@@ -505,6 +507,29 @@ class PoolServer:
     def _route_catalog(self) -> Response:
         if self._token_user() is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
+        return self._json(HTTPStatus.OK,
+                          {"catalog": [e.as_dict() for e in self.catalog().entries()]})
+
+    def _route_catalog_layout(self) -> Response:
+        """
+        Replace the whole catalog layout (blocks + task order) -- `hashengine catalog layout`.
+
+        Admin-only like the web drag-and-drop: it renumbers and can de-list any task. Refs that
+        are not published on the pool are dropped by `Catalog.set_layout`; the reply lists the
+        resulting catalog so the caller can show the numbering.
+        """
+        _user, err = self._auth_role(("admin",))
+        if err is not None:
+            if err == HTTPStatus.FORBIDDEN:
+                return self._json(HTTPStatus.FORBIDDEN,
+                                  {"error": "раскладку каталога меняет только администратор"})
+            return self._empty(err)
+        data = request.get_json(silent=True) or {}
+        blocks = data.get("blocks") if isinstance(data, dict) else None
+        if not isinstance(blocks, list) or not all(
+                isinstance(b, dict) and isinstance(b.get("tasks"), list) for b in blocks):
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        self.catalog().set_layout(blocks)
         return self._json(HTTPStatus.OK,
                           {"catalog": [e.as_dict() for e in self.catalog().entries()]})
 

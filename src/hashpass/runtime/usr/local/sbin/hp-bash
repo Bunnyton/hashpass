@@ -21,6 +21,7 @@ export LANG="${LANG:-C.UTF-8}"
 if [ -n "$HP_PORT" ] && command -v script >/dev/null 2>&1; then
     log=/run/hp/typescript          # tmpfs, outside $HOME (see hp-console)
     : > "$log" 2>/dev/null || true
+    chmod 644 "$log" 2>/dev/null || true   # nested shells of other users read it too
     exec env SHELL=/bin/sh \
         script -q -e -f -c '/bin/bash --rcfile /etc/hp-bashrc -i' "$log"
 fi

@@ -33,6 +33,7 @@ stage "Оставь короткий отчёт: в /home/student/report.txt д�
   neutral ls cat pwd
   on enter say "Отчёт из одного слова. Где именно и какого — сказано в цели."
   on enter read clue1.md
+  on pass say "Бонус: cat report.txt — файл на месте."
   hint cmd echo missing ГОТОВО say "В echo должно быть ровно слово ГОТОВО — заглавными."
   hint tries 3 say "Файл появился? cat его. Слово одно, регистр важен."
   hint tries 6 say "Загугли: «bash записать слово в файл»."
@@ -50,6 +51,7 @@ stage "Напечатай, сколько строк в /var/log/app/service.log
   allow grep awk wc
   neutral ls cat less
   on enter say "Важен ВЫВОД — ровно число. И посчитать надо по-настоящему: echo с ответом не пройдёт."
+  on pass say "grep -c — счётчик; grep -n — номера строк."
   hint output "0" say "Ноль? В журнале точно есть строки ERROR — присмотрись к команде: регистр, путь."
   hint tries 3 say "Строки с ERROR ты уже видишь? Теперь их надо не показать, а посчитать. У grep есть ключ для счёта, у wc — для строк."
   hint tries 6 say "man grep — ищи «count». Или загугли: «посчитать строки со словом в файле linux»."
@@ -66,6 +68,7 @@ stage "Установи пакет sl — его в системе нет; по�
   neutral ls cat pwd
   on enter say "Пакета sl нет. Ты — student, а apt слушается только root."
   on enter exec intro2
+  on pass say "sl -F: поезд улетит."
   hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права root на одну команду?"
   hint output "Unable to locate package" say "apt не нашёл пакет — когда он обновлял список? Два шага."
   hint tries 3 say "Прочитай, что ответил apt: он говорит прямым текстом, чего хочет."
@@ -78,6 +81,7 @@ stage "Запусти установленный поезд"
   accept cmd "sl" ok
   neutral ls cat less
   on enter say "Пакет называется sl, команда — тоже. Поезд следов на диске не оставляет — его нужно просто запустить."
+  on pass say "Поезд ушёл. Попробуй sl -l."
   hint idle 240 say "Имя команды совпадает с именем пакета."
 
 # --- Задание 5: скрытый грейдер в /hp судит ответ ---
@@ -88,6 +92,7 @@ stage "Создай /home/student/secret с одной фразой — той �
   neutral ls cat pwd
   on enter say "Фразу подсмотреть негде — зато есть подсказка."
   on enter read clue3.md
+  on pass say "Фраза известна. Пещера открыта."
   hint tries 3 say "Фраза — по-английски, строчными, два слова через дефис, без лишних пробелов. cat /home/student/secret — точно так?"
   hint tries 6 say "Загугли: «Али-Баба заклинание пещера по-английски»."
   hint idle 240 say "Перечитай подсказку: два слова, дефис, Али-Баба."

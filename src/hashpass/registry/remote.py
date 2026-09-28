@@ -403,6 +403,15 @@ class RemoteRegistry:
                    headers={"Authorization": f"Bearer {self._auth_token(token)}",
                             "Content-Type": "application/octet-stream"})
 
+    def set_catalog_layout(self, blocks: list[dict[str, object]], *,
+                           token: str | None = None) -> list[dict[str, object]]:
+        """Replace the pool's catalog layout (admin); return the resulting numbered catalog."""
+        headers = {"Content-Type": "application/json",
+                   "Authorization": f"Bearer {self._auth_token(token)}"}
+        raw = self._send("PUT", "/catalog/layout", data=json.dumps({"blocks": blocks}).encode("utf-8"),
+                         headers=headers)
+        return list(json.loads(raw.decode("utf-8")).get("catalog", [])) if raw else []
+
     def catalog(self, *, token: str | None = None) -> list[dict[str, object]]:
         """Return the ordered task catalog (requires a login token)."""
         result = self._get_json("/catalog", token=self._auth_token(token))

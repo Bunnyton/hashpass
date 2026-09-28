@@ -23,11 +23,11 @@ stage "Перечисли всё внутри /home/student/search, но не г
   solve find /home/student/search -maxdepth 3
   observe output
   neutral ls cat pwd cd
-  on enter say "Дерево глубокое. Нужны не все этажи — только верхние три."
-  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ искать, потом — критерии. Прочитай его сообщение ещё раз."
-  hint output "unknown predicate" say "find не знает такого ключа. Присмотрись к дефисам: у find даже длинные ключи пишутся с одним."
-  hint tries 3 say "Вывод слишком длинный или слишком короткий? Сравни с деревом (ls -R search): сколько уровней ты показал?"
+  on pass say "find -maxdepth 1 — это почти ls. Сравни: find search -maxdepth 1 и ls search."
+  hint output "paths must precede expression" say "Порядок: сначала где искать, потом критерии."
+  hint output "unknown predicate" say "find не знает такого ключа — присмотрись к дефисам."
+  hint tries 3 say "Сравни вывод с ls -R search: лишние этажи или недостающие?"
   hint tries 6 say "man find — ищи слово «depth». Или загугли: «find ограничить глубину поиска»."
-  hint idle 240 say "Перечитай цель: всё, но не глубже трёх уровней. Сам каталог search — уровень 0."
+  hint idle 240 say "Сам каталог search — нулевой уровень."
 
 exec finale

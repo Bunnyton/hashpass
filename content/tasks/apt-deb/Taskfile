@@ -23,18 +23,19 @@ stage "Скачай пакет cmatrix (.deb по ссылке из брифа) 
   check exec sh -c "dpkg-query -W -f='\${Status}' cmatrix 2>/dev/null | grep -q 'install ok installed'"
   neutral ls cat pwd
   on enter say "Файл .deb — это уже пакет. Ему не нужен репозиторий, нужен установщик."
-  hint output "command not found" say "Скачивалки под таким именем нет. Какие ещё бывают? Загугли: «скачать файл из терминала linux» — их как минимум две."
-  hint output "dependency problems" say "Прочитай ответ dpkg целиком: он сам сказал, чего не хватает и почему остановился. В теории есть способ доделать сломанную установку."
+  on pass say "dpkg -L cmatrix перечислит все файлы, которые принёс пакет. Найди, где лежит сам бинарь."
+  hint output "command not found" say "Такой скачивалки нет. Их как минимум две — загугли."
+  hint output "dependency problems" say "dpkg сам сказал, чего не хватает. В теории есть, чем доделать."
   hint output "Unmet dependencies" say "apt отказался — и в последней строке сам написал, что попробовать. Прочитай её."
   hint output "Permission denied" say "Установщику не хватило прав. Как обычный пользователь одалживает права администратора на одну команду?"
-  hint tries 3 say "Файл скачался? ls покажет. Дальше — по теории: чем ставят .deb напрямую, и что делать, если установщик пожаловался."
-  hint tries 6 say "man dpkg — ищи «install»; и загляни, что apt умеет делать с файлом ./пакет.deb. Или загугли: «установить deb файл debian зависимости»."
+  hint tries 3 say "Файл скачался (ls)? Дальше — по теории."
+  hint tries 6 say "man dpkg — «install»; apt тоже умеет ставить ./файл.deb."
   hint idle 240 say "Перечитай бриф: ссылка там есть. cmatrix пока не запускай."
 
 stage "А теперь запусти cmatrix — и выйди из него клавишей q"
   accept cmd "cmatrix" ok
   neutral ls cat pwd
-  on enter say "Установлено. Сюрприз — по имени пакета. Выход — q."
+  on pass say "cmatrix -r — цветной дождь. А cmatrix -h расскажет остальное. Выход всё так же q."
   hint tries 4 say "Команда называется так же, как пакет."
   hint idle 240 say "Одно слово — имя пакета. Выйти — q."
 

@@ -48,7 +48,7 @@ def test_push_base_dispatches_to_cmd_push_base(monkeypatch):
     monkeypatch.setattr(engine.cli, "cmd_push_base",
                         lambda env, registry=None, *, force=False:  # noqa: ARG005
                         calls.append((registry, force)) or 0)
-    monkeypatch.setattr(engine, "_engine_enabled", lambda: True)
+    monkeypatch.setattr(engine_cli, "_engine_enabled", lambda: True)
     assert engine.main(["push", "base", "--force"]) == 0
     assert calls == [(None, True)]
 
@@ -60,7 +60,7 @@ def test_login_if_needed_dispatches_the_flag(monkeypatch):
     monkeypatch.setattr(engine.cli, "cmd_login",
                         lambda env, registry=None, *, if_needed=False:  # noqa: ARG005
                         calls.append((registry, if_needed)) or 0)
-    monkeypatch.setattr(engine, "_engine_enabled", lambda: True)
+    monkeypatch.setattr(engine_cli, "_engine_enabled", lambda: True)
     assert engine.main(["login", "http://p", "--if-needed"]) == 0
     assert engine.main(["login", "http://p"]) == 0
     assert calls == [("http://p", True), ("http://p", False)]
@@ -72,7 +72,17 @@ def test_logout_dispatches_to_cmd_logout(monkeypatch):
     calls = []
     monkeypatch.setattr(engine.cli, "cmd_logout",
                         lambda env, registry=None: calls.append(registry) or 0)  # noqa: ARG005
-    monkeypatch.setattr(engine, "_engine_enabled", lambda: True)
+    monkeypatch.setattr(engine_cli, "_engine_enabled", lambda: True)
     assert engine.main(["logout", "http://p"]) == 0
     assert engine.main(["logout"]) == 0
     assert calls == ["http://p", None]
+
+
+@pytest.mark.tier1
+def test_catalog_layout_dispatches(monkeypatch):
+    calls: list[tuple] = []
+    monkeypatch.setattr(engine_cli.cli, "cmd_catalog_layout",
+                        lambda env, specs, registry=None, io=None: calls.append((specs, registry)) or 0)  # noqa: ARG005
+    monkeypatch.setattr(engine_cli, "_engine_enabled", lambda: True)
+    assert engine_cli.main(["catalog", "layout", "--registry", "http://p", "Знакомство: a:1 b:1"]) == 0
+    assert calls == [(["Знакомство: a:1 b:1"], "http://p")]

@@ -15,18 +15,19 @@ stage "Создай файл /home/file.txt — обычному пользов�
   observe /home/file.txt
   neutral ls cat pwd
   on enter say "Ты student. /home принадлежит root. Ты — нет."
-  hint output "Permission denied" say "Прочитай ответ: доступ запрещён — тебе. А кто здесь может всё? Теория рассказывала, как одолжить его права на одну команду."
-  hint tries 3 say "Файл не появился? Посмотри, что ответила система. Кто владелец /home (ls -ld /home) — и кто ты?"
-  hint tries 6 say "Загугли: «linux выполнить команду от имени root». Или man sudo, первые строки."
+  on pass say "sudo пишет каждую команду в журнал — админ увидит, кто и что делал. sudo -l покажет, что тебе разрешено."
+  hint output "Permission denied" say "Доступ запрещён — тебе. А кто здесь может всё?"
+  hint tries 3 say "Кто владелец /home (ls -ld /home)? Как одолжить его права?"
+  hint tries 6 say "man sudo, первые строки."
   hint idle 240 say "Перечитай цель и теорию: одна команда, один префикс."
 
 stage "Удали /home/file.txt — его создал root"
   solve sudo rm -f /home/file.txt
   check exec test ! -e /home/file.txt
   neutral ls cat pwd
-  on enter say "Создал root — значит, и удалять ему."
+  on pass say "sudo -i открывает целую сессию root. Загляни — промпт тот же, а полномочия другие. Не забудь exit."
   hint output "Permission denied" say "Снова «доступ запрещён». Чей файл — того и права. Тот же приём, что и при создании файла."
-  hint tries 4 say "Файл всё ещё на месте? ls -l /home/file.txt покажет владельца. Кто может удалить чужой файл?"
+  hint tries 4 say "ls -l /home/file.txt — чей? Кто может удалить чужое?"
   hint idle 240 say "Перечитай: тот же трюк, другая команда."
 
 exec finale

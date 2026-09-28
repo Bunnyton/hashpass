@@ -24,10 +24,10 @@ stage "Найди файлы (только файлы), лежащие ровн�
   solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
   observe output
   neutral ls cat pwd cd
-  on enter say "Стенка снизу, стенка сверху — и в щели между ними ровно один этаж."
+  on pass say "Меняй -type f на -type d — и те же этажи покажут каталоги. Проверь."
   hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
-  hint tries 3 say "В выводе есть каталоги? Или файлы с других этажей? Сравни с ls -R search — какой предикат отсекает лишнее?"
-  hint tries 6 say "man find: слова «mindepth», «maxdepth», «type». Или загугли: «find файлы на определённой глубине»."
+  hint tries 3 say "В выводе есть каталоги или чужие этажи? Условий три."
+  hint tries 6 say "man find: mindepth, maxdepth, type."
   hint idle 240 say "Перечитай цель: ровно третий уровень и только файлы. Это три условия."
 
 exec finale

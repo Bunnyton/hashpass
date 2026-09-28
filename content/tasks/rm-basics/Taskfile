@@ -24,10 +24,11 @@ stage "Очисти /home/student/workdir до нуля — включая ск�
   check exec sh -c 'test -d /home/student/workdir && test -z "$(ls -A /home/student/workdir 2>/dev/null)"'
   neutral ls cat pwd
   on enter say "Мусор бывает на виду, а бывает — с точкой в начале имени."
-  hint output "Is a directory" say "rm отказался: это каталог. Прочитай его ответ — и вспомни из теории, какой ключ делает удаление рекурсивным."
+  on pass say "Ты только что удалил скрытое. Помни: rm не спрашивает и корзины у него нет — вот почему ls -a идёт первым."
+  hint output "Is a directory" say "rm отказался: это каталог. В теории был ключ."
   hint tries 3 say "Проверь, что осталось: ls показывает пусто? А ls -a?"
-  hint tries 6 say "Звёздочка в шелле не подставляет имена с точкой. Загугли: «bash glob скрытые файлы» — или man bash, раздел Pathname Expansion."
-  hint tries 10 say "Скрытое удаляется отдельным шаблоном (или через find). Каталог workdir при этом должен уцелеть — а если снёс, пересоздай."
+  hint tries 6 say "Звёздочка не подставляет имена с точкой. Загугли: «bash glob скрытые файлы»."
+  hint tries 10 say "Скрытое удаляется отдельным шаблоном. Каталог оставь."
   hint idle 240 say "Перечитай цель: ВСЁ содержимое, каталог остаётся. Проверяй через ls -A."
 
 exec finale

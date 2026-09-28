@@ -24,37 +24,25 @@ for a in "$@"; do
 done
 
 cd "$(dirname "$0")"
-TASKS=(
-    intro-hello        # 0 — знакомство, whoami
-    simple-ls          # 1 — ls
-    cat-file           # 2 — cat
-    ls-la              # 3 — ls -la, скрытые файлы
-    help-man           # 4–5 — --help + man (два этапа; бывшие help-flag и man-of-man)
-    cd-abs             # 6 — cd + pwd, абсолютные пути
-    cp-basics          # 7 — cp одиночный
-    cp-more            # 8 — cp -r, звёздочка
-    mv-basics          # 9 — mv, rename
-    rm-basics          # 10 — rm -rf, скрытые
-    ls-mv-cp           # 11 — обход дерева с whitelist
-    grep-search        # 12 — grep -r
-    find-1             # 13 — find -maxdepth
-    find-2             # 14 — find -mindepth+maxdepth+type
-    find-3             # 15 — find -name
-    find-4             # 16 — find -o (OR)
-    find-5             # 17 — find -not -empty
-    sudo-basics        # 18 — sudo touch/rm
-    apt-update         # 19 — apt install sl
-    apt-remove         # 20 — apt remove sl
-    apt-add-repo       # 21 — добавить репозиторий
-    apt-deb            # 22 — dpkg -i .deb
-    star-wars          # 23 — приз: telnet
-    vim-intro          # 24 — vim / vimtutor
-    chmod-basics       # 25 — chmod NNN
-    chgrp-basics       # 26 — chgrp
-    chmod-evil         # 30 — chmod +/- относительная запись
-    # старые (сохраняем на будущее)
-    first-steps grep-hunt inventory fruit-store proc-audit showcase
+# Блоки каталога по темам. Порядок блоков и заданий внутри = нумерация на пуле: после всех
+# push-ей раскладка целиком отправляется `hashengine catalog layout` (только администратор).
+# Формат строки: 'Название блока: каталог каталог …' (имена каталогов заданий здесь).
+BLOCKS=(
+    'Знакомство: intro-hello simple-ls cat-file ls-la help-man cd-abs'
+    'Файлы и каталоги: cp-basics cp-more mv-basics rm-basics ls-mv-cp inventory'
+    'Поиск: grep-search grep-hunt find-1 find-2 find-3 find-4 find-5'
+    'Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
+    'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit'
+    'Редактор и текст: vim-intro fruit-store'
+    'Призы: star-wars'
+    'Архив: first-steps showcase'
 )
+# Порядок сборки/пуша — тот же, что в блоках (родитель из `from` раньше потомка).
+TASKS=()
+for block in "${BLOCKS[@]}"; do
+    read -r -a names <<< "${block#*:}"
+    TASKS+=("${names[@]}")
+done
 # Must equal the namespace the images were built under -- `hashengine build` namespaces images
 # by the LOCAL login, and the pool now rejects a push whose ref namespace differs from the
 # pushing user (author == author): a mismatch here gets a 403, not a silent wrong owner.
@@ -90,19 +78,37 @@ if [[ -z "$DRY" ]]; then
     hashengine push base
 fi
 
+declare -A REF_OF
 for name in "${TASKS[@]}"; do
     echo
     echo "=== $name ==="
+    # image_ref = 'first-steps:1'; on the pool it lives under <login>/first-steps:1
+    image_ref=$(grep -E '^image ' "$name/Taskfile" | head -1 | awk '{print $2}')
+    REF_OF[$name]="$USER_LOGIN/$image_ref"
     (
         cd "$name"
         hashengine build Taskfile
-        image_ref=$(grep -E '^image ' Taskfile | head -1 | awk '{print $2}')
-        # image_ref = 'first-steps:1'; on the pool it lives under <login>/first-steps:1
         if [[ -z "$DRY" ]]; then
             hashengine push "$USER_LOGIN/$image_ref" --task $FORCE
         fi
     )
 done
+
+# Раскладка каталога: блоки по темам, нумерация по порядку; задания, которых больше нет в
+# BLOCKS (например, старые help-flag / man-of-man), из каталога уходят (образы остаются).
+SPECS=()
+for block in "${BLOCKS[@]}"; do
+    title="${block%%:*}"
+    read -r -a names <<< "${block#*:}"
+    refs=()
+    for n in "${names[@]}"; do refs+=("${REF_OF[$n]}"); done
+    SPECS+=("$title: ${refs[*]}")
+done
+if [[ -z "$DRY" ]]; then
+    echo
+    echo "── раскладка каталога по блокам ──"
+    hashengine catalog layout --registry "$POOL_URL" "${SPECS[@]}"
+fi
 
 echo
 echo "готово. Проверьте пул: hashpass"

@@ -6,6 +6,22 @@
 # Interactive-only.
 case $- in *i*) ;; *) return ;; esac
 
+# Once per shell. The console starts bash with `--rcfile /etc/hp-bashrc`; every other
+# interactive bash (su -, sudo -i, a user the student created) gets here from /etc/bash.bashrc
+# (image/base.py appends the hook), so the prompt, the grading and the hints follow the student
+# across identities. Not exported on purpose: a child shell must load its own copy.
+[ -n "${__HP_LOADED-}" ] && return
+__HP_LOADED=1
+# `su -` and `sudo` scrub the environment; the grade port survives in /run/hp/port (hp-console).
+# A shell that had to recover it this way is NESTED: it hooks in silently -- only the console's
+# first shell greets the host (the greeting renders the intro; a second one would replay it).
+__hp_nested=0
+if [ -z "${HP_PORT-}" ] && [ -r /run/hp/port ]; then
+    HP_PORT=$(cat /run/hp/port 2>/dev/null)
+    export HP_PORT
+    __hp_nested=1
+fi
+
 # Debian keeps /usr/games out of ROOT's login PATH (login.defs ENV_SUPATH), so a task run as
 # root (`settings user root`) could `apt install sl` and still get "sl: command not found" --
 # the package lands in /usr/games. Students and root alike get the games dirs here, once.
@@ -173,7 +189,12 @@ if [ -n "${HP_PORT-}" ]; then
     # buffer, arm the next timing sample, then render the prompt.
     PROMPT_COMMAND='__hp_postexec "$__hp_cmd"; __hp_cmd=""; __hp_precmd; _hp_render_prompt'
 
-    # Greet the host once so it renders the intro / read / first stage announce.
-    hp-io hello 2>/dev/null
+    # Greet the host once so it renders the intro / read / first stage announce -- from the
+    # console's first shell only; a plain child `bash` inherits HP_GREETED, a `su -`/`sudo -i`
+    # shell is marked nested above.
+    if [ "$__hp_nested" -eq 0 ] && [ -z "${HP_GREETED-}" ]; then
+        export HP_GREETED=1
+        hp-io hello 2>/dev/null
+    fi
     __hp_cmd=""
 fi

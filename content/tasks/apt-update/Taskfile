@@ -16,10 +16,11 @@ stage "Установи пакет sl — самую свежую версию �
     sudo apt-get install -y sl >/dev/null 2>&1
   check exec command -v sl || test -x /usr/games/sl
   neutral ls cat pwd
-  on enter say "Пакета sl в системе пока нет. apt слушается только администратора — а ты student."
-  hint output "Unable to locate package" say "apt не нашёл пакет. Когда список пакетов обновлялся в последний раз? В теории было два шага, не один."
+  on enter say "apt слушается только администратора. А ты — student."
+  on pass say "Поезд ходит на каждую опечатку ls. Попробуй sl -l — вагоны поедут назад. А sl -F… сам увидишь."
+  hint output "Unable to locate package" say "apt не нашёл пакет. Когда обновлялся список? Шагов два."
   hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
-  hint tries 3 say "Пакет ещё не стоит? Прочитай, что ответил apt — обычно он говорит прямым текстом, чего хочет."
+  hint tries 3 say "Прочитай ответ apt — он говорит прямым текстом."
   hint tries 6 say "Загугли: «apt установить пакет debian». Или apt --help."
   hint idle 240 say "Перечитай теорию: сначала обновить список, потом установить."
 

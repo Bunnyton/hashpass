@@ -20,8 +20,9 @@ stage "Собери все строки с TODO из /home/student/legacy/notes.
   observe /home/student/todos.txt
   neutral ls cat less pwd
   on enter say "Тимлид в отпуске. Заметки — твои. TODO — тоже."
+  on pass say "Бонус: grep -c TODO notes.txt — сколько их всего? А grep -v TODO — всё, кроме них."
   hint cmd grep missing TODO say "Ищем именно строки с TODO — проверь, что ты просишь у grep."
-  hint tries 3 say "Строки на экране уже видишь? Тогда осталось отправить их в файл, а не на экран."
+  hint tries 3 say "Строки видишь? Отправь их в файл, а не на экран."
   hint tries 6 say "Загугли: «grep вывод в файл» или «bash перенаправление вывода»."
   hint idle 240 say "Перечитай цель: какие строки, из какого файла, в какой файл."
 

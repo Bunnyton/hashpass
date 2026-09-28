@@ -203,24 +203,44 @@ def _without_sudo(segment: str) -> str:
     return " ".join(tokens)
 
 
+def _token_matches(want: str, got: str, *, last: bool) -> bool:
+    """Match one pattern word exactly; the LAST word may be a prefix when it ends in `/` or `.`."""
+    if want == got:
+        return True
+    return last and not (want[-1].isalnum() or want[-1] in "_-") and got.startswith(want)
+
+
 def _cmd_matches(pattern: str, command: str) -> bool:
     """
     Whether an `accept cmd` pattern names the command the student ran.
 
-    The pattern must be the START of the command (after an optional `sudo`; a path in the first
-    word counts by its basename) and end on a word boundary: `cmatrix` matches `cmatrix`,
-    `sudo cmatrix -s` and `/usr/games/cmatrix`, not `dpkg -s cmatrix` or `ls cmatrix.deb`;
-    `sl` does not match `sleep`. A pattern ending in a non-word character (`apt install ./`) is
-    a plain prefix. The live console ships the LAST simple command of a pipeline/`&&` chain as
-    the command (so `ls --help | less` arrives as `less …`); the segment split below matters
+    Per pipeline segment (after an optional `sudo`; a path in the first word counts by its
+    basename): the pattern's first word must be the command itself, and its remaining words must
+    appear in order among the command's words. Word-based, so an alias the student's shell
+    expands (`ls --help` arrives as `ls --color=auto --help` from a fresh user's ~/.bashrc)
+    still matches, while `dpkg -s cmatrix` never counts as `cmatrix` and `sleep` never as `sl`.
+    A pattern word ending in `/` or `.` (`apt install ./`) matches a word by prefix. The live
+    console ships the LAST simple command of a pipeline/`&&` chain; the segment split matters
     for the test/`feed()` path, which sees the whole line.
     """
+    want = pattern.split()
+    if not want:
+        return False
     for raw in _SEG_SPLIT.split(command.strip()):
-        seg = _without_sudo(raw)
-        if not seg.startswith(pattern):
+        got = _without_sudo(raw).split()
+        if not got or got[0] != want[0]:
             continue
-        rest = seg[len(pattern):]
-        if not (pattern[-1].isalnum() or pattern[-1] in "_-") or not rest or rest[0].isspace():
+        pos = 1
+        ok = True
+        for i, w in enumerate(want[1:], start=1):
+            last = i == len(want) - 1
+            while pos < len(got) and not _token_matches(w, got[pos], last=last):
+                pos += 1
+            if pos >= len(got):
+                ok = False
+                break
+            pos += 1
+        if ok:
             return True
     return False
 

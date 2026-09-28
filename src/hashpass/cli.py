@@ -554,7 +554,6 @@ def _render_intro(session: object, readme: str | None, io: Io) -> None:
     if readme:
         session.read_text(readme)            # markdown, paged (Enter), even reveal
     _announce_stage(session, io)
-    io.write("(работайте в терминале — проверка после каждой команды; exit — завершить)\n")
     session.enter_stage()                    # stage-1 on_enter — right before the prompt
 
 
@@ -1476,6 +1475,44 @@ def cmd_push_base(env: Home, registry: str | None = None, *, force: bool = False
                      f"перезаписать: hashengine push base --force\x1b[0m\n")
             return 0
     return cmd_push(env, ref, url, publish=False, force=True, io=io)
+
+
+def parse_layout_specs(specs: list[str], owner: str) -> list[dict[str, object]]:
+    """
+    Turn `"Название: ref ref …"` strings into catalog blocks (bare refs get `owner/`).
+
+    Each spec is one block in catalog order; its refs are the block's tasks in order, spelled
+    as published (`name:version`); only a missing namespace is filled in, exactly like
+    `hashengine build` does for the image name.
+    """
+    blocks: list[dict[str, object]] = []
+    for spec in specs:
+        name, sep, rest = spec.partition(":")
+        if not sep or not name.strip():
+            msg = f"блок задаётся как «Название: ref ref …», получено: {spec!r}"
+            raise ValueError(msg)
+        refs = [r if "/" in r else f"{owner}/{r}" for r in rest.split()]
+        blocks.append({"name": name.strip(), "open": True, "tasks": refs})
+    return blocks
+
+
+def cmd_catalog_layout(env: Home, specs: list[str], registry: str | None = None,
+                       io: Io | None = None) -> int:
+    """Set the pool catalog's blocks and order from `"Название: ref …"` specs; print the numbering."""
+    io = io or _default_io()
+    url = _ensure_registry_login(env, registry, io)
+    token = _pool_token(env, url) or ""
+    owner = token_user(token) or ""
+    blocks = parse_layout_specs(specs, owner)
+    client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+    rows = _push_call(client.set_catalog_layout, blocks, token=token)
+    wanted = {r for b in blocks for r in b["tasks"]}
+    listed = {str(r.get("ref")) for r in rows}
+    for row in rows:
+        io.write(f"№{row.get('number')}  {row.get('ref')}   [{row.get('block_name', '')}]\n")
+    for ref in sorted(wanted - listed):
+        io.write(f"\x1b[33m⚠ не на пуле, пропущен: {ref}\x1b[0m\n")
+    return 0
 
 
 def cmd_pull(env: Home, ref: str, registry: str | None = None, io: Io | None = None) -> int:

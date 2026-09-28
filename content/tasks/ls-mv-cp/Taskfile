@@ -23,10 +23,10 @@ stage "Где-то в /home/student/subdir_1, subdir_2 или subdir_3 лежи�
   variant grep -rh phrase /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3
   observe output
   neutral ls cd pwd
-  on enter say "Инструменты: ls, cd, cat. И клавиша Tab, чтобы не набирать имена целиком."
-  hint cmd cat say "Файл открыт — а нужная строка внутри? Если да, покажи ТОЛЬКО её. Если нет — ищи дальше."
-  hint tries 4 say "Ты обошёл все три subdir до самого дна? В одном из них глубже, чем кажется."
-  hint tries 8 say "Обходить руками — честно, но долго. У grep есть ключ для поиска по всем подкаталогам сразу: man grep, слово «recursive»."
+  on pass say "Три подвала руками — честно. В следующий раз: grep -r 'phrase:' . — и подвалы обойдёт машина."
+  hint cmd cat say "Файл открыт — покажи только нужную строку."
+  hint tries 4 say "Все три subdir до самого дна?"
+  hint tries 8 say "У grep есть ключ для поиска по всем подкаталогам."
   hint idle 300 say "Перечитай цель: показать нужно ТОЛЬКО строку phrase:…, а не весь файл."
 
 exec finale

@@ -21,10 +21,11 @@ stage "В /home/student/workspace файл file5 должен называтьс
   observe bool /home/student/workspace/file5
   neutral ls cat pwd
   on enter say "Кто-то перепутал цифру. Содержимое верное — имя нет."
-  hint output "No such file or directory" say "Команда не нашла файл. Прочитай, какой именно — и сверь с ls: ты точно в workspace?"
-  hint cmd cp say "Теперь файлов два, а нужен один с новым именем. Копировать — не то же самое, что переименовать."
-  hint tries 3 say "Переименование в Linux — это перемещение на новое имя. Какая команда из теории перемещает?"
-  hint tries 6 say "man mv — второй абзац DESCRIPTION. Или загугли: «переименовать файл в терминале linux»."
+  on pass say "mv переименовывает и каталоги, и сразу несколько файлов в другой каталог. Перенеси file2 в новый каталог done."
+  hint output "No such file or directory" say "Какой файл не нашёлся? Сверь имя с ls."
+  hint cmd cp say "Теперь файлов два, а нужен один с новым именем."
+  hint tries 3 say "Переименование — это перемещение на новое имя."
+  hint tries 6 say "man mv — второй абзац DESCRIPTION."
   hint idle 240 say "Перечитай цель: старое имя, новое имя, один каталог."
 
 exec finale

@@ -15,10 +15,11 @@ stage "Создай файл /etc/apt/sources.list.d/custom.list с одной �
     echo 'deb http://deb.debian.org/debian trixie main' | sudo tee /etc/apt/sources.list.d/custom.list >/dev/null
   observe /etc/apt/sources.list.d/custom.list
   neutral ls cat pwd
-  on enter say "Источники apt — обычные текстовые файлы. Добавить свой — значит положить рядом ещё один. Каталог, правда, принадлежит root."
-  hint output "command not found" say "Такой программы тут нет. Файл из одной строки можно сделать и без редактора — вспомни, как ты создавал hello.txt."
-  hint output "Permission denied" say "Запись в файл делает твоя оболочка, а не команда слева от >. Прочитай в теории, как отдать саму запись команде с правами администратора."
-  hint tries 3 say "Файл есть? cat его: строка должна совпадать с брифом символ в символ, и она одна."
+  on enter say "Каталог /etc/apt принадлежит root."
+  on pass say "Файл лежит в /etc/apt/sources.list.d — загляни, что там ещё, кроме твоего."
+  hint output "command not found" say "Файл из одной строки делается и без редактора — вспомни hello.txt."
+  hint output "Permission denied" say "Запись через > делает твоя оболочка, а не команда слева. Теория знает обход."
+  hint tries 3 say "cat файл: одна строка, символ в символ как в брифе?"
   hint tries 8 say "Загугли: «bash создать файл с одной строкой без редактора»."
   hint idle 240 say "Перечитай бриф: путь к файлу и строка — оба даны."
 
@@ -27,9 +28,9 @@ stage "Дай apt узнать о новом репозитории"
   accept cmd "apt update" ok
   accept cmd "apt-get update" ok
   neutral ls cat pwd
-  on enter say "apt пока не в курсе. Какой командой он перечитывает свои источники?"
+  on pass say "apt policy покажет, откуда теперь берутся пакеты. Твой источник — в списке."
   hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
-  hint tries 3 say "Ты делал это в задании про установку sl — первый из двух шагов."
+  hint tries 3 say "Первый из двух шагов задания про sl."
   hint idle 240 say "apt --help — там есть действие, которое обновляет список пакетов."
 
 exec finale

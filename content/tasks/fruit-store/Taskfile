@@ -20,7 +20,8 @@ stage "Отсортируй журнал /home/student/store/sold.txt и сох�
   observe /home/student/store/sorted.txt
   neutral ls cat pwd less
   on enter say "Хозяин ларька сортировать не умеет. Зато умеет шелл."
-  hint tries 3 say "Отсортированный список у тебя на экране? Осталось положить его в файл — ты это уже делал."
+  on pass say "sort -r перевернёт порядок. А sort | uniq -c посчитает, сколько раз продали каждый фрукт — попробуй."
+  hint tries 3 say "Отсортированное на экране? Отправь в файл."
   hint tries 6 say "Загугли: «linux отсортировать строки файла» и «bash вывод команды в файл»."
   hint idle 240 say "Перечитай цель: из какого файла, в какой файл, в каком порядке."
 
@@ -28,8 +29,8 @@ stage "Оставь в отсортированном списке только 
   solve uniq /home/student/store/sorted.txt > /home/student/store/unique.txt
   observe /home/student/store/unique.txt
   neutral ls cat pwd less
-  on enter say "В отсортированном списке одинаковые строки стоят рядом. Это не случайно."
-  hint tries 3 say "Проверь unique.txt: дубли ещё есть? Какая команда убирает повторы — и почему ей нужен именно отсортированный вход?"
+  on pass say "uniq работает только по соседям — поэтому sort нужен раньше. Проверь без sort: дубли останутся."
+  hint tries 3 say "Дубли ещё есть? Какая команда убирает повторы — и почему ей нужен sort?"
   hint tries 6 say "Загугли: «linux удалить повторяющиеся строки из файла». Название команды очень короткое."
   hint idle 240 say "Перечитай цель: вход — sorted.txt, выход — unique.txt."
 
@@ -37,8 +38,8 @@ stage "Посчитай, сколько строк в unique.txt, и запиш�
   solve wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt
   observe /home/student/store/howmany.txt
   neutral ls cat pwd less
-  on enter say "Хозяину нужно одно число. Без имени файла рядом."
-  hint tries 3 say "cat howmany.txt — там только число? Если рядом имя файла, подумай, как отдать команде содержимое, а не имя."
+  on pass say "wc -w считает слова, wc -c — байты. Одна команда, три счётчика."
+  hint tries 3 say "cat howmany.txt: там только число, без имени файла?"
   hint tries 6 say "Загугли: «wc посчитать строки без имени файла» или «bash перенаправление ввода»."
   hint idle 240 say "Перечитай цель: число строк, одно число, в файл."
 

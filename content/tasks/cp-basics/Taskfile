@@ -20,11 +20,11 @@ stage "Положи копию /home/student/copy_me.txt в каталог /home
   variant cp /home/student/copy_me.txt /home/student/wait_file/copy_me.txt
   observe /home/student/wait_file/copy_me.txt /home/student/copy_me.txt
   neutral ls cat pwd
-  on enter say "Файл ждут в wait_file. Оригинал пусть остаётся, где был."
-  hint output "No such file or directory" say "cp говорит, что чего-то не нашёл. Прочитай, чего именно — и проверь путь через ls."
-  hint cmd mv say "Файл переехал, а не скопировался. Оригинал должен остаться — верни его и подумай, чем cp отличается от mv."
-  hint tries 3 say "Загляни в wait_file: появилось ли там что-нибудь? Что cp принимает первым аргументом, а что вторым?"
-  hint tries 6 say "man cp — первые две строки SYNOPSIS. Или загугли: «cp скопировать файл в папку linux»."
+  on pass say "cp умеет копировать под новым именем: cp a.txt b.txt. Сделай третью копию с любым именем."
+  hint output "No such file or directory" say "cp сказал, чего не нашёл. Прочитай — и проверь путь через ls."
+  hint cmd mv say "Файл переехал, а не скопировался. Верни оригинал."
+  hint tries 3 say "Загляни в wait_file: что там? Что cp принимает первым, что вторым?"
+  hint tries 6 say "man cp — первые две строки SYNOPSIS."
   hint idle 240 say "Перечитай цель: откуда — куда. Оба пути есть в тексте задания."
 
 exec finale

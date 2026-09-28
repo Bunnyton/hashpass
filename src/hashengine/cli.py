@@ -56,12 +56,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_pull.add_argument("ref")
     p_pull.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
     sub.add_parser("images", help="список локально собранных образов и заданий")
+    p_cat = sub.add_parser("catalog", help="каталог пула: раскладка по блокам (администратор)")
+    p_cat.add_argument("action", choices=["layout"], help="layout — задать блоки и порядок")
+    p_cat.add_argument("specs", nargs="+", metavar="'Название: ref ref …'",
+                       help="блоки по порядку; ref без namespace получает ваш логин")
+    p_cat.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
     p_remote = sub.add_parser("remote", help="список образов/заданий на пуле")
     p_remote.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
     return parser
 
 
-def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
+def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911, C901
     """Route a parsed engine sub-command (no sub-command prints help)."""
     command = args.command
     if command is None:
@@ -85,6 +90,8 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911
         return cli.cmd_pull(env, args.ref, args.registry)
     if command == "remote":
         return cli.cmd_remote_images(env, args.registry)
+    if command == "catalog":
+        return cli.cmd_catalog_layout(env, args.specs, args.registry)
     return cli.cmd_images(env)
 
 

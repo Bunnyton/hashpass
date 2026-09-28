@@ -21,12 +21,12 @@ stage "Скопируй всё содержимое /home/student/dir1 в /home/
   variant cp -r /home/student/dir1/file1.txt /home/student/dir1/file2.txt /home/student/dir1/file3.txt /home/student/dir2/
   observe /home/student/dir2/file1.txt /home/student/dir2/file2.txt /home/student/dir2/file3.txt
   neutral ls cat pwd
-  on enter say "В dir2 пока пусто. После твоей команды там должно лежать всё то же, что в dir1."
+  on pass say "Бонус: cp -rv покажет каждый файл, который копирует. Попробуй на dir1 → dir3."
   hint output "omitting directory" say "Прочитай ответ cp целиком: он сам сказал, чего ему не хватило."
-  hint cmd cp has -r say "Скопировалось — но КУДА именно? Загляни в dir2 и сравни с целью: содержимое dir1 должно лежать прямо в dir2, а не каталогом внутри."
+  hint cmd cp has -r say "Скопировалось — но куда именно? Загляни в dir2."
   hint tries 3 say "Загляни в dir2: что там оказалось? Всё, что было в dir1, или только часть?"
   hint tries 6 say "man cp — найди слово recursive. Или загугли: «cp скопировать каталог со всем содержимым»."
-  hint tries 10 say "Каталог — не файл; cp обходит его только с ключом рекурсии. Какая это буква — ты уже знаешь."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
+  hint tries 10 say "Каталог — не файл; cp обходит его только с ключом рекурсии."
+  hint idle 240 say "Перечитай цель и вывод последней команды."
 
 exec finale

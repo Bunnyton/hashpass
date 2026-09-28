@@ -25,8 +25,9 @@ stage "Найди в /home/student/search все непустые файлы"
   observe output
   neutral ls cat pwd cd
   on enter say "Половина файлов — пустышки. Нужны те, в которых что-то есть."
+  on pass say "-empty находит и пустые каталоги. Сколько их в search? (подсказка: -type d)"
   hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
-  hint tries 3 say "В выводе есть пустые файлы или каталоги? Проверь размеры: ls -lR search. Какой предикат из теории отвечает за пустоту — и как его перевернуть?"
+  hint tries 3 say "ls -lR search: какие пустые? Как перевернуть предикат?"
   hint tries 6 say "man find: «empty», «not». Или загугли: «find непустые файлы»."
   hint idle 240 say "Перечитай цель: файлы (не каталоги), НЕпустые."
 

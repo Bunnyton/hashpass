@@ -45,7 +45,13 @@ _SYSTEMD_INSTALL = (
     "&& gpasswd -a student sudo "
     "&& mkdir -p /etc/sudoers.d "
     "&& echo 'student ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/student "
-    "&& chmod 440 /etc/sudoers.d/student"
+    "&& chmod 440 /etc/sudoers.d/student "
+    # The hashpass shell is the DEFAULT shell experience, not a one-off: every interactive bash
+    # (su -, sudo -i, users the student creates) sources /etc/hp-bashrc via /etc/bash.bashrc,
+    # and `useradd` gives new users bash, so grading and hints follow the student everywhere.
+    "&& printf '\\n# hashpass: live grading hooks in every interactive shell\\n"
+    "[ -r /etc/hp-bashrc ] && . /etc/hp-bashrc\\n' >> /etc/bash.bashrc "
+    "&& useradd -D -s /bin/bash"
 )
 
 
