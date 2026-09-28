@@ -106,7 +106,7 @@ def test_text_menu_asks_once_per_task(tmp_path, monkeypatch):
     def read(prompt: str) -> str:
         prompts.append(prompt)
         return ""                                          # Enter: go on
-    cli._run_from_menu(env, "http://pool", "stud", "tok", 1, cli.Io(read=read, write=out.append, clock=lambda: ""))  # noqa: SLF001
+    cli._run_from_menu(env, 1, cli.Io(read=read, write=out.append, clock=lambda: ""))  # noqa: SLF001
     assert runs == ["b/a:1", "b/b:1"]
     # ONE question after №1 (the old outer loop asked a second time); after №2 -- the last
     # available task -- no question at all, just the note.
