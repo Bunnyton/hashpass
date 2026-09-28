@@ -114,7 +114,7 @@ def test_run_from_menu_delegates_to_pool_run_which_chains_itself(tmp_path, monke
     monkeypatch.setattr(cli, "cmd_pool_run", lambda _env, arg, _io=None: ran.append(arg) or 0)
     io = cli.Io(read=lambda _p: pytest.fail("the menu must not prompt"), write=lambda _s: None,
                 clock=lambda: "")
-    cli._run_from_menu(env, "http://p", "stud", "tok", 1, io)   # noqa: SLF001
+    cli._run_from_menu(env, 1, io)   # noqa: SLF001
     assert ran == ["1"]
 
 

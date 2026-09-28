@@ -1924,11 +1924,10 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
         if not row.get("available", True):
             io.write("\x1b[33mзадание сейчас недоступно\x1b[0m\n")
             continue
-        _run_from_menu(env, url, user, token, int(choice), io)
+        _run_from_menu(env, int(choice), io)
 
 
-def _run_from_menu(env: Home, url: str, user: str, token: str,  # noqa: PLR0913, PLR0917, ARG001
-                   number: int, io: Io) -> None:
+def _run_from_menu(env: Home, number: int, io: Io) -> None:
     """Run a task from the text menu; `cmd_pool_run` itself shows the verdict and chains onward."""
     cmd_pool_run(env, str(number), io)
 
