@@ -25,8 +25,8 @@ def _shown_lines(text: str) -> str:
     return "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
 
 
-def _student_texts(task: Path) -> list[tuple[str, str]]:
-    """(where, text) for every string a student can see in this task."""
+def _student_texts(task: Path, *, assets: bool = True) -> list[tuple[str, str]]:
+    """(where, text) for every string a student can see in this task (`assets=False`: prose only)."""
     out: list[tuple[str, str]] = []
     for line in (task / "Taskfile").read_text(encoding="utf-8").splitlines():
         if line.lstrip().startswith("#"):
@@ -35,6 +35,8 @@ def _student_texts(task: Path) -> list[tuple[str, str]]:
     for f in sorted(task.rglob("*")):
         if not f.is_file() or f.name.lower() == "readme.md" or f.name == "Taskfile":
             continue                               # README is for authors; the Taskfile is parsed above
+        if not assets and f.suffix != ".md" and f.name != "finale":
+            continue                               # data files of the task's world, not its prose
         try:
             text = f.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -60,3 +62,31 @@ def test_tasks_run_as_student_unless_a_reason_says_root(task: Path):
     text = (task / "Taskfile").read_text(encoding="utf-8")
     if _USER_ROOT.search(text):
         assert _ROOT_REASON.search(text), f"{task.name}: `user root` without a `# root: …` reason"
+
+
+_MIN_DUP = 28   # characters: long enough to be a real repeated sentence, not a path or a name
+
+
+def _phrases(text: str) -> list[str]:
+    """Sentences of a student-facing text, normalized (whitespace, case, trailing punctuation)."""
+    out = []
+    for raw in re.split(r"(?<=[.!?…])\s+|\n", text):
+        t = " ".join(raw.split()).strip(' .!?…—-*`"«»')
+        if len(t) >= _MIN_DUP and not t.startswith(("#", "http")):
+            out.append(t.lower())
+    return out
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("task", TASKS, ids=[t.name for t in TASKS])
+def test_student_facing_text_does_not_repeat_itself(task: Path):
+    # Rule (user, 2026-09-29): every thought once -- no restating between say, brief, stage,
+    # on enter, hints and finale («в звёздных войнах много дублирования»).
+    seen: dict[str, str] = {}
+    dups = []
+    for where, text in _student_texts(task, assets=False):
+        for ph in _phrases(text):
+            if ph in seen and seen[ph] != where:
+                dups.append(f"{seen[ph]} ↔ {where}: {ph!r}")
+            seen.setdefault(ph, where)
+    assert not dups, "\n".join(dups)

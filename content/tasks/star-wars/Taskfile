@@ -11,14 +11,13 @@ hidden hp
 settings
   pager on
 
-say "Ты добил модуль базовых команд. Держи приз, оператор."
+say "Модуль базовых команд позади. Держи приз, оператор."
 read brief.md
 
-stage "Подключись к telehack.com по telnet и посмотри «Звёздные войны» в ASCII"
+stage "Подключись к telehack.com и посмотри «Звёздные войны»"
   accept cmd "telnet"
   neutral ls cat pwd
-  on enter say "Никаких проверок. Просто смотри."
   on pass say "На telehack.com есть ещё игры: набери help после входа."
-  hint idle 300 say "Команда — в брифе. Выход из telnet: Ctrl+], потом quit."
+  hint idle 300 say "Застрял внутри? Выход описан в брифе."
 
 exec finale
