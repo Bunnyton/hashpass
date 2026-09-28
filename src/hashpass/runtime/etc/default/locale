@@ -1,0 +1,4 @@
+# hashpass console: `su - <user>` reads this via pam_env. Without it LANG is unset, the
+# shell runs in the C locale and readline refuses Cyrillic input. C.UTF-8 keeps sort/ls
+# collation byte-ordered (grading-stable) while making the terminal UTF-8 aware.
+LANG=C.UTF-8

@@ -16,8 +16,10 @@
 #
 # Image-edit console (no HP_PORT): plain bash with the same rcfile (ble.sh, aliases, prompt)
 # but with the intro banner shown and the grade hooks skipped.
+# Belt and braces for the locale (see hp-console): readline reads it at startup.
+export LANG="${LANG:-C.UTF-8}"
 if [ -n "$HP_PORT" ] && command -v script >/dev/null 2>&1; then
-    log="$HOME/.hp-typescript"
+    log=/run/hp/typescript          # tmpfs, outside $HOME (see hp-console)
     : > "$log" 2>/dev/null || true
     exec env SHELL=/bin/sh \
         script -q -e -f -c '/bin/bash --rcfile /etc/hp-bashrc -i' "$log"

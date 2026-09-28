@@ -40,14 +40,6 @@ alias ll='ls -alh --color=auto'
 alias la='ls -A --color=auto'
 alias l='ls -CF --color=auto'
 
-# Welcome banner for the plain image/edit shell.  A graded task (HP_PORT set) drives its own
-# intro over the grade socket, so stay quiet there.
-if [ -z "${HP_PORT-}" ] && [ -r /etc/hp-banner ]; then
-    printf '\e[95m'
-    cat /etc/hp-banner 2>/dev/null
-    printf '\e[0m'
-fi
-
 # ---------------------------------------------------------------------------------------
 # Live-grade hooks -- ONLY inside a task (HP_PORT set).
 #
@@ -142,7 +134,7 @@ if [ -n "${HP_PORT-}" ]; then
         local rc=$?
         local cmd="$1"
         [ -z "$cmd" ] && return
-        local log="$HOME/.hp-typescript"
+        local log=/run/hp/typescript
         local size out=""
         size=$(stat -c %s "$log" 2>/dev/null || echo 0)
         if [ "$size" -gt "${__hp_off:-0}" ]; then

@@ -18,6 +18,20 @@ mount -o remount,gid=5,mode=620,ptmxmode=666,max=4096 /dev/pts 2>/dev/null \
 [ -e /dev/pts/ptmx ] && ln -sf pts/ptmx /dev/ptmx 2>/dev/null || true
 
 user="${HP_USER:-student}"
+# UTF-8 for the whole console session (readline needs it BEFORE bash starts, or Cyrillic
+# input is echoed as \320\277… octal escapes). /etc/default/locale is there too, but
+# pam_env did not deliver it through `su -` in the booted container -- pass it explicitly.
+export LANG=C.UTF-8
+# The console transcript (script(1) in hp-bash) lives in /run/hp -- tmpfs, OUTSIDE the home
+# directory, so `ls -a ~` never shows engine internals. Owned by the console user (script
+# runs as them), 0700 so it is theirs alone.
+mkdir -p /run/hp && chmod 700 /run/hp && chown "$user" /run/hp 2>/dev/null || true
+# The machine has booted: greet before any shell (graded task or plain image console alike).
+if [ -r /etc/hp-banner ]; then
+    printf '\033[1;31m'
+    cat /etc/hp-banner
+    printf '\033[0m'
+fi
 if id "$user" >/dev/null 2>&1; then
     if [ "$user" != root ]; then
         case "${HP_SUDO:-on}" in
@@ -25,7 +39,7 @@ if id "$user" >/dev/null 2>&1; then
             *)   gpasswd -a "$user" sudo >/dev/null 2>&1 ;;
         esac
     fi
-    su --whitelist-environment=HP_PORT - "$user" -s /usr/local/sbin/hp-bash
+    su --whitelist-environment=HP_PORT,LANG - "$user" -s /usr/local/sbin/hp-bash
 else
     /usr/local/sbin/hp-bash   # unknown user: fall back to a root shell
 fi

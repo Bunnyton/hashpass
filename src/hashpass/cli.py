@@ -1952,17 +1952,84 @@ def _run_from_menu(env: Home, url: str, user: str, token: str,  # noqa: PLR0913,
         current = int(ans) if ans.isdigit() else nxt
 
 
+_BIG_GLYPHS: dict[str, tuple[str, ...]] = {          # 5-row block font, just the verdict letters
+    "Р": ("████ ", "█   █", "████ ", "█    ", "█    "),
+    "Е": ("█████", "█    ", "████ ", "█    ", "█████"),
+    "Ш": ("█ █ █", "█ █ █", "█ █ █", "█ █ █", "█████"),
+    "Н": ("█   █", "█   █", "█████", "█   █", "█   █"),
+    "О": (" ███ ", "█   █", "█   █", "█   █", " ███ "),
+    " ": ("   ", "   ", "   ", "   ", "   "),
+}
+_BIG_ROWS = 5
+
+
+def _big_text(text: str) -> str:
+    """Render `text` in the 5-row block font (unknown characters become a blank)."""
+    rows = ["  ".join(_BIG_GLYPHS.get(ch, _BIG_GLYPHS[" "])[i] for ch in text) for i in range(_BIG_ROWS)]
+    return "\n".join(rows) + "\n"
+
+
+def _verdict_banner(*, solved: bool) -> str:
+    """Big green «РЕШЕНО» or red «НЕ РЕШЕНО» -- the last thing a student sees after a task."""
+    color = "\x1b[1;32m" if solved else "\x1b[1;31m"
+    return "\n" + color + _big_text("РЕШЕНО" if solved else "НЕ РЕШЕНО") + "\x1b[0m\n"
+
+
+def _next_entry(entries: list[dict[str, object]], current_ref: str) -> dict[str, object] | None:
+    """Return the next catalog entry after `current_ref` (by number) a student may open, else None."""
+    current = next((e for e in entries if str(e.get("ref")) == current_ref), None)
+    if current is None:
+        return None
+    later = [e for e in entries
+             if int(e.get("number") or 0) > int(current.get("number") or 0)
+             and e.get("available", True) and not e.get("hidden", False)]
+    return min(later, key=lambda e: int(e.get("number") or 0)) if later else None
+
+
+def _ask_after_task(io: Io, nxt: dict[str, object] | None) -> bool:
+    """After the verdict: Enter -> run the next task (True); q (or no input) -> back to the menu."""
+    if nxt is None:
+        io.write("\x1b[2mЭто было последнее доступное задание.\x1b[0m\n")
+        return False
+    title = str(nxt.get("name") or nxt.get("ref") or "").rsplit("/", 1)[-1]
+    answer = io.read(f"Enter — следующее задание (№{nxt.get('number')} {title}), q — выйти в меню: ")
+    if answer is None:
+        return False
+    return answer.strip().lower() not in ("q", "й")
+
+
 def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
-    """Student run: resolve a number/ref, ensure it's pulled, run it, and submit on completion."""
+    """
+    Student run: resolve a number/ref, run it, submit on completion, show the verdict, chain.
+
+    After each task the console prints a big «РЕШЕНО»/«НЕ РЕШЕНО» and asks whether to go
+    straight to the next available task (Enter) or back to the menu (q).
+    """
     io = io or _default_io()
     url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
     client0 = RemoteRegistry(url)
     ref = _resolve_pool_ref(client0, token, arg)
+    while True:
+        rc, solved = _run_pool_task(env, url, user, token, ref, io)
+        if solved is None:                                   # locked task: nothing ran
+            return rc
+        io.write(_verdict_banner(solved=solved))
+        nxt = _next_entry(client0.catalog(token=token), ref)
+        if not _ask_after_task(io, nxt):
+            return rc
+        ref = str(nxt["ref"])
+
+
+def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa: PLR0913, PLR0917
+                   io: Io) -> tuple[int, bool | None]:
+    """Run ONE pool task; return (exit code, solved) -- solved is None when the task is locked."""
+    client0 = RemoteRegistry(url)
     entry = next((e for e in client0.catalog(token=token) if str(e["ref"]) == ref), None)
     if entry is not None and not entry.get("available", True):
         io.write("\x1b[33mзадание сейчас недоступно\x1b[0m\n")   # visible in the list, but locked
-        return 0
+        return 0, None
+    outcome: dict[str, bool] = {"solved": False}
     store = ImageStore(env.images)
     client = RemoteRegistry(url)
     # Fetch the task image if missing, refresh it if the pool re-published it (digest changed).
@@ -1979,6 +2046,7 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
         RemoteRegistry(url).pull_task(ref, tdir, token=token)
 
     def _submit(completed: bool, history: list[dict[str, object]]) -> None:  # noqa: FBT001
+        outcome["solved"] = completed
         if not completed:
             return  # only report a real completion; the server digest-gates the credit
         mark_solved(env, ref)   # record «решено» before the network, so a failed submit still
@@ -1999,7 +2067,8 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
             io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"
                      "\x1b[0m\n")
 
-    return cmd_run(env, ref, io, student_id=user, on_complete=_submit, pool=client)
+    rc = cmd_run(env, ref, io, student_id=user, on_complete=_submit, pool=client)
+    return rc, outcome["solved"]
 
 
 def task_mode(env: Home, io: Io | None = None) -> int:

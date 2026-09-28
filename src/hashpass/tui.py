@@ -34,6 +34,13 @@ if TYPE_CHECKING:
 
 _DOWN_WORKERS = 6            # parallel background downloads
 
+def _read_line(prompt: str) -> str | None:
+    """Read one line from the suspended terminal (the after-task choice); None at EOF."""
+    try:
+        return input(prompt)
+    except EOFError:
+        return None
+
 
 @dataclass
 class TaskRow:
@@ -259,9 +266,10 @@ class PoolTUI(App):
         # sys.stdout so the student sees «пул недоступен …» / «собираю локально» before a long
         # local base build (a silent Io hid them). `write` looks sys.stdout up per call --
         # Textual swaps sys.stdout while the app runs, so it must not be bound up front.
-        # Input stays disabled, as before. `clock` must be a zero-arg callable returning an
-        # ISO stamp -- reuse cli._now_iso (time.strftime needs a format string).
-        io = Io(read=lambda _p: None, write=lambda s: sys.stdout.write(s),  # noqa: PLW0108
+        # `read` is the real terminal: after the task the verdict screen asks «следующее
+        # задание / в меню». `clock` must be a zero-arg callable returning an ISO stamp --
+        # reuse cli._now_iso (time.strftime needs a format string).
+        io = Io(read=_read_line, write=lambda s: sys.stdout.write(s),  # noqa: PLW0108
                 clock=_now_iso)
         with self.suspend():
             self._task_frame_start(row)

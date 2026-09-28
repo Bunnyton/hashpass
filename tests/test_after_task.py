@@ -1,0 +1,83 @@
+"""Tier1: the verdict screen after a task and the «next task / menu» choice."""
+import pytest
+
+from hashpass import cli
+
+
+@pytest.mark.tier1
+def test_verdict_banner_is_big_green_or_red():
+    solved = cli._verdict_banner(solved=True)          # noqa: SLF001
+    failed = cli._verdict_banner(solved=False)         # noqa: SLF001
+    assert "32m" in solved and "31m" in failed                        # green / red
+    rows = [ln for ln in cli._big_text("РЕШЕНО").splitlines() if ln.strip()]  # noqa: SLF001
+    assert len(rows) == cli._BIG_ROWS and len({len(r) for r in rows}) == 1   # noqa: SLF001
+    assert "█" in rows[0]
+    assert len(cli._big_text("НЕ РЕШЕНО").splitlines()[0]) > len(rows[0])   # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_next_entry_is_the_next_available_number():
+    entries = [
+        {"number": 3, "ref": "b/c:1", "available": True, "hidden": False},
+        {"number": 4, "ref": "b/d:1", "available": False, "hidden": False},   # locked
+        {"number": 5, "ref": "b/e:1", "available": True, "hidden": True},     # hidden
+        {"number": 6, "ref": "b/f:1", "available": True, "hidden": False},
+    ]
+    assert cli._next_entry(entries, "b/c:1")["ref"] == "b/f:1"            # noqa: SLF001
+    assert cli._next_entry(entries, "b/f:1") is None                     # noqa: SLF001
+    assert cli._next_entry(entries, "ghost:1") is None                   # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_ask_after_task_enter_means_next_q_means_menu():
+    nxt = {"number": 6, "ref": "b/f:1", "name": "f"}
+    out: list[str] = []
+    assert cli._ask_after_task(cli.Io(read=lambda _p: "", write=out.append, clock=lambda: ""), nxt) is True  # noqa: SLF001
+    assert cli._ask_after_task(cli.Io(read=lambda _p: "q", write=out.append, clock=lambda: ""), nxt) is False  # noqa: SLF001
+    assert cli._ask_after_task(cli.Io(read=lambda _p: None, write=out.append, clock=lambda: ""), nxt) is False  # noqa: SLF001
+    assert cli._ask_after_task(cli.Io(read=lambda _p: "", write=out.append, clock=lambda: ""), None) is False  # noqa: SLF001
+    assert any("последнее" in s for s in out)
+
+
+class _FakePool:
+    def __init__(self, url: str, **_kw: object) -> None:
+        self.url = url
+
+    def catalog(self, *, token: str = "") -> list[dict[str, object]]:  # noqa: ARG002
+        return [{"number": 1, "ref": "b/a:1", "name": "a", "available": True, "hidden": False,
+                 "digest": ""},
+                {"number": 2, "ref": "b/b:1", "name": "b", "available": True, "hidden": False,
+                 "digest": ""}]
+
+    def pull_many(self, *_a: object, **_k: object) -> list[str]:
+        return []
+
+    def pull_task(self, *_a: object, **_k: object) -> None:
+        return None
+
+    def submit(self, *_a: object, **_k: object) -> dict[str, object]:
+        return {"status": "passed"}
+
+
+@pytest.mark.tier1
+def test_pool_run_chains_to_the_next_task_until_menu(tmp_path, monkeypatch):
+    runs: list[str] = []
+
+    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool) -> int:  # noqa: ARG001
+        runs.append(ref)
+        on_complete(True, [])  # noqa: FBT003
+        return 0
+    monkeypatch.setattr(cli, "_require_pool_identity", lambda _env, _io: ("http://pool", "stud"))
+    monkeypatch.setattr(cli, "_pool_token", lambda _env, _url: "tok")
+    monkeypatch.setattr(cli, "RemoteRegistry", _FakePool)
+    monkeypatch.setattr(cli, "task_dir", lambda _ref, _store: tmp_path)      # exists -> no pull_task
+    monkeypatch.setattr(cli, "task_digest", lambda _p: "")
+    monkeypatch.setattr(cli, "mark_solved", lambda _env, _ref: None)
+    monkeypatch.setattr(cli, "cmd_run", fake_cmd_run)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    answers = iter(["", "q"])                          # Enter -> next; q -> menu
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: next(answers), write=out.append, clock=lambda: "")
+    assert cli.cmd_pool_run(env, "1", io) == 0
+    assert runs == ["b/a:1", "b/b:1"]
+    assert sum("█" in s for s in out) >= len(runs)     # a verdict banner after each run
