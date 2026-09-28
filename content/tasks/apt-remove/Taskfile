@@ -1,9 +1,12 @@
-# apt-remove — удалить пакет через apt (sl поставлен заранее, чтобы было что удалять).
+# apt-remove — удалить пакет через apt. Продолжение apt-update: наследуем его образ и
+# воспроизводим его конечное состояние (sl установлен) — действия студента между заданиями
+# не сохраняются. Без `|| true`: если sl не встал, сборка обязана упасть, а не выпустить
+# задание с ложной предпосылкой.
 
 image apt-remove:1
+from apt-update:1
 
-run apt-get update >/dev/null 2>&1
-run apt-get install -y sl >/dev/null 2>&1 || true
+run apt-get update >/dev/null 2>&1 && apt-get install -y sl >/dev/null 2>&1
 
 hidden hp
 

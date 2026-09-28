@@ -81,3 +81,28 @@ def test_cmd_build_without_a_pool_pushes_to_the_local_service(tmp_path, monkeypa
     imf.write_text(_IMAGE, encoding="utf-8")
     assert cli.cmd_build(env, str(imf), io=cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "")) == 0
     assert pushed == ["dev/tool:1"]
+
+
+@pytest.mark.tier1
+def test_cmd_build_namespaces_bare_from_parents_like_the_image_itself(tmp_path, monkeypatch):
+    # `from apt-update:1` in a course Taskfile must resolve to the owner's own build of that
+    # task (`bunnyton/apt-update:1`), exactly as the image name itself is namespaced.
+    seen: list[tuple[str, ...]] = []
+
+    def fake_build(recipe, store, *, base, workdir, progress) -> object:  # noqa: ARG001
+        seen.append(recipe.parents)
+        src = tmp_path / "fake-layer"
+        src.mkdir(exist_ok=True)
+        return store.save(recipe.name, recipe.version, src, recipe.parents)
+    monkeypatch.setattr(cli, "ensure_base_image", lambda _env, _store, **_kw: tmp_path)
+    monkeypatch.setattr(cli, "build", fake_build)
+    monkeypatch.setattr(cli, "_reset_workdir", lambda _p: None)
+    monkeypatch.setattr(cli, "_author_identity", lambda _env, _io: "bunnyton")
+    monkeypatch.setattr(cli, "_push_image", lambda *_a, **_k: None)
+    monkeypatch.delenv("HASHPASS_POOL", raising=False)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    imf = tmp_path / "Imagefile"
+    imf.write_text("image apt-remove:1\nfrom apt-update:1, alice/lib:2\nrun echo hi\n", encoding="utf-8")
+    assert cli.cmd_build(env, str(imf), io=cli.Io(read=lambda _p: None, write=lambda _s: None,
+                                                   clock=lambda: "")) == 0
+    assert seen == [("bunnyton/apt-update:1", "alice/lib:2")]   # bare -> owner; explicit ns kept

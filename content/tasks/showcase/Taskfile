@@ -31,7 +31,7 @@ stage "Оставь короткий отчёт: в /home/student/report.txt д�
     echo ГОТОВО > /home/student/report.txt
   observe /home/student/report.txt
   neutral ls cat pwd
-  on enter say "Задание 1: отчёт из одного слова. Где именно и какого — сказано в цели."
+  on enter say "Отчёт из одного слова. Где именно и какого — сказано в цели."
   on enter read clue1.md
   hint cmd echo missing ГОТОВО say "В echo должно быть ровно слово ГОТОВО — заглавными."
   hint tries 3 say "Файл появился? cat его. Слово одно, регистр важен."
@@ -49,7 +49,7 @@ stage "Напечатай, сколько строк в /var/log/app/service.log
   observe output
   allow grep awk wc
   neutral ls cat less
-  on enter say "Задание 2: важен ВЫВОД — ровно число. И посчитать надо по-настоящему: echo с ответом не пройдёт."
+  on enter say "Важен ВЫВОД — ровно число. И посчитать надо по-настоящему: echo с ответом не пройдёт."
   hint output "0" say "Ноль? В журнале точно есть строки ERROR — присмотрись к команде: регистр, путь."
   hint tries 3 say "Строки с ERROR ты уже видишь? Теперь их надо не показать, а посчитать. У grep есть ключ для счёта, у wc — для строк."
   hint tries 6 say "man grep — ищи «count». Или загугли: «посчитать строки со словом в файле linux»."
@@ -64,7 +64,7 @@ stage "Установи пакет sl — его в системе нет; по�
     apt-get install -y sl >/dev/null 2>&1
   check exec command -v sl || test -x /usr/games/sl
   neutral ls cat pwd
-  on enter say "Задание 3: пакета sl нет. Ты — student, а apt слушается только root."
+  on enter say "Пакета sl нет. Ты — student, а apt слушается только root."
   on enter exec intro2
   hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права root на одну команду?"
   hint output "Unable to locate package" say "apt не нашёл пакет — когда он обновлял список? Два шага."
@@ -76,16 +76,16 @@ stage "Установи пакет sl — его в системе нет; по�
 stage "Запусти установленный поезд"
   accept cmd "sl"
   neutral ls cat less
-  on enter say "Задание 4: пакет называется sl, команда — тоже. Стадия ловит саму команду: следа на диске поезд не оставляет."
+  on enter say "Пакет называется sl, команда — тоже. Поезд следов на диске не оставляет — его нужно просто отправить."
   hint idle 240 say "Имя команды совпадает с именем пакета."
 
 # --- Задание 5: скрытый грейдер в /hp судит ответ ---
-stage "Создай /home/student/secret с фразой, которую ждёт скрытый грейдер"
+stage "Создай /home/student/secret с одной фразой — той самой, что открывает пещеру"
   solve:
     echo open-sesame > /home/student/secret
   check exec grade
   neutral ls cat pwd
-  on enter say "Задание 5: в /hp живёт грейдер, и прочитать его нельзя. Зато есть подсказка."
+  on enter say "Фразу подсмотреть негде — зато есть подсказка."
   on enter read clue3.md
   hint tries 3 say "Фраза — по-английски, строчными, два слова через дефис, без лишних пробелов. cat /home/student/secret — точно так?"
   hint tries 6 say "Загугли: «Али-Баба заклинание пещера по-английски»."

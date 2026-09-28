@@ -24,7 +24,7 @@ content/tasks/<id>/
 | Директива | Синтаксис | Смысл |
 |---|---|---|
 | `image` | `image <name>:<ver>` | Имя образа. Без `:ver` → `latest`. Один раз. |
-| `from` | `from <ref>[, <ref>…]` | Наследование (транзитивное); правее = приоритет. |
+| `from` | `from <ref>[, <ref>…]` | Наследование (транзитивное); правее = приоритет. Голое имя (`from apt-update:1`) `hashengine build` подставляет в namespace владельца (`bunnyton/apt-update:1`); явный `alice/lib:2` остаётся как есть. Задание-продолжение: `from <предыдущее>` + `run` решения предыдущего (действия студента не сохраняются). |
 | `run` | `run <shell-команда>` | Выполняется **при сборке**, запекается в образ. Так создаётся среда (`mkdir`, `printf > file`, `apt-get install`, `chown -R student:student …`). |
 | `copy` | `copy <src> <dst>` | Хостовый файл/каталог → в образ. |
 | `hidden` | `hidden <dir>` | Каталог → скрытый `/hp/work/`. Обычно `hidden hp`. |
@@ -126,6 +126,12 @@ hint idle 240  say "Долгая пауза. Перечитай задание: 
 `say`-подобных — stdout. Скрипты — `#!/bin/sh` (в базе нет python), `chmod +x`.
 
 ## Рантайм: что важно знать автору
+
+- PATH консоли (и у `student`, и у `root`) включает `/usr/games` и `/usr/local/games` (runtime ≥ 19):
+  пакеты вроде `sl`, `cmatrix` запускаются по имени. `check exec` выполняется НЕ в оболочке
+  студента — в проверках пиши полные пути или `command -v X || test -x /usr/games/X`.
+- `run`, создающий предпосылку задания (`apt-get install -y sl`), — без `|| true`: провал должен
+  ронять сборку.
 
 - Консоль — реальный загруженный Debian (systemd-nspawn, bash). Сборка (`solve`) идёт под
   `settings user` — `whoami`, `$USER`, владельцы файлов совпадают с живой консолью.

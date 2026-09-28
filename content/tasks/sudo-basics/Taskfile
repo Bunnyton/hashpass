@@ -25,7 +25,7 @@ stage "Удали /home/file.txt — его создал root"
   check exec test ! -e /home/file.txt
   neutral ls cat pwd
   on enter say "Создал root — значит, и удалять ему."
-  hint output "Permission denied" say "Снова «доступ запрещён». Чей файл — того и права. Тот же приём, что на прошлом этапе."
+  hint output "Permission denied" say "Снова «доступ запрещён». Чей файл — того и права. Тот же приём, что и при создании файла."
   hint tries 4 say "Файл всё ещё на месте? ls -l /home/file.txt покажет владельца. Кто может удалить чужой файл?"
   hint idle 240 say "Перечитай: тот же трюк, другая команда."
 

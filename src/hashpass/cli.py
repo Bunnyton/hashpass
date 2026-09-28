@@ -376,7 +376,10 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     recipe = _rebase_paths(recipe, taskfile_path.resolve().parent)   # paths relative to the Taskfile
     name, version = resolve_ref(recipe, tag, taskfile_path)
     user = _author_identity(env, io)                     # images are namespaced by their owner
-    recipe = replace(recipe, name=_namespace_name(name, user), version=version)
+    # A bare `from apt-update:1` means the owner's own build of that task (a course chains its
+    # tasks); an explicit `alice/lib:2` is left alone.
+    parents = tuple(p if "/" in p else _namespace_name(p, user) for p in recipe.parents)
+    recipe = replace(recipe, name=_namespace_name(name, user), version=version, parents=parents)
     store = ImageStore(env.images)
     base = ensure_base_image(env, store)
     ref = image_ref(recipe)

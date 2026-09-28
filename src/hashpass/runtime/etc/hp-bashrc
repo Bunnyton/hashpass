@@ -6,6 +6,15 @@
 # Interactive-only.
 case $- in *i*) ;; *) return ;; esac
 
+# Debian keeps /usr/games out of ROOT's login PATH (login.defs ENV_SUPATH), so a task run as
+# root (`settings user root`) could `apt install sl` and still get "sl: command not found" --
+# the package lands in /usr/games. Students and root alike get the games dirs here, once.
+case ":$PATH:" in
+    *:/usr/games:*) ;;
+    *) PATH="$PATH:/usr/local/games:/usr/games" ;;
+esac
+export PATH
+
 # Prompt: cwd in bright blue, then " ❯ " in bright green, a red ✗ mark on non-zero.
 # Snapshot $? first so PS1 sees the previous command's status, not PROMPT_COMMAND's own.
 _hp_last_status=0
