@@ -42,7 +42,7 @@ content/tasks/<id>/
 
 ```
 settings
-  user root          # логин консоли (по умолчанию student). root — если этап пишет в / или ставит пакеты
+  user root          # логин консоли (по умолчанию student). Только с `# root: <почему>` над settings — привилегии дают через sudo
   sudo off           # убрать студента из sudo (по умолчанию on; sudo у student БЕЗ пароля)
   pager on           # длинные read/show file — постранично по Enter (по умолчанию off)
   similarity 100     # порог приёмки observe output, % (по умолчанию 90; 100 = строго)
@@ -65,7 +65,7 @@ settings
 | Derived по выводу | `solve <cmd>` + `observe output` | Результат — stdout команды (только чистый stdout по OSC-133; порог `settings similarity`). |
 | Существование | `solve <cmd>` + `observe bool <path…>` | Важно лишь есть/нет (файл/каталог), без содержимого. |
 | Скрипт/команда | `check exec <файл-в-hp \| shell-команда>` | `exit 0` = принято. Для недетерминированного: права (`stat -c %a`), процессы, архивы, «файла нет». `solve` при этом всё равно обязателен (подготовка следующих этапов), но не деривируется. |
-| По самой команде | `accept cmd "<подстрока>" [ok]` (можно несколько) | Команда без следа на ФС (`man man`, `ls --help`, `telnet …`). Подстрока ищется в **сырой** строке команды. Без FS-грейда. `ok` — команда обязана ещё и завершиться с кодом 0 (runtime ≥ 20): упавший `cmatrix` — не «запустил cmatrix». Без `ok` — только когда провал тоже засчитывается по смыслу (`telnet` без сети). |
+| По самой команде | `accept cmd "<начало команды>" [ok]` (можно несколько) | Команда без следа на ФС (`man man`, `ls --help`, `telnet …`). Образец — **начало** команды (после `sudo`) в любом сегменте конвейера, до границы слова: `cmatrix` ловит `cmatrix`/`sudo cmatrix -s`, но не `dpkg -s cmatrix` и не `ls cmatrix.deb`; `sl` не ловит `sleep`; образец с `/` на конце (`apt install ./`) — префикс. Без FS-грейда. `ok` (на весь этап) — команда обязана ещё и завершиться с кодом 0 (runtime ≥ 20): упавший `cmatrix` — не «запустил cmatrix». Без `ok` — только когда провал тоже засчитывается по смыслу (`telnet` без сети). |
 
 Дополнения к derived:
 
@@ -143,8 +143,12 @@ hint idle 240  say "Долгая пауза. Перечитай задание: 
   бери `accept cmd` или `observe` файла. `ls -la` печатает mtime → не деривируется, используй
   `check exec` по смыслу (`grep -q hidden_key …`).
 - Фоновый процесс не переживает команду при деривации: запускай и проверяй в одной `solve:`.
-- Изменения в `/` или `apt` в этапе → `settings user root`. Пакет нужен для среды → `run apt-get …`
-  при сборке (тяжело, но один раз), а не в `solve`.
+- Изменения в `/` или `apt` в этапе — через `sudo` (у `student` он без пароля, `solve sudo …`
+  деривируется). Пакет нужен для среды → `run apt-get …` при сборке (один раз), а не в `solve`.
+- В базе (runtime ≥ 21) есть `man` и man-страницы coreutils/grep/find/sudo/apt/dpkg/bash — подсказки
+  «man cp» честны. Пакеты, поставленные в `run`, приходят со страницами тоже (dpkg-исключение снято).
+- apt в базе (runtime ≥ 22) ставит без Recommends и с молчаливым debconf: студенческий `apt install`
+  никогда не откроет диалог (cmatrix через kbd тянул keyboard-configuration и вешал консоль).
 - База = `debian:trixie` + `systemd dbus bash sudo procps` (см. `image/base.py`): есть `coreutils grep sed
   find tar gzip apt dpkg`; **нет** `man`, `vim`, `python3`, `tree`, `telnet`, `less` — ставь `run apt-get install -y …`
   при сборке, если задание про них (иначе студент получит `command not found`).

@@ -35,7 +35,6 @@ stage "А теперь запусти cmatrix — и выйди из него к
   accept cmd "cmatrix" ok
   neutral ls cat pwd
   on enter say "Установлено. Сюрприз — по имени пакета. Выход — q."
-  hint output "error while loading shared libraries" say "Программа есть, а библиотеки — нет: установка прошла не до конца. Что говорит dpkg -s cmatrix?"
   hint tries 4 say "Команда называется так же, как пакет."
   hint idle 240 say "Одно слово — имя пакета. Выйти — q."
 

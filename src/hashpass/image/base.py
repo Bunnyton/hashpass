@@ -10,7 +10,18 @@ _SYSTEMD_INSTALL = (
     # chown 0:0 / first: the base dir is created by the unprivileged builder (uid 1000) while
     # its extracted contents are root-owned; systemd's postinst tmpfiles refuses that "unsafe
     # path transition" (/ owned by 1000 -> /etc owned by root) and aborts dpkg. Root-own / to fix.
-    "chown 0:0 / && apt-get update "
+    "chown 0:0 / "
+    # The docker-exported slim rootfs strips /usr/share/man via a dpkg path-exclude. Hints
+    # across the course say `man cp` / `man find`: drop the exclude, install man-db + manpages
+    # and re-install the packages whose pages those hints point at, so `man X` is real.
+    "&& rm -f /etc/dpkg/dpkg.cfg.d/docker /etc/dpkg/dpkg.cfg.d/docker-apt-speedup "
+    "&& apt-get update "
+    "&& apt-get install -y man-db manpages "
+    # A student's `apt install` must never open a debconf dialog (e.g. keyboard-configuration
+    # pulled in as a Recommends of kbd by cmatrix): no Recommends by default, debconf silent.
+    "&& printf 'APT::Install-Recommends \"false\";\\n' > /etc/apt/apt.conf.d/99hp-no-recommends "
+    "&& echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections "
+    "&& apt-get install -y --reinstall coreutils grep findutils sudo apt dpkg bash "
     # libnss-myhostname: resolve the container's own (dynamic, per-run) hostname + localhost via
     # NSS, so name lookups work regardless of the nspawn machine name. nsswitch (from runtime/)
     # references it as `hosts: files myhostname dns`.

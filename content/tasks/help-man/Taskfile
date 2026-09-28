@@ -4,12 +4,8 @@
 
 image help-man:1
 
-# man-db не входит в базовый образ — без него `man man` даст «command not found». А docker-база
-# вырезает /usr/share/man через dpkg-исключение: без его снятия и переустановки пакетов
-# `man man` отвечает «No manual entry» и завершается с ошибкой (предпосылка ложна).
-run rm -f /etc/dpkg/dpkg.cfg.d/docker* /etc/dpkg/dpkg.cfg.d/*excludes*
-run apt-get update >/dev/null 2>&1
-run DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall man-db manpages coreutils grep >/dev/null
+# man-db и man-страницы приходят из базы (runtime ≥ 21); этот шаг — страж предпосылки:
+# без страниц `man man` отвечает «No manual entry» и завершается с ошибкой.
 run test -s /usr/share/man/man1/man.1.gz && test -s /usr/share/man/man1/ls.1.gz
 
 hidden hp

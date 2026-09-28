@@ -18,8 +18,8 @@ _TASKFILE = Path(__file__).resolve().parents[2] / "content" / "tasks" / "proc-au
 _TS = "2026-08-31T00:00:00"
 
 _INSTALL = (
-    "apt-get update >/dev/null 2>&1\n"
-    "apt-get install -y procps >/dev/null 2>&1\n"
+    "sudo apt-get update >/dev/null 2>&1\n"
+    "sudo apt-get install -y procps >/dev/null 2>&1\n"
     "dpkg -s procps | grep '^Status:' > /home/student/install-status.txt"
 )
 _AUDIT = "sleep 600 &\nsleep 0.3\npgrep -x sleep | wc -l > /home/student/proc-count.txt"

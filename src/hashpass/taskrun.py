@@ -183,14 +183,46 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
     return res.stdout
 
 
+_SEG_SPLIT = re.compile(r"\s*(?:\|\||&&|;|\|)\s*")
+
+
+def _without_sudo(segment: str) -> str:
+    """Drop a leading `sudo` (and its own `-x` options) so the pattern anchors on the real command."""
+    tokens = segment.split()
+    if tokens and tokens[0] == "sudo":
+        tokens = tokens[1:]
+        while tokens and tokens[0].startswith("-"):
+            tokens = tokens[1:]
+    return " ".join(tokens)
+
+
+def _cmd_matches(pattern: str, command: str) -> bool:
+    """
+    Whether an `accept cmd` pattern names the command the student ran.
+
+    The pattern must be the START of some pipeline segment (`|`, `&&`, `||`, `;`), after an
+    optional `sudo`, and end on a word boundary: `cmatrix` matches `cmatrix` and
+    `sudo cmatrix -s`, not `dpkg -s cmatrix` or `ls cmatrix.deb`; `sl` does not match `sleep`.
+    A pattern ending in a non-word character (`apt install ./`) is a plain prefix.
+    """
+    for raw in _SEG_SPLIT.split(command.strip()):
+        seg = _without_sudo(raw)
+        if not seg.startswith(pattern):
+            continue
+        rest = seg[len(pattern):]
+        if not (pattern[-1].isalnum() or pattern[-1] in "_-") or not rest or rest[0].isspace():
+            return True
+    return False
+
+
 def _accepted_by_cmd(sm: StageMeta, command: str, rc: int | None) -> bool:
     """
-    Whether `command` passes the stage by an `accept cmd` match.
+    Whether `command` passes the stage by an `accept cmd` match (see `_cmd_matches`).
 
     With `accept cmd "…" ok` the command must also have exited 0; an unknown status (an older
     console that does not report it) is not held against the student.
     """
-    if not sm.accept_cmds or not any(sub in command for sub in sm.accept_cmds):
+    if not sm.accept_cmds or not any(_cmd_matches(sub, command) for sub in sm.accept_cmds):
         return False
     return not (sm.accept_ok and rc is not None and rc != 0)
 

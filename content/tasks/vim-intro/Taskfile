@@ -15,7 +15,7 @@ say "Те самые три буквы. VIM. Мощнее, чем кажется
 read brief.md
 
 stage "Пройди хотя бы первый урок встроенного учебника vim"
-  accept cmd "vimtutor"
+  accept cmd "vimtutor" ok
   neutral ls cat pwd
   on enter say "Учебник живёт внутри редактора и запускается одной командой из брифа."
   hint idle 300 say "Выход из vim — :q. Если не отпускает — Esc, потом :q! и Enter."
