@@ -120,7 +120,9 @@ class NspawnRunner:
         overlay_mount([self._mnt], upper, work, mnt, sudo=True)
         try:
             extra = [f"--bind={host}:{dst}" for host, dst in binds]
-            extra += [f"--setenv={key}={val}" for key, val in setenv.items()]
+            # Same locale as the student's console (hp-console exports C.UTF-8), so references
+            # derived here match what `wc -m`/`grep -i` print there on Cyrillic data.
+            extra += [f"--setenv={key}={val}" for key, val in {"LANG": "C.UTF-8", **setenv}.items()]
             if user:
                 extra.append(f"--user={user}")
             p = subprocess.run(

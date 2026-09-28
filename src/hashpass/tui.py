@@ -38,7 +38,7 @@ def _read_line(prompt: str) -> str | None:
     """Read one line from the suspended terminal (the after-task choice); None at EOF."""
     try:
         return input(prompt)
-    except EOFError:
+    except (EOFError, KeyboardInterrupt):     # Ctrl-C here means «в меню», not «kill the TUI»
         return None
 
 

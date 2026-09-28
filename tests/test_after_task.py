@@ -81,3 +81,69 @@ def test_pool_run_chains_to_the_next_task_until_menu(tmp_path, monkeypatch):
     assert cli.cmd_pool_run(env, "1", io) == 0
     assert runs == ["b/a:1", "b/b:1"]
     assert sum("█" in s for s in out) >= len(runs)     # a verdict banner after each run
+
+
+@pytest.mark.tier1
+def test_text_menu_asks_once_per_task(tmp_path, monkeypatch):
+    # The text menu used to wrap cmd_pool_run in its own «следующее?» loop -> two prompts.
+    runs: list[str] = []
+
+    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool) -> int:  # noqa: ARG001
+        runs.append(ref)
+        on_complete(True, [])  # noqa: FBT003
+        return 0
+    monkeypatch.setattr(cli, "_require_pool_identity", lambda _env, _io: ("http://pool", "stud"))
+    monkeypatch.setattr(cli, "_pool_token", lambda _env, _url: "tok")
+    monkeypatch.setattr(cli, "RemoteRegistry", _FakePool)
+    monkeypatch.setattr(cli, "task_dir", lambda _ref, _store: tmp_path)
+    monkeypatch.setattr(cli, "task_digest", lambda _p: "")
+    monkeypatch.setattr(cli, "mark_solved", lambda _env, _ref: None)
+    monkeypatch.setattr(cli, "cmd_run", fake_cmd_run)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    prompts: list[str] = []
+    out: list[str] = []
+
+    def read(prompt: str) -> str:
+        prompts.append(prompt)
+        return ""                                          # Enter: go on
+    cli._run_from_menu(env, "http://pool", "stud", "tok", 1, cli.Io(read=read, write=out.append, clock=lambda: ""))  # noqa: SLF001
+    assert runs == ["b/a:1", "b/b:1"]
+    # ONE question after №1 (the old outer loop asked a second time); after №2 -- the last
+    # available task -- no question at all, just the note.
+    assert len(prompts) == 1 and "выйти в меню" in prompts[0]
+    assert any("последнее" in s for s in out)
+
+
+@pytest.mark.tier1
+def test_failed_run_shows_no_verdict(tmp_path, monkeypatch):
+    # «нет такого образа» (cmd_run returns 1 without grading) must not print a red НЕ РЕШЕНО.
+    monkeypatch.setattr(cli, "_require_pool_identity", lambda _env, _io: ("http://pool", "stud"))
+    monkeypatch.setattr(cli, "_pool_token", lambda _env, _url: "tok")
+    monkeypatch.setattr(cli, "RemoteRegistry", _FakePool)
+    monkeypatch.setattr(cli, "task_dir", lambda _ref, _store: tmp_path)
+    monkeypatch.setattr(cli, "task_digest", lambda _p: "")
+    monkeypatch.setattr(cli, "cmd_run", lambda *_a, **_k: 1)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: pytest.fail("must not ask"), write=out.append, clock=lambda: "")
+    assert cli.cmd_pool_run(env, "1", io) == 1
+    assert not any("█" in s for s in out)
+
+
+@pytest.mark.tier1
+def test_rerun_of_a_solved_task_says_so(tmp_path, monkeypatch):
+    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool) -> int:  # noqa: ARG001
+        on_complete(False, [])  # noqa: FBT003
+        return 0
+    monkeypatch.setattr(cli, "_require_pool_identity", lambda _env, _io: ("http://pool", "stud"))
+    monkeypatch.setattr(cli, "_pool_token", lambda _env, _url: "tok")
+    monkeypatch.setattr(cli, "RemoteRegistry", _FakePool)
+    monkeypatch.setattr(cli, "task_dir", lambda _ref, _store: tmp_path)
+    monkeypatch.setattr(cli, "task_digest", lambda _p: "")
+    monkeypatch.setattr(cli, "cmd_run", fake_cmd_run)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    cli.mark_solved(env, "b/a:1")                             # credited on an earlier run
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: "q", write=out.append, clock=lambda: "")
+    assert cli.cmd_pool_run(env, "1", io) == 0
+    assert any("31m" in s for s in out) and any("ранее уже зачтено" in s for s in out)

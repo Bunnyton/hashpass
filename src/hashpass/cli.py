@@ -1859,14 +1859,6 @@ def _render_pool_menu(rows: list[dict[str, object]], user: str) -> str:
     return "\n".join(lines)
 
 
-def _next_number(rows: list[dict[str, object]], after: int) -> int | None:
-    """Return the next task worth doing after `after` (first uncredited ahead, else first)."""
-    todo = [r for r in rows if r.get("server") != "passed" and r.get("available", True)]
-    ahead = [r for r in todo if int(r["number"]) > after]  # type: ignore[arg-type]
-    pick = (ahead or todo)
-    return int(pick[0]["number"]) if pick else None  # type: ignore[arg-type]
-
-
 def _resync(env: Home, url: str, user: str, token: str, io: Io) -> None:
     """Self-check: re-submit tasks solved locally but not yet credited on the server."""
     client = RemoteRegistry(url)
@@ -1935,21 +1927,10 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
         _run_from_menu(env, url, user, token, int(choice), io)
 
 
-def _run_from_menu(env: Home, url: str, user: str, token: str,  # noqa: PLR0913, PLR0917
+def _run_from_menu(env: Home, url: str, user: str, token: str,  # noqa: PLR0913, PLR0917, ARG001
                    number: int, io: Io) -> None:
-    """Run a task from the menu, then offer to go straight to the next one (hand-holding flow)."""
-    current: int | None = number
-    while current is not None:
-        cmd_pool_run(env, str(current), io)
-        nxt = _next_number(pool_status(env, url, token, user), current)
-        if nxt is None:
-            io.write("\x1b[32mВсе доступные задания зачтены!\x1b[0m\n")
-            return
-        ans = (io.read(f"Перейти к следующему заданию №{nxt}? "
-                       "[Enter — да, номер — другое, q — в меню]: ") or "").strip().lower()
-        if ans in ("q", "quit", "exit", "выход"):
-            return
-        current = int(ans) if ans.isdigit() else nxt
+    """Run a task from the text menu; `cmd_pool_run` itself shows the verdict and chains onward."""
+    cmd_pool_run(env, str(number), io)
 
 
 _BIG_GLYPHS: dict[str, tuple[str, ...]] = {          # 5-row block font, just the verdict letters
@@ -2012,9 +1993,11 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     ref = _resolve_pool_ref(client0, token, arg)
     while True:
         rc, solved = _run_pool_task(env, url, user, token, ref, io)
-        if solved is None:                                   # locked task: nothing ran
+        if solved is None:                                   # locked task or a failed run: no verdict
             return rc
         io.write(_verdict_banner(solved=solved))
+        if not solved and ref in load_solved(env):
+            io.write("\x1b[2m(ранее уже зачтено — прогресс сохранён)\x1b[0m\n")
         nxt = _next_entry(client0.catalog(token=token), ref)
         if not _ask_after_task(io, nxt):
             return rc
@@ -2023,13 +2006,13 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
 
 def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa: PLR0913, PLR0917
                    io: Io) -> tuple[int, bool | None]:
-    """Run ONE pool task; return (exit code, solved) -- solved is None when the task is locked."""
+    """Run ONE pool task; return (exit code, solved) -- None when nothing was graded (locked/failed)."""
     client0 = RemoteRegistry(url)
     entry = next((e for e in client0.catalog(token=token) if str(e["ref"]) == ref), None)
     if entry is not None and not entry.get("available", True):
         io.write("\x1b[33mзадание сейчас недоступно\x1b[0m\n")   # visible in the list, but locked
         return 0, None
-    outcome: dict[str, bool] = {"solved": False}
+    outcome: dict[str, bool | None] = {"solved": None}   # stays None unless the console ran
     store = ImageStore(env.images)
     client = RemoteRegistry(url)
     # Fetch the task image if missing, refresh it if the pool re-published it (digest changed).
