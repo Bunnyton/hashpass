@@ -29,7 +29,7 @@ TASKS=(
     simple-ls          # 1 — ls
     cat-file           # 2 — cat
     ls-la              # 3 — ls -la, скрытые файлы
-    help-man           # 4 — --help + man (два этапа; бывшие help-flag и man-of-man)
+    help-man           # 4–5 — --help + man (два этапа; бывшие help-flag и man-of-man)
     cd-abs             # 6 — cd + pwd, абсолютные пути
     cp-basics          # 7 — cp одиночный
     cp-more            # 8 — cp -r, звёздочка

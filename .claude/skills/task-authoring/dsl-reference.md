@@ -65,7 +65,7 @@ settings
 | Derived по выводу | `solve <cmd>` + `observe output` | Результат — stdout команды (только чистый stdout по OSC-133; порог `settings similarity`). |
 | Существование | `solve <cmd>` + `observe bool <path…>` | Важно лишь есть/нет (файл/каталог), без содержимого. |
 | Скрипт/команда | `check exec <файл-в-hp \| shell-команда>` | `exit 0` = принято. Для недетерминированного: права (`stat -c %a`), процессы, архивы, «файла нет». `solve` при этом всё равно обязателен (подготовка следующих этапов), но не деривируется. |
-| По самой команде | `accept cmd "<начало команды>" [ok]` (можно несколько) | Команда без следа на ФС (`man man`, `ls --help`, `telnet …`). Образец — **начало** команды (после `sudo`) в любом сегменте конвейера, до границы слова: `cmatrix` ловит `cmatrix`/`sudo cmatrix -s`, но не `dpkg -s cmatrix` и не `ls cmatrix.deb`; `sl` не ловит `sleep`; образец с `/` на конце (`apt install ./`) — префикс. Без FS-грейда. `ok` (на весь этап) — команда обязана ещё и завершиться с кодом 0 (runtime ≥ 20): упавший `cmatrix` — не «запустил cmatrix». Без `ok` — только когда провал тоже засчитывается по смыслу (`telnet` без сети). |
+| По самой команде | `accept cmd "<начало команды>" [ok]` (можно несколько) | Команда без следа на ФС (`man man`, `ls --help`, `telnet …`). Образец — **начало** команды (после `sudo`; путь в первом слове — по basename: `/usr/games/sl` = `sl`), до границы слова: `cmatrix` ловит `cmatrix`/`sudo cmatrix -s`, но не `dpkg -s cmatrix` и не `ls cmatrix.deb`; `sl` не ловит `sleep`; образец с `/` на конце (`apt install ./`) — префикс. Консоль передаёт **последнюю** простую команду конвейера (`ls --help | less` придёт как `less`). Обёртки `env`/`nohup`/`sudo -u` не распознаются. Без FS-грейда. `ok` (на весь этап) — команда обязана ещё и завершиться с кодом 0 (runtime ≥ 20): упавший `cmatrix` — не «запустил cmatrix». Без `ok` — только когда провал тоже засчитывается по смыслу (`telnet` без сети). |
 
 Дополнения к derived:
 
@@ -150,7 +150,7 @@ hint idle 240  say "Долгая пауза. Перечитай задание: 
 - apt в базе (runtime ≥ 22) ставит без Recommends и с молчаливым debconf: студенческий `apt install`
   никогда не откроет диалог (cmatrix через kbd тянул keyboard-configuration и вешал консоль).
 - База = `debian:trixie` + `systemd dbus bash sudo procps` (см. `image/base.py`): есть `coreutils grep sed
-  find tar gzip apt dpkg`; **нет** `man`, `vim`, `python3`, `tree`, `telnet`, `less` — ставь `run apt-get install -y …`
+  find tar gzip apt dpkg man`; **нет** `vim`, `python3`, `tree`, `telnet`, `less` — ставь `run apt-get install -y …`
   при сборке, если задание про них (иначе студент получит `command not found`).
 - `hidden hp` → содержимое `hp/` ложится в `/hp/work/` (т.е. `hp/finale` → `/hp/work/finale`,
   вызывается как `exec finale`).

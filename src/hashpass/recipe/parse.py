@@ -352,18 +352,18 @@ def _apply_check(value: str, sacc: _StageAcc) -> None:
 
 def _apply_accept(value: str, sacc: _StageAcc) -> None:
     """
-    Apply `accept cmd "<substring>" [ok]`: a concrete command that passes the stage on its own.
+    Apply `accept cmd "<command start>" [ok]`: a concrete command that passes the stage on its own.
 
     `ok` additionally requires the command to have exited 0 (the console reports the status):
     a `cmatrix` that dies on a missing library is not «запустил cmatrix».
     """
     verb, _, rest = value.partition(" ")
     if verb != "cmd":
-        msg = f"accept requires 'cmd \"<substring>\"', got: {value!r}"
+        msg = f"accept requires 'cmd \"<command start>\"', got: {value!r}"
         raise ValueError(msg)
     sub, tail = _take_quoted(rest.strip())
     if not sub or tail.strip() not in ("", "ok"):
-        msg = f"accept cmd takes one quoted command substring (+ optional 'ok'), got: {value!r}"
+        msg = f"accept cmd takes one quoted command start (+ optional 'ok'), got: {value!r}"
         raise ValueError(msg)
     sacc.accept_cmds.append(sub)
     if tail.strip() == "ok":

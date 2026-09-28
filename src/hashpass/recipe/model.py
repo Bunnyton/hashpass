@@ -125,7 +125,7 @@ class StageSpec:
     on_enter: tuple[Action, ...] = ()
     on_pass: tuple[Action, ...] = ()
     hints: tuple[HintRule, ...] = ()
-    accept_cmds: tuple[str, ...] = ()   # `accept cmd "<substr>"`: a command that passes the stage
+    accept_cmds: tuple[str, ...] = ()   # `accept cmd "<start>"`: a command that passes the stage
     accept_ok: bool = False             # `accept cmd "…" ok`: … and it must have exited 0
     match_output: bool = False          # `observe output`: grade on command stdout (fuzzy, `similarity`)
     variants: tuple[tuple[str, ...], ...] = ()  # alt `variant` solutions; reference = output COMMON to all

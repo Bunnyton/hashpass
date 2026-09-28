@@ -32,7 +32,7 @@ class StageMeta:
     on_pass: tuple[Action, ...]
     acceptance: str                   # "derived" | "handler" | "command"
     hints: tuple[HintRule, ...] = ()
-    accept_cmds: tuple[str, ...] = ()  # command substrings that pass the stage (`accept cmd`)
+    accept_cmds: tuple[str, ...] = ()  # command starts that pass the stage (`accept cmd`)
     accept_ok: bool = False            # `accept cmd "…" ok`: the command must also have exited 0
     match_output: bool = False         # `observe output`: accept by the command's stdout, not FS
     deny: tuple[str, ...] = ()         # base commands that MAY NOT be the accepting command

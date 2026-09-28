@@ -183,7 +183,7 @@ def test_accept_cmd_parsed_and_accepts_without_solve():
     r = parse_recipe('image t:1\nstage "x"\n  accept cmd "grep -r ERROR"\n  accept cmd "rg ERROR"\n')
     assert r.stages[0].accept_cmds == ("grep -r ERROR", "rg ERROR")
     assert r.stages[0].solve == ()          # an accept-cmd-only stage needs no `solve`
-    with pytest.raises(ValueError, match="one quoted command substring"):
+    with pytest.raises(ValueError, match="one quoted command start"):
         parse_recipe('image t:1\nstage "x"\n  accept cmd grep bare\n')
 
 

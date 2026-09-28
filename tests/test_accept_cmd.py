@@ -14,7 +14,10 @@ def _stage(*patterns: str, ok: bool = False) -> StageMeta:
 @pytest.mark.parametrize(("pattern", "command", "expected"), [
     ("cmatrix", "cmatrix", True),
     ("cmatrix", "sudo cmatrix -s", True),
-    ("cmatrix", "ls | cmatrix", True),                 # any pipeline segment
+    ("cmatrix", "ls | cmatrix", True),                 # segment split (feed() path sees the line)
+    ("cmatrix", "/usr/games/cmatrix", True),           # a path counts by its basename
+    ("sl", "/usr/games/sl", True),
+    ("cmatrix", "./cmatrix -s", True),
     ("cmatrix", "dpkg -s cmatrix", False),             # mentions it, does not run it
     ("cmatrix", "ls cmatrix_2.0-3_amd64.deb", False),
     ("cmatrix", "rm cmatrix*.deb", False),

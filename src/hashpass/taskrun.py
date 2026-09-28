@@ -187,12 +187,19 @@ _SEG_SPLIT = re.compile(r"\s*(?:\|\||&&|;|\|)\s*")
 
 
 def _without_sudo(segment: str) -> str:
-    """Drop a leading `sudo` (and its own `-x` options) so the pattern anchors on the real command."""
+    """
+    Normalize a command segment so the pattern anchors on the real command.
+
+    Drops a leading `sudo` (and its own `-x` options) and reduces a path in the first word to
+    its basename (`/usr/games/sl` -> `sl`, `./cmatrix` -> `cmatrix`).
+    """
     tokens = segment.split()
     if tokens and tokens[0] == "sudo":
         tokens = tokens[1:]
         while tokens and tokens[0].startswith("-"):
             tokens = tokens[1:]
+    if tokens and "/" in tokens[0]:
+        tokens[0] = tokens[0].rsplit("/", 1)[-1] or tokens[0]
     return " ".join(tokens)
 
 
@@ -200,10 +207,13 @@ def _cmd_matches(pattern: str, command: str) -> bool:
     """
     Whether an `accept cmd` pattern names the command the student ran.
 
-    The pattern must be the START of some pipeline segment (`|`, `&&`, `||`, `;`), after an
-    optional `sudo`, and end on a word boundary: `cmatrix` matches `cmatrix` and
-    `sudo cmatrix -s`, not `dpkg -s cmatrix` or `ls cmatrix.deb`; `sl` does not match `sleep`.
-    A pattern ending in a non-word character (`apt install ./`) is a plain prefix.
+    The pattern must be the START of the command (after an optional `sudo`; a path in the first
+    word counts by its basename) and end on a word boundary: `cmatrix` matches `cmatrix`,
+    `sudo cmatrix -s` and `/usr/games/cmatrix`, not `dpkg -s cmatrix` or `ls cmatrix.deb`;
+    `sl` does not match `sleep`. A pattern ending in a non-word character (`apt install ./`) is
+    a plain prefix. The live console ships the LAST simple command of a pipeline/`&&` chain as
+    the command (so `ls --help | less` arrives as `less …`); the segment split below matters
+    for the test/`feed()` path, which sees the whole line.
     """
     for raw in _SEG_SPLIT.split(command.strip()):
         seg = _without_sudo(raw)
