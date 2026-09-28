@@ -5,7 +5,6 @@ image apt-update:1
 hidden hp
 
 settings
-  user root
   pager on
 
 say "apt — пакетный менеджер Debian/Ubuntu. Настало время установить что-нибудь."
@@ -13,13 +12,13 @@ read brief.md
 
 stage "Установи пакет sl — самую свежую версию из репозитория"
   solve:
-    apt-get update >/dev/null 2>&1
-    apt-get install -y sl >/dev/null 2>&1
+    sudo apt-get update >/dev/null 2>&1
+    sudo apt-get install -y sl >/dev/null 2>&1
   check exec command -v sl || test -x /usr/games/sl
   neutral ls cat pwd
-  on enter say "Ты root, apt — твой. Пакета sl в системе пока нет."
+  on enter say "Пакета sl в системе пока нет. apt слушается только администратора — а ты student."
   hint output "Unable to locate package" say "apt не нашёл пакет. Когда список пакетов обновлялся в последний раз? В теории было два шага, не один."
-  hint output "Permission denied" say "apt нужны права администратора. Кто ты сейчас — whoami — и что делать, если не root?"
+  hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
   hint tries 3 say "Пакет ещё не стоит? Прочитай, что ответил apt — обычно он говорит прямым текстом, чего хочет."
   hint tries 6 say "Загугли: «apt установить пакет debian». Или apt --help."
   hint idle 240 say "Перечитай теорию: сначала обновить список, потом установить."

@@ -57,12 +57,12 @@ def test_extract_output_isolates_stdout_via_osc133():
 def test_parse_cmd_request_decodes_command_and_cleans_output():
     cmd = base64.b64encode("grep ERROR log".encode()).decode()
     out = base64.b64encode("\x1b[31mERROR here\x1b[0m\r\n".encode()).decode()
-    command, output, typing = cli._parse_cmd_request(f"cmd {cmd} {out}")  # noqa: SLF001
+    command, output, typing, _rc = cli._parse_cmd_request(f"cmd {cmd} {out}")  # noqa: SLF001
     assert command == "grep ERROR log"
     assert "ERROR here" in output
     assert "\x1b" not in output                                # ANSI stripped for matching
     assert typing is None
-    assert cli._parse_cmd_request(f"cmd {cmd}") == ("grep ERROR log", "", None)  # noqa: SLF001
+    assert cli._parse_cmd_request(f"cmd {cmd}") == ("grep ERROR log", "", None, None)  # noqa: SLF001
     assert cli._parse_cmd_request(f"cmd {cmd} {out} 0.75")[2] == 0.75  # noqa: SLF001, PLR2004
 
 
@@ -368,7 +368,7 @@ def test_render_observe_records_command_history():
                                                                    local_key=""))
     io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "T")
     hist: list[dict] = []
-    cli._render_observe(session, "echo hello world done", "out", 0.05, io, history=hist)  # noqa: SLF001
+    cli._render_observe(session, "echo hello world done", "out", 0.05, None, io, history=hist)  # noqa: SLF001
     assert hist == [{"command": "echo hello world done", "ts": "T", "typing": 0.05, "pasted": True}]
 
 
@@ -382,13 +382,13 @@ def test_render_observe_no_forced_phrase_completion_fires_outro(monkeypatch):
         session = SimpleNamespace(
             progress=object(),
             meta=SimpleNamespace(stages=[SimpleNamespace(message=f"goal {i}") for i in range(4)]),
-            observe=lambda command, *, ts, output: FeedResult(  # noqa: ARG005
+            observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
                 advanced=True, stage=3, local_key=key),
             fire_outro=lambda: writes.append("<outro>"),
             enter=lambda: writes.append("<enter>"),
         )
         monkeypatch.setattr(cli, "current_stage", lambda _p: stage_left)
-        cli._render_observe(session, "cmd", "out", None, io)  # noqa: SLF001
+        cli._render_observe(session, "cmd", "out", None, None, io)  # noqa: SLF001
         return "".join(writes)
 
     done = run(None, "key{secret}")
@@ -427,3 +427,13 @@ def test_cmd_run_unknown_ref_hints_the_same_name_in_another_namespace(tmp_path):
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "t")
     assert cli.cmd_run(env, "debian:trixie", io) == 1
     assert out == ["нет такого образа: debian:trixie — быть может, вы искали bunnyton/debian:trixie?\n"]
+
+
+@pytest.mark.tier1
+def test_parse_cmd_request_reads_the_exit_status_token():
+    cmd = base64.b64encode(b"cmatrix").decode()
+    out = base64.b64encode(b"").decode()
+    assert cli._parse_cmd_request(f"cmd {cmd} {out} 1.5 rc=127")[3] == 127        # noqa: SLF001, PLR2004
+    assert cli._parse_cmd_request(f"cmd {cmd} {out}  rc=0")[3] == 0               # noqa: SLF001
+    assert cli._parse_cmd_request(f"cmd {cmd} {out} 1.5")[3] is None              # noqa: SLF001
+    assert cli._parse_cmd_request(f"cmd {cmd} {out} 1.5 rc=0")[2] == 1.5          # noqa: SLF001, PLR2004

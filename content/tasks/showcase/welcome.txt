@@ -1,2 +1,1 @@
-Welcome to the showcase image. This file was baked in at build time via `copy`,
-so you can `cat /opt/welcome.txt` inside the task.
+Добро пожаловать на борт. Этот файл лежал в /opt ещё до того, как ты вошёл —\nзагляни в него командой cat, когда будет минутка.\n

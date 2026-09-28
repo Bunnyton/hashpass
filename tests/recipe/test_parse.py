@@ -347,3 +347,16 @@ def test_observe_bool_parses_into_existence_paths():
     s = r.stages[0]
     assert s.observe_bool == ("/usr/games/sl", "/var/run")
     assert s.observe == () and s.match_output is False
+
+
+@pytest.mark.tier1
+def test_accept_cmd_ok_requires_a_successful_exit():
+    # `accept cmd "…" ok`: the command must also exit 0 -- a run of cmatrix that dies on a
+    # missing library is not «запустил cmatrix».
+    r = parse_recipe('image t:1\nstage "x"\n  accept cmd "cmatrix" ok\n  accept cmd "sl"\n')
+    assert r.stages[0].accept_cmds == ("cmatrix", "sl")
+    assert r.stages[0].accept_ok is True
+    plain = parse_recipe('image t:1\nstage "x"\n  accept cmd "cmatrix"\n')
+    assert plain.stages[0].accept_ok is False
+    with pytest.raises(ValueError, match="accept cmd"):
+        parse_recipe('image t:1\nstage "x"\n  accept cmd "cmatrix" nope\n')

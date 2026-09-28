@@ -84,6 +84,25 @@ def test_cmd_build_without_a_pool_pushes_to_the_local_service(tmp_path, monkeypa
 
 
 @pytest.mark.tier1
+def test_build_key_changes_when_a_parent_is_rebuilt(tmp_path):
+    # A child chained with `from` must not be served from the cache once its parent changed:
+    # the key folds each parent's own build_key (or pool digest) in, not just its ref.
+    from hashpass.build import _build_key, _parent_ids  # noqa: PLC0415
+    store = ImageStore(tmp_path / "images")
+    src = tmp_path / "src"
+    src.mkdir()
+    base = tmp_path / "base"
+    (base / "etc").mkdir(parents=True)
+    (base / "etc" / "hp-base-version").write_text("19\n", encoding="utf-8")
+    store.save("bunnyton/apt-update", "1", src, (), build_key="k1")
+    first = _build_key(base, _parent_ids(store, ("bunnyton/apt-update:1",)), ())
+    store.save("bunnyton/apt-update", "1", src, (), build_key="k2")     # parent rebuilt
+    second = _build_key(base, _parent_ids(store, ("bunnyton/apt-update:1",)), ())
+    assert first != second
+    assert _parent_ids(store, ("bunnyton/apt-update:1",)) == ("bunnyton/apt-update:1@k2",)
+
+
+@pytest.mark.tier1
 def test_cmd_build_namespaces_bare_from_parents_like_the_image_itself(tmp_path, monkeypatch):
     # `from apt-update:1` in a course Taskfile must resolve to the owner's own build of that
     # task (`bunnyton/apt-update:1`), exactly as the image name itself is namespaced.

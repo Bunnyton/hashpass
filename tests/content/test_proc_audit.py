@@ -20,9 +20,9 @@ _TS = "2026-08-31T00:00:00"
 _INSTALL = (
     "apt-get update >/dev/null 2>&1\n"
     "apt-get install -y procps >/dev/null 2>&1\n"
-    "dpkg -s procps | grep '^Status:' > /install-status.txt"
+    "dpkg -s procps | grep '^Status:' > /home/student/install-status.txt"
 )
-_AUDIT = "sleep 600 &\nsleep 0.3\npgrep -x sleep | wc -l > /proc-count.txt"
+_AUDIT = "sleep 600 &\nsleep 0.3\npgrep -x sleep | wc -l > /home/student/proc-count.txt"
 
 
 @pytest.mark.tier3
@@ -35,13 +35,13 @@ def test_proc_audit_discriminates_both_stages(tmp_path, base_tar):
                        base_tar=base_tar, student_id="s1", nonce="n1")
     try:
         # Stage 1 (apt install): a bogus status is rejected; the real install advances + mints a key.
-        assert session.feed("echo nope > /install-status.txt", ts=_TS).advanced is False
+        assert session.feed("echo nope > /home/student/install-status.txt", ts=_TS).advanced is False
         r1 = session.feed(_INSTALL, ts=_TS)
         assert r1.advanced is True
         assert r1.local_key is not None
 
         # Stage 2 (process search): a wrong count is rejected; the real pgrep audit advances.
-        assert session.feed("echo 0 > /proc-count.txt", ts=_TS).advanced is False
+        assert session.feed("echo 0 > /home/student/proc-count.txt", ts=_TS).advanced is False
         r2 = session.feed(_AUDIT, ts=_TS)
         assert r2.advanced is True
         assert r2.local_key is not None

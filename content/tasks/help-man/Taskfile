@@ -1,0 +1,37 @@
+# help-man — два способа спросить у команды, что она умеет: --help и man. Два этапа: сначала
+# короткая шпаргалка ls, потом полный мануал. Приёмка по команде (следа на ФС нет) + `ok`:
+# команда обязана завершиться нормально.
+
+image help-man:1
+
+# man-db не входит в базовый образ — без него `man man` даст «command not found». А docker-база
+# вырезает /usr/share/man через dpkg-исключение: без его снятия и переустановки пакетов
+# `man man` отвечает «No manual entry» и завершается с ошибкой (предпосылка ложна).
+run rm -f /etc/dpkg/dpkg.cfg.d/docker* /etc/dpkg/dpkg.cfg.d/*excludes*
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall man-db manpages coreutils grep >/dev/null
+run test -s /usr/share/man/man1/man.1.gz && test -s /usr/share/man/man1/ls.1.gz
+
+hidden hp
+
+settings
+  pager on
+
+say "Ключи бывают не только буквенные. И у любой команды есть справка — короткая и большая."
+read brief.md
+
+stage "Выясни у самой команды ls, какие ключи она понимает — не выходя из терминала"
+  accept cmd "ls --help" ok
+  neutral cat pwd
+  on enter say "У ls десятки ключей. Она сама может их перечислить — если правильно попросить."
+  hint tries 4 say "Ключ-слово пишется через два дефиса. Какое слово ты скажешь, если просишь о помощи по-английски?"
+  hint idle 240 say "Перечитай теорию: там показан длинный ключ, который есть почти у каждой команды."
+
+stage "Открой полную справочную страницу самой команды man — и выйди из неё"
+  accept cmd "man man" ok
+  neutral ls cat pwd
+  on enter say "Шпаргалка была короткой. У каждой команды есть целая страница в руководстве — а у самого руководства?"
+  hint tries 5 say "Формула из теории: man <имя команды>. Какую команду ты изучаешь прямо сейчас?"
+  hint idle 240 say "Выход из страницы — клавиша q. Вход — как в теории."
+
+exec finale

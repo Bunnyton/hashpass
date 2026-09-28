@@ -65,6 +65,7 @@ class _StageAcc:
     on_pass: list[Action] = field(default_factory=list)
     hints: list[HintRule] = field(default_factory=list)
     accept_cmds: list[str] = field(default_factory=list)
+    accept_ok: bool = False
     match_output: bool = False
     variants: list[list[str]] = field(default_factory=list)
     deny: list[str] = field(default_factory=list)
@@ -350,16 +351,23 @@ def _apply_check(value: str, sacc: _StageAcc) -> None:
 
 
 def _apply_accept(value: str, sacc: _StageAcc) -> None:
-    """Apply `accept cmd "<substring>"`: a concrete command that passes the stage on its own."""
+    """
+    Apply `accept cmd "<substring>" [ok]`: a concrete command that passes the stage on its own.
+
+    `ok` additionally requires the command to have exited 0 (the console reports the status):
+    a `cmatrix` that dies on a missing library is not «запустил cmatrix».
+    """
     verb, _, rest = value.partition(" ")
     if verb != "cmd":
         msg = f"accept requires 'cmd \"<substring>\"', got: {value!r}"
         raise ValueError(msg)
     sub, tail = _take_quoted(rest.strip())
-    if not sub or tail:
-        msg = f"accept cmd takes one quoted command substring, got: {value!r}"
+    if not sub or tail.strip() not in ("", "ok"):
+        msg = f"accept cmd takes one quoted command substring (+ optional 'ok'), got: {value!r}"
         raise ValueError(msg)
     sacc.accept_cmds.append(sub)
+    if tail.strip() == "ok":
+        sacc.accept_ok = True
 
 
 def _apply_observe(value: str, sacc: _StageAcc) -> None:
@@ -425,6 +433,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         on_pass=tuple(sacc.on_pass),
         hints=tuple(sacc.hints),
         accept_cmds=tuple(sacc.accept_cmds),
+        accept_ok=sacc.accept_ok,
         match_output=sacc.match_output,
         variants=tuple(tuple(v) for v in sacc.variants),
         deny=tuple(sacc.deny),

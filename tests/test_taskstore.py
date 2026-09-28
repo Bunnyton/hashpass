@@ -18,8 +18,10 @@ from hashpass.recipe.model import (
 from hashpass.taskstore import (
     StageMeta,
     TaskMeta,
+    load_meta,
     meta_from_dict,
     meta_to_dict,
+    save_meta,
 )
 
 
@@ -72,3 +74,17 @@ def test_backcompat_missing_new_keys_default():
     assert m.voice == Voice()
     assert m.settings == Settings()
     assert m.react == ()
+
+
+@pytest.mark.tier1
+def test_stage_meta_accept_ok_round_trips(tmp_path):
+    meta = TaskMeta(image_ref="t:1", stages=(
+        StageMeta(message="run it", neutral=(), check=None, on_enter=(), on_pass=(),
+                  acceptance="command", accept_cmds=("cmatrix",), accept_ok=True),))
+    save_meta(meta, tmp_path / "task-meta.json")
+    assert load_meta(tmp_path / "task-meta.json").stages[0].accept_ok is True
+    plain = TaskMeta(image_ref="t:1", stages=(
+        StageMeta(message="run it", neutral=(), check=None, on_enter=(), on_pass=(),
+                  acceptance="command", accept_cmds=("sl",)),))
+    save_meta(plain, tmp_path / "plain.json")
+    assert load_meta(tmp_path / "plain.json").stages[0].accept_ok is False

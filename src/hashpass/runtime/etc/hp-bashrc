@@ -137,6 +137,9 @@ if [ -n "${HP_PORT-}" ]; then
     # `cmd <cmd_b64> <output_b64> <typing_seconds>` to the host.  Cap the output at
     # 64 KiB to keep the socket message bounded.
     __hp_postexec() {
+        # FIRST statement: $? is still the student's command status here (PROMPT_COMMAND runs
+        # us before anything else). Shipped as `rc=<n>` so `accept cmd "…" ok` can insist on 0.
+        local rc=$?
         local cmd="$1"
         [ -z "$cmd" ] && return
         local log="$HOME/.hp-typescript"
@@ -155,7 +158,7 @@ if [ -n "${HP_PORT-}" ]; then
 
         local cmd_b64
         cmd_b64=$(printf '%s' "$cmd" | base64 -w0)
-        hp-io "cmd $cmd_b64 $out $typing" 2>/dev/null
+        hp-io "cmd $cmd_b64 $out $typing rc=$rc" 2>/dev/null
 
         # After hp-io's reply streamed back through the terminal (and was captured by
         # script(1)), advance the offset past it so the NEXT command doesn't see the reply

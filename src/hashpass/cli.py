@@ -602,11 +602,11 @@ def _extract_output(delta: str) -> str:
     return _strip_terminal(delta[begin:end.start()] if end else delta[begin:])
 
 
-_CMD_FIELDS = 3   # cmd <command-b64> <output-b64> <typing-seconds>
+_CMD_FIELDS = 3   # cmd <command-b64> <output-b64> <typing-seconds> [rc=<status>]
 
 
-def _parse_cmd_request(req: str) -> tuple[str, str, float | None]:
-    """Decode a `cmd <command-b64> [<output-b64>] [<typing-seconds>]` request."""
+def _parse_cmd_request(req: str) -> tuple[str, str, float | None, int | None]:
+    """Decode a `cmd <command-b64> [<output-b64>] [<typing-seconds>] [rc=<status>]` request."""
     parts = req[4:].split(" ")
     command = base64.b64decode(parts[0]).decode("utf-8", "replace")
     output = ""
@@ -616,7 +616,12 @@ def _parse_cmd_request(req: str) -> tuple[str, str, float | None]:
     if len(parts) >= _CMD_FIELDS and parts[2]:   # guest-measured prompt->submit seconds (new runtime)
         with contextlib.suppress(ValueError):
             typing = float(parts[2])
-    return command, output, typing
+    rc: int | None = None                        # the command's exit status (runtime >= 20)
+    for tok in parts[3:]:
+        if tok.startswith("rc="):
+            with contextlib.suppress(ValueError):
+                rc = int(tok[3:])
+    return command, output, typing, rc
 
 
 _PASTE_MIN_LEN = 12     # short commands are too noisy to judge as typed vs pasted
@@ -650,15 +655,15 @@ def _policy_reply(session: object) -> str:
     return f"{','.join(sm.allow)};{','.join(sm.deny)};{','.join(sm.neutral)}\n"
 
 
-def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
-                    typing: float | None, io: Io,
+def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913, PLR0917
+                    typing: float | None, rc: int | None, io: Io,
                     *, history: list[dict[str, object]] | None = None) -> None:
     """React/grade/hint on one console command (+ its captured output), then announce a pass."""
     ts = io.clock()
     if history is not None and len(history) < _HISTORY_CAP:
         history.append({"command": command[:1000], "ts": ts, "typing": typing,
                         "pasted": _looks_pasted(command, typing)})
-    res = session.observe(command, ts=ts, output=output)  # react + grade + hints + on_pass
+    res = session.observe(command, ts=ts, output=output, rc=rc)  # react + grade + hints + on_pass
     if not res.advanced:
         return
     if current_stage(session.progress) is None:

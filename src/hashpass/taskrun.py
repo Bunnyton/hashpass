@@ -183,6 +183,18 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
     return res.stdout
 
 
+def _accepted_by_cmd(sm: StageMeta, command: str, rc: int | None) -> bool:
+    """
+    Whether `command` passes the stage by an `accept cmd` match.
+
+    With `accept cmd "…" ok` the command must also have exited 0; an unknown status (an older
+    console that does not report it) is not held against the student.
+    """
+    if not sm.accept_cmds or not any(sub in command for sub in sm.accept_cmds):
+        return False
+    return not (sm.accept_ok and rc is not None and rc != 0)
+
+
 class TaskSession:
     """One student's live task run: a /hp-free student container + per-session hidden /hp."""
 
@@ -264,10 +276,10 @@ class TaskSession:
             if idx < len(pages) - 1:
                 self.pause()
 
-    def _accept(self, stage: int, sm: StageMeta, command: str,
-                out: str, ts: str) -> tuple[bool, str | None]:
+    def _accept(self, stage: int, sm: StageMeta, command: str,  # noqa: PLR0913
+                out: str, ts: str, *, rc: int | None = None) -> tuple[bool, str | None]:
         """Decide acceptance: `accept cmd` match, else handler check-run, else derived host-side."""
-        if sm.accept_cmds and any(sub in command for sub in sm.accept_cmds):
+        if _accepted_by_cmd(sm, command, rc):
             return True, local_key(self.task_id, stage, self.nonce)  # a concrete solution command
         if sm.acceptance == "command":
             return False, None       # accepted ONLY by an `accept cmd` match (no FS grading)
@@ -337,13 +349,15 @@ class TaskSession:
                                       hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
 
-    def observe(self, command: str, *, ts: str, output: str = "") -> FeedResult:
+    def observe(self, command: str, *, ts: str, output: str = "",
+                rc: int | None = None) -> FeedResult:
         """
         React/grade/hint on a command the student ALREADY ran in the interactive console.
 
         Same as feed() but does NOT re-run the command (the console executed it). `output` is the
         command's captured stdout, streamed from the live console over the grade socket (empty when
         unavailable), so `output`-conditioned hints and output-based acceptance fire live too.
+        `rc` is the command's exit status as the console reported it (None on an older runtime).
         """
         stage = current_stage(self.progress)
         if stage is None:
@@ -356,7 +370,7 @@ class TaskSession:
             self.tries[stage] += 1
         ctx = self._ctx(command, self.tries[stage], stage, out)
         self._perform_all(self.meta.react, ctx)          # per-command catch-all handlers
-        accepted, key = self._accept(stage, sm, command, out, ts)
+        accepted, key = self._accept(stage, sm, command, out, ts, rc=rc)
         accepted, key, hint = self._apply_policy(sm, command, accepted, key)
         if accepted:
             self._on_pass(stage, ctx, ts)

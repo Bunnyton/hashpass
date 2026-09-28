@@ -54,8 +54,28 @@ def _base_stamp(base: Path) -> str:
         return str(base)
 
 
+def _parent_ids(store: ImageStore, parents: tuple[str, ...]) -> tuple[str, ...]:
+    """
+    Identify each parent by ref AND content (`ref@build_key`), so a rebuilt parent invalidates its children.
+
+    A parent without a build key (pulled from a pool, committed from a console) is identified by
+    its ref plus its pool digest when it has one -- there is nothing better to hash short of the
+    whole layer.
+    """
+    out = []
+    for ref in parents:
+        img = store.get(ref)
+        out.append(f"{ref}@{img.build_key or img.pool_digest or ''}")
+    return tuple(out)
+
+
 def _build_key(base: Path, parents: tuple[str, ...], steps: Sequence[_Step]) -> str:
-    """Fold base identity + parents + every step (COPY by source content) into one cache key."""
+    """
+    Fold base identity + parents + every step (COPY by source content) into one cache key.
+
+    `parents` are the ids from `_parent_ids` (ref@content), never bare refs: a child built on
+    an older generation of its parent must not be served from the cache once the parent changed.
+    """
     h = hashlib.sha256()
     h.update(("base\0" + _base_stamp(base) + "\0parents\0" + ",".join(parents)).encode())
     for step in steps:
@@ -100,7 +120,7 @@ def build(  # noqa: PLR0913
     ref = f"{recipe.name}:{recipe.version}"
     lowers = resolve_lowers(recipe.parents, store)
     base = base or build_base(workdir / "base", from_tar=base_tar)
-    key = _build_key(base, recipe.parents, recipe.steps)
+    key = _build_key(base, _parent_ids(store, recipe.parents), recipe.steps)
     if store.exists(ref):
         cached = store.get(ref)
         if cached.build_key == key:                   # identical inputs -> reuse, run nothing

@@ -3,9 +3,7 @@
 
 image proc-audit:1
 
-# Задание меняет / и ставит пакеты — нужна root-консоль.
 settings
-  user root
   pager on
 
 hidden hp
@@ -13,25 +11,26 @@ hidden hp
 say "Тебя позвали на аудит системы. Инструментов нет — только руки и apt."
 read brief.md
 
-stage "Поставь пакет psmisc (в нём pstree и killall) и сохрани строку Status: из его dpkg-статуса в /install-status.txt"
+stage "Поставь пакет psmisc (в нём pstree и killall) и сохрани строку Status: из его dpkg-статуса в /home/student/install-status.txt"
   solve:
-    apt-get update >/dev/null 2>&1
-    apt-get install -y psmisc >/dev/null 2>&1
-    dpkg -s psmisc | grep '^Status:' > /install-status.txt
-  observe /install-status.txt
+    sudo apt-get update >/dev/null 2>&1
+    sudo apt-get install -y psmisc >/dev/null 2>&1
+    dpkg -s psmisc | grep '^Status:' > /home/student/install-status.txt
+  observe /home/student/install-status.txt
   neutral ls cat pwd
-  on enter say "Инструментов для аудита нет. Зато есть apt и root."
+  on enter say "Инструментов для аудита нет. Зато есть apt и sudo."
+  hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
   hint output "Unable to locate package" say "apt не знает такого пакета. Когда он в последний раз обновлял список? Два шага."
   hint tries 3 say "Пакет стоит? dpkg -s psmisc расскажет — и там же та самая строка Status:. Осталось оставить только её и положить в файл."
   hint tries 6 say "Загугли: «dpkg проверить установлен ли пакет» и «grep строка начинающаяся с»."
   hint idle 300 say "Перечитай цель: установить, спросить dpkg, одну строку — в файл."
 
-stage "Запусти ОДИН фоновый sleep 600, посчитай, сколько процессов sleep сейчас работает, и запиши число в /proc-count.txt"
+stage "Запусти ОДИН фоновый sleep 600, посчитай, сколько процессов sleep сейчас работает, и запиши число в /home/student/proc-count.txt"
   solve:
     sleep 600 &
     sleep 0.3
-    pgrep -x sleep | wc -l > /proc-count.txt
-  observe /proc-count.txt
+    pgrep -x sleep | wc -l > /home/student/proc-count.txt
+  observe /home/student/proc-count.txt
   neutral ls cat pwd
   on enter say "Фон — это когда команда работает, а промпт уже вернулся. Один символ в конце строки."
   hint tries 3 say "sleep ушёл в фон (ты видел [1] и номер)? Как найти процесс по имени — теория показывала pgrep. Как посчитать строки — ты уже умеешь."
