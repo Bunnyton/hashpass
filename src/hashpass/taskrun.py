@@ -185,9 +185,9 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
 
 _SEG_SPLIT = re.compile(r"\s*(?:\|\||&&|;|\|)\s*")
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-_SUDO_OPTS_WITH_ARG = frozenset(("-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-T", "-U",
+_SUDO_OPTS_WITH_ARG = frozenset(("-u", "-g", "-C", "-D", "-h", "-p", "-r", "-R", "-t", "-T", "-U",
                                  "--user", "--group", "--chdir", "--host", "--prompt", "--role",
-                                 "--type", "--command-timeout", "--other-user"))
+                                 "--chroot", "--type", "--command-timeout", "--other-user"))
 
 
 def _without_sudo(segment: str) -> str:

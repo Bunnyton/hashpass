@@ -47,6 +47,7 @@ def _stage(*patterns: str, ok: bool = False) -> StageMeta:
     ("cat notes", "LANG=C cat notes", True),              # env assignments before the command
     ("cat notes", "sudo LANG=C cat notes", True),
     ("bob", "sudo -u bob cat notes", False),
+    ("apt update", "sudo -R /srv/jail apt update", True),
 ])
 def test_accept_cmd_is_anchored_on_the_command_actually_run(pattern, command, expected):
     assert _accepted_by_cmd(_stage(pattern), command, None) is expected
