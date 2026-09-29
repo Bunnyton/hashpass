@@ -1,0 +1,25 @@
+#!/bin/sh
+# hp-banner -- print the boot banner: one of several looks (/etc/hp-banners/*.txt) with a
+# random slogan («welcome to hashpass», «I love linux», …) from /etc/hp-slogans.txt rendered
+# into the art. Templates carry {{SLOGAN}} (as is) and {{SLOGAN_SPACED}} (S P A C E D caps).
+# HP_BANNERS / HP_SLOGANS / HP_SEED let the tests render on the host, deterministically.
+dir=${HP_BANNERS:-/etc/hp-banners}
+list=${HP_SLOGANS:-/etc/hp-slogans.txt}
+
+pick() {   # one non-empty line of stdin: random, or the HP_SEED-th for tests
+    if [ -n "${HP_SEED-}" ]; then
+        awk -v s="$HP_SEED" 'NF { l[n++] = $0 } END { if (n) print l[s % n] }'
+    else
+        grep . | shuf -n1
+    fi
+}
+
+banner=$(ls "$dir"/*.txt 2>/dev/null | pick)
+slogan=$(pick < "$list" 2>/dev/null)
+[ -n "$slogan" ] || slogan="welcome to hashpass"
+spaced=$(printf '%s' "$slogan" | tr '[:lower:]' '[:upper:]' | sed 's/./& /g; s/ $//')
+if [ -n "$banner" ]; then
+    printf '\033[1;31m'
+    sed -e "s|{{SLOGAN_SPACED}}|$spaced|g" -e "s|{{SLOGAN}}|$slogan|g" "$banner"
+    printf '\033[0m'
+fi

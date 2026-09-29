@@ -1,4 +1,6 @@
 """Tier1: the console keeps its transcript out of $HOME, boots with a UTF-8 locale and a banner."""
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -38,8 +40,38 @@ def test_boot_banners_come_in_several_looks_with_random_phrases():
     phrases = [ln for ln in (_RT / "etc/hp-phrases.txt").read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert len(phrases) >= 20 and len(set(phrases)) == len(phrases)            # noqa: PLR2004
     console = (_RT / "usr/local/sbin/hp-console").read_text(encoding="utf-8")
-    assert "/etc/hp-banners/*.txt" in console and "hp-phrases.txt" in console and "shuf" in console
+    assert "hp-banner" in console and "hp-phrases.txt" in console and "shuf" in console
     assert "hp-banner" not in (_RT / "etc/hp-bashrc").read_text(encoding="utf-8")   # printed once
+
+
+@pytest.mark.tier1
+def test_boot_banner_slogans_are_varied_and_free_of_the_machine():
+    # User: «welcome to hashpass можно. Ещё разных: I love linux, I hate windows…» -- the tagline
+    # is drawn from a slogan list, independent of the art; «to the machine» is gone for good.
+    slogans = [ln for ln in (_RT / "etc/hp-slogans.txt").read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert len(slogans) >= 15 and len(set(slogans)) == len(slogans)            # noqa: PLR2004
+    for must in ("welcome to hashpass", "I love linux", "I hate windows"):
+        assert must in slogans
+    for sl in slogans:                       # they go through sed: keep the replacement plain
+        assert not set(sl) & set("|&\\{}"), sl
+    for b in sorted((_RT / "etc/hp-banners").glob("*.txt")):
+        text = b.read_text(encoding="utf-8")
+        assert "{{SLOGAN" in text, b.name
+        assert "machine" not in text.lower(), b.name
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("seed", range(6))
+def test_hp_banner_renders_a_slogan_into_the_art(seed):
+    script = _RT / "usr/local/sbin/hp-banner"
+    env = {**os.environ, "HP_BANNERS": str(_RT / "etc/hp-banners"), "HP_SLOGANS": str(_RT / "etc/hp-slogans.txt"),
+           "HP_SEED": str(seed)}
+    out = subprocess.run(["sh", str(script)], check=True, capture_output=True, text=True, env=env).stdout
+    slogans = [ln for ln in (_RT / "etc/hp-slogans.txt").read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert "{{" not in out and "}}" not in out
+    spaced = [" ".join(sl.upper()) for sl in slogans]
+    assert any(sl in out for sl in slogans) or any(sp in out for sp in spaced), out
+    assert len([ln for ln in out.splitlines() if ln.strip()]) >= 3                # noqa: PLR2004
 
 
 @pytest.mark.tier1
