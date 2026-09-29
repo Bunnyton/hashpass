@@ -26,7 +26,7 @@ stage "Найди в /home/student/search файлы, чьё имя начина
   variant find /home/student/search -name "level2*" -type f -o -name "*3*" -type f
   observe output
   neutral ls cat pwd cd
-  on pass say "Скобки в find экранируют: \( … \). А -not (или !) переворачивает условие — попробуй найти файлы БЕЗ тройки."
+  on pass say "Скобки для find экранируют: \( … \). А сколько файлов начинаются с level2 И содержат тройку — одновременно?"
   hint output "syntax error near unexpected token" say "Ругается bash: скобки забрал себе. Экранируй их."
   hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
   hint tries 3 say "Чего не хватает в выводе — level2 или тройки?"

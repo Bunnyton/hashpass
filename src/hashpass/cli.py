@@ -1505,13 +1505,16 @@ def cmd_catalog_layout(env: Home, specs: list[str], registry: str | None = None,
     owner = token_user(token) or ""
     blocks = parse_layout_specs(specs, owner)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
-    rows = _push_call(client.set_catalog_layout, blocks, token=token)
+    result = _push_call(client.set_catalog_layout, blocks, token=token)
+    rows = list(result.get("catalog", []))
     wanted = {r for b in blocks for r in b["tasks"]}
     listed = {str(r.get("ref")) for r in rows}
     for row in rows:
         io.write(f"№{row.get('number')}  {row.get('ref')}   [{row.get('block_name', '')}]\n")
     for ref in sorted(wanted - listed):
         io.write(f"\x1b[33m⚠ не на пуле, пропущен: {ref}\x1b[0m\n")
+    for ref in result.get("removed", []):
+        io.write(f"\x1b[33m⚠ снято с публикации (нет в раскладке): {ref}\x1b[0m\n")
     return 0
 
 

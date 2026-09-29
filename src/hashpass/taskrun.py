@@ -203,11 +203,13 @@ def _without_sudo(segment: str) -> str:
     return " ".join(tokens)
 
 
-def _token_matches(want: str, got: str, *, last: bool) -> bool:
-    """Match one pattern word exactly; the LAST word may be a prefix when it ends in `/` or `.`."""
-    if want == got:
-        return True
-    return last and not (want[-1].isalnum() or want[-1] in "_-") and got.startswith(want)
+def _is_option(word: str) -> bool:
+    return word.startswith("-") and word != "-"
+
+
+def _word_matches(want: str, got: str) -> bool:
+    """Match one pattern word exactly; a word ending in `/` or `.` (`./`) matches by prefix."""
+    return want == got or (not (want[-1].isalnum() or want[-1] in "_-") and got.startswith(want))
 
 
 def _cmd_matches(pattern: str, command: str) -> bool:
@@ -215,32 +217,28 @@ def _cmd_matches(pattern: str, command: str) -> bool:
     Whether an `accept cmd` pattern names the command the student ran.
 
     Per pipeline segment (after an optional `sudo`; a path in the first word counts by its
-    basename): the pattern's first word must be the command itself, and its remaining words must
-    appear in order among the command's words. Word-based, so an alias the student's shell
-    expands (`ls --help` arrives as `ls --color=auto --help` from a fresh user's ~/.bashrc)
-    still matches, while `dpkg -s cmatrix` never counts as `cmatrix` and `sleep` never as `sl`.
-    A pattern word ending in `/` or `.` (`apt install ./`) matches a word by prefix. The live
-    console ships the LAST simple command of a pipeline/`&&` chain; the segment split matters
-    for the test/`feed()` path, which sees the whole line.
+    basename): the pattern's POSITIONAL words must be exactly the command's leading positional
+    words, in order (`apt update` is not `apt search update`, `man man` is not `man ls man`),
+    while the pattern's OPTION words (`-…`) may sit anywhere among the command's options -- so
+    an alias the student's shell expands (`ls --help` arrives as `ls --color=auto --help` from a
+    fresh user's ~/.bashrc) still matches. `sleep` never counts as `sl`, `dpkg -s cmatrix` never
+    as `cmatrix`. A pattern word ending in `/` or `.` (`apt install ./`) matches by prefix. The
+    live console ships the LAST simple command of a pipeline/`&&` chain; the segment split
+    matters for the test/`feed()` path, which sees the whole line.
     """
     want = pattern.split()
     if not want:
         return False
+    want_pos = [w for w in want if not _is_option(w)]
+    want_opt = [w for w in want if _is_option(w)]
     for raw in _SEG_SPLIT.split(command.strip()):
         got = _without_sudo(raw).split()
-        if not got or got[0] != want[0]:
+        got_pos = [w for w in got if not _is_option(w)]
+        got_opt = [w for w in got if _is_option(w)]
+        if len(got_pos) < len(want_pos) or not all(
+                _word_matches(w, g) for w, g in zip(want_pos, got_pos, strict=False)):
             continue
-        pos = 1
-        ok = True
-        for i, w in enumerate(want[1:], start=1):
-            last = i == len(want) - 1
-            while pos < len(got) and not _token_matches(w, got[pos], last=last):
-                pos += 1
-            if pos >= len(got):
-                ok = False
-                break
-            pos += 1
-        if ok:
+        if all(any(_word_matches(w, g) for g in got_opt) for w in want_opt):
             return True
     return False
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# fruit-store: meme «Panik Kalm Panik». Regenerate: meme.py render "Panik Kalm Panik" --width 72
+# fruit-store: meme «Panik Kalm Panik». Regenerate: meme.py render "Panik Kalm Panik"
 cat <<'ART'
 
 ⣿⠍⡊⡩⠨⡉⡊⠍⠌⠍⡊⡩⠨⡉⡊⠍⠌⠍⡊⡩⠨⡉⡊⠍⠌⠍⡊⡩⠨⡉⡊⠍⠌⢍⡯⡑⠩⠡⠩⢑⢉⠅⢍⢑⠩⠡⠩⢑⢉⠅⢍⢑⠩⠡⠩⠑⠩⠡⠩⢑⢉⠅⢍⢑⠩⠡⠩⢑⢉⠅⠍⢽

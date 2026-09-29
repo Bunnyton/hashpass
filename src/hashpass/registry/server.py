@@ -529,9 +529,32 @@ class PoolServer:
         if not isinstance(blocks, list) or not all(
                 isinstance(b, dict) and isinstance(b.get("tasks"), list) for b in blocks):
             return self._empty(HTTPStatus.BAD_REQUEST)
-        self.catalog().set_layout(blocks)
-        return self._json(HTTPStatus.OK,
-                          {"catalog": [e.as_dict() for e in self.catalog().entries()]})
+        catalog = self.catalog()
+        listed = {str(r) for b in blocks for r in b["tasks"]}
+        owners = {_owner_of(r) for r in listed}
+        # The layout governs the namespaces it mentions. Tasks of OTHER authors are not this
+        # deploy's business: they keep their catalog place (own blocks, in order) after the
+        # requested ones. Same-namespace tasks left out are de-listed -- and reported.
+        current = catalog.blocks()
+        foreign = [{"id": b.id, "name": b.name, "open": b.open,
+                    "tasks": [e.ref for e in b.entries
+                              if e.ref not in listed and _owner_of(e.ref.partition(":")[0]) not in owners]}
+                   for b in current]
+        foreign = [b for b in foreign if b["tasks"]]
+        removed = [e.ref for b in current for e in b.entries
+                   if e.ref not in listed and _owner_of(e.ref.partition(":")[0]) in owners]
+        by_name = {b.name: b for b in current}
+        layout = []
+        for b in blocks:
+            was = by_name.get(str(b.get("name", "")))
+            entry = dict(b)
+            if was is not None:                    # keep the block's id and collapsed state
+                entry.setdefault("id", was.id)
+                entry.setdefault("open", was.open)
+            layout.append(entry)
+        catalog.set_layout(layout + foreign)
+        return self._json(HTTPStatus.OK, {"catalog": [e.as_dict() for e in catalog.entries()],
+                                          "removed": removed})
 
     def _route_submit(self) -> Response:   # noqa: PLR0911
         user = self._token_user()

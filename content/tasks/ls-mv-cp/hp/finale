@@ -1,5 +1,5 @@
 #!/bin/sh
-# ls-mv-cp: meme «Waiting Skeleton». Regenerate: meme.py render "Waiting Skeleton" --width 73
+# ls-mv-cp: meme «Waiting Skeleton». Regenerate: meme.py render "Waiting Skeleton"
 cat <<'ART'
 
 ⠠⠐⠠⢀⢂⠠⠀⠄⡀⠄⢀⠀⠠⠀⠠⠀⠄⢀⠀⡀⠠⠀⢀⠀⠄⠀⡀⠀⡀⢀⠀⠠⠀⠐⠀⠂⠐⠠⠠⠠⠀⡀⡀⡀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡐⠄⠂

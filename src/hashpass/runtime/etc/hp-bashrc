@@ -67,7 +67,13 @@ alias l='ls -CF --color=auto'
 #     command, then clears the buffer, then arms precmd for the next round.
 # ---------------------------------------------------------------------------------------
 if [ -n "${HP_PORT-}" ]; then
-    __hp_off=0
+    # Armed only when the FIRST prompt is about to be drawn: this rc is sourced early (from
+    # /etc/bash.bashrc) and the DEBUG trap would otherwise capture the rest of the startup
+    # files (`return` below, ~/.bashrc of a `su -` login…) and ship it as a phantom command --
+    # one extra «try» per shell. Until armed, preexec/postexec do nothing.
+    __hp_armed=0
+    # Ship only what THIS shell produces: a nested shell must not replay the whole transcript.
+    __hp_off=$(stat -c %s /run/hp/typescript 2>/dev/null || echo 0)
     __hp_shadow=()
     __hp_prompt_t=""
     __hp_submit_t=""
@@ -87,6 +93,7 @@ if [ -n "${HP_PORT-}" ]; then
     #      defined here shadows the binary/builtin for THIS run only; __hp_postexec unsets
     #      them so the next command is judged fresh against the (possibly changed) policy.
     __hp_preexec() {
+        [ "$__hp_armed" -eq 1 ] || return
         local f
         for f in "${__hp_shadow[@]}"; do unset -f "$f" 2>/dev/null; done
         __hp_shadow=()
@@ -148,6 +155,10 @@ if [ -n "${HP_PORT-}" ]; then
         # FIRST statement: $? is still the student's command status here (PROMPT_COMMAND runs
         # us before anything else). Shipped as `rc=<n>` so `accept cmd "…" ok` can insist on 0.
         local rc=$?
+        if [ "$__hp_armed" -eq 0 ]; then       # first prompt: drop whatever startup captured
+            __hp_armed=1
+            return
+        fi
         local cmd="$1"
         [ -z "$cmd" ] && return
         local log=/run/hp/typescript

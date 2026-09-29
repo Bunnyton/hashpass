@@ -18,7 +18,7 @@ mount -o remount,gid=5,mode=620,ptmxmode=666,max=4096 /dev/pts 2>/dev/null \
 [ -e /dev/pts/ptmx ] && ln -sf pts/ptmx /dev/ptmx 2>/dev/null || true
 
 user="${HP_USER:-student}"
-# /run/hp holds the transcript and the grade port, readable by EVERY user: nested shells
+# /run/hp (0755) holds the transcript and the grade port, readable by EVERY user: nested shells
 # (`su - other`, `sudo -i`, a user the student just created) load the same hooks from
 # /etc/bash.bashrc (see image/base.py) and find the host through /run/hp/port, so grading and
 # hints never disappear when the student changes identity.
@@ -32,7 +32,7 @@ fi
 export LANG=C.UTF-8
 # The console transcript (script(1) in hp-bash) lives in /run/hp -- tmpfs, OUTSIDE the home
 # directory, so `ls -a ~` never shows engine internals. Owned by the console user (script
-# runs as them), 0700 so it is theirs alone.
+# runs as them); other users only read it (0644, see hp-bash).
 # The machine has booted: greet before any shell (graded task or plain image console alike) --
 # one of several looks and a random one-liner, metasploit-style.
 banner=$(ls /etc/hp-banners/*.txt 2>/dev/null | shuf -n1)

@@ -26,9 +26,14 @@ def _stage(*patterns: str, ok: bool = False) -> StageMeta:
     ("ls --help", "ls --help | head", True),
     ("ls --help", "ls --color=auto --help", True),     # alias from a fresh user's ~/.bashrc
     ("grep -r ERROR", "grep --color=auto -r ERROR /var/log", True),
+    ("apt update", "apt --fix-broken update", True),   # options may sit anywhere
+    ("apt-get update", "sudo apt-get -y update", True),
     ("ls --help", "ls --hepl", False),
     ("ls --help", "ls", False),
     ("man man", "man manpages", False),
+    ("apt update", "apt search update", False),         # positional words: exactly, in order
+    ("apt update", "apt install update", False),
+    ("man man", "man ls man", False),
     ("man man", "man man", True),
     ("apt update", "sudo apt update", True),
     ("apt-get update", "sudo -E apt-get update", True),

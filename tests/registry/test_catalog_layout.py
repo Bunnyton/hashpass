@@ -62,7 +62,30 @@ def test_layout_api_is_admin_only_and_renumbers(registry, tmp_path):
     assert status == HTTPStatus.OK
     rows = [(r["number"], r["ref"], r["block_name"]) for r in body["catalog"]]
     assert rows == [(1, "b/d:1", "Поиск"), (2, "b/c:1", "Поиск"), (3, "b/a:1", "Знакомство")]
-    # b/old:1 is not in the layout -> de-listed; b/ghost:1 is not on the pool -> dropped
+    assert body["removed"] == ["b/old:1"]   # same namespace, not in the layout -> de-listed, reported
+    # b/ghost:1 is not on the pool -> dropped
+
+
+@pytest.mark.tier2
+def test_layout_keeps_other_authors_tasks_and_block_state(registry, tmp_path):
+    # A deploy lists only its own namespace: another author's tasks stay published (after the
+    # requested blocks), and a block already in the catalog keeps its id and collapsed state.
+    for ref in ("b/a:1", "alice/x:1", "b/c:1"):
+        _seed(registry, ref, tmp_path)
+    cat = Catalog(registry.catalog_path)
+    first = cat.blocks()[0]
+    cat.rename_block(first.id, "Знакомство")
+    cat.set_block_open(first.id, open_=False)
+    registry.users.add("admin", "pw-correct", role="admin")
+    admin = RemoteRegistry(registry.base_url).login("admin", "pw-correct")
+    status, body = _put(registry.base_url, admin, {"blocks": [{"name": "Знакомство", "tasks": ["b/c:1", "b/a:1"]}]})
+    assert status == HTTPStatus.OK
+    rows = [(r["number"], r["ref"], r["block_name"]) for r in body["catalog"]]
+    assert rows[:2] == [(1, "b/c:1", "Знакомство"), (2, "b/a:1", "Знакомство")]
+    assert rows[2][1] == "alice/x:1"                     # kept, after the requested blocks
+    assert body["removed"] == []
+    blocks = cat.blocks()
+    assert blocks[0].id == first.id and blocks[0].open is False   # id + collapsed state preserved
 
 
 @pytest.mark.tier2

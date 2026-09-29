@@ -1,5 +1,5 @@
 #!/bin/sh
-# apt-add-repo: meme «Trade Offer». Regenerate: meme.py render "Trade Offer" --width 76
+# apt-add-repo: meme «Trade Offer». Regenerate: meme.py render "Trade Offer"
 cat <<'ART'
 
 ⠐⡐⠨⢐⠐⡁⡂⢂⠐⡀⢂⠐⡀⠂⠠⠐⠀⠌⡙⢖⢨⡀⡂⢂⣂⣦⣶⣿⡿⣿⣿⣿⣿⢿⠟⡻⠩⡱⠨⢂⠅⡂⡊⠔⡐⠔⡐⠔⡐⠔⡐⠔⡐⡐⡡⢂⠕⡐⢅⠝⡮⡯⡪⡂⡊⡐⡐⠌⡂⠽⣿⣿⣆⠢⢂⢅

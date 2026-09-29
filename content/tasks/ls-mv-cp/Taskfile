@@ -23,7 +23,7 @@ stage "Где-то в /home/student/subdir_1, subdir_2 или subdir_3 лежи�
   variant grep -rh phrase /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3
   observe output
   neutral ls cd pwd
-  on pass say "Три подвала руками — честно. В следующий раз: grep -r 'phrase:' . — и подвалы обойдёт машина."
+  on pass say "Три подвала руками — честно. Скоро появится инструмент, который обойдёт их за тебя."
   hint cmd cat say "Файл открыт — покажи только нужную строку."
   hint tries 4 say "Все три subdir до самого дна?"
   hint tries 8 say "У grep есть ключ для поиска по всем подкаталогам."

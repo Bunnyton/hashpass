@@ -19,7 +19,8 @@ _SYSTEMD_INSTALL = (
     "&& apt-get install -y man-db manpages "
     # A student's `apt install` must never open a debconf dialog (e.g. keyboard-configuration
     # pulled in as a Recommends of kbd by cmatrix): no Recommends by default, debconf silent.
-    "&& printf 'APT::Install-Recommends \"false\";\\n' > /etc/apt/apt.conf.d/99hp-no-recommends "
+    "&& printf 'APT::Install-Recommends \"false\";\\n"
+    "Dpkg::Options { \"--force-confdef\"; \"--force-confold\"; };\\n' > /etc/apt/apt.conf.d/99hp "
     "&& echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections "
     "&& apt-get install -y --reinstall coreutils grep findutils sudo apt dpkg bash "
     # libnss-myhostname: resolve the container's own (dynamic, per-run) hostname + localhost via
