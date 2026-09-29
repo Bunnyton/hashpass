@@ -3,13 +3,8 @@
 
 image grep-search:1
 
-run mkdir -p /home/student/haystack/a/b/c /home/student/haystack/x/y /home/student/haystack/z
-run printf 'обычный текст\n' > /home/student/haystack/a/f1.txt
-run printf 'скучные заметки\n' > /home/student/haystack/a/b/f2.txt
-run printf 'один из миллиона\n' > /home/student/haystack/a/b/c/f3.txt
-run printf 'просто болталка\n' > /home/student/haystack/x/f4.txt
-run printf 'здесь ничего\n' > /home/student/haystack/x/y/f5.txt
-run printf 'КЛЮЧ: silver-bullet-42\n' > /home/student/haystack/z/hidden.txt
+# data/haystack: python3 .claude/skills/task-authoring/scripts/mkdata.py tree … --seed 190 --depth 4 --dirs 24 --files 60; ключ — mkdata.py plant (37-й файл)
+copy data/haystack /home/student/haystack
 run chown -R student:student /home/student/haystack
 
 hidden hp
@@ -24,7 +19,7 @@ stage "Где-то в дереве /home/student/haystack есть строка,
   solve grep -rh КЛЮЧ /home/student/haystack
   observe output
   neutral ls cat pwd cd
-  on enter say "Шесть файлов в трёх ветках. Руками — можно. Но зачем?"
+  on enter say "Шестьдесят файлов в трёх ветках. Руками — можно. Но зачем?"
   on pass say "grep -rn добавит номер строки, grep -ri — забудет про регистр. Попробуй оба на haystack."
   hint output "Is a directory" say "grep: это каталог. Как заставить его зайти внутрь?"
   hint cmd grep has -r say "Нашёл! Но впереди имя файла. grep --help | grep -i filename."

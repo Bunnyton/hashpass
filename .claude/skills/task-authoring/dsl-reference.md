@@ -26,7 +26,7 @@ content/tasks/<id>/
 | `image` | `image <name>:<ver>` | Имя образа. Без `:ver` → `latest`. Один раз. |
 | `from` | `from <ref>[, <ref>…]` | Наследование (транзитивное); правее = приоритет. Голое имя (`from apt-update:1`) `hashengine build` подставляет в namespace владельца (`bunnyton/apt-update:1`); явный `alice/lib:2` остаётся как есть. Задание-продолжение: `from <предыдущее>` + `run` решения предыдущего (действия студента не сохраняются). |
 | `run` | `run <shell-команда>` | Выполняется **при сборке**, запекается в образ. Так создаётся среда (`mkdir`, `printf > file`, `apt-get install`, `chown -R student:student …`). |
-| `copy` | `copy <src> <dst>` | Хостовый файл/каталог → в образ. |
+| `copy` | `copy <src> <dst>` | Файл/каталог из папки задания → в образ (`copy data/haystack /home/student/haystack`: каталог ложится **содержимым** в `dst`, как `COPY` в Docker). Так в задание попадают настоящие данные (`data/`), а не `printf` в `run`. Владельца ставь следом: `run chown -R student:student …`. |
 | `hidden` | `hidden <dir>` | Каталог → скрытый `/hp/work/`. Обычно `hidden hp`. |
 | `readme` | `readme <file>` | Markdown-брифинг; показывается после intro. Современные задания вместо него пишут `read brief.md` в intro. |
 | `settings` | блок | См. ниже. |

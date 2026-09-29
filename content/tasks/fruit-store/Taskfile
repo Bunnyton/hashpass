@@ -2,9 +2,10 @@
 
 image fruit-store:1
 
-run mkdir -p /home/student/store
 # Ассортимент дня — с повторами, как в реальном журнале продаж.
-run printf 'banana\napple\ncherry\napple\nbanana\napple\n' > /home/student/store/sold.txt
+
+# data/store/sold.txt: python3 .claude/skills/task-authoring/scripts/mkdata.py list … --lines 500 --seed 170 (17 позиций)
+copy data/store /home/student/store
 run chown -R student:student /home/student/store
 
 hidden hp

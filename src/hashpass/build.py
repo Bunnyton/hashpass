@@ -139,7 +139,10 @@ def build(  # noqa: PLR0913
             if isinstance(step, CopyStep):
                 if progress is not None:
                     progress(f"{label}: копирую {step.src} → {step.dst}")
-                subprocess.run(["sudo", "rsync", "-a", "--mkpath", step.src,
+                # A directory source lands as its CONTENTS at dst (docker COPY semantics), so
+                # `copy data/tree /home/student/tree` never nests a second `tree/` inside.
+                src = step.src.rstrip("/") + "/" if Path(step.src).is_dir() else step.src
+                subprocess.run(["sudo", "rsync", "-a", "--mkpath", src,
                                 str(mnt / step.dst.lstrip("/"))], check=True)
             else:
                 if progress is not None:

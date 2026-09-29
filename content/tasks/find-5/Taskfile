@@ -2,13 +2,8 @@
 
 image find-5:1
 
-run mkdir -p /home/student/search/a /home/student/search/b
-run printf 'not empty\n' > /home/student/search/full1.txt
-run printf 'has content\n' > /home/student/search/a/full2.txt
-run printf 'also has data\n' > /home/student/search/b/full3.txt
-run touch /home/student/search/empty1.txt
-run touch /home/student/search/a/empty2.txt
-run touch /home/student/search/b/empty3.txt
+# data/search: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 165 --depth 5 --dirs 30 --files 140 …
+copy data/search /home/student/search
 run chown -R student:student /home/student/search
 
 hidden hp
@@ -21,8 +16,7 @@ read brief.md
 
 stage "Найди в /home/student/search все непустые файлы"
   solve find /home/student/search -type f -not -empty
-  variant find /home/student/search -type f \! -empty
-  observe output
+  check exec grade
   neutral ls cat pwd cd
   on enter say "Половина файлов — пустышки. Нужны те, в которых что-то есть."
   on pass say "-empty находит и пустые каталоги. Сколько их в search? (подсказка: -type d)"

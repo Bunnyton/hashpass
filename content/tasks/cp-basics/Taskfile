@@ -3,8 +3,9 @@
 
 image cp-basics:1
 
+# data/copy_me.txt: python3 .claude/skills/task-authoring/scripts/mkdata.py text … --kind prose --lines 150 --seed 140
+copy data/copy_me.txt /home/student/copy_me.txt
 run mkdir -p /home/student/wait_file
-run printf 'Любопытно, однако)\n' > /home/student/copy_me.txt
 run chown -R student:student /home/student/copy_me.txt /home/student/wait_file
 
 hidden hp

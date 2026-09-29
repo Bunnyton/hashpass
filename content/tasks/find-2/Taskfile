@@ -2,14 +2,8 @@
 
 image find-2:1
 
-run mkdir -p /home/student/search/a/b/c /home/student/search/x/y/z
-run touch /home/student/search/root.txt
-run touch /home/student/search/a/lvl1.txt
-run touch /home/student/search/a/b/lvl2.txt
-run touch /home/student/search/a/b/c/lvl3.txt
-run touch /home/student/search/x/one.txt
-run touch /home/student/search/x/y/two.txt
-run touch /home/student/search/x/y/z/three.txt
+# data/search: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 162 --depth 6 --dirs 40 --files 170 …
+copy data/search /home/student/search
 run chown -R student:student /home/student/search
 
 hidden hp
@@ -22,7 +16,7 @@ read brief.md
 
 stage "Найди файлы (только файлы), лежащие ровно на 3-м уровне вложенности внутри /home/student/search"
   solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
-  observe output
+  check exec grade
   neutral ls cat pwd cd
   on pass say "Меняй -type f на -type d — и те же этажи покажут каталоги. Проверь."
   hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."

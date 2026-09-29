@@ -2,8 +2,8 @@
 
 image cd-abs:1
 
-run mkdir -p /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
-run printf 'Ты нашёл меня! Молодец.\n' > /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me/key_here.txt
+# data/dir1: цепочка dir1/…/dir9/cd_to_me плюс 2–3 каталога-двойника и файлы на каждом этаже (gen seed 102)
+copy data/dir1 /home/student/dir1
 run chown -R student:student /home/student/dir1
 
 hidden hp

@@ -5,10 +5,8 @@
 
 image simple-ls:1
 
-run mkdir -p /home/student/room
-run printf 'ковёр\n' > /home/student/room/carpet.txt
-run printf 'лампа\n' > /home/student/room/lamp.txt
-run printf 'кот\n' > /home/student/room/cat.txt
+# data/room: девять вещей в комнате
+copy data/room /home/student/room
 run chown -R student:student /home/student/room
 
 hidden hp

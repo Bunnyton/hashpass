@@ -45,6 +45,22 @@ def test_copy_interleave_and_resave(tmp_path, base_tar):
 
 
 @pytest.mark.tier3
+def test_copy_directory_puts_its_contents_at_dst(tmp_path, base_tar):
+    # `copy data/tree /home/student/tree` lands data/tree/* under /home/student/tree (docker COPY
+    # semantics), whatever the trailing slash -- authors ship real fixture trees next to the Taskfile.
+    src = tmp_path / "data" / "tree"
+    (src / "sub").mkdir(parents=True)
+    (src / "a.txt").write_text("A", encoding="utf-8")
+    (src / "sub" / "b.txt").write_text("B", encoding="utf-8")
+    store = ImageStore(tmp_path / "images")
+    recipe = parse_recipe(f"image demo:1\ncopy {src} /home/student/tree\n")
+    demo = build(recipe, store, base_tar=base_tar, workdir=tmp_path / "b1")
+    assert (demo.layer / "home/student/tree/a.txt").read_text(encoding="utf-8") == "A"
+    assert (demo.layer / "home/student/tree/sub/b.txt").read_text(encoding="utf-8") == "B"
+    assert not (demo.layer / "home/student/tree/tree").exists()
+
+
+@pytest.mark.tier3
 def test_build_then_run_image_roundtrips(tmp_path, base_tar):
     store = ImageStore(tmp_path / "images")
     build(

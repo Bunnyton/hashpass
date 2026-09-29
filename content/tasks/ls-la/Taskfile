@@ -5,9 +5,8 @@
 
 image ls-la:1
 
-run mkdir -p /home/student/attic
-run printf 'обычный файл\n' > /home/student/attic/normal.txt
-run printf 'старый ключ\n' > /home/student/attic/.hidden_key
+# data/attic: 25 обычных файлов и 4 скрытых (gen seed 210)
+copy data/attic /home/student/attic
 run chown -R student:student /home/student/attic
 
 hidden hp

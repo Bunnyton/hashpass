@@ -2,8 +2,8 @@
 
 image cat-file:1
 
-run mkdir -p /home/student/mailbox
-run printf 'Здесь может быть ваша реклама\nЗдесь может быть ваша реклама\nСЕКРЕТ: black-cat-on-a-mat\nЗдесь может быть ваша реклама\nЗдесь может быть ваша реклама\n' > /home/student/mailbox/key_here.txt
+# data/mailbox: python3 .claude/skills/task-authoring/scripts/mkdata.py text … --kind ads (key_here.txt: 320 строк, СЕКРЕТ на 58 %; 4 письма рядом)
+copy data/mailbox /home/student/mailbox
 run chown -R student:student /home/student/mailbox
 
 hidden hp
@@ -19,7 +19,7 @@ stage "Найди в /home/student/mailbox/key_here.txt строку с СЕКР
   variant cat /home/student/mailbox/key_here.txt | grep СЕКРЕТ
   observe output
   neutral ls pwd
-  on enter say "Пять писем в ящике, одно — важное. Остальное — реклама."
+  on enter say "Пять писем в ящике, одно важное — и в нём триста строк рекламы вокруг одной нужной."
   on pass say "Подсказка на будущее: grep -n покажет ещё и номер строки — попробуй прямо сейчас."
   hint cmd cat say "Секрет виден. Теперь покажи только его строку."
   hint tries 3 say "cat даёт всё. В теории был инструмент для строк."

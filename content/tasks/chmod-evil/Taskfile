@@ -3,13 +3,9 @@
 
 image chmod-evil:1
 
-run mkdir -p /home/student/target
-run touch /home/student/target/test1
-run touch /home/student/target/test2
-run touch /home/student/target/test3
-run chmod 000 /home/student/target/test1
-run chmod 000 /home/student/target/test2
-run chmod 000 /home/student/target/test3
+# data/target: три файла с содержимым; права 000 ставятся при сборке
+copy data/target /home/student/target
+run chmod 000 /home/student/target/test1 /home/student/target/test2 /home/student/target/test3
 run chown -R student:student /home/student/target
 
 hidden hp

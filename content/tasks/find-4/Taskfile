@@ -2,15 +2,8 @@
 
 image find-4:1
 
-run mkdir -p /home/student/search/a/b/c
-run touch /home/student/search/level2_alpha.txt
-run touch /home/student/search/level2_beta.log
-run touch /home/student/search/a/level2_deep.txt
-run touch /home/student/search/a/report3.md
-run touch /home/student/search/a/b/lvl_3_data.txt
-run touch /home/student/search/a/b/c/file_with_3_inside.txt
-run touch /home/student/search/plain.txt
-run touch /home/student/search/a/other.log
+# data/search: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 164 --depth 5 --dirs 35 --files 150 …
+copy data/search /home/student/search
 run chown -R student:student /home/student/search
 
 hidden hp
@@ -23,8 +16,7 @@ read brief.md
 
 stage "Найди в /home/student/search файлы, чьё имя начинается с level2 ИЛИ содержит цифру 3"
   solve find /home/student/search -type f \( -name "level2*" -o -name "*3*" \)
-  variant find /home/student/search -name "level2*" -type f -o -name "*3*" -type f
-  observe output
+  check exec grade
   neutral ls cat pwd cd
   on pass say "Скобки для find экранируют: \( … \). А сколько файлов начинаются с level2 И содержат тройку — одновременно?"
   hint output "syntax error near unexpected token" say "Ругается bash: скобки забрал себе. Экранируй их."

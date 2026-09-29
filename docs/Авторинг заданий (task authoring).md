@@ -38,6 +38,11 @@ stage "Вытащи строку с TODO из /notes.txt в /found.txt"
   observe /found.txt
 ```
 
+В настоящем задании среда — не `printf`, а файлы: положи журналы/деревья в `data/` рядом с
+Taskfile (генератор `.claude/skills/task-authoring/scripts/mkdata.py`, сотни строк и десятки
+каталогов — чтобы была видна магия) и подключи `copy data/notes /home/student/notes` +
+`run chown -R student:student /home/student/notes`. Каталог копируется содержимым, как `COPY` в Docker.
+
 **2. Собери и запусти** — авторская команда `hashengine` (нужен `systemd-nspawn` + scoped sudo; базовый
 rootfs `<home>/base/rootfs.tar` — готовится один раз вручную, docker в рантайме не нужен):
 

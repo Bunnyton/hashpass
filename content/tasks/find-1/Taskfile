@@ -2,13 +2,8 @@
 
 image find-1:1
 
-run mkdir -p /home/student/search/lvl1/lvl2/lvl3/lvl4/lvl5
-run touch /home/student/search/f0.txt
-run touch /home/student/search/lvl1/f1.txt
-run touch /home/student/search/lvl1/lvl2/f2.txt
-run touch /home/student/search/lvl1/lvl2/lvl3/f3.txt
-run touch /home/student/search/lvl1/lvl2/lvl3/lvl4/f4.txt
-run touch /home/student/search/lvl1/lvl2/lvl3/lvl4/lvl5/f5.txt
+# data/search: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 161 --depth 6 --dirs 45 --files 160 …
+copy data/search /home/student/search
 run chown -R student:student /home/student/search
 
 hidden hp
@@ -21,7 +16,7 @@ read brief.md
 
 stage "Перечисли всё внутри /home/student/search, но не глубже 3-го уровня вложенности"
   solve find /home/student/search -maxdepth 3
-  observe output
+  check exec grade
   neutral ls cat pwd cd
   on pass say "find -maxdepth 1 — это почти ls. Сравни: find search -maxdepth 1 и ls search."
   hint output "paths must precede expression" say "Порядок: сначала где искать, потом критерии."

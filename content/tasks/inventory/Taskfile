@@ -2,8 +2,8 @@
 
 image inventory:1
 
-run mkdir -p /home/student/warehouse
-run touch /home/student/warehouse/apples /home/student/warehouse/bread /home/student/warehouse/cheese
+# data/warehouse: 80 позиций склада (gen seed 200)
+copy data/warehouse /home/student/warehouse
 run chown -R student:student /home/student/warehouse
 
 hidden hp

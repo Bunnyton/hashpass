@@ -2,8 +2,8 @@
 
 image grep-hunt:1
 
-run mkdir -p /home/student/legacy
-run printf 'alpha\nTODO: fix the leak\nbeta\ngamma\nTODO: rename ClassX\ndelta\n' > /home/student/legacy/notes.txt
+# data/legacy: python3 .claude/skills/task-authoring/scripts/mkdata.py text … --kind notes --lines 400 --seed 180 --sprinkle TODO: --sprinkle-count 24
+copy data/legacy /home/student/legacy
 run chown -R student:student /home/student/legacy
 
 hidden hp

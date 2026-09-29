@@ -1,8 +1,10 @@
 """Tier2: `hashengine catalog layout` -- blocks by theme drive the pool's numbering."""
+import io
 import json
 import urllib.error
 import urllib.request
 from http import HTTPStatus
+from typing import Never
 
 import pytest
 
@@ -124,3 +126,20 @@ def test_cmd_catalog_layout_prints_numbering_and_warns_about_missing(registry, t
     assert "№1  bunnyton/c:1   [Первый]" in text and "№2  bunnyton/a:1   [Первый]" in text
     assert "пропущен: bunnyton/ghost:1" in text
     assert [e["ref"] for e in RemoteRegistry(registry.base_url).catalog(token=cli._pool_token(env, registry.base_url))] == ["bunnyton/c:1", "bunnyton/a:1"]  # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_cmd_catalog_layout_explains_a_pool_without_the_route(tmp_path, monkeypatch):
+    # A pool running an older hashengine answers 404 to PUT /catalog/layout: say what to do.
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr(cli, "_ensure_registry_login", lambda _e, _r, _i: "http://pool.test")
+    monkeypatch.setattr(cli, "_pool_token", lambda _e, _u: "tok")
+    monkeypatch.setattr(cli, "token_user", lambda _t: "bunnyton")
+
+    def _gone(self, blocks, *, token=None) -> Never:  # noqa: ARG001
+        url = "http://pool.test/catalog/layout"
+        raise urllib.error.HTTPError(url, HTTPStatus.NOT_FOUND, "NOT FOUND", {}, io.BytesIO(b""))
+    monkeypatch.setattr(cli.RemoteRegistry, "set_catalog_layout", _gone)
+    quiet = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "")
+    with pytest.raises(RuntimeError, match="обновите hashengine на сервере"):
+        cli.cmd_catalog_layout(env, ["Первый: a:1"], "http://pool.test", quiet)

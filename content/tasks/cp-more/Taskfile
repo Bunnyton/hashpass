@@ -2,10 +2,9 @@
 
 image cp-more:1
 
-run mkdir -p /home/student/dir1 /home/student/dir2
-run printf 'Любопытной Варваре...\n' > /home/student/dir1/file1.txt
-run printf '...на базаре нос оторвали\n' > /home/student/dir1/file2.txt
-run printf 'но она вернулась\n' > /home/student/dir1/file3.txt
+# data/dir1: python3 .claude/skills/task-authoring/scripts/mkdata.py tree … --seed 150 --depth 3 --dirs 9 --files 34 (+ file1..3.txt)
+copy data/dir1 /home/student/dir1
+run mkdir -p /home/student/dir2
 run chown -R student:student /home/student/dir1 /home/student/dir2
 
 hidden hp
@@ -18,8 +17,7 @@ read brief.md
 
 stage "Скопируй всё содержимое /home/student/dir1 в /home/student/dir2 одной командой"
   solve cp -r /home/student/dir1/. /home/student/dir2/
-  variant cp -r /home/student/dir1/file1.txt /home/student/dir1/file2.txt /home/student/dir1/file3.txt /home/student/dir2/
-  observe /home/student/dir2/file1.txt /home/student/dir2/file2.txt /home/student/dir2/file3.txt
+  check exec sh -c '! diff -rq /home/student/dir1 /home/student/dir2 2>&1 | grep -v "^Only in /home/student/dir2"'
   neutral ls cat pwd
   on pass say "Бонус: cp -rv покажет каждый файл, который копирует. Попробуй на dir1 → dir3."
   hint output "omitting directory" say "Прочитай ответ cp целиком: он сам сказал, чего ему не хватило."

@@ -1505,7 +1505,14 @@ def cmd_catalog_layout(env: Home, specs: list[str], registry: str | None = None,
     owner = token_user(token) or ""
     blocks = parse_layout_specs(specs, owner)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
-    result = _push_call(client.set_catalog_layout, blocks, token=token)
+    try:
+        result = _push_call(client.set_catalog_layout, blocks, token=token)
+    except urllib.error.HTTPError as exc:
+        if exc.code != HTTPStatus.NOT_FOUND:
+            raise
+        msg = ("пул не знает раскладки каталога (PUT /catalog/layout) — обновите hashengine на "
+               "сервере из main и перезапустите пул, затем повторите deploy.sh")
+        raise RuntimeError(msg) from exc
     rows = list(result.get("catalog", []))
     wanted = {r for b in blocks for r in b["tasks"]}
     listed = {str(r.get("ref")) for r in rows}

@@ -1,7 +1,7 @@
 #!/bin/sh
-# Принято, если вывод последней команды показал содержимое room — все три вещи.
+# Принято, если вывод последней команды показал содержимое room — хотя бы главные вещи.
 out=${HP_LAST_OUT:-}
-for f in carpet.txt lamp.txt cat.txt; do
+for f in carpet.txt lamp.txt cat.txt sofa.txt mug.txt; do
   case "$out" in *"$f"*) ;; *) exit 1 ;; esac
 done
 exit 0

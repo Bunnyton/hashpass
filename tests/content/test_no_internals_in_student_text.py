@@ -35,7 +35,7 @@ def _student_texts(task: Path, *, assets: bool = True) -> list[tuple[str, str]]:
     for f in sorted(task.rglob("*")):
         if not f.is_file() or f.name.lower() == "readme.md" or f.name == "Taskfile":
             continue                               # README is for authors; the Taskfile is parsed above
-        if not assets and f.suffix != ".md" and f.name != "finale":
+        if not assets and (f.suffix != ".md" or "data" in f.relative_to(task).parts):
             continue                               # data files of the task's world, not its prose
         try:
             text = f.read_text(encoding="utf-8")

@@ -3,8 +3,8 @@
 
 image mv-basics:1
 
-run mkdir -p /home/student/workspace
-run printf 'У файлов нет расширений????????\n\nВ Linux расширение — это лишь часть имени.\nОпределяет тип файла его сигнатура,\nа не .txt в конце.\n' > /home/student/workspace/file5
+# data/workspace: file1..file9 без file2 — file5 назван не так (gen seed 230)
+copy data/workspace /home/student/workspace
 run chown -R student:student /home/student/workspace
 
 hidden hp

@@ -2,11 +2,8 @@
 
 image rm-basics:1
 
-run mkdir -p /home/student/workdir /home/student/workdir/.hidden_junk
-run printf 'мусор 1\n' > /home/student/workdir/junk1.txt
-run printf 'мусор 2\n' > /home/student/workdir/junk2.txt
-run printf 'спрятанный мусор\n' > /home/student/workdir/.secret_junk
-run printf 'ещё мусор\n' > /home/student/workdir/.hidden_junk/inside.txt
+# data/workdir: python3 .claude/skills/task-authoring/scripts/mkdata.py tree … --seed 240 --dirs 5 --files 40 + скрытые файлы и каталоги
+copy data/workdir /home/student/workdir
 run chown -R student:student /home/student/workdir
 
 hidden hp

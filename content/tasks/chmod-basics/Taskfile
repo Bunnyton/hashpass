@@ -2,10 +2,9 @@
 
 image chmod-basics:1
 
-run mkdir -p /home/student/perm_dir
-run printf '#!/bin/bash\necho "Я обязательно выживу"\n' > /home/student/perm_dir/file.txt
-run printf '#!/bin/bash\necho "run me"\n' > /home/student/perm_dir/exec_me.sh
-run chmod 777 /home/student/perm_dir /home/student/perm_dir/file.txt /home/student/perm_dir/exec_me.sh
+# data/perm_dir: python3 .claude/skills/task-authoring/scripts/mkdata.py text … — восемь файлов проекта; права 777 ставятся при сборке
+copy data/perm_dir /home/student/perm_dir
+run chmod -R 777 /home/student/perm_dir
 run chown -R student:student /home/student/perm_dir
 
 hidden hp

@@ -2,12 +2,10 @@
 
 image ls-mv-cp:1
 
-run mkdir -p /home/student/subdir_1/lvl1/lvl2 /home/student/subdir_2/lvl1/lvl2 /home/student/subdir_3/lvl1
-run printf 'обычные заметки про кроликов\n' > /home/student/subdir_1/lvl1/notes.txt
-run printf 'важные данные\n' > /home/student/subdir_2/lvl1/data.txt
-run printf 'кофе-брейк\n' > /home/student/subdir_2/lvl1/lvl2/coffee.txt
-run printf 'ничего интересного\n' > /home/student/subdir_3/lvl1/boring.txt
-run printf 'Терпение должны иметь мы, пока осядет муть.\nphrase:ветер-в-парусах\n' > /home/student/subdir_2/lvl1/lvl2/prize.txt
+# data/subdir_*: python3 .claude/skills/task-authoring/scripts/mkdata.py tree … --seed 221/222/223 --depth 3 (приз — subdir_2/lvl1/lvl2/prize.txt)
+copy data/subdir_1 /home/student/subdir_1
+copy data/subdir_2 /home/student/subdir_2
+copy data/subdir_3 /home/student/subdir_3
 run chown -R student:student /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3
 
 hidden hp

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Принято, если вывод последней команды — ровно тот набор путей, что даёт
+#   find /home/student/search -maxdepth 3
+# в любом порядке; пути могут быть абсолютными или относительно /home/student (или search).
+norm() {
+  sed -e 's#^/home/student/##' -e 's#^\./search#search#' -e 's#^\.$#search#' -e 's#^\./#search/#' \
+      -e 's#/$##' | grep -v '^$' | sort -u
+}
+want=$(cd /home/student && find search -maxdepth 3 | norm)
+got=$(printf '%s\n' "${HP_LAST_OUT:-}" | norm)
+[ -n "$got" ] && [ "$got" = "$want" ]

@@ -2,8 +2,9 @@
 
 image chgrp-basics:1
 
-run mkdir -p /home/student/.secret
-run printf 'Rock never dies. key{ready-to-rock}\n' > /home/student/.secret/rock.txt
+# data/secret: python3 .claude/skills/task-authoring/scripts/mkdata.py text … (rock.txt — 80 строк, ключ на 50 %)
+copy data/secret /home/student/.secret
+run chown -R student:student /home/student/.secret
 run groupadd -f FiveFingerDeathPunch
 run chown root:FiveFingerDeathPunch /home/student/.secret/rock.txt
 run chmod 640 /home/student/.secret/rock.txt
