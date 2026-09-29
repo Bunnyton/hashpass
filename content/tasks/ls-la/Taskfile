@@ -5,7 +5,7 @@
 
 image ls-la:1
 
-# data/attic: 25 обычных файлов и 4 скрытых (gen seed 210)
+# data: data/attic сделан руками один раз (25 обычных + 4 скрытых) — правь файлы напрямую
 copy data/attic /home/student/attic
 run chown -R student:student /home/student/attic
 
@@ -24,7 +24,7 @@ stage "Покажи всё содержимое /home/student/attic в длин�
   on enter say "На чердаке что-то есть. Обычный ls этого не покажет."
   on pass say "Точка в начале имени — и файл исчезает из обычного ls. Так прячутся конфиги: ls -a ~ — твои уже там."
   hint cmd ls missing -a say "Список неполный. Чем скрытый файл отличается от обычного?"
-  hint tries 3 say "Видишь один файл. А сколько их там на самом деле?"
+  hint tries 3 say "Двадцать пять на виду. А сколько их там на самом деле?"
   hint tries 6 say "man ls — слово hidden. Заодно найди длинный формат."
   hint idle 240 say "Перечитай теорию: там два ключа, и нужны оба."
 

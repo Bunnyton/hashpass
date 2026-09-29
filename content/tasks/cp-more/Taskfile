@@ -2,7 +2,8 @@
 
 image cp-more:1
 
-# data/dir1: python3 .claude/skills/task-authoring/scripts/mkdata.py tree … --seed 150 --depth 3 --dirs 9 --files 34 (+ file1..3.txt)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/dir1 --seed 150 --depth 3 --dirs 9 --files 34 --lines 5-40 --plant 'file1.txt=Любопытной Варваре...' --plant 'file2.txt=...на базаре нос оторвали' --plant 'file3.txt=но она вернулась'
+# data: dir1.sha256 в скрытом слое: (cd data && find dir1 -type f | LC_ALL=C sort | xargs sha256sum) — эталон для проверки
 copy data/dir1 /home/student/dir1
 run mkdir -p /home/student/dir2
 run chown -R student:student /home/student/dir1 /home/student/dir2
@@ -17,11 +18,12 @@ read brief.md
 
 stage "Скопируй всё содержимое /home/student/dir1 в /home/student/dir2 одной командой"
   solve cp -r /home/student/dir1/. /home/student/dir2/
-  check exec sh -c '! diff -rq /home/student/dir1 /home/student/dir2 2>&1 | grep -v "^Only in /home/student/dir2"'
+  check exec grade
   neutral ls cat pwd
   on pass say "Бонус: cp -rv покажет каждый файл, который копирует. Попробуй на dir1 → dir3."
   hint output "omitting directory" say "Прочитай ответ cp целиком: он сам сказал, чего ему не хватило."
   hint cmd cp has -r say "Скопировалось — но куда именно? Загляни в dir2."
+  hint cmd mv say "Переехало, а не скопировалось — dir1 должен остаться целым."
   hint tries 3 say "Загляни в dir2: что там оказалось? Всё, что было в dir1, или только часть?"
   hint tries 6 say "man cp — найди слово recursive. Или загугли: «cp скопировать каталог со всем содержимым»."
   hint tries 10 say "Каталог — не файл; cp обходит его только с ключом рекурсии."

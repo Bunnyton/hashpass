@@ -2,7 +2,10 @@
 
 image ls-mv-cp:1
 
-# data/subdir_*: python3 .claude/skills/task-authoring/scripts/mkdata.py tree … --seed 221/222/223 --depth 3 (приз — subdir_2/lvl1/lvl2/prize.txt)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/subdir_1 --seed 221 --depth 3 --dirs 7 --files 26 --lines 3-25 --plant lvl1/lvl2/ --plant 'lvl1/notes.txt=обычные заметки про кроликов'
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/subdir_2 --seed 222 --depth 3 --dirs 8 --files 30 --lines 3-25 --plant 'lvl1/data.txt=важные данные' --plant 'lvl1/lvl2/coffee.txt=кофе-брейк' --plant 'lvl1/lvl2/prize.txt=Терпение должны иметь мы, пока осядет муть.'
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py plant data/subdir_2/lvl1/lvl2/prize.txt --line 'phrase:ветер-в-парусах' --at 2
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/subdir_3 --seed 223 --depth 3 --dirs 6 --files 22 --lines 3-25 --plant lvl1/lvl2/ --plant 'lvl1/boring.txt=ничего интересного'
 copy data/subdir_1 /home/student/subdir_1
 copy data/subdir_2 /home/student/subdir_2
 copy data/subdir_3 /home/student/subdir_3

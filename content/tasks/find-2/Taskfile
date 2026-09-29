@@ -2,7 +2,7 @@
 
 image find-2:1
 
-# data/search: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 162 --depth 6 --dirs 40 --files 170 …
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 162 --depth 6 --dirs 40 --files 170 --lines 2-12
 copy data/search /home/student/search
 run chown -R student:student /home/student/search
 

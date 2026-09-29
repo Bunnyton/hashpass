@@ -2,7 +2,11 @@
 
 image cat-file:1
 
-# data/mailbox: python3 .claude/skills/task-authoring/scripts/mkdata.py text … --kind ads (key_here.txt: 320 строк, СЕКРЕТ на 58 %; 4 письма рядом)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/key_here.txt --kind ads --lines 320 --seed 101 --plant 'СЕКРЕТ: black-cat-on-a-mat@0.58'
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/bank-notice.txt --kind ads --lines 60 --seed 110
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/newsletter-09.txt --kind ads --lines 90 --seed 111
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/promo-summer.txt --kind ads --lines 45 --seed 112
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/spam-2019.txt --kind ads --lines 70 --seed 113
 copy data/mailbox /home/student/mailbox
 run chown -R student:student /home/student/mailbox
 

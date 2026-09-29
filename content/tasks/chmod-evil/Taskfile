@@ -3,7 +3,8 @@
 
 image chmod-evil:1
 
-# data/target: три файла с содержимым; права 000 ставятся при сборке
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/target/test2 --kind notes --lines 40 --seed 131
+# data: data/target сделан руками один раз — правь файлы напрямую
 copy data/target /home/student/target
 run chmod 000 /home/student/target/test1 /home/student/target/test2 /home/student/target/test3
 run chown -R student:student /home/student/target

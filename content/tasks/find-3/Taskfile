@@ -2,7 +2,7 @@
 
 image find-3:1
 
-# data/search: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 163 --depth 6 --dirs 40 --files 120 …
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 163 --depth 6 --dirs 40 --files 120 --lines 2-12 --plant 'a/b/c/level4_alpha/inside/readme.txt=Первый из трёх.' --plant 'x/y/z/level4_beta/inside/notes.txt=Второй из трёх.' --plant m/n/o/level4_gamma/ --plant 'a/level4_notes.txt=Я файл, а не каталог.' --plant 'x/y/level4.log=И я файл.' --plant 'docs/level4_plan.md=Тоже файл.' --plant a/b/level3_delta/ --plant m/level5_omega/ --plant x/y/z/lvl4_x/ --plant other/deep/tree/regular_dir/
 copy data/search /home/student/search
 run chown -R student:student /home/student/search
 

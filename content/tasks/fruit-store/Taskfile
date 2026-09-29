@@ -4,7 +4,7 @@ image fruit-store:1
 
 # Ассортимент дня — с повторами, как в реальном журнале продаж.
 
-# data/store/sold.txt: python3 .claude/skills/task-authoring/scripts/mkdata.py list … --lines 500 --seed 170 (17 позиций)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py list data/store/sold.txt --items apple,banana,cherry,kiwi,mango,pear,plum,grape,lemon,lime,melon,peach,fig,quince,apricot,orange,papaya --lines 500 --seed 170
 copy data/store /home/student/store
 run chown -R student:student /home/student/store
 

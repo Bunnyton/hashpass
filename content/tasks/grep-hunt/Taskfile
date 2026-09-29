@@ -2,7 +2,9 @@
 
 image grep-hunt:1
 
-# data/legacy: python3 .claude/skills/task-authoring/scripts/mkdata.py text … --kind notes --lines 400 --seed 180 --sprinkle TODO: --sprinkle-count 24
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/legacy/notes.txt --kind notes --lines 400 --seed 180 --sprinkle TODO: --sprinkle-count 24
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/legacy/meeting-2025.md --kind notes --lines 60 --seed 181
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/legacy/README.old --kind prose --lines 35 --seed 182
 copy data/legacy /home/student/legacy
 run chown -R student:student /home/student/legacy
 

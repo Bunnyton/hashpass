@@ -12,6 +12,7 @@ Taskfile as a comment and can be re-run.
     mkdata.py list OUT --items apple,banana,cherry --lines 500 --seed 4
     mkdata.py tree DIR --seed 5 --depth 6 --dirs 45 --files 160 [--empty 0.5] [--kind prose]
                   [--plant a/b/level4_alpha/] [--plant docs/key.txt=КЛЮЧ: x]
+                  (no directory is left empty -- git would drop it; use `run mkdir -p` for those)
     mkdata.py stats DIR                # per-depth counts, to tune a seed
 """
 from __future__ import annotations
@@ -89,7 +90,7 @@ LOG_MSGS = {
 }
 DIR_NAMES = ["archive", "backup", "docs", "src", "tmp", "old", "photos", "2019", "2020", "2021",
              "projects", "logs", "cache", "config", "data", "lib", "misc", "notes", "reports",
-             "tests", "build", "assets", "drafts", "vendor", "scripts", "music", "video", "inbox",
+             "tests", "assets", "drafts", "vendor", "scripts", "music", "video", "inbox",
              "sent", "work", "home", "shared", "export", "import", "staging", "release"]
 FILE_NAMES = ["readme", "notes", "todo", "report", "summary", "invoice", "draft", "letter", "list",
               "index", "main", "utils", "config", "backup", "photo", "song", "chapter", "log",
@@ -181,6 +182,8 @@ def _unique(rnd: random.Random, pool: list[str], taken: set[str], ext: str | Non
 def cmd_tree(a: argparse.Namespace) -> int:
     rnd = random.Random(a.seed)
     root = Path(a.dir)
+    if root.exists() and any(root.iterdir()):
+        sys.exit(f"{root} exists and is not empty: remove it first (a tree is regenerated from scratch)")
     root.mkdir(parents=True, exist_ok=True)
     dirs: list[tuple[Path, int]] = [(root, 0)]
     names: dict[Path, set[str]] = {root: set()}
@@ -201,9 +204,17 @@ def cmd_tree(a: argparse.Namespace) -> int:
         target = root / rel
         if rel.endswith("/"):
             target.mkdir(parents=True, exist_ok=True)
+        elif target.is_dir():
+            sys.exit(f"--plant {rel}: a directory with that name already exists")
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text + "\n" if text else "", encoding="utf-8")
+    # git cannot hold an empty directory, so every directory gets a file; a directory that must
+    # stay empty in the task is made by `run mkdir -p` in the Taskfile instead.
+    for d in [*sorted(p for p in root.rglob("*") if p.is_dir()), root]:
+        if not any(d.iterdir()):
+            body = "\n".join(gen_lines(a.kind, rnd.randint(lo, hi), rnd)) + "\n"
+            (d / _unique(rnd, FILE_NAMES, set(), "txt")).write_text(body, encoding="utf-8")
     return cmd_stats(a)
 
 

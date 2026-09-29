@@ -2,7 +2,7 @@
 
 image rm-basics:1
 
-# data/workdir: python3 .claude/skills/task-authoring/scripts/mkdata.py tree … --seed 240 --dirs 5 --files 40 + скрытые файлы и каталоги
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/workdir --seed 240 --depth 2 --dirs 5 --files 40 --lines 1-8 --plant '.secret_junk=спрятанный мусор' --plant '.hidden_junk/inside.txt=ещё мусор' --plant .cache/index.bin= --plant '.cache/pages/1.html=<html>мусор</html>' --plant .old_config=junk=1
 copy data/workdir /home/student/workdir
 run chown -R student:student /home/student/workdir
 

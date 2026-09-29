@@ -2,7 +2,7 @@
 
 image inventory:1
 
-# data/warehouse: 80 позиций склада (gen seed 200)
+# data: data/warehouse сделан руками один раз (80 позиций) — правь файлы напрямую
 copy data/warehouse /home/student/warehouse
 run chown -R student:student /home/student/warehouse
 

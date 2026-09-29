@@ -2,8 +2,9 @@
 
 image find-5:1
 
-# data/search: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 165 --depth 5 --dirs 30 --files 140 …
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 165 --depth 5 --dirs 30 --files 140 --lines 2-12 --empty 0.5
 copy data/search /home/student/search
+run mkdir -p /home/student/search/tmp/empty_a /home/student/search/old/empty_b
 run chown -R student:student /home/student/search
 
 hidden hp

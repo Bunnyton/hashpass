@@ -2,7 +2,13 @@
 
 image chmod-basics:1
 
-# data/perm_dir: python3 .claude/skills/task-authoring/scripts/mkdata.py text … — восемь файлов проекта; права 777 ставятся при сборке
+# data: data/perm_dir/file.txt, exec_me.sh — руками; остальные — mkdata (ниже)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/notes.md --kind notes --lines 35 --seed 120
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/build.log --kind log --lines 60 --seed 121
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/plan.txt --kind prose --lines 25 --seed 122
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/config.cfg --kind notes --lines 20 --seed 123
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/changelog.md --kind notes --lines 45 --seed 124
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/draft.txt --kind prose --lines 30 --seed 125
 copy data/perm_dir /home/student/perm_dir
 run chmod -R 777 /home/student/perm_dir
 run chown -R student:student /home/student/perm_dir

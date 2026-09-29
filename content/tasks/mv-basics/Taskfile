@@ -3,7 +3,14 @@
 
 image mv-basics:1
 
-# data/workspace: file1..file9 без file2 — file5 назван не так (gen seed 230)
+# data: data/workspace/file5 — руками; остальные — mkdata (ниже)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file1 --kind prose --lines 12 --seed 230
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file3 --kind prose --lines 15 --seed 231
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file4 --kind prose --lines 18 --seed 232
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file6 --kind prose --lines 21 --seed 233
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file7 --kind prose --lines 24 --seed 234
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file8 --kind prose --lines 27 --seed 235
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file9 --kind prose --lines 30 --seed 236
 copy data/workspace /home/student/workspace
 run chown -R student:student /home/student/workspace
 

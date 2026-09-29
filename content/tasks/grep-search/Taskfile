@@ -3,7 +3,8 @@
 
 image grep-search:1
 
-# data/haystack: python3 .claude/skills/task-authoring/scripts/mkdata.py tree … --seed 190 --depth 4 --dirs 24 --files 60; ключ — mkdata.py plant (37-й файл)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/haystack --seed 190 --depth 4 --dirs 24 --files 60 --lines 20-80
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py plant data/haystack/old/src/notes/export21/draft_2022.txt --line 'КЛЮЧ: silver-bullet-42' --at 0.5
 copy data/haystack /home/student/haystack
 run chown -R student:student /home/student/haystack
 
@@ -19,7 +20,7 @@ stage "Где-то в дереве /home/student/haystack есть строка,
   solve grep -rh КЛЮЧ /home/student/haystack
   observe output
   neutral ls cat pwd cd
-  on enter say "Шестьдесят файлов в трёх ветках. Руками — можно. Но зачем?"
+  on enter say "Шестьдесят два файла в трёх ветках. Руками — можно. Но зачем?"
   on pass say "grep -rn добавит номер строки, grep -ri — забудет про регистр. Попробуй оба на haystack."
   hint output "Is a directory" say "grep: это каталог. Как заставить его зайти внутрь?"
   hint cmd grep has -r say "Нашёл! Но впереди имя файла. grep --help | grep -i filename."

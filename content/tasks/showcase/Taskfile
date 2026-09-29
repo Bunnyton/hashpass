@@ -9,8 +9,8 @@
 
 image showcase:1
 
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/service.log --kind log --lines 600 --seed 250 --sprinkle ERROR --sprinkle-count 41
 run mkdir -p /var/log/app
-# data/service.log: python3 .claude/skills/task-authoring/scripts/mkdata.py text … --kind log --lines 600 --seed 250 --sprinkle ERROR --sprinkle-count 41
 copy data/service.log /var/log/app/service.log
 copy welcome.txt /opt/welcome.txt
 

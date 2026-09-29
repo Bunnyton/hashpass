@@ -5,7 +5,7 @@
 
 image simple-ls:1
 
-# data/room: девять вещей в комнате
+# data: data/room сделан руками один раз — правь файлы напрямую
 copy data/room /home/student/room
 run chown -R student:student /home/student/room
 

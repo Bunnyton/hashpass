@@ -2,7 +2,9 @@
 
 image chgrp-basics:1
 
-# data/secret: python3 .claude/skills/task-authoring/scripts/mkdata.py text … (rock.txt — 80 строк, ключ на 50 %)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/secret/rock.txt --kind prose --lines 80 --seed 103 --plant 'Rock never dies. key{ready-to-rock}@0.5'
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/secret/setlist-2024.txt --kind prose --lines 40 --seed 104
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/secret/rider.md --kind notes --lines 30 --seed 105
 copy data/secret /home/student/.secret
 run chown -R student:student /home/student/.secret
 run groupadd -f FiveFingerDeathPunch

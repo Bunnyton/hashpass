@@ -34,5 +34,5 @@ __pycache__/
 src/*.egg-info/
 .pytest_cache/
 .venv/
-build/
+/build/
 content/tasks/*/reports/

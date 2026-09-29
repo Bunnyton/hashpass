@@ -2,7 +2,7 @@
 
 image find-4:1
 
-# data/search: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 164 --depth 5 --dirs 35 --files 150 …
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 164 --depth 5 --dirs 35 --files 150 --lines 2-12 --plant level2_alpha.txt=alpha --plant level2_beta.log=beta --plant a/level2_deep.txt=deep --plant a/report3.md=report --plant a/b/lvl_3_data.txt=data --plant a/b/c/file_with_3_inside.txt=3 --plant plain.txt=plain --plant a/other.log=other --plant room3/ --plant level2_archive/
 copy data/search /home/student/search
 run chown -R student:student /home/student/search
 
