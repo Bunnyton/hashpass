@@ -1,7 +1,7 @@
 # simple-ls — первая настоящая команда: ls.
 # Приёмка — по ВЫВОДУ: студент любым способом увидел содержимое room (ls room, ls -l room,
 # cd room и ls …). `observe output` для ls нестабилен (колонки в TTY vs строки в pipe),
-# поэтому судит скрытый грейдер по HP_LAST_OUT.
+# поэтому судит скрытая проверка по HP_LAST_OUT.
 
 image simple-ls:1
 

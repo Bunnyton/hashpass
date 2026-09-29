@@ -14,6 +14,10 @@ TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
 _FORBIDDEN = re.compile(
     r"стади|этап|грейдер|засчит|зач[её]т|\bTaskfile\b|(?<![\w/])/hp\b|build time|\bcopy`",
     re.IGNORECASE)
+# Author-facing text (Taskfile `#` comments, README.md, hp/* script comments) travels to the pool
+# with the task and is read there, so it speaks the world's language too; a file NAME (Taskfile)
+# is fine in a comment.
+_FORBIDDEN_AUTHOR = re.compile(r"стади|этап|грейдер|засчит|зач[её]т|(?<![\w/])/hp\b", re.IGNORECASE)
 # `stage "…"`, `say "…"`, `say dramatic "…"`, and an unquoted `say …` to end of line.
 _SAY = re.compile(r'\b(?:stage|say)(?:\s+dramatic)?\s+(?:"((?:[^"\\]|\\.)*)"|(\S.*))')
 _USER_ROOT = re.compile(r"^\s*user\s+root\b", re.MULTILINE)
@@ -90,3 +94,31 @@ def test_student_facing_text_does_not_repeat_itself(task: Path):
                 dups.append(f"{seen[ph]} ↔ {where}: {ph!r}")
             seen.setdefault(ph, where)
     assert not dups, "\n".join(dups)
+
+
+def _author_texts(task: Path) -> list[tuple[str, str]]:
+    """(where, text) for every author-facing line: `#` comments of Taskfile/hp scripts and README.md."""
+    out: list[tuple[str, str]] = []
+    for f in sorted(task.rglob("*")):
+        if not f.is_file() or "data" in f.relative_to(task).parts:
+            continue
+        try:
+            text = f.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if f.name.lower() == "readme.md":
+            out.append((f"{task.name}/{f.relative_to(task)}", text))
+        elif f.name == "Taskfile" or f.parent.name == "hp":
+            comments = [ln for ln in text.splitlines() if ln.lstrip().startswith("#")]
+            out.append((f"{task.name}/{f.relative_to(task)}", "\n".join(comments)))
+    return out
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("task", TASKS, ids=[t.name for t in TASKS])
+def test_author_comments_and_readme_never_mention_internals(task: Path):
+    # User (2026-09-30): «Стадия засчитается по самой команде — файлов она не создаёт» must not
+    # appear anywhere in a task, comments included.
+    offenders = [f"{where}: …{text[max(0, m.start() - 30):m.end() + 30]!r}"
+                 for where, text in _author_texts(task) for m in _FORBIDDEN_AUTHOR.finditer(text)]
+    assert not offenders, "\n".join(offenders)

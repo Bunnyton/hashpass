@@ -1,4 +1,4 @@
-# fruit-store — фруктовый ларёк: sort → uniq → wc, три этапа, каждый — файл для следующего.
+# fruit-store — фруктовый ларёк: sort → uniq → wc, три шага, каждый — файл для следующего.
 
 image fruit-store:1
 
