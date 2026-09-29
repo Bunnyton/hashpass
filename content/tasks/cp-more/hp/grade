@@ -3,5 +3,11 @@
 # и каждый его файл лежит в dir2 с тем же содержимым — любым способом; лишнее в dir2 не мешает.
 cd /home/student || exit 1
 here=$(dirname "$0")
+[ -d dir1 ] && [ ! -L dir1 ] && [ -d dir2 ] && [ ! -L dir2 ] && ! [ dir1 -ef dir2 ] || exit 1
 sha256sum -c --quiet "$here/dir1.sha256" >/dev/null 2>&1 || exit 1
-sed 's#  dir1/#  dir2/#' "$here/dir1.sha256" | sha256sum -c --quiet >/dev/null 2>&1
+sed 's#  dir1/#  dir2/#' "$here/dir1.sha256" | sha256sum -c --quiet >/dev/null 2>&1 || exit 1
+# ссылка или тот же inode — не копия
+sed 's#^[0-9a-f]*  ##' "$here/dir1.sha256" | while read -r f; do
+  g="dir2/${f#dir1/}"
+  [ -f "$f" ] && [ ! -L "$f" ] && [ -f "$g" ] && [ ! -L "$g" ] && ! [ "$f" -ef "$g" ] || exit 1
+done
