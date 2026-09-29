@@ -184,19 +184,30 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
 
 
 _SEG_SPLIT = re.compile(r"\s*(?:\|\||&&|;|\|)\s*")
+_ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_SUDO_OPTS_WITH_ARG = frozenset(("-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-T", "-U",
+                                 "--user", "--group", "--chdir", "--host", "--prompt", "--role",
+                                 "--type", "--command-timeout", "--other-user"))
 
 
 def _without_sudo(segment: str) -> str:
     """
     Normalize a command segment so the pattern anchors on the real command.
 
-    Drops a leading `sudo` (and its own `-x` options) and reduces a path in the first word to
-    its basename (`/usr/games/sl` -> `sl`, `./cmatrix` -> `cmatrix`).
+    Drops env assignments (`LANG=C cmd`), a leading `sudo` with its own options (`-u bob`
+    consumes its argument) and reduces a path in the first word to its basename
+    (`/usr/games/sl` -> `sl`, `./cmatrix` -> `cmatrix`).
     """
     tokens = segment.split()
+    while tokens and _ENV_ASSIGN.match(tokens[0]):   # `LANG=C cmd`
+        tokens = tokens[1:]
     if tokens and tokens[0] == "sudo":
         tokens = tokens[1:]
         while tokens and tokens[0].startswith("-"):
+            opt, tokens = tokens[0], tokens[1:]
+            if opt in _SUDO_OPTS_WITH_ARG:            # `sudo -u bob cmd`: `bob` is not the command
+                tokens = tokens[1:]
+        while tokens and _ENV_ASSIGN.match(tokens[0]):   # `sudo LANG=C cmd`
             tokens = tokens[1:]
     if tokens and "/" in tokens[0]:
         tokens[0] = tokens[0].rsplit("/", 1)[-1] or tokens[0]

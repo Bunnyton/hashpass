@@ -548,11 +548,19 @@ class PoolServer:
         for b in blocks:
             was = by_name.get(str(b.get("name", "")))
             entry = dict(b)
+            entry["tasks"] = [str(r) for r in b["tasks"]]
             if was is not None:                    # keep the block's id and collapsed state
                 entry.setdefault("id", was.id)
                 entry.setdefault("open", was.open)
             layout.append(entry)
-        catalog.set_layout(layout + foreign)
+        requested = {str(e.get("name", "")): e for e in layout}
+        for b in foreign:                          # same name = same block, never a twin id
+            home = requested.get(b["name"])
+            if home is not None:
+                home["tasks"].extend(b["tasks"])
+            else:
+                layout.append(b)
+        catalog.set_layout(layout)
         return self._json(HTTPStatus.OK, {"catalog": [e.as_dict() for e in catalog.entries()],
                                           "removed": removed})
 

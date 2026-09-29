@@ -42,7 +42,27 @@ def test_console_ships_only_the_students_commands(tmp_path):
     env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
            "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
-    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+    _drive_and_check(str(_RC), env, log)
+
+
+@pytest.mark.tier1
+def test_startup_lines_after_the_rc_are_not_a_try(tmp_path):
+    # In the image /etc/bash.bashrc sources the rc FIRST and the rest of the startup files
+    # (skel ~/.bashrc: aliases, PS1 tweaks, command substitutions) run with the DEBUG trap already
+    # installed. None of that may reach the host as a command.
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    rc = tmp_path / "bashrc"
+    rc.write_text(f". {_RC}\nalias ls='ls --color=auto'\nHOSTTAG=$(hostname)\n"
+                  "[ -f /nonexistent ] && . /nonexistent\ntrue\n", encoding="utf-8")
+    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+           "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    _drive_and_check(str(rc), env, log)
+
+
+def _drive_and_check(rcfile: str, env: dict, log: Path) -> None:
+    child = pexpect.spawn("bash", ["--rcfile", rcfile, "-i"], env=env, encoding="utf-8",
                           timeout=10, dimensions=(24, 100))
     child.expect("❯")
     child.sendline("echo hi")

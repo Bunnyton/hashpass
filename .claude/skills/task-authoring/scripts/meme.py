@@ -22,13 +22,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 _API = "https://api.imgflip.com/get_memes"
 _UA = {"User-Agent": "Mozilla/5.0 (hashpass meme.py)"}   # imgflip answers 403 to a bare urllib UA
 _RAMP = " .:-=+*#%@"
 _DOTS = ((0x01, 0x08), (0x02, 0x10), (0x04, 0x20), (0x40, 0x80))   # braille bit per (row, col)
 _BLANK = "⠀"
+_ATTEMPTS = 3
 _CACHE = Path.home() / ".cache" / "hashpass-memes"   # downloads are kept: re-render works offline
 
 
@@ -43,7 +44,7 @@ def _templates() -> list[dict]:
 
 def _fetch(src: str) -> Image.Image:
     if Path(src).is_file():
-        return Image.open(src)
+        return _decode(Path(src).read_bytes(), src)
     if not src.startswith(("http://", "https://")):
         hits = [m for m in _templates() if src.lower() in m["name"].lower()]
         if not hits:
@@ -52,16 +53,35 @@ def _fetch(src: str) -> Image.Image:
         print(f"# {hits[0]['name']}  {src}", file=sys.stderr)
     cached = _CACHE / (hashlib.sha256(src.encode()).hexdigest()[:16] + Path(src).suffix)
     if cached.is_file():
-        return Image.open(cached)
+        try:
+            return _decode(cached.read_bytes(), str(cached))
+        except SystemExit:
+            cached.unlink()                       # a broken download: fetch again
     req = urllib.request.Request(src, headers=_UA)  # noqa: S310
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
-            data = resp.read()
-    except (urllib.error.URLError, OSError) as exc:
-        sys.exit(f"cannot download {src}: {exc}")
+    err: Exception | None = None
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
+                data = resp.read()
+            break
+        except (urllib.error.URLError, OSError) as exc:
+            err = exc
+            print(f"# attempt {attempt}/{_ATTEMPTS} failed: {exc}", file=sys.stderr)
+    else:
+        sys.exit(f"cannot download {src}: {err}")
+    img = _decode(data, src)                      # cache only what decodes
     _CACHE.mkdir(parents=True, exist_ok=True)
     cached.write_bytes(data)
-    return Image.open(io.BytesIO(data))
+    return img
+
+
+def _decode(data: bytes, what: str) -> Image.Image:
+    try:
+        img = Image.open(io.BytesIO(data))
+        img.load()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        sys.exit(f"not an image I can read ({what}): {exc}")
+    return img
 
 
 def _prep(img: Image.Image, width_px: int, height_px: int, *, gamma: float, light: bool) -> Image.Image:

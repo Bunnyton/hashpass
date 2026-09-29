@@ -41,6 +41,12 @@ def _stage(*patterns: str, ok: bool = False) -> StageMeta:
     ("dpkg -i", "sudo dpkg -i ./x.deb", True),
     ("dpkg -i", "dpkg -install", False),
     ("grep -r ERROR", "sudo grep -r ERROR /var/log", True),
+    ("cat notes", "sudo -u bob cat notes", True),        # sudo options that take an argument
+    ("cat notes", "sudo -u bob -H cat notes", True),
+    ("cat notes", "sudo -ubob cat notes", True),
+    ("cat notes", "LANG=C cat notes", True),              # env assignments before the command
+    ("cat notes", "sudo LANG=C cat notes", True),
+    ("bob", "sudo -u bob cat notes", False),
 ])
 def test_accept_cmd_is_anchored_on_the_command_actually_run(pattern, command, expected):
     assert _accepted_by_cmd(_stage(pattern), command, None) is expected

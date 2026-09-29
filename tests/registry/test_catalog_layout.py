@@ -82,10 +82,29 @@ def test_layout_keeps_other_authors_tasks_and_block_state(registry, tmp_path):
     assert status == HTTPStatus.OK
     rows = [(r["number"], r["ref"], r["block_name"]) for r in body["catalog"]]
     assert rows[:2] == [(1, "b/c:1", "Знакомство"), (2, "b/a:1", "Знакомство")]
-    assert rows[2][1] == "alice/x:1"                     # kept, after the requested blocks
+    assert rows[2] == (3, "alice/x:1", "Знакомство")      # kept, in the same-named block
     assert body["removed"] == []
     blocks = cat.blocks()
     assert blocks[0].id == first.id and blocks[0].open is False   # id + collapsed state preserved
+    assert len(blocks) == 1                              # not a second «Знакомство» with the same id
+
+
+@pytest.mark.tier2
+def test_layout_appends_other_authors_blocks_with_unique_ids(registry, tmp_path):
+    # A foreign task in a block the deploy does not name keeps its own block; block ids stay unique.
+    for ref in ("b/a:1", "alice/x:1"):
+        _seed(registry, ref, tmp_path)
+    cat = Catalog(registry.catalog_path)
+    first = cat.blocks()[0]
+    cat.rename_block(first.id, "Чужое")
+    registry.users.add("admin", "pw-correct", role="admin")
+    admin = RemoteRegistry(registry.base_url).login("admin", "pw-correct")
+    status, body = _put(registry.base_url, admin, {"blocks": [{"name": "Моё", "tasks": ["b/a:1"]}]})
+    assert status == HTTPStatus.OK
+    assert [(r["ref"], r["block_name"]) for r in body["catalog"]] == [("b/a:1", "Моё"), ("alice/x:1", "Чужое")]
+    blocks = cat.blocks()
+    assert [b.name for b in blocks] == ["Моё", "Чужое"]
+    assert len({b.id for b in blocks}) == len(blocks)
 
 
 @pytest.mark.tier2
