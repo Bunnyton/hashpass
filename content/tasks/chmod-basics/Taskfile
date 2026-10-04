@@ -18,16 +18,14 @@ hidden hp
 settings
   pager on
 
-say "У каждого файла есть права. rwxrwxrwx — три тройки: владелец / группа / остальные."
+say "Кто может читать твои файлы, а кто — нет? Решаешь ты."
 read brief.md
 
-stage "Выставь каталогу /home/student/perm_dir права drwxr----x: владельцу — всё, группе — только чтение, остальным — только вход"
+stage "Выставь каталогу /home/student/perm_dir права drwxr----x"
   solve chmod 741 /home/student/perm_dir
   check exec sh -c 'test "$(stat -c %a /home/student/perm_dir)" = "741"'
   neutral ls cat pwd
-  on enter say "Три тройки — три цифры. Сейчас там 777: можно всё и всем."
   on pass say "stat -c %a perm_dir покажет права цифрами — сверь с тем, что ставил."
-  hint output "Operation not permitted" say "Чей каталог (ls -ld)? Только он меняет права."
   hint tries 3 say "ls -ld perm_dir — какая тройка не сошлась?"
   hint tries 6 say "r=4, w=2, x=1 — три суммы по отдельности."
   hint idle 240 say "Перечитай цель: rwx | r-- | --x. Три цифры."

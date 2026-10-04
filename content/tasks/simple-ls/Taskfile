@@ -14,16 +14,15 @@ hidden hp
 settings
   pager on
 
-say "Первая команда — самая простая. Она показывает, что вокруг."
+say "На новом месте первым делом оглядываются."
 read brief.md
 
 stage "Посмотри, что лежит в /home/student/room"
   solve ls /home/student/room
   check exec grade
   neutral cat pwd
-  on enter say "Ты стоишь в /home/student. Комната — прямо здесь, рядом."
   on pass say "Голый ls — самое частое, что набирают в терминале. Попробуй ls -l: те же вещи, но с паспортами."
   hint tries 4 say "Одна команда из теории. Ей можно сказать, куда смотреть."
-  hint idle 240 say "Команда одна и короткая."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale

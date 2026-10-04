@@ -479,6 +479,22 @@ def _announce_stage(session: object, io: Io) -> None:
     io.write(f"\n\u2500\u2500  {session.meta.stages[stage].message}\n")
 
 
+_SOLVED_BANNER = ("\n\x1b[1;32m╭────────────╮\n"
+                  "│   РЕШЕНО   │\n"
+                  "╰────────────╯\x1b[0m\n")
+
+
+def _finish(session: object, io: Io) -> None:
+    """Last stage passed: the author's outro (finale meme), then a small «РЕШЕНО» right under it."""
+    session.fire_outro()
+    io.write(_SOLVED_BANNER)
+
+
+def _state_reply(session: object) -> str:
+    """`solved` once every stage passed (the prompt then shows «[Решено]»), else an empty line."""
+    return "solved\n" if current_stage(session.progress) is None else "\n"
+
+
 def _advance_and_announce(session: object, io: Io) -> bool:
     """
     Grade the current stage against the live FS once; announce a pass + next goal.
@@ -492,7 +508,7 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     if not res.advanced:
         return False
     if current_stage(session.progress) is None:
-        session.fire_outro()   # completion/acceptance wording is the author's (voice bye / outro)
+        _finish(session, io)   # the author's outro (voice bye / finale), then «РЕШЕНО»
     else:
         # announce the next stage's goal FIRST, THEN fire its on_enter — same reason as the
         # intro flow: on_enter reads like a targeted hint that closes the announce.
@@ -666,9 +682,9 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
     if not res.advanced:
         return
     if current_stage(session.progress) is None:
-        # Completion/acceptance wording is entirely the author's (`on pass`, `voice bye`, outro).
+        # The author's `on pass` / outro (finale meme), then the engine's small «РЕШЕНО».
         # Keys stay host-side (`res.local_key`), compared under the hood -- nothing on-screen.
-        session.fire_outro()                 # top-level `say`/`read`/`exec` after the last stage
+        _finish(session, io)
     else:
         session.enter()                      # next stage's on_enter
         _announce_stage(session, io)
@@ -714,6 +730,11 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
                     router: _Router, readme: str | None, clock: Callable[[], str],
                     history: list[dict[str, object]] | None = None) -> None:
     """Serve one console request: `policy` (raw reply), else `hello`/`cmd` rendered to the socket."""
+    if req.startswith("state"):
+        # The prompt asks after each command whether the task is done, to show «[Решено]».
+        with contextlib.suppress(OSError):
+            conn.sendall(_state_reply(session).encode())
+        return
     if req.startswith("policy"):
         # The console PULLS the current stage's command policy before running each command, so it
         # can block a disallowed command locally (see runtime config.fish). Raw reply, no render.
@@ -1979,29 +2000,6 @@ def _run_from_menu(env: Home, number: int, io: Io) -> None:
     cmd_pool_run(env, str(number), io)
 
 
-_BIG_GLYPHS: dict[str, tuple[str, ...]] = {          # 5-row block font, just the verdict letters
-    "Р": ("████ ", "█   █", "████ ", "█    ", "█    "),
-    "Е": ("█████", "█    ", "████ ", "█    ", "█████"),
-    "Ш": ("█ █ █", "█ █ █", "█ █ █", "█ █ █", "█████"),
-    "Н": ("█   █", "█   █", "█████", "█   █", "█   █"),
-    "О": (" ███ ", "█   █", "█   █", "█   █", " ███ "),
-    " ": ("   ", "   ", "   ", "   ", "   "),
-}
-_BIG_ROWS = 5
-
-
-def _big_text(text: str) -> str:
-    """Render `text` in the 5-row block font (unknown characters become a blank)."""
-    rows = ["  ".join(_BIG_GLYPHS.get(ch, _BIG_GLYPHS[" "])[i] for ch in text) for i in range(_BIG_ROWS)]
-    return "\n".join(rows) + "\n"
-
-
-def _verdict_banner(*, solved: bool) -> str:
-    """Big green «РЕШЕНО» or red «НЕ РЕШЕНО» -- the last thing a student sees after a task."""
-    color = "\x1b[1;32m" if solved else "\x1b[1;31m"
-    return "\n" + color + _big_text("РЕШЕНО" if solved else "НЕ РЕШЕНО") + "\x1b[0m\n"
-
-
 def _next_entry(entries: list[dict[str, object]], current_ref: str,
                 solved: frozenset[str] = frozenset()) -> dict[str, object] | None:
     """
@@ -2036,10 +2034,10 @@ def _ask_after_task(io: Io, nxt: dict[str, object] | None) -> bool:
 
 def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     """
-    Student run: resolve a number/ref, run it, submit on completion, show the verdict, chain.
+    Student run: resolve a number/ref, run it, submit on completion, chain.
 
-    After each task the console prints a big «РЕШЕНО»/«НЕ РЕШЕНО» and asks whether to go
-    straight to the next available task (Enter) or back to the menu (q).
+    «РЕШЕНО» is shown INSIDE the console, under the finale (and as «[Решено]» in the prompt), so
+    after exit there is no verdict screen: straight to «next task (Enter) / menu (q)».
     """
     io = io or _default_io()
     url, user = _require_pool_identity(env, io)
@@ -2048,11 +2046,8 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     ref = _resolve_pool_ref(client0, token, arg)
     while True:
         rc, solved = _run_pool_task(env, url, user, token, ref, io)
-        if solved is None:                                   # locked task or a failed run: no verdict
+        if solved is None:                                   # locked task or a failed run
             return rc
-        io.write(_verdict_banner(solved=solved))
-        if not solved and ref in load_solved(env):
-            io.write("\x1b[2m(ранее уже зачтено — прогресс сохранён)\x1b[0m\n")
         nxt = _next_entry(client0.catalog(token=token), ref, frozenset(load_solved(env)))
         if not _ask_after_task(io, nxt):
             return rc
@@ -2087,8 +2082,7 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
         outcome["solved"] = completed
         if not completed:
             return  # only report a real completion; the server digest-gates the credit
-        mark_solved(env, ref)   # record «решено» before the network, so a failed submit still
-        io.write("\x1b[32mрешено\x1b[0m\n")   # leaves a clear local status
+        mark_solved(env, ref)   # record «решено» locally before the network: a failed submit keeps it
         digest = task_digest(task_dir(ref, store))
         authenticity = _authenticity(history)
         try:
@@ -2098,10 +2092,7 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
             io.write(f"\x1b[33mне зачтено (нет связи?): {exc}\x1b[0m\n"
                      "\x1b[2m  позже нажмите s в меню для самопроверки\x1b[0m\n")
             return
-        if result.get("status") == "passed":
-            note = "  \x1b[33m(похоже на вставку)\x1b[0m" if authenticity["verdict"] == "pasted" else ""
-            io.write(f"\x1b[32mзачтено\x1b[0m{note}\n")
-        else:
+        if result.get("status") != "passed":             # success is silent: «РЕШЕНО» was shown
             io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"
                      "\x1b[0m\n")
 

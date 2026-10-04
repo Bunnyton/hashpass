@@ -11,18 +11,17 @@ hidden hp
 settings
   pager on
 
-say "Тебя взяли кладовщиком. Первое поручение — опись."
+say "Тебя взяли кладовщиком. Первый день, первое поручение."
 read brief.md
 
-stage "Составь опись содержимого /home/student/warehouse — список должен лежать в файле /home/student/inventory.txt"
+stage "Составь опись /home/student/warehouse в файле /home/student/inventory.txt"
   solve ls /home/student/warehouse > /home/student/inventory.txt
   variant ls -1 /home/student/warehouse > /home/student/inventory.txt
   observe /home/student/inventory.txt
   neutral cat less pwd
-  on enter say "Начальник хочет бумажку. То есть файл. Со списком."
   on pass say "Стрелка > перезаписывает файл, а >> дописывает. Добавь в опись ещё одну строку через >> и проверь."
   hint tries 3 say "Список на экране есть? Отправь его не на экран, а в файл."
   hint tries 6 say "Загугли: «bash перенаправить вывод команды в файл»."
-  hint idle 240 say "cat inventory.txt — там список?"
+  hint idle 240 say "Долгая пауза. cat inventory.txt — там список?"
 
 exec finale

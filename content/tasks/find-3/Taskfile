@@ -11,10 +11,10 @@ hidden hp
 settings
   pager on
 
-say "Ключ -name — фильтр по имени. С шаблоном * работает тонко."
+say "Имена обманчивы: похожих много, нужных — единицы."
 read brief.md
 
-stage "Найди внутри /home/student/search все каталоги, чьё имя начинается с level4"
+stage "Найди в /home/student/search все каталоги, чьё имя начинается с level4"
   solve find /home/student/search -type d -name "level4*"
   check exec grade
   neutral ls cat pwd cd

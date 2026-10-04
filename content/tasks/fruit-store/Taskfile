@@ -16,32 +16,31 @@ settings
 say "Утро в ларьке. Пора разобрать вчерашний журнал продаж."
 read brief.md
 
-stage "Отсортируй журнал /home/student/store/sold.txt и сохрани результат в /home/student/store/sorted.txt"
+stage "Отсортируй журнал /home/student/store/sold.txt — результат в sorted.txt рядом"
   solve sort /home/student/store/sold.txt > /home/student/store/sorted.txt
   observe /home/student/store/sorted.txt
   neutral ls cat pwd less
-  on enter say "Хозяин ларька сортировать не умеет. Зато умеет шелл."
-  on pass say "sort -r перевернёт порядок. А sort | uniq -c посчитает, сколько раз продали каждый фрукт — попробуй."
+  on pass say "sort -r перевернёт порядок, а sort -R перемешает строки — попробуй на экране."
   hint tries 3 say "Отсортированное на экране? Отправь в файл."
   hint tries 6 say "Загугли: «linux отсортировать строки файла» и «bash вывод команды в файл»."
-  hint idle 240 say "Перечитай цель: из какого файла, в какой файл, в каком порядке."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
-stage "Оставь в отсортированном списке только уникальные строки — результат в /home/student/store/unique.txt"
+stage "Убери повторы из sorted.txt — результат в /home/student/store/unique.txt"
   solve uniq /home/student/store/sorted.txt > /home/student/store/unique.txt
   observe /home/student/store/unique.txt
   neutral ls cat pwd less
-  on pass say "uniq работает только по соседям — поэтому sort нужен раньше. Проверь без sort: дубли останутся."
-  hint tries 3 say "Дубли ещё есть? Какая команда убирает повторы — и почему ей нужен sort?"
+  on pass say "uniq убирает повторы только у соседей — поэтому sort нужен раньше. А uniq -c ещё и посчитает каждый фрукт."
+  hint tries 3 say "Открой unique.txt: повторы ещё есть?"
   hint tries 6 say "Загугли: «linux удалить повторяющиеся строки из файла». Название команды очень короткое."
-  hint idle 240 say "Перечитай цель: вход — sorted.txt, выход — unique.txt."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
-stage "Посчитай, сколько строк в unique.txt, и запиши число в /home/student/store/howmany.txt"
+stage "Сколько строк в unique.txt? Только число — в /home/student/store/howmany.txt"
   solve wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt
   observe /home/student/store/howmany.txt
   neutral ls cat pwd less
   on pass say "wc -w считает слова, wc -c — байты. Одна команда, три счётчика."
   hint tries 3 say "cat howmany.txt: там только число, без имени файла?"
   hint tries 6 say "Загугли: «wc посчитать строки без имени файла» или «bash перенаправление ввода»."
-  hint idle 240 say "Перечитай цель: число строк, одно число, в файл."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale

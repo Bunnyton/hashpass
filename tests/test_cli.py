@@ -402,6 +402,49 @@ def test_render_observe_no_forced_phrase_completion_fires_outro(monkeypatch):
 
 
 @pytest.mark.tier1
+def test_completion_prints_a_small_solved_banner_right_after_the_finale(monkeypatch):
+    # User (2026-10-04): «высылать решено ascii графикой поменьше внизу сразу после решения».
+    writes: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
+    session = SimpleNamespace(
+        progress=object(), meta=SimpleNamespace(stages=[SimpleNamespace(message="goal")]),
+        observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
+            advanced=True, stage=0, local_key=""),
+        fire_outro=lambda: writes.append("<outro>"), enter=lambda: writes.append("<enter>"))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: None)
+    cli._render_observe(session, "cmd", "out", None, None, io)  # noqa: SLF001
+    out = "".join(writes)
+    assert out.index("<outro>") < out.index("РЕШЕНО")            # below the meme
+    banner = out[out.index("<outro>") + len("<outro>"):]
+    assert "█" not in banner and len(banner.strip().splitlines()) <= 3   # noqa: PLR2004 -- small, not the 5-row font
+    assert "32m" in banner                                          # green
+
+
+@pytest.mark.tier1
+def test_mid_task_pass_prints_no_solved_banner(monkeypatch):
+    writes: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
+    session = SimpleNamespace(
+        progress=object(), meta=SimpleNamespace(stages=[SimpleNamespace(message=f"g{i}") for i in range(2)]),
+        observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
+            advanced=True, stage=0, local_key=""),
+        fire_outro=lambda: writes.append("<outro>"), enter=lambda: writes.append("<enter>"))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 1)
+    cli._render_observe(session, "cmd", "out", None, None, io)  # noqa: SLF001
+    assert "РЕШЕНО" not in "".join(writes)
+
+
+@pytest.mark.tier1
+def test_state_reply_says_solved_once_every_stage_passed(monkeypatch):
+    # The console prompt asks `state` to show «[Решено]» after the task is done.
+    session = SimpleNamespace(progress=object(), meta=SimpleNamespace(stages=[object()]))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 0)
+    assert cli._state_reply(session) == "\n"                       # noqa: SLF001
+    monkeypatch.setattr(cli, "current_stage", lambda _p: None)
+    assert cli._state_reply(session) == "solved\n"                 # noqa: SLF001
+
+
+@pytest.mark.tier1
 def test_policy_reply_serializes_current_stage_policy(monkeypatch):
     session = SimpleNamespace(progress=object(), meta=SimpleNamespace(stages=[
         SimpleNamespace(allow=("grep", "awk", "wc"), deny=(), neutral=("ls", "cat")),

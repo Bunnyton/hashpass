@@ -19,15 +19,15 @@ settings
 say "Три подвала, в каждом — этажи. Карту не дали."
 read brief.md
 
-stage "Где-то в /home/student/subdir_1, subdir_2 или subdir_3 лежит файл со строкой phrase:… — найди и покажи эту строку"
+stage "Найди в /home/student/subdir_1, subdir_2 или subdir_3 строку phrase:… и покажи только её"
   solve cat /home/student/subdir_2/lvl1/lvl2/prize.txt | grep phrase
   variant grep -rh phrase /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3
   observe output
   neutral ls cd pwd
-  on pass say "Три подвала руками — честно. Скоро появится инструмент, который обойдёт их за тебя."
+  on pass say "На дне подвала набери pwd, а потом cd без аргументов — и ты сразу дома."
   hint cmd cat say "Файл открыт — покажи только нужную строку."
   hint tries 4 say "Все три subdir до самого дна?"
   hint tries 8 say "У grep есть ключ для поиска по всем подкаталогам."
-  hint idle 300 say "Перечитай цель: показать нужно ТОЛЬКО строку phrase:…, а не весь файл."
+  hint idle 300 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale

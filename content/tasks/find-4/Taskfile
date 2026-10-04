@@ -11,14 +11,14 @@ hidden hp
 settings
   pager on
 
-say "Несколько условий — и подходит любое из них. По умолчанию find думает иначе."
+say "Бывает, годится любое из двух. Учим find говорить «или»."
 read brief.md
 
 stage "Найди в /home/student/search файлы, чьё имя начинается с level2 ИЛИ содержит цифру 3"
   solve find /home/student/search -type f \( -name "level2*" -o -name "*3*" \)
   check exec grade
   neutral ls cat pwd cd
-  on pass say "Скобки для find экранируют: \( … \). А сколько файлов начинаются с level2 И содержат тройку — одновременно?"
+  on pass say "А сколько файлов начинаются с level2 И содержат тройку — одновременно?"
   hint output "syntax error near unexpected token" say "Ругается bash: скобки забрал себе. Экранируй их."
   hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
   hint tries 3 say "Чего не хватает в выводе — level2 или тройки?"

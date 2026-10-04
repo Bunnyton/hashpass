@@ -7,21 +7,20 @@ hidden hp
 settings
   pager on
 
-say "apt — пакетный менеджер Debian/Ubuntu. Настало время установить что-нибудь."
+say "Голая система скучна. Пора её чем-нибудь наполнить."
 read brief.md
 
-stage "Установи пакет sl — самую свежую версию из репозитория"
+stage "Установи самую свежую версию пакета sl"
   solve:
     sudo apt-get update >/dev/null 2>&1
     sudo apt-get install -y sl >/dev/null 2>&1
   check exec command -v sl || test -x /usr/games/sl
   neutral ls cat pwd
-  on enter say "apt слушается только администратора. А ты — student."
   on pass say "Поезд ходит на каждую опечатку ls. Попробуй sl -l — вагоны поедут назад. А sl -F… сам увидишь."
   hint output "Unable to locate package" say "apt не нашёл пакет. Когда обновлялся список? Шагов два."
   hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
   hint tries 3 say "Прочитай ответ apt — он говорит прямым текстом."
   hint tries 6 say "Загугли: «apt установить пакет debian». Или apt --help."
-  hint idle 240 say "Перечитай теорию: сначала обновить список, потом установить."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
 
 exec finale

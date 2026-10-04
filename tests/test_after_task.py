@@ -5,17 +5,6 @@ from hashpass import cli
 
 
 @pytest.mark.tier1
-def test_verdict_banner_is_big_green_or_red():
-    solved = cli._verdict_banner(solved=True)          # noqa: SLF001
-    failed = cli._verdict_banner(solved=False)         # noqa: SLF001
-    assert "32m" in solved and "31m" in failed                        # green / red
-    rows = [ln for ln in cli._big_text("РЕШЕНО").splitlines() if ln.strip()]  # noqa: SLF001
-    assert len(rows) == cli._BIG_ROWS and len({len(r) for r in rows}) == 1   # noqa: SLF001
-    assert "█" in rows[0]
-    assert len(cli._big_text("НЕ РЕШЕНО").splitlines()[0]) > len(rows[0])   # noqa: SLF001
-
-
-@pytest.mark.tier1
 def test_next_entry_is_the_next_available_number():
     entries = [
         {"number": 3, "ref": "b/c:1", "available": True, "hidden": False},
@@ -81,7 +70,11 @@ def test_pool_run_chains_to_the_next_task_until_menu(tmp_path, monkeypatch):
     assert cli.cmd_pool_run(env, "1", io) == 0
     assert runs == ["b/a:1", "b/b:1"]                   # both solved -> nothing left -> stops
     assert any("последнее" in s for s in out)
-    assert sum("█" in s for s in out) >= len(runs)     # a verdict banner after each run
+    # User (2026-10-04): after exit go straight to «next task / menu» -- no «РЕШЕНО/НЕ РЕШЕНО»
+    # (the console already showed it under the meme) and no «решено/зачтено» chatter.
+    shown = "".join(out)
+    assert "█" not in shown and "РЕШЕНО" not in shown
+    assert "решено" not in shown and "зачтено" not in shown
 
 
 @pytest.mark.tier1
@@ -131,7 +124,7 @@ def test_failed_run_shows_no_verdict(tmp_path, monkeypatch):
 
 
 @pytest.mark.tier1
-def test_rerun_of_a_solved_task_says_so(tmp_path, monkeypatch):
+def test_unsolved_exit_shows_no_verdict_either(tmp_path, monkeypatch):
     def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool) -> int:  # noqa: ARG001
         on_complete(False, [])  # noqa: FBT003
         return 0
@@ -142,8 +135,37 @@ def test_rerun_of_a_solved_task_says_so(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "task_digest", lambda _p: "")
     monkeypatch.setattr(cli, "cmd_run", fake_cmd_run)
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
-    cli.mark_solved(env, "b/a:1")                             # credited on an earlier run
     out: list[str] = []
-    io = cli.Io(read=lambda _p: "q", write=out.append, clock=lambda: "")
-    assert cli.cmd_pool_run(env, "1", io) == 0
-    assert any("31m" in s for s in out) and any("ранее уже зачтено" in s for s in out)
+    prompts: list[str] = []
+
+    def read(prompt: str) -> str:
+        prompts.append(prompt)
+        return "q"
+    assert cli.cmd_pool_run(env, "1", cli.Io(read=read, write=out.append, clock=lambda: "")) == 0
+    shown = "".join(out)
+    assert "РЕШЕНО" not in shown and "31m" not in shown
+    assert len(prompts) == 1 and "выйти в меню" in prompts[0]      # straight to the choice
+
+
+class _OfflinePool(_FakePool):
+    def submit(self, *_a: object, **_k: object) -> dict[str, object]:
+        msg = "connection refused"
+        raise RuntimeError(msg)
+
+
+@pytest.mark.tier1
+def test_failed_submit_is_still_reported(tmp_path, monkeypatch):
+    # Silence is for success only: a credit that did not reach the pool must say so.
+    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool) -> int:  # noqa: ARG001
+        on_complete(True, [])  # noqa: FBT003
+        return 0
+    monkeypatch.setattr(cli, "_require_pool_identity", lambda _env, _io: ("http://pool", "stud"))
+    monkeypatch.setattr(cli, "_pool_token", lambda _env, _url: "tok")
+    monkeypatch.setattr(cli, "RemoteRegistry", _OfflinePool)
+    monkeypatch.setattr(cli, "task_dir", lambda _ref, _store: tmp_path)
+    monkeypatch.setattr(cli, "task_digest", lambda _p: "")
+    monkeypatch.setattr(cli, "cmd_run", fake_cmd_run)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    out: list[str] = []
+    assert cli.cmd_pool_run(env, "1", cli.Io(read=lambda _p: "q", write=out.append, clock=lambda: "")) == 0
+    assert any("нет связи" in s for s in out)

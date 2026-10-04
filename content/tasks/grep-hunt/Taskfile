@@ -16,12 +16,11 @@ settings
 say "Тебе достался устаревший проект. Разгребай techdebt."
 read brief.md
 
-stage "Собери все строки с TODO из /home/student/legacy/notes.txt в файл /home/student/todos.txt"
+stage "Собери строки с TODO из /home/student/legacy/notes.txt в файл /home/student/todos.txt"
   solve grep TODO /home/student/legacy/notes.txt > /home/student/todos.txt
   variant grep -F TODO /home/student/legacy/notes.txt > /home/student/todos.txt
   observe /home/student/todos.txt
   neutral ls cat less pwd
-  on enter say "Тимлид в отпуске. Заметки — твои. TODO — тоже."
   on pass say "Бонус: grep -c TODO notes.txt — сколько их всего? А grep -v TODO — всё, кроме них."
   hint cmd grep missing TODO say "Ищем именно строки с TODO — проверь, что ты просишь у grep."
   hint tries 3 say "Строки видишь? Отправь их в файл, а не на экран."

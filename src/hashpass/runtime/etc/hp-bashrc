@@ -31,14 +31,17 @@ case ":$PATH:" in
 esac
 export PATH
 
-# Prompt: cwd in bright blue, then " ❯ " in bright green, a red ✗ mark on non-zero.
+# Prompt: cwd in bright blue, then " ❯ " in bright green, a red ✗ mark on non-zero, and a green
+# «[Решено]» once the task is done (__hp_solved, set by the live-grade hooks below).
 # Snapshot $? first so PS1 sees the previous command's status, not PROMPT_COMMAND's own.
 _hp_last_status=0
+__hp_solved=0
 _hp_render_prompt() {
     _hp_last_status=$?
-    local mark=''
+    local mark='' done=''
     (( _hp_last_status != 0 )) && mark=$'\[\e[91m\] ✗\[\e[0m\]'
-    PS1='\[\e[94m\]\w\[\e[0m\]'"$mark"'\[\e[92m\] ❯ \[\e[0m\]'
+    (( __hp_solved == 1 )) && done=$'\[\e[1;92m\] [Решено]\[\e[0m\]'
+    PS1='\[\e[94m\]\w\[\e[0m\]'"$done$mark"'\[\e[92m\] ❯ \[\e[0m\]'
 }
 
 # OSC 133 semantic prompts (used by `_extract_output` on the host to isolate a command's
@@ -157,6 +160,7 @@ if [ -n "${HP_PORT-}" ]; then
         local rc=$?
         if [ "$__hp_armed" -eq 0 ]; then       # first prompt: drop whatever startup captured
             __hp_armed=1
+            __hp_check_solved                  # a `su -` shell opened after the finish
             return
         fi
         local cmd="$1"
@@ -183,6 +187,14 @@ if [ -n "${HP_PORT-}" ]; then
         # script(1)), advance the offset past it so the NEXT command doesn't see the reply
         # as its own output.
         __hp_off=$(stat -c %s "$log" 2>/dev/null || echo "$size")
+        __hp_check_solved
+    }
+
+    # Ask the host once per command whether every step passed; then the prompt says «[Решено]»
+    # for the rest of the session and we stop asking.
+    __hp_check_solved() {
+        [ "$__hp_solved" -eq 1 ] && return
+        [ "$(hp-io state 2>/dev/null)" = solved ] && __hp_solved=1
     }
 
     # Snapshot BASH_COMMAND into __hp_cmd on every simple command, EXCEPT when the current

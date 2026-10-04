@@ -11,7 +11,7 @@ hidden hp
 say "Тебя позвали на аудит системы. Инструментов нет — только руки и apt."
 read brief.md
 
-stage "Поставь пакет psmisc (в нём pstree и killall) и сохрани строку Status: из его dpkg-статуса в /home/student/install-status.txt"
+stage "Поставь пакет psmisc и запиши его строку Status: в /home/student/install-status.txt"
   solve:
     sudo apt-get update >/dev/null 2>&1
     sudo apt-get install -y psmisc >/dev/null 2>&1
@@ -21,11 +21,11 @@ stage "Поставь пакет psmisc (в нём pstree и killall) и сох�
   on pass say "pstree покажет процессы деревом — найди в нём свою оболочку."
   hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
   hint output "Unable to locate package" say "apt не знает такого пакета. Когда он в последний раз обновлял список? Два шага."
-  hint tries 3 say "dpkg -s psmisc — там та самая строка Status:. Оставь только её."
+  hint tries 3 say "Кто в брифе выдаёт паспорт пакета? Из паспорта нужна одна строка."
   hint tries 6 say "Загугли: «grep строка начинающаяся с»."
   hint idle 300 say "Перечитай цель: установить, спросить dpkg, одну строку — в файл."
 
-stage "Запусти ОДИН фоновый sleep 600, посчитай, сколько процессов sleep сейчас работает, и запиши число в /home/student/proc-count.txt"
+stage "Запусти в фоне один sleep 600 и запиши в /home/student/proc-count.txt, сколько процессов sleep сейчас живо"
   solve:
     sleep 600 &
     sleep 0.3
@@ -33,7 +33,7 @@ stage "Запусти ОДИН фоновый sleep 600, посчитай, ск�
   observe /home/student/proc-count.txt
   neutral ls cat pwd
   on pass say "killall sleep — и все спящие проснутся мёртвыми. Проверь pgrep после."
-  hint tries 3 say "sleep в фоне ([1] и номер)? Найти по имени — pgrep, посчитать — ты умеешь."
+  hint tries 3 say "sleep ушёл в фон (видно [1] и номер)? Дальше — найти по имени и посчитать строки."
   hint tries 6 say "Загугли: «bash запустить команду в фоне» и «pgrep посчитать процессы»."
   hint idle 300 say "Перечитай цель: три действия — запустить, посчитать, записать число."
 

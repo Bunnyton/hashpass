@@ -15,19 +15,18 @@ hidden hp
 settings
   pager on
 
-say "Файлы можно читать прямо в терминале. Иногда — целиком, иногда — только нужное."
+say "Почта пришла. Почти вся — реклама."
 read brief.md
 
-stage "Найди в /home/student/mailbox/key_here.txt строку с СЕКРЕТОМ и выведи только её"
+stage "Выведи из /home/student/mailbox/key_here.txt только строку со словом СЕКРЕТ"
   solve grep СЕКРЕТ /home/student/mailbox/key_here.txt
   variant cat /home/student/mailbox/key_here.txt | grep СЕКРЕТ
   observe output
   neutral ls pwd
-  on enter say "Пять писем в ящике, одно важное — и в нём триста строк рекламы вокруг одной нужной."
-  on pass say "Подсказка на будущее: grep -n покажет ещё и номер строки — попробуй прямо сейчас."
-  hint cmd cat say "Секрет виден. Теперь покажи только его строку."
-  hint tries 3 say "cat даёт всё. В теории был инструмент для строк."
+  on pass say "На будущее: grep -n покажет ещё и номер строки — попробуй прямо сейчас."
+  hint cmd cat say "Триста строк, а нужна одна. Чем бы её отфильтровать?"
+  hint tries 3 say "В теории была команда, которая печатает не всё, а только строки с нужным словом."
   hint tries 6 say "man grep — или загугли: «вывести из файла строки содержащие слово linux»."
-  hint idle 240 say "Перечитай цель: нужна одна строка, а не весь файл."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale

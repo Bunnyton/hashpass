@@ -16,13 +16,12 @@ settings
 say "Иногда пакет лежит на диске .deb-файлом. Ставится и такой."
 read brief.md
 
-stage "Скачай пакет cmatrix (.deb по ссылке из брифа) и установи его из файла — так, чтобы он был готов к запуску"
+stage "Скачай .deb по ссылке из брифа и установи из него cmatrix"
   solve:
     wget -q http://ftp.debian.org/debian/pool/main/c/cmatrix/cmatrix_2.0-3_amd64.deb
     sudo apt-get install -y ./cmatrix_2.0-3_amd64.deb >/dev/null 2>&1
   check exec sh -c "dpkg-query -W -f='\${Status}' cmatrix 2>/dev/null | grep -q 'install ok installed'"
   neutral ls cat pwd
-  on enter say "Файл .deb — это уже пакет. Ему не нужен репозиторий, нужен установщик."
   on pass say "dpkg -L cmatrix перечислит все файлы, которые принёс пакет. Найди, где лежит сам бинарь."
   hint output "command not found" say "Такой скачивалки нет. Их как минимум две — загугли."
   hint output "dependency problems" say "dpkg сам сказал, чего не хватает. В теории есть, чем доделать."
@@ -30,13 +29,13 @@ stage "Скачай пакет cmatrix (.deb по ссылке из брифа) 
   hint output "Permission denied" say "Установщику не хватило прав. Как обычный пользователь одалживает права администратора на одну команду?"
   hint tries 3 say "Файл скачался (ls)? Дальше — по теории."
   hint tries 6 say "man dpkg — «install»; apt тоже умеет ставить ./файл.deb."
-  hint idle 240 say "Перечитай бриф: ссылка там есть. cmatrix пока не запускай."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
 
 stage "А теперь запусти cmatrix — и выйди из него клавишей q"
   accept cmd "cmatrix" ok
   neutral ls cat pwd
   on pass say "cmatrix -r — цветной дождь. А cmatrix -h расскажет остальное. Выход всё так же q."
   hint tries 4 say "Команда называется так же, как пакет."
-  hint idle 240 say "Одно слово — имя пакета. Выйти — q."
+  hint idle 240 say "Матрица ждёт. Перечитай цель."
 
 exec finale

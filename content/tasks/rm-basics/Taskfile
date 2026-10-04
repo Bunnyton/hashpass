@@ -14,18 +14,17 @@ settings
 say "rm — remove. Крушить, ломать! Но по правилам."
 read brief.md
 
-stage "Очисти /home/student/workdir до нуля — включая скрытое, — но сам каталог оставь"
+stage "Очисти /home/student/workdir до нуля, скрытое тоже — сам каталог оставь"
   solve:
     rm -rf /home/student/workdir/*
     rm -rf /home/student/workdir/.[!.]*
   check exec sh -c 'test -d /home/student/workdir && test -z "$(ls -A /home/student/workdir 2>/dev/null)"'
   neutral ls cat pwd
-  on enter say "Мусор бывает на виду, а бывает — с точкой в начале имени."
   on pass say "Ты только что удалил скрытое. Помни: rm не спрашивает и корзины у него нет — вот почему ls -a идёт первым."
   hint output "Is a directory" say "rm отказался: это каталог. В теории был ключ."
   hint tries 3 say "Проверь, что осталось: ls показывает пусто? А ls -a?"
-  hint tries 6 say "Звёздочка не подставляет имена с точкой. Загугли: «bash glob скрытые файлы»."
-  hint tries 10 say "Скрытое удаляется отдельным шаблоном. Каталог оставь."
-  hint idle 240 say "Перечитай цель: ВСЁ содержимое, каталог остаётся. Проверяй через ls -A."
+  hint tries 6 say "Что в теории сказано про звёздочку и имена с точкой? Или загугли: «bash glob скрытые файлы»."
+  hint tries 10 say "Один шаблон — для видимого, другой — для имён с точкой; в одной команде их может быть оба."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale

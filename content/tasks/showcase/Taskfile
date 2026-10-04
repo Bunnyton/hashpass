@@ -27,16 +27,15 @@ say "Введу тебя в курс дела, прежде чем начнём.
 read theory.md
 
 # --- Задание 1: наблюдаемый артефакт (без привилегий) + `on enter read` + реактивная cmd-подсказка ---
-stage "Оставь короткий отчёт: в /home/student/report.txt должно лежать одно слово — ГОТОВО"
+stage "Оставь отчёт: в /home/student/report.txt — одно слово ГОТОВО"
   solve:
     echo ГОТОВО > /home/student/report.txt
   observe /home/student/report.txt
   neutral ls cat pwd
-  on enter say "Отчёт из одного слова. Где именно и какого — сказано в цели."
   on enter read clue1.md
-  on pass say "Бонус: cat report.txt — файл на месте."
-  hint cmd echo missing ГОТОВО say "В echo должно быть ровно слово ГОТОВО — заглавными."
-  hint tries 3 say "Файл появился? cat его. Слово одно, регистр важен."
+  on pass say "Отчёт сдан. Бюрократия в Linux — это просто файл."
+  hint cmd echo missing ГОТОВО say "Сверь слово в echo с целью — буква в букву."
+  hint tries 3 say "Файл появился? Загляни в него."
   hint tries 6 say "Загугли: «bash записать слово в файл»."
 
 # --- Задание 2: приёмка по ВЫВОДУ команды (СТРОГО: similarity 100) + варианты + whitelist ---
@@ -51,25 +50,23 @@ stage "Напечатай, сколько строк в /var/log/app/service.log
   observe output
   allow grep awk wc
   neutral ls cat less
-  on enter say "Важен ВЫВОД — ровно число. И посчитать надо по-настоящему: echo с ответом не пройдёт."
   on pass say "grep -c — счётчик; grep -n — номера строк."
-  hint output "0" say "Ноль? В журнале точно есть строки ERROR — присмотрись к команде: регистр, путь."
-  hint tries 3 say "Строки с ERROR ты уже видишь? Теперь их надо не показать, а посчитать. У grep есть ключ для счёта, у wc — для строк."
+  hint cmd grep missing ERROR say "Присмотрись к шаблону: для grep регистр букв важен."
+  hint tries 3 say "Строки с ERROR ты уже видишь — как их не показать, а посчитать?"
   hint tries 6 say "man grep — ищи «count». Или загугли: «посчитать строки со словом в файле linux»."
 
 # --- Задание 3: sudo + пакет, которого НЕТ; проверка ОДНОЙ inline-командой (без скрипта) ---
 # `check exec <команда>` запускает проверку прямо строкой (exit 0 = принято). Скрипт не нужен;
 # и это шаг-часовой (sentinel) — `solve` при сборке НЕ выполняется (apt не гоняется во время build).
 # `on enter exec intro2` — пример действия-скрипта из скрытого слоя.
-stage "Установи пакет sl — его в системе нет; понадобятся права администратора"
+stage "Установи пакет sl"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y sl >/dev/null 2>&1
   check exec command -v sl || test -x /usr/games/sl
   neutral ls cat pwd
-  on enter say "Пакета sl нет. Ты — student, а apt слушается только root."
   on enter exec intro2
-  on pass say "sl -F: поезд улетит."
+  on pass say "dpkg -L sl покажет, куда пакет разложил свои файлы."
   hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права root на одну команду?"
   hint output "Unable to locate package" say "apt не нашёл пакет — когда он обновлял список? Два шага."
   hint tries 3 say "Прочитай, что ответил apt: он говорит прямым текстом, чего хочет."
@@ -81,22 +78,20 @@ stage "Установи пакет sl — его в системе нет; по�
 stage "Запусти установленный поезд"
   accept cmd "sl" ok
   neutral ls cat less
-  on enter say "Пакет называется sl, команда — тоже. Поезд следов на диске не оставляет — его нужно просто запустить."
-  on pass say "Поезд ушёл. Попробуй sl -l."
+  on pass say "Поезд ушёл. А sl -F — улетит."
   hint idle 240 say "Имя команды совпадает с именем пакета."
 
 # --- Задание 5: скрытая проверка из скрытого слоя судит ответ ---
-stage "Создай /home/student/secret с одной фразой — той самой, что открывает пещеру"
+stage "Запиши в /home/student/secret фразу, которая открывает пещеру"
   solve:
     echo open-sesame > /home/student/secret
   check exec grade
   neutral ls cat pwd
-  on enter say "Фразу подсмотреть негде — зато есть подсказка."
   on enter read clue3.md
   on pass say "Фраза известна. Пещера открыта."
-  hint tries 3 say "Фраза — по-английски, строчными, два слова через дефис, без лишних пробелов. cat /home/student/secret — точно так?"
+  hint tries 3 say "По-английски, строчными, без лишних пробелов — в файле точно так?"
   hint tries 6 say "Загугли: «Али-Баба заклинание пещера по-английски»."
-  hint idle 240 say "Перечитай подсказку: два слова, дефис, Али-Баба."
+  hint idle 240 say "Долгая пауза. Перечитай заметку под целью и загляни в файл."
 
 # --- ФИНАЛ: ASCII-арт из скрытого слоя; он и отмечает полное прохождение (обязательных фраз нет) ---
 exec finale

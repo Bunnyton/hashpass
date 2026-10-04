@@ -11,10 +11,10 @@ hidden hp
 settings
   pager on
 
-say "Продолжаем осваивать find. -mindepth — младший брат -maxdepth."
+say "Продолжаем осваивать find. Сегодня — точность до этажа."
 read brief.md
 
-stage "Найди файлы (только файлы), лежащие ровно на 3-м уровне вложенности внутри /home/student/search"
+stage "Найди только файлы, лежащие ровно на 3-м уровне вложенности в /home/student/search"
   solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
   check exec grade
   neutral ls cat pwd cd
@@ -22,6 +22,6 @@ stage "Найди файлы (только файлы), лежащие ровн�
   hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
   hint tries 3 say "В выводе есть каталоги или чужие этажи? Условий три."
   hint tries 6 say "man find: mindepth, maxdepth, type."
-  hint idle 240 say "Перечитай цель: ровно третий уровень и только файлы. Это три условия."
+  hint idle 240 say "Перечитай цель: ровно третий уровень и только файлы."
 
 exec finale

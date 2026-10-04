@@ -7,21 +7,20 @@ hidden hp
 settings
   pager on
 
-say "Над всеми правами есть root — суперпользователь. sudo пускает его в комнату на минуту."
+say "Есть двери, в которые student не пускают. Но ключ от них лежит рядом."
 read brief.md
 
-stage "Создай файл /home/file.txt — обычному пользователю в /home писать нельзя"
+stage "Создай файл /home/file.txt"
   solve sudo touch /home/file.txt
   observe /home/file.txt
   neutral ls cat pwd
-  on enter say "Ты student. /home принадлежит root. Ты — нет."
   on pass say "sudo пишет каждую команду в журнал — админ увидит, кто и что делал. sudo -l покажет, что тебе разрешено."
   hint output "Permission denied" say "Доступ запрещён — тебе. А кто здесь может всё?"
   hint tries 3 say "Кто владелец /home (ls -ld /home)? Как одолжить его права?"
   hint tries 6 say "man sudo, первые строки."
   hint idle 240 say "Перечитай цель и теорию: одна команда, один префикс."
 
-stage "Удали /home/file.txt — его создал root"
+stage "А теперь удали /home/file.txt"
   solve sudo rm -f /home/file.txt
   check exec test ! -e /home/file.txt
   neutral ls cat pwd

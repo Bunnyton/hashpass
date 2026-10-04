@@ -10,18 +10,17 @@ settings
 say "Список пакетов apt берёт из репозиториев. Можно добавить свой."
 read brief.md
 
-stage "Создай файл /etc/apt/sources.list.d/custom.list с одной строкой — описанием репозитория из брифа"
+stage "Пропиши репозиторий из брифа в файл /etc/apt/sources.list.d/custom.list"
   solve:
     echo 'deb http://deb.debian.org/debian trixie main' | sudo tee /etc/apt/sources.list.d/custom.list >/dev/null
   observe /etc/apt/sources.list.d/custom.list
   neutral ls cat pwd
-  on enter say "Каталог /etc/apt принадлежит root."
   on pass say "Файл лежит в /etc/apt/sources.list.d — загляни, что там ещё, кроме твоего."
   hint output "command not found" say "Файл из одной строки делается и без редактора — вспомни hello.txt."
-  hint output "Permission denied" say "Запись через > делает твоя оболочка, а не команда слева. Теория знает обход."
+  hint output "Permission denied" say "Перечитай в брифе, кто на самом деле выполняет >, — там же и обход."
   hint tries 3 say "cat файл: одна строка, символ в символ как в брифе?"
   hint tries 8 say "Загугли: «bash создать файл с одной строкой без редактора»."
-  hint idle 240 say "Перечитай бриф: путь к файлу и строка — оба даны."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
 
 stage "Дай apt узнать о новом репозитории"
   solve sudo apt-get update >/dev/null 2>&1

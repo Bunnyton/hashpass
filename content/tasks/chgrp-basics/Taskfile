@@ -20,12 +20,11 @@ settings
 say "Права держат тебя снаружи. Но группу можно сменить — и войти."
 read brief.md
 
-stage "Смени группу файла /home/student/.secret/rock.txt на student — тогда файл откроется"
+stage "Смени группу файла /home/student/.secret/rock.txt на student"
   solve sudo chgrp student /home/student/.secret/rock.txt
   check exec sh -c 'test "$(stat -c %G /home/student/.secret/rock.txt)" = "student"'
   neutral ls cat pwd cd
-  on enter say "Файл принадлежит root и группе FiveFingerDeathPunch. Ты не в группе. Пока."
-  on pass say "Группы пользователя: команда groups. Ты в sudo? А в FiveFingerDeathPunch — уже нет нужды."
+  on pass say "Загляни внутрь — ключ ждёт. А id покажет все твои группы вместе с их номерами."
   hint output "Operation not permitted" say "Чей файл — того и право менять. Одолжи права."
   hint output "Permission denied" say "Читать пока нельзя. Задача — не прочитать, а сменить группу."
   hint tries 3 say "ls -l .secret/rock.txt — какая там группа? Какая команда меняет именно её?"

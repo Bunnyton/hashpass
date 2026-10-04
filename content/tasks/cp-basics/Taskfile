@@ -16,7 +16,7 @@ settings
 say "Копия — вторая жизнь файла. Знакомимся с cp."
 read brief.md
 
-stage "Положи копию /home/student/copy_me.txt в каталог /home/student/wait_file — оригинал должен остаться на месте"
+stage "Положи копию /home/student/copy_me.txt в каталог /home/student/wait_file"
   solve cp /home/student/copy_me.txt /home/student/wait_file/
   variant cp /home/student/copy_me.txt /home/student/wait_file/copy_me.txt
   observe /home/student/wait_file/copy_me.txt /home/student/copy_me.txt
@@ -26,6 +26,6 @@ stage "Положи копию /home/student/copy_me.txt в каталог /home
   hint cmd mv say "Файл переехал, а не скопировался. Верни оригинал."
   hint tries 3 say "Загляни в wait_file: что там? Что cp принимает первым, что вторым?"
   hint tries 6 say "man cp — первые две строки SYNOPSIS."
-  hint idle 240 say "Перечитай цель: откуда — куда. Оба пути есть в тексте задания."
+  hint idle 240 say "Долгая пауза. Перечитай цель: откуда — куда."
 
 exec finale

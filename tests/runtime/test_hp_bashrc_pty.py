@@ -74,3 +74,36 @@ def _drive_and_check(rcfile: str, env: dict, log: Path) -> None:
     cmds = [r for r in reqs if r.startswith("cmd ")]
     assert cmds == ["cmd echo hi"], reqs                    # no `return`/startup-line phantom
     assert reqs.count("hello") == 1
+
+
+@pytest.mark.tier1
+def test_prompt_gets_a_solved_label_once_the_host_says_so(tmp_path):
+    # User (2026-10-04): «в конце когда решили добавь в командную строку label [Решено]».
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    flag = tmp_path / "solved"
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    shim = bindir / "hp-io"
+    shim.write_text('#!/bin/sh\nprintf \'%s\\n\' "$1" >> "$HP_IO_LOG"\n'
+                    '[ "$1" = state ] && [ -f "$HP_SOLVED" ] && echo solved\nexit 0\n',
+                    encoding="utf-8")
+    shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+           "HP_IO_LOG": str(log), "HP_SOLVED": str(flag), "HOME": str(tmp_path), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 100))
+    child.expect("❯")
+    child.sendline("echo one")
+    child.expect("❯")
+    assert "Решено" not in child.before
+    flag.touch()                                   # the host now reports the task as done
+    child.sendline("echo two")
+    child.expect(r"\[Решено\][^\n]*❯")
+    child.sendline("echo three")                    # it stays
+    child.expect(r"\[Решено\][^\n]*❯")
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+    assert [r for r in _requests(log) if r.startswith("cmd ")] == [
+        "cmd echo one", "cmd echo two", "cmd echo three"]

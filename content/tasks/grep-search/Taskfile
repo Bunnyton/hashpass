@@ -13,14 +13,13 @@ hidden hp
 settings
   pager on
 
-say "Руками искать — долго. Настало время grep."
+say "Иголка в стоге сена? Настало время grep."
 read brief.md
 
-stage "Где-то в дереве /home/student/haystack есть строка, начинающаяся с КЛЮЧ: — покажи только её, без имени файла впереди"
+stage "Покажи строку с КЛЮЧ: из дерева /home/student/haystack — только её, без имени файла"
   solve grep -rh КЛЮЧ /home/student/haystack
   observe output
   neutral ls cat pwd cd
-  on enter say "Шестьдесят два файла в трёх ветках. Руками — можно. Но зачем?"
   on pass say "grep -rn добавит номер строки, grep -ri — забудет про регистр. Попробуй оба на haystack."
   hint output "Is a directory" say "grep: это каталог. Как заставить его зайти внутрь?"
   hint cmd grep has -r say "Нашёл! Но впереди имя файла. grep --help | grep -i filename."
