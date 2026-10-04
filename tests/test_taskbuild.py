@@ -95,22 +95,29 @@ def test_build_meta_carries_actions_hints_voice_settings_react():
     assert meta_from_dict(meta_to_dict(meta)) == meta
 
 
-# --- task build cache: an unchanged task skips derivation (no solve re-runs) -------------------
+# --- per-stage derivation cache: only stages whose inputs changed re-run their solve -----------
+# Stage i is derived from the image + solve of stages 0..i-1 + its own grading fields, so editing
+# the LAST stage re-derives only it, and a hint/message edit re-derives nothing.
 
 _CACHED = """\
 image ctask:1
 hidden hid
 
-stage "make it"
-  solve echo hi > /o.txt
-  observe /o.txt
+stage "first"
+  solve echo a > /a.txt
+  observe /a.txt
+  hint tries 2 say "look around"
+
+stage "second"
+  solve echo b > /b.txt
+  observe /b.txt
 """
 
 
 @pytest.fixture
 def fake_build(tmp_path, monkeypatch):
-    """Stub the image build + derivation; count how many times derivation actually runs."""
-    calls = {"derive": 0, "image_key": "img-key-1"}
+    """Stub the image build + per-stage derivation; record which stages actually derive."""
+    calls = {"derived": [], "image_key": "img-key-1"}
 
     def build(recipe, store, **_kw: object) -> object:
         layer = tmp_path / "layer"
@@ -118,13 +125,12 @@ def fake_build(tmp_path, monkeypatch):
         return store.save(recipe.name, recipe.version, layer, recipe.parents,
                           build_key=calls["image_key"])
 
-    def derive(_factory, recipe, _task, _passes, _progress=None) -> tuple:
-        calls["derive"] += 1
-        return [StageChecks(canonical={"o.txt": FileState("file", "hi")}) for _ in recipe.stages], \
-               ["derived" for _ in recipe.stages]
+    def derive_stage(_factory, task, i, *_a: object, **_kw: object) -> StageChecks:
+        calls["derived"].append(i)
+        return StageChecks(canonical={f"s{i}": FileState("file", task.stages[i].commands[0])})
 
     monkeypatch.setattr(tb, "build", build)
-    monkeypatch.setattr(tb, "_selective_derive", derive)
+    monkeypatch.setattr(tb, "_derive_stage", derive_stage)
     monkeypatch.setattr(tb, "resolve_lowers", lambda *_a, **_k: [])
     (tmp_path / "hid").mkdir()
     (tmp_path / "hid" / "grade").write_text("v1", encoding="utf-8")
@@ -141,39 +147,62 @@ def _build(tmp_path, recipe, store, progress=None) -> object:
                       sudo=False, progress=progress)
 
 
-@pytest.mark.tier1
-def test_unchanged_task_rebuild_skips_derivation(tmp_path, fake_build):
-    store = ImageStore(tmp_path / "images")
-    lines: list[str] = []
-    first = _build(tmp_path, _cached_recipe(tmp_path), store)
-    second = _build(tmp_path, _cached_recipe(tmp_path), store, progress=lines.append)
-    assert fake_build["derive"] == 1
-    assert second.meta == first.meta
-    assert (second.bundle_dir / "checks.json").exists()
-    assert any("из кэша" in ln for ln in lines)
-
-
-@pytest.mark.tier1
-def test_changed_stage_rederives(tmp_path, fake_build):
+def _rebuild(tmp_path, fake_build, text=_CACHED) -> tuple:
+    """Build once, reset the call log, build again with `text`; return (rebuilt-stages, task)."""
     store = ImageStore(tmp_path / "images")
     _build(tmp_path, _cached_recipe(tmp_path), store)
-    _build(tmp_path, _cached_recipe(tmp_path, _CACHED.replace("echo hi", "echo bye")), store)
-    assert fake_build["derive"] == 2  # noqa: PLR2004
+    fake_build["derived"].clear()
+    task = _build(tmp_path, _cached_recipe(tmp_path, text), store)
+    return fake_build["derived"], task
 
 
 @pytest.mark.tier1
-def test_changed_hidden_content_rederives(tmp_path, fake_build):
+def test_unchanged_task_rebuild_derives_nothing(tmp_path, fake_build):
+    derived, task = _rebuild(tmp_path, fake_build)
+    assert derived == []
+    checks = load_bundle(task.bundle_dir).checks
+    assert [st.canonical for st in checks.stages] == [
+        {"s0": FileState("file", "echo a > /a.txt")}, {"s1": FileState("file", "echo b > /b.txt")}]
+
+
+@pytest.mark.tier1
+def test_changed_last_stage_rederives_only_it(tmp_path, fake_build):
+    derived, task = _rebuild(tmp_path, fake_build, _CACHED.replace("echo b", "echo B"))
+    assert derived == [1]
+    assert load_bundle(task.bundle_dir).checks.stages[1].canonical == {
+        "s1": FileState("file", "echo B > /b.txt")}
+
+
+@pytest.mark.tier1
+def test_changed_first_stage_solve_rederives_later_stages_too(tmp_path, fake_build):
+    derived, _ = _rebuild(tmp_path, fake_build, _CACHED.replace("echo a", "echo A"))
+    assert derived == [0, 1]
+
+
+@pytest.mark.tier1
+def test_hint_and_message_edit_rederives_nothing_but_updates_meta(tmp_path, fake_build):
+    text = _CACHED.replace("look around", "try ls").replace('"second"', '"второй"')
+    derived, task = _rebuild(tmp_path, fake_build, text)
+    assert derived == []
+    assert task.meta.stages[1].message == "второй"
+
+
+@pytest.mark.tier1
+def test_hidden_edit_rederives_nothing_but_restages_hp(tmp_path, fake_build):
     store = ImageStore(tmp_path / "images")
     _build(tmp_path, _cached_recipe(tmp_path), store)
+    fake_build["derived"].clear()
     (tmp_path / "hid" / "grade").write_text("v2", encoding="utf-8")
-    _build(tmp_path, _cached_recipe(tmp_path), store)
-    assert fake_build["derive"] == 2  # noqa: PLR2004
+    task = _build(tmp_path, _cached_recipe(tmp_path), store)
+    assert fake_build["derived"] == []
+    assert (task.hp_src_dir / "work" / "grade").read_text(encoding="utf-8") == "v2"
 
 
 @pytest.mark.tier1
-def test_rebuilt_image_rederives(tmp_path, fake_build):
+def test_rebuilt_image_rederives_every_stage(tmp_path, fake_build):
     store = ImageStore(tmp_path / "images")
     _build(tmp_path, _cached_recipe(tmp_path), store)
+    fake_build["derived"].clear()
     fake_build["image_key"] = "img-key-2"
     _build(tmp_path, _cached_recipe(tmp_path), store)
-    assert fake_build["derive"] == 2  # noqa: PLR2004
+    assert fake_build["derived"] == [0, 1]

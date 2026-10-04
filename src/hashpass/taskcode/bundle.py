@@ -21,34 +21,35 @@ class Bundle:
     hints: dict
 
 
-def _checks_to_dict(checks: DerivedChecks) -> dict:
+def stage_checks_to_dict(st: StageChecks) -> dict:
+    """Serialize one stage's derived checks (also the per-stage derivation cache entry)."""
     return {
-        "task_id": checks.task_id,
-        "stages": [
-            {
-                "canonical": {k: {"kind": v.kind, "text": v.text}
-                              for k, v in st.canonical.items()},
-                "mode": st.mode,
-                "threshold": st.threshold,
-                "k": st.k,
-                "size_threshold": st.size_threshold,
-            }
-            for st in checks.stages
-        ],
+        "canonical": {k: {"kind": v.kind, "text": v.text} for k, v in st.canonical.items()},
+        "mode": st.mode,
+        "threshold": st.threshold,
+        "k": st.k,
+        "size_threshold": st.size_threshold,
     }
 
 
-def _checks_from_dict(data: dict) -> DerivedChecks:
-    stages = tuple(
-        StageChecks(
-            canonical={k: FileState(v["kind"], v["text"]) for k, v in st["canonical"].items()},
-            mode=st["mode"],
-            threshold=st["threshold"],
-            k=st["k"],
-            size_threshold=st["size_threshold"],
-        )
-        for st in data["stages"]
+def stage_checks_from_dict(st: dict) -> StageChecks:
+    """Inverse of `stage_checks_to_dict`."""
+    return StageChecks(
+        canonical={k: FileState(v["kind"], v["text"]) for k, v in st["canonical"].items()},
+        mode=st["mode"],
+        threshold=st["threshold"],
+        k=st["k"],
+        size_threshold=st["size_threshold"],
     )
+
+
+def _checks_to_dict(checks: DerivedChecks) -> dict:
+    return {"task_id": checks.task_id,
+            "stages": [stage_checks_to_dict(st) for st in checks.stages]}
+
+
+def _checks_from_dict(data: dict) -> DerivedChecks:
+    stages = tuple(stage_checks_from_dict(st) for st in data["stages"])
     return DerivedChecks(task_id=data["task_id"], stages=stages)
 
 

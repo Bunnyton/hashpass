@@ -1,16 +1,19 @@
 """Build a task: image + selective derivation on the image chain + hidden /hp + meta."""
-# Task cache: derivation (every stage's `solve` run `passes` times in nspawn) is the slow half of
-# a task build, so its inputs -- the image's build_key, the whole recipe, hidden/readme content
-# and the derivation engine's own source -- fold into a `task-key` file next to task-meta.json.
-# A rebuild with the same key reuses bundle + /hp + meta and runs no solve at all.
+# Per-stage derivation cache (Docker-style prefix layers): derivation -- each stage's `solve` run
+# `passes` times in nspawn -- is the slow half of a task build. Stage i is derived from the image,
+# the `solve` of stages 0..i-1 (replayed as prep) and its own grading fields, so those (plus the
+# runtime user, passes and the engine's own source) fold into the stage's cache key. Edit the last
+# stage and only it re-derives; edit an earlier `solve` and that stage and every later one do; a
+# hint / message / on-pass / hidden edit re-derives nothing (meta + /hp are always rewritten, cheap).
 import hashlib
 import itertools
+import json
 from collections.abc import Callable
 from fnmatch import fnmatch
 from pathlib import Path
 
 import hashpass
-from hashpass.build import _hash_source, build
+from hashpass.build import build
 from hashpass.canon import Observation, canonicalize
 from hashpass.hidden import stage_hidden_layer
 from hashpass.image.base import build_base
@@ -19,18 +22,22 @@ from hashpass.imagestore.store import ImageStore
 from hashpass.recipe.model import Recipe, StageSpec, image_ref
 from hashpass.recipe.taskbridge import recipe_to_taskcode
 from hashpass.runner.nspawn import NspawnRunner
-from hashpass.taskcode.bundle import Bundle, dump_bundle
+from hashpass.taskcode.bundle import (
+    Bundle,
+    dump_bundle,
+    stage_checks_from_dict,
+    stage_checks_to_dict,
+)
 from hashpass.taskcode.derive import DerivedChecks, StageChecks
 from hashpass.taskcode.execute import OUTPUT_KEY, run_stage
 from hashpass.taskcode.model import StageCode, TaskCode
-from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, load_meta, save_meta
+from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, save_meta
 
 _MIN_PASSES = 2  # differential derivation needs >= 2 passes to cancel run noise
 _PERCENT = 100   # `settings similarity` is a percent; the comparator threshold is a 0-1 ratio
-_KEY_FILE = "task-key"
-# Package sources whose change can alter what derivation writes: editing the engine busts the cache.
-_ENGINE_SOURCES = ("taskbuild.py", "hidden.py", "taskstore.py", "canon", "taskcode", "recipe",
-                   "runner")
+_CACHE_DIR = "derive-cache"   # under the task dir: one <key>.json StageChecks per derived stage
+# Package sources whose change can alter what derivation produces: editing the engine busts the cache.
+_ENGINE_SOURCES = ("taskbuild.py", "canon", "taskcode", "recipe", "runner")
 
 
 def _engine_stamp() -> str:
@@ -45,28 +52,57 @@ def _engine_stamp() -> str:
     return h.hexdigest()
 
 
-def _task_key(recipe: Recipe, image_key: str, passes: int) -> str:
-    """Fold the image build key, the full recipe, hidden/readme content and the engine into one key."""
-    h = hashlib.sha256()
-    for part in (image_key, str(passes), repr(recipe), _engine_stamp(),
-                 _hash_source(Path(recipe.hidden)) if recipe.hidden else "",
-                 _hash_source(Path(recipe.readme)) if recipe.readme else ""):
-        h.update(part.encode() + b"\0")
-    return h.hexdigest()
+def _stage_keys(recipe: Recipe, image_key: str | None, passes: int) -> list[str | None]:
+    """
+    Cache key per stage: image + user/similarity/passes + engine + prior solves + own grading fields.
+
+    `None` for every stage when the image has no build key (pulled/committed): nothing to anchor to.
+    """
+    if not image_key:
+        return [None] * len(recipe.stages)
+    head = hashlib.sha256()
+    for part in (image_key, repr(recipe.settings.user), repr(recipe.settings.similarity),
+                 str(passes), _engine_stamp()):
+        head.update(part.encode() + b"\0")
+    keys: list[str | None] = []
+    for st in recipe.stages:
+        own = (st.solve, st.observe, st.observe_bool, st.exclude, st.check, st.accept_cmds,
+               st.match_output, st.variants)
+        h = head.copy()
+        h.update(repr(own).encode())
+        keys.append(h.hexdigest())
+        head.update(repr(st.solve).encode() + b"\0")    # later stages replay this solve as prep
+    return keys
 
 
-def _cached_task(tdir: Path, key: str | None) -> TaskMeta | None:
-    """Return the stored meta when `tdir` holds a complete build made with this exact key."""
+def _cache_get(cache: Path, key: str | None) -> StageChecks | None:
+    """Return a cached stage derivation, or None (no key, miss, or an unreadable entry)."""
     if key is None:
         return None
     try:
-        if (tdir / _KEY_FILE).read_text(encoding="utf-8").strip() != key:
-            return None
-        if not (tdir / "bundle" / "checks.json").is_file() or not (tdir / "hp").is_dir():
-            return None
-        return load_meta(tdir)
-    except (OSError, ValueError, KeyError):
+        return stage_checks_from_dict(json.loads((cache / f"{key}.json").read_text(encoding="utf-8")))
+    except (OSError, ValueError, KeyError, TypeError):
         return None
+
+
+def _cache_put(cache: Path, key: str | None, checks: StageChecks) -> None:
+    """Store one stage's derivation (atomic rename, so an interrupted write never looks cached)."""
+    if key is None:
+        return
+    cache.mkdir(parents=True, exist_ok=True)
+    tmp = cache / f"{key}.tmp"
+    tmp.write_text(json.dumps(stage_checks_to_dict(checks)), encoding="utf-8")
+    tmp.replace(cache / f"{key}.json")
+
+
+def _cache_prune(cache: Path, keep: list[str | None]) -> None:
+    """Drop entries no current stage uses, so the cache never grows past the task's stage count."""
+    if not cache.is_dir():
+        return
+    wanted = {f"{k}.json" for k in keep if k}
+    for f in cache.iterdir():
+        if f.name not in wanted:
+            f.unlink(missing_ok=True)
 
 
 def _excluded(key: str, patterns: tuple[str, ...]) -> bool:
@@ -171,9 +207,11 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
     return StageChecks(canonical=canonical, threshold=threshold)
 
 
-def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task: TaskCode,
+def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task: TaskCode,  # noqa: PLR0913, PLR0917
                       passes: int,
-                      progress: Callable[[str], None] | None = None) -> tuple[list[StageChecks], list[str]]:
+                      progress: Callable[[str], None] | None = None,
+                      cache: Path | None = None,
+                      keys: list[str | None] | None = None) -> tuple[list[StageChecks], list[str]]:
     """
     Per stage: handler -> sentinel checks; observed -> derived checks. Returns (checks, modes).
 
@@ -191,14 +229,20 @@ def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task:
         if mode in ("handler", "command"):
             _report(progress, f"{label} ({mode})")
             checks.append(StageChecks(canonical={}))       # sentinel; runtime uses handler/accept_cmds
+        elif cache is not None and (hit := _cache_get(cache, keys[i])) is not None:
+            _report(progress, f"{label} (не изменилась — из кэша)")
+            checks.append(hit)
         else:
             _report(progress, label)
             # `observe output` grades stdout with the fuzzy `settings similarity` threshold;
             # plain FS observation stays exact (threshold 1.0).
             threshold = recipe.settings.similarity / _PERCENT if stage.match_output else 1.0
-            checks.append(_derive_stage(factory, deriv_task, i, stage.exclude, passes,
-                                        progress, threshold, keep_output=stage.match_output,
-                                        variants=stage.variants, user=user))
+            derived = _derive_stage(factory, deriv_task, i, stage.exclude, passes,
+                                    progress, threshold, keep_output=stage.match_output,
+                                    variants=stage.variants, user=user)
+            if cache is not None:
+                _cache_put(cache, keys[i], derived)
+            checks.append(derived)
         acceptance.append(mode)
     return checks, acceptance
 
@@ -278,13 +322,8 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
     task = recipe_to_taskcode(recipe)
 
     tdir = store.get(ref).layer.parent / "task"
-    key = _task_key(recipe, image.build_key, passes) if image.build_key else None
-    cached = _cached_task(tdir, key)
-    if cached is not None:
-        _report(progress, f"задание {ref} не изменилось — приёмка из кэша (solve не запускаю)")
-        return StoredTask(ref=ref, image=image, bundle_dir=tdir / "bundle",
-                          hp_src_dir=tdir / "hp", meta=cached)
-    (tdir / _KEY_FILE).unlink(missing_ok=True)       # a half-done rebuild must never look cached
+    cache = tdir / _CACHE_DIR
+    keys = _stage_keys(recipe, image.build_key, passes)
 
     _report(progress, "вывожу приёмку...")
     lowers = resolve_lowers((ref,), store)
@@ -300,7 +339,9 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
         runner.prepare(lowers)
         return runner
 
-    stage_checks, acceptance = _selective_derive(factory, recipe, task, passes, progress)
+    stage_checks, acceptance = _selective_derive(factory, recipe, task, passes, progress,
+                                                 cache=cache, keys=keys)
+    _cache_prune(cache, keys)
 
     bundle_dir = tdir / "bundle"
     derived = DerivedChecks(task_id=task.id, stages=tuple(stage_checks))
@@ -313,7 +354,5 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
 
     meta = _build_meta(ref, recipe, acceptance)
     save_meta(meta, tdir)
-    if key is not None:
-        (tdir / _KEY_FILE).write_text(key, encoding="utf-8")
     _report(progress, f"сохранил задание {ref}")
     return StoredTask(ref=ref, image=image, bundle_dir=bundle_dir, hp_src_dir=hp_dir, meta=meta)
