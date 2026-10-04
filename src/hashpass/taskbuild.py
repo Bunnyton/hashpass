@@ -1,10 +1,16 @@
 """Build a task: image + selective derivation on the image chain + hidden /hp + meta."""
+# Task cache: derivation (every stage's `solve` run `passes` times in nspawn) is the slow half of
+# a task build, so its inputs -- the image's build_key, the whole recipe, hidden/readme content
+# and the derivation engine's own source -- fold into a `task-key` file next to task-meta.json.
+# A rebuild with the same key reuses bundle + /hp + meta and runs no solve at all.
+import hashlib
 import itertools
 from collections.abc import Callable
 from fnmatch import fnmatch
 from pathlib import Path
 
-from hashpass.build import build
+import hashpass
+from hashpass.build import _hash_source, build
 from hashpass.canon import Observation, canonicalize
 from hashpass.hidden import stage_hidden_layer
 from hashpass.image.base import build_base
@@ -17,10 +23,50 @@ from hashpass.taskcode.bundle import Bundle, dump_bundle
 from hashpass.taskcode.derive import DerivedChecks, StageChecks
 from hashpass.taskcode.execute import OUTPUT_KEY, run_stage
 from hashpass.taskcode.model import StageCode, TaskCode
-from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, save_meta
+from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, load_meta, save_meta
 
 _MIN_PASSES = 2  # differential derivation needs >= 2 passes to cancel run noise
 _PERCENT = 100   # `settings similarity` is a percent; the comparator threshold is a 0-1 ratio
+_KEY_FILE = "task-key"
+# Package sources whose change can alter what derivation writes: editing the engine busts the cache.
+_ENGINE_SOURCES = ("taskbuild.py", "hidden.py", "taskstore.py", "canon", "taskcode", "recipe",
+                   "runner")
+
+
+def _engine_stamp() -> str:
+    """Hash the derivation engine's own source, so a grader/derive change re-derives every task."""
+    root = Path(hashpass.__file__).parent
+    h = hashlib.sha256()
+    for name in _ENGINE_SOURCES:
+        p = root / name
+        files = sorted(p.rglob("*.py")) if p.is_dir() else [p]
+        for f in files:
+            h.update(str(f.relative_to(root)).encode() + b"\0" + f.read_bytes() + b"\0")
+    return h.hexdigest()
+
+
+def _task_key(recipe: Recipe, image_key: str, passes: int) -> str:
+    """Fold the image build key, the full recipe, hidden/readme content and the engine into one key."""
+    h = hashlib.sha256()
+    for part in (image_key, str(passes), repr(recipe), _engine_stamp(),
+                 _hash_source(Path(recipe.hidden)) if recipe.hidden else "",
+                 _hash_source(Path(recipe.readme)) if recipe.readme else ""):
+        h.update(part.encode() + b"\0")
+    return h.hexdigest()
+
+
+def _cached_task(tdir: Path, key: str | None) -> TaskMeta | None:
+    """Return the stored meta when `tdir` holds a complete build made with this exact key."""
+    if key is None:
+        return None
+    try:
+        if (tdir / _KEY_FILE).read_text(encoding="utf-8").strip() != key:
+            return None
+        if not (tdir / "bundle" / "checks.json").is_file() or not (tdir / "hp").is_dir():
+            return None
+        return load_meta(tdir)
+    except (OSError, ValueError, KeyError):
+        return None
 
 
 def _excluded(key: str, patterns: tuple[str, ...]) -> bool:
@@ -231,6 +277,15 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
                   sudo=sudo, progress=progress)
     task = recipe_to_taskcode(recipe)
 
+    tdir = store.get(ref).layer.parent / "task"
+    key = _task_key(recipe, image.build_key, passes) if image.build_key else None
+    cached = _cached_task(tdir, key)
+    if cached is not None:
+        _report(progress, f"задание {ref} не изменилось — приёмка из кэша (solve не запускаю)")
+        return StoredTask(ref=ref, image=image, bundle_dir=tdir / "bundle",
+                          hp_src_dir=tdir / "hp", meta=cached)
+    (tdir / _KEY_FILE).unlink(missing_ok=True)       # a half-done rebuild must never look cached
+
     _report(progress, "вывожу приёмку...")
     lowers = resolve_lowers((ref,), store)
     base = base or build_base(workdir / "base", from_tar=base_tar)
@@ -247,7 +302,6 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
 
     stage_checks, acceptance = _selective_derive(factory, recipe, task, passes, progress)
 
-    tdir = store.get(ref).layer.parent / "task"
     bundle_dir = tdir / "bundle"
     derived = DerivedChecks(task_id=task.id, stages=tuple(stage_checks))
     dump_bundle(Bundle(checks=derived, conditions={}, hints={}), bundle_dir)
@@ -259,5 +313,7 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
 
     meta = _build_meta(ref, recipe, acceptance)
     save_meta(meta, tdir)
+    if key is not None:
+        (tdir / _KEY_FILE).write_text(key, encoding="utf-8")
     _report(progress, f"сохранил задание {ref}")
     return StoredTask(ref=ref, image=image, bundle_dir=bundle_dir, hp_src_dir=hp_dir, meta=meta)

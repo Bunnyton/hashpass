@@ -1,8 +1,13 @@
+from dataclasses import replace
+
 import pytest
 
+import hashpass.taskbuild as tb
+from hashpass.canon.capture import FileState
 from hashpass.imagestore.store import ImageStore
 from hashpass.recipe.model import (
     ExecAction,
+    Recipe,
     SayAction,
     Settings,
     ShowFileAction,
@@ -12,6 +17,7 @@ from hashpass.recipe.model import (
 from hashpass.recipe.parse import parse_recipe
 from hashpass.taskbuild import _build_meta, build_task
 from hashpass.taskcode.bundle import load_bundle
+from hashpass.taskcode.derive import StageChecks
 from hashpass.taskstore import load_task, meta_from_dict, meta_to_dict
 
 _DERIVED = """\
@@ -87,3 +93,87 @@ def test_build_meta_carries_actions_hints_voice_settings_react():
     assert meta.react == (ExecAction("watch.sh"),)
     # and the whole thing survives the JSON round-trip
     assert meta_from_dict(meta_to_dict(meta)) == meta
+
+
+# --- task build cache: an unchanged task skips derivation (no solve re-runs) -------------------
+
+_CACHED = """\
+image ctask:1
+hidden hid
+
+stage "make it"
+  solve echo hi > /o.txt
+  observe /o.txt
+"""
+
+
+@pytest.fixture
+def fake_build(tmp_path, monkeypatch):
+    """Stub the image build + derivation; count how many times derivation actually runs."""
+    calls = {"derive": 0, "image_key": "img-key-1"}
+
+    def build(recipe, store, **_kw: object) -> object:
+        layer = tmp_path / "layer"
+        layer.mkdir(exist_ok=True)
+        return store.save(recipe.name, recipe.version, layer, recipe.parents,
+                          build_key=calls["image_key"])
+
+    def derive(_factory, recipe, _task, _passes, _progress=None) -> tuple:
+        calls["derive"] += 1
+        return [StageChecks(canonical={"o.txt": FileState("file", "hi")}) for _ in recipe.stages], \
+               ["derived" for _ in recipe.stages]
+
+    monkeypatch.setattr(tb, "build", build)
+    monkeypatch.setattr(tb, "_selective_derive", derive)
+    monkeypatch.setattr(tb, "resolve_lowers", lambda *_a, **_k: [])
+    (tmp_path / "hid").mkdir()
+    (tmp_path / "hid" / "grade").write_text("v1", encoding="utf-8")
+    return calls
+
+
+def _cached_recipe(tmp_path, text=_CACHED) -> Recipe:
+    r = parse_recipe(text)
+    return replace(r, hidden=str(tmp_path / "hid"))
+
+
+def _build(tmp_path, recipe, store, progress=None) -> object:
+    return build_task(recipe, store, base=tmp_path / "base", workdir=tmp_path / "bt",
+                      sudo=False, progress=progress)
+
+
+@pytest.mark.tier1
+def test_unchanged_task_rebuild_skips_derivation(tmp_path, fake_build):
+    store = ImageStore(tmp_path / "images")
+    lines: list[str] = []
+    first = _build(tmp_path, _cached_recipe(tmp_path), store)
+    second = _build(tmp_path, _cached_recipe(tmp_path), store, progress=lines.append)
+    assert fake_build["derive"] == 1
+    assert second.meta == first.meta
+    assert (second.bundle_dir / "checks.json").exists()
+    assert any("из кэша" in ln for ln in lines)
+
+
+@pytest.mark.tier1
+def test_changed_stage_rederives(tmp_path, fake_build):
+    store = ImageStore(tmp_path / "images")
+    _build(tmp_path, _cached_recipe(tmp_path), store)
+    _build(tmp_path, _cached_recipe(tmp_path, _CACHED.replace("echo hi", "echo bye")), store)
+    assert fake_build["derive"] == 2  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_changed_hidden_content_rederives(tmp_path, fake_build):
+    store = ImageStore(tmp_path / "images")
+    _build(tmp_path, _cached_recipe(tmp_path), store)
+    (tmp_path / "hid" / "grade").write_text("v2", encoding="utf-8")
+    _build(tmp_path, _cached_recipe(tmp_path), store)
+    assert fake_build["derive"] == 2  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_rebuilt_image_rederives(tmp_path, fake_build):
+    store = ImageStore(tmp_path / "images")
+    _build(tmp_path, _cached_recipe(tmp_path), store)
+    fake_build["image_key"] = "img-key-2"
+    _build(tmp_path, _cached_recipe(tmp_path), store)
+    assert fake_build["derive"] == 2  # noqa: PLR2004
