@@ -1,5 +1,4 @@
-"""Tier1: vim-intro's check -- every ---> line fixed to its sample AND the file was edited in vim."""
-import os
+"""Tier1: vim-intro -- the silent «opened in vim» stage and the visible «every ---> line fixed» check."""
 import subprocess
 from pathlib import Path
 
@@ -15,42 +14,51 @@ _FIXED = [
 ]
 
 
-def _lesson(tmp_path: Path, lines: list[str], history: list[str]) -> bool:
+def _lesson(tmp_path: Path, lines: list[str]) -> bool:
     f = tmp_path / "lesson1.txt"
     f.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    hist = tmp_path / "history"
-    hist.write_text("".join(h + "\n" for h in history), encoding="utf-8")
-    env = {**os.environ, "HP_HISTORY": str(hist)}
-    return subprocess.run(["sh", str(_TASK / "hp" / "lesson"), history[-1] if history else "", str(f)], env=env,
+    return subprocess.run(["sh", str(_TASK / "hp" / "lesson"), "cat lesson1.txt", str(f)],
+                          check=False).returncode == 0
+
+
+def _invim(command: str) -> bool:
+    return subprocess.run(["sh", str(_TASK / "hp" / "invim"), command, "/home/student/lesson1.txt"],
                           check=False).returncode == 0
 
 
 @pytest.mark.tier1
-@pytest.mark.parametrize("history", [
-    ["vim lesson1.txt"], ["vimtutor ru", "vi ~/lesson1.txt"], ["sudo vim /home/student/lesson1.txt"],
+@pytest.mark.parametrize("command", [
+    "vim lesson1.txt", "vi ~/lesson1.txt", "sudo vim /home/student/lesson1.txt", "vim ./lesson1.txt",
 ])
-def test_fixed_in_vim_passes(tmp_path, history):
-    assert _lesson(tmp_path, _FIXED, history)
+def test_opening_the_file_in_vim_passes_the_silent_stage(command):
+    assert _invim(command)
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("command", ["sed -i s/a/b/ lesson1.txt", "vim other.txt", "vimtutor", "", "cat lesson1.txt"])
+def test_other_commands_do_not(command):
+    assert not _invim(command)
+
+
+@pytest.mark.tier1
+def test_fixed_lines_pass(tmp_path):
+    assert _lesson(tmp_path, _FIXED)
 
 
 @pytest.mark.tier1
 def test_trailing_spaces_are_forgiven(tmp_path):
-    lines = [ln + "  " if ln.startswith("--->") else ln for ln in _FIXED]
-    assert _lesson(tmp_path, lines, ["vim lesson1.txt"])
+    assert _lesson(tmp_path, [ln + "  " if ln.startswith("--->") else ln for ln in _FIXED])
 
 
 @pytest.mark.tier1
 def test_the_shipped_exercise_is_not_already_solved(tmp_path):
-    raw = (_TASK / "data" / "lesson1.txt").read_text(encoding="utf-8").splitlines()
-    assert not _lesson(tmp_path, raw, ["vim lesson1.txt"])
+    assert not _lesson(tmp_path, (_TASK / "data" / "lesson1.txt").read_text(encoding="utf-8").splitlines())
 
 
 @pytest.mark.tier1
-@pytest.mark.parametrize(("lines", "history"), [
-    (_FIXED, ["sed -i 's/x/y/' lesson1.txt"]),                    # fixed, but not in vim
-    (_FIXED, []),
-    ([ln.replace("сладко ", "") if ln.startswith("--->") else ln for ln in _FIXED], ["vim lesson1.txt"]),
-    ([ln for ln in _FIXED if not ln.startswith("---> Без")], ["vim lesson1.txt"]),   # arrow deleted
+@pytest.mark.parametrize("lines", [
+    [ln.replace("сладко ", "") if ln.startswith("--->") else ln for ln in _FIXED],
+    [ln for ln in _FIXED if not ln.startswith("---> Без")],                       # arrow deleted
 ])
-def test_unfixed_or_not_in_vim_is_silently_refused(tmp_path, lines, history):
-    assert not _lesson(tmp_path, lines, history)
+def test_unfixed_lines_fail(tmp_path, lines):
+    assert not _lesson(tmp_path, lines)

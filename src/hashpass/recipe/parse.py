@@ -68,6 +68,7 @@ class _StageAcc:
     accept_ok: bool = False
     match_output: bool = False
     variants: list[list[str]] = field(default_factory=list)
+    silent: bool = False
     deny: list[str] = field(default_factory=list)
     allow: list[str] = field(default_factory=list)
 
@@ -421,6 +422,10 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
     if sacc.deny and sacc.allow:
         msg = f"stage {sacc.message!r} sets both 'deny' and 'allow' (use one command policy)"
         raise ValueError(msg)
+    if sacc.silent and (sacc.on_enter or sacc.on_pass or sacc.hints):
+        # A silent stage only tracks HOW the student goes; the visible goal after it talks.
+        msg = f"silent stage {sacc.message!r} shows nothing: move on enter/on pass/hint to the next stage"
+        raise ValueError(msg)
     return StageSpec(
         message=sacc.message,
         solve=tuple(sacc.solve),
@@ -438,6 +443,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         variants=tuple(tuple(v) for v in sacc.variants),
         deny=tuple(sacc.deny),
         allow=tuple(sacc.allow),
+        silent=sacc.silent,
     )
 
 
@@ -447,7 +453,10 @@ def _parse_stage_block(header_value: str, lines: list[tuple[int, str]],
     if not header_value:
         msg = "stage requires a message"
         raise ValueError(msg)
-    sacc = _StageAcc(message=_unquote(header_value))
+    silent = header_value.startswith("silent ")
+    if silent:
+        header_value = header_value[len("silent "):].strip()
+    sacc = _StageAcc(message=_unquote(header_value), silent=silent)
     i = start
     while i < len(lines) and lines[i][0] > 0:
         indent, content = lines[i]
@@ -579,6 +588,9 @@ def parse_recipe(text: str) -> Recipe:
         else:
             handler(value, acc)
         i += 1
+    if acc.stages and acc.stages[-1].silent:
+        msg = f"the last stage {acc.stages[-1].message!r} is silent: nothing visible would follow it"
+        raise ValueError(msg)
     # `image` is optional: an unnamed recipe gets name "" and is named at build time
     # (CLI `-t`, else the Taskfile's directory). image_ref/build resolve it then.
     voice = Voice(hello=tuple(acc.hello), bye=tuple(acc.bye))

@@ -472,11 +472,20 @@ def _reset_workdir(path: Path) -> None:
 
 
 def _announce_stage(session: object, io: Io) -> None:
-    """Print the current stage goal (no number: the student does not know the count)."""
+    """
+    Print the goal the student faces (no number: the student does not know the count).
+
+    A `stage silent` is never announced: its next visible stage's goal is shown instead, and only
+    once -- passing the silent stage advances progress without repeating that goal.
+    """
     stage = current_stage(session.progress)
-    if stage is None:
+    stages = session.meta.stages
+    while stage is not None and stage < len(stages) and getattr(stages[stage], "silent", False):
+        stage += 1
+    if stage is None or stage >= len(stages) or getattr(session, "_announced", None) == stage:
         return
-    io.write(f"\n\u2500\u2500  {session.meta.stages[stage].message}\n")
+    session._announced = stage                   # noqa: SLF001 -- console-side announce memo
+    io.write(f"\n\u2500\u2500  {stages[stage].message}\n")
 
 
 _SOLVED_BANNER = ("\n\x1b[1;32m╭────────────╮\n"
@@ -685,9 +694,13 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
         # The author's `on pass` / outro (finale meme), then the engine's small «РЕШЕНО».
         # Keys stay host-side (`res.local_key`), compared under the hood -- nothing on-screen.
         _finish(session, io)
-    else:
-        session.enter()                      # next stage's on_enter
-        _announce_stage(session, io)
+        return
+    session.enter()                          # next stage's on_enter
+    _announce_stage(session, io)
+    if res.stage is not None and getattr(session.meta.stages[res.stage], "silent", False):
+        # The command that took the right path (`chmod +x test1`) usually also reached the goal
+        # the student was looking at: grade it now, not on the next command.
+        _advance_and_announce(session, io)
 
 
 def _grade_server(session: object, router: _Router, clock: Callable[[], str],  # noqa: PLR0913, PLR0917

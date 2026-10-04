@@ -131,6 +131,7 @@ class StageSpec:
     variants: tuple[tuple[str, ...], ...] = ()  # alt `variant` solutions; reference = output COMMON to all
     deny: tuple[str, ...] = ()           # `deny <cmd...>`: base commands forbidden to pass the stage
     allow: tuple[str, ...] = ()          # `allow <cmd...>`: ONLY these base commands may pass the stage
+    silent: bool = False                 # `stage silent "<note>"`: shows nothing, only tracks the path
 
 
 @dataclass(frozen=True)

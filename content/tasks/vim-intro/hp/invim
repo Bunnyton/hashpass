@@ -1,0 +1,21 @@
+#!/bin/sh
+# invim FILE — тихий шаг: последняя команда студента ($1) открывала FILE в vim/vi.
+# Студенту не показывается; правка sed-ом этот шаг просто не проходит.
+cmd=$1
+name=$(basename "$2")
+[ -n "$cmd" ] || exit 1
+printf '%s\n' "$cmd" | awk -v name="$name" '
+{
+    n = split($0, segs, /;|&&|\|\||\||&/)
+    for (s = 1; s <= n; s++) {
+        k = split(segs[s], w, /[ \t]+/)
+        i = 1
+        while (i <= k && w[i] == "") i++
+        if (w[i] == "sudo") { i++; while (i <= k && w[i] ~ /^-/) i++ }
+        b = w[i]; sub(/.*\//, "", b)
+        if (b != "vim" && b != "vi" && b != "vim.basic" && b != "nvim") continue
+        for (i++; i <= k; i++) { t = w[i]; sub(/.*\//, "", t); if (t == name) ok = 1 }
+    }
+}
+END { exit ok ? 0 : 1 }
+'
