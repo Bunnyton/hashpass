@@ -1,4 +1,5 @@
 """Run a stored task: student container WITHOUT /hp; handlers/checks/hints in a bound-/hp run."""
+import contextlib
 import re
 import shutil
 import sys
@@ -291,6 +292,17 @@ class TaskSession:
         self._last_progress_ts: str | None = None
         self.pause: Callable[[], None] = _no_pause   # pager pause hook (set by the console driver)
 
+    def _record(self, command: str) -> None:
+        """
+        Append the student's command to `/hp/history` (HP_HISTORY): one command per line.
+
+        Lets a `check exec` grader judge HOW a result was reached, not only the result -- e.g. a
+        silent background rule «only +/- for chmod» reads the last chmod of a file from here.
+        """
+        line = "; ".join(part.strip() for part in command.splitlines() if part.strip())
+        with contextlib.suppress(OSError), (self.hp_dir / "history").open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+
     @staticmethod
     def _ctx(command: str, tries: int, stage: int, last_out: str = "") -> HandlerContext:
         """Build the HP_* handler context for one delegated action."""
@@ -395,6 +407,7 @@ class TaskSession:
 
     def feed(self, command: str, *, ts: str) -> FeedResult:
         """Run one student command (no /hp), tally tries, react, check acceptance, maybe hint."""
+        self._record(command)
         stage = current_stage(self.progress)
         if stage is None:
             return FeedResult(advanced=False, stage=None, local_key=None)
@@ -430,6 +443,7 @@ class TaskSession:
         unavailable), so `output`-conditioned hints and output-based acceptance fire live too.
         `rc` is the command's exit status as the console reported it (None on an older runtime).
         """
+        self._record(command)
         stage = current_stage(self.progress)
         if stage is None:
             return FeedResult(advanced=False, stage=None, local_key=None)

@@ -122,7 +122,8 @@ hint idle 240  say "Долгая пауза. Перечитай задание: 
 | `exec <файл \| команда>` | Первый токен — файл в `/hp/work` → запустить его (по shebang); иначе `sh -c`. stdout печатается **мгновенно** (ASCII-арт не «печатается»). Именованные `key=value` после файла → `HP_ARG_key`. |
 
 Контракт `exec`-скриптов: `argv[1]` = команда студента; env `HP_TRIES`, `HP_LAST_OUT`, `HP_STAGE`,
-`HP_STATE` (rw json), `HP_HISTORY`, `HP_ROOTFS`, `HP_ARG_*`. Для `check` — exit-код; для
+`HP_STATE` (rw json), `HP_HISTORY` (файл: все команды студента за сессию, по строке на команду,
+многострочная склеена через `; `), `HP_ROOTFS`, `HP_ARG_*`. Для `check` — exit-код; для
 `say`-подобных — stdout. Скрипты — `#!/bin/sh` (в базе нет python), `chmod +x`.
 
 ## Рантайм: что важно знать автору

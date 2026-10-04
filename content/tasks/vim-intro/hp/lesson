@@ -1,0 +1,33 @@
+#!/bin/sh
+# lesson FILE (после команды студента в $1) — упражнения урока 1.1 в FILE исправлены: каждая строка со стрелкой ---> совпадает
+# со строкой-образцом под ней (хвостовые пробелы не в счёт), и стрелок ровно три.
+# Фоновое правило задания: файл правили в vim (в истории команд — vim/vi с этим файлом). Студенту
+# об этой проверке не говорится: sed-исправление просто «ещё не готово». $HP_HISTORY — от консоли.
+shift          # $1 — последняя команда студента; дальше — аргументы проверки
+f=$1
+awk '
+/^---> / { line = $0; sub(/^---> /, "", line); sub(/[ \t]+$/, "", line); want = 1; arrows++; next }
+want {
+    sample = $0; sub(/^[ \t]+/, "", sample); sub(/[ \t]+$/, "", sample)
+    if (line != sample) bad = 1
+    want = 0
+}
+END { exit (arrows == 3 && !bad) ? 0 : 1 }
+' "$f" || exit 1
+[ -r "${HP_HISTORY:-}" ] || exit 1
+name=$(basename "$f")
+awk -v name="$name" '
+{
+    n = split($0, segs, /;|&&|\|\||\||&/)
+    for (s = 1; s <= n; s++) {
+        k = split(segs[s], w, /[ \t]+/)
+        i = 1
+        while (i <= k && w[i] == "") i++
+        if (w[i] == "sudo") { i++; while (i <= k && w[i] ~ /^-/) i++ }
+        b = w[i]; sub(/.*\//, "", b)
+        if (b != "vim" && b != "vi" && b != "vim.basic" && b != "nvim") continue
+        for (i++; i <= k; i++) { t = w[i]; sub(/.*\//, "", t); if (t == name) ok = 1 }
+    }
+}
+END { exit ok ? 0 : 1 }
+' "$HP_HISTORY"

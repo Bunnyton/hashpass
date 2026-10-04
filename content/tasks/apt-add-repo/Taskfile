@@ -1,4 +1,6 @@
 # apt-add-repo — добавить репозиторий: строка в sources.list.d + apt update.
+# Репозиторий — trixie-backports: в базе его нет (там только trixie/-updates/-security), так что
+# apt update действительно скачает новый список, а не скажет «configured multiple times».
 
 image apt-add-repo:1
 
@@ -12,7 +14,7 @@ read brief.md
 
 stage "Пропиши репозиторий из брифа в файл /etc/apt/sources.list.d/custom.list"
   solve:
-    echo 'deb http://deb.debian.org/debian trixie main' | sudo tee /etc/apt/sources.list.d/custom.list >/dev/null
+    echo 'deb http://deb.debian.org/debian trixie-backports main' | sudo tee /etc/apt/sources.list.d/custom.list >/dev/null
   observe /etc/apt/sources.list.d/custom.list
   neutral ls cat pwd
   on pass say "Файл лежит в /etc/apt/sources.list.d — загляни, что там ещё, кроме твоего."

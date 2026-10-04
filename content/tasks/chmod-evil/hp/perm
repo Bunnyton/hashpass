@@ -1,0 +1,42 @@
+#!/bin/sh
+# perm FILE MODE (после команды студента в $1) — права FILE равны MODE (восьмерично) И выставлены относительной записью.
+# Фоновое правило задания: последняя команда chmod, задевшая FILE (сам файл, маска вроде test*
+# или каталог над ним), должна быть символьной (u+x, go-r, a=…). Цифры (chmod 111) молча не
+# принимаются — студент видит только, что цель ещё не достигнута; переделать буквами можно.
+# Историю команд студента (по строке на команду) даёт консоль: $HP_HISTORY.
+shift          # $1 — последняя команда студента; дальше — аргументы проверки
+f=$1
+want=$2
+[ "$(stat -c %a "$f" 2>/dev/null)" = "$want" ] || exit 1
+# Нет истории или в ней ещё нет chmod этого файла (фоновая проверка ФС опередила запись команды) —
+# права пока ничем не объяснены: не принимаем, следующая проверка после команды решит.
+[ -r "${HP_HISTORY:-}" ] || exit 1
+awk -v path="$f" '
+function base(p) { sub(/\/+$/, "", p); n = split(p, a, "/"); return a[n] }
+function glob2re(g,   r) { r = g; gsub(/\./, "\\.", r); gsub(/\*/, ".*", r); gsub(/\?/, ".", r); return "^" r "$" }
+function touches(t,   b) {
+    b = base(t)
+    if (b == "" || b == ".") return 1                       # chmod … . / chmod … ./ — всё под cwd
+    if (name ~ glob2re(b)) return 1                         # сам файл или маска
+    return index("/" path "/", "/" b "/") > 0               # каталог над файлом (chmod -R …)
+}
+BEGIN { name = base(path); last = "" }
+{
+    n = split($0, segs, /;|&&|\|\||\||&/)
+    for (s = 1; s <= n; s++) {
+        k = split(segs[s], w, /[ \t]+/)
+        i = 1
+        while (i <= k && w[i] == "") i++
+        if (w[i] == "sudo") { i++; while (i <= k && w[i] ~ /^-/) i++ }
+        if (w[i] != "chmod" && w[i] !~ /\/chmod$/) continue
+        i++; mode = ""
+        for (; i <= k; i++) {
+            if (w[i] == "") continue
+            if (mode == "" && (w[i] ~ /^--/ || w[i] ~ /^-[RvcfH]+$/)) continue   # опции chmod
+            if (mode == "") { mode = w[i]; continue }
+            if (touches(w[i])) last = mode
+        }
+    }
+}
+END { exit (last == "" || last ~ /^[0-7]+$/) ? 1 : 0 }
+' "$HP_HISTORY"

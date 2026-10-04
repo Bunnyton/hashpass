@@ -1,5 +1,7 @@
 # chmod-evil — усложнённый chmod: относительная запись (u+r, o-x …), три файла.
-# Приёмка — по итоговым правам (stat). Запрет цифровой записи — на совести студента (бриф).
+# Приёмка — по итоговым правам (stat) + фоновое правило в hp/perm: последняя chmod файла — буквами.
+# Цифры (chmod 111) принимаются молча НЕ будут: студенту об этой проверке не говорится, в брифе
+# только «никакого chmod NNN». Переделать буквами можно в любой момент.
 
 image chmod-evil:1
 
@@ -19,7 +21,7 @@ read brief.md
 
 stage "Выставь файлу /home/student/target/test1 права --x--x--x"
   solve chmod +x /home/student/target/test1
-  check exec sh -c 'test "$(stat -c %a /home/student/target/test1)" = "111"'
+  check exec perm /home/student/target/test1 111
   neutral ls cat pwd
   on pass say "u, g, o — три адресата; a — все сразу. Ты только что раздал x всем одной буквой."
   hint tries 3 say "ls -l target/test1: какое право появилось и у кого?"
@@ -29,7 +31,7 @@ stage "Выставь файлу /home/student/target/test1 права --x--x--x
 stage "Выставь файлу /home/student/target/test2 права -w-rw-r--"
   solve:
     chmod u+w,g+rw,o+r /home/student/target/test2
-  check exec sh -c 'test "$(stat -c %a /home/student/target/test2)" = "264"'
+  check exec perm /home/student/target/test2 264
   neutral ls cat pwd
   on pass say "Кроме + и - есть ещё =: u=rw оставит владельцу ровно rw, что бы там ни было раньше."
   hint tries 3 say "Сравни тройка за тройкой — их можно менять по одной."
@@ -38,7 +40,7 @@ stage "Выставь файлу /home/student/target/test2 права -w-rw-r--
 
 stage "Выставь файлу /home/student/target/test3 права rwxr-xr-x"
   solve chmod u+rwx,go+rx /home/student/target/test3
-  check exec sh -c 'test "$(stat -c %a /home/student/target/test3)" = "755"'
+  check exec perm /home/student/target/test3 755
   neutral ls cat pwd
   on pass say "rwxr-xr-x — 755, самые частые права скрипта. Теперь ты умеешь и буквами, и цифрами."
   hint tries 3 say "Группе и остальным нужно одно и то же — есть ли способ назвать обоих сразу?"
