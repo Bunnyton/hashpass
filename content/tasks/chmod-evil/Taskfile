@@ -1,7 +1,7 @@
 # chmod-evil — усложнённый chmod: относительная запись (u+r, o-x …), три файла.
-# Перед каждым файлом — тихий шаг (stage silent): его проходит только chmod буквами по этому файлу
-# (hp/symbolic смотрит на саму команду). Студенту он не показывается — видна цель файла; цифры
-# (chmod 111) тихий шаг не проходят, и цель просто не принимается. Видимый шаг — по итоговым правам.
+# На каждый файл — два шага с ОДНОЙ целью: первый проходит только chmod буквами по этому файлу
+# (hp/symbolic смотрит на саму команду), второй — по итоговым правам. Одинаковая цель печатается
+# один раз, первый шаг ничего не пишет: цифры (chmod 111) его просто не проходят.
 
 image chmod-evil:1
 
@@ -19,22 +19,27 @@ settings
 say "Тварь ты дрожащая или право имеешь? chmod поможет разобраться."
 read brief.md
 
-stage silent "путь: test1 — только относительной записью"
+stage "Выставь файлу /home/student/target/test1 права --x--x--x"
   solve chmod +x /home/student/target/test1
   check exec symbolic /home/student/target/test1
+  neutral ls cat pwd
+  hint tries 3 say "ls -l target/test1: какое право появилось и у кого?"
+  hint tries 6 say "man chmod, символьный режим: u/g/o/a и +/-."
+  hint idle 240 say "Перечитай цель: три тройки, в каждой — только x."
 
 stage "Выставь файлу /home/student/target/test1 права --x--x--x"
   solve chmod +x /home/student/target/test1
   check exec sh -c 'test "$(stat -c %a /home/student/target/test1)" = "111"'
   neutral ls cat pwd
   on pass say "u, g, o — три адресата; a — все сразу. Ты только что раздал x всем одной буквой."
-  hint tries 3 say "ls -l target/test1: какое право появилось и у кого?"
-  hint tries 6 say "man chmod, символьный режим: u/g/o/a и +/-."
-  hint idle 240 say "Перечитай цель: три тройки, в каждой — только x."
 
-stage silent "путь: test2 — только относительной записью"
+stage "Выставь файлу /home/student/target/test2 права -w-rw-r--"
   solve chmod u+w,g+rw,o+r /home/student/target/test2
   check exec symbolic /home/student/target/test2
+  neutral ls cat pwd
+  hint tries 3 say "Сравни тройка за тройкой — их можно менять по одной."
+  hint tries 6 say "man chmod: несколько режимов через запятую."
+  hint idle 240 say "Перечитай цель: -w- | rw- | r--. Кто получает что?"
 
 stage "Выставь файлу /home/student/target/test2 права -w-rw-r--"
   solve:
@@ -42,21 +47,20 @@ stage "Выставь файлу /home/student/target/test2 права -w-rw-r--
   check exec sh -c 'test "$(stat -c %a /home/student/target/test2)" = "264"'
   neutral ls cat pwd
   on pass say "Кроме + и - есть ещё =: u=rw оставит владельцу ровно rw, что бы там ни было раньше."
-  hint tries 3 say "Сравни тройка за тройкой — их можно менять по одной."
-  hint tries 6 say "man chmod: несколько режимов через запятую."
-  hint idle 240 say "Перечитай цель: -w- | rw- | r--. Кто получает что?"
 
-stage silent "путь: test3 — только относительной записью"
+stage "Выставь файлу /home/student/target/test3 права rwxr-xr-x"
   solve chmod u+rwx,go+rx /home/student/target/test3
   check exec symbolic /home/student/target/test3
+  neutral ls cat pwd
+  hint tries 3 say "Группе и остальным нужно одно и то же — есть ли способ назвать обоих сразу?"
+  hint tries 6 say "man chmod: буквы категорий объединяются."
+  hint idle 240 say "Перечитай цель: rwx | r-x | r-x."
 
 stage "Выставь файлу /home/student/target/test3 права rwxr-xr-x"
   solve chmod u+rwx,go+rx /home/student/target/test3
   check exec sh -c 'test "$(stat -c %a /home/student/target/test3)" = "755"'
   neutral ls cat pwd
   on pass say "rwxr-xr-x — 755, самые частые права скрипта. Теперь ты умеешь и буквами, и цифрами."
-  hint tries 3 say "Группе и остальным нужно одно и то же — есть ли способ назвать обоих сразу?"
-  hint tries 6 say "man chmod: буквы категорий объединяются."
-  hint idle 240 say "Перечитай цель: rwx | r-x | r-x."
 
 exec finale
+

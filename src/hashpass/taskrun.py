@@ -24,7 +24,7 @@ from hashpass.recipe.model import Action, ExecAction, ReadAction, SayAction, Sho
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import load_bundle
-from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, load_task
+from hashpass.taskstore import StageMeta, StoredTask, load_task
 
 _ACCEPT_EXIT = 0
 
@@ -267,21 +267,6 @@ def _accepted_by_cmd(sm: StageMeta, command: str, rc: int | None) -> bool:
     return not (sm.accept_ok and rc is not None and rc != 0)
 
 
-def shown_stage(meta: TaskMeta, stage: int | None) -> int | None:
-    """
-    Return the stage whose goal the student SEES.
-
-    That is `stage` itself, or -- for a `stage silent` -- the next visible one: its goal, hints,
-    tries and neutral set face the student while silent stages run.
-    """
-    if stage is None:
-        return None
-    for i in range(stage, len(meta.stages)):
-        if not meta.stages[i].silent:
-            return i
-    return None
-
-
 class TaskSession:
     """One student's live task run: a /hp-free student container + per-session hidden /hp."""
 
@@ -306,14 +291,12 @@ class TaskSession:
         self._said_bye = False
         self._last_progress_ts: str | None = None
         self.pause: Callable[[], None] = _no_pause   # pager pause hook (set by the console driver)
-        self._entered: set[int] = set()              # shown stages whose on_enter already fired
 
     def _record(self, command: str) -> None:
         """
         Append the student's command to `/hp/history` (HP_HISTORY): one command per line.
 
-        Lets a `check exec` grader judge HOW a result was reached, not only the result -- e.g. a
-        silent background rule «only +/- for chmod» reads the last chmod of a file from here.
+        Lets a `check exec` grader see every command of the session, not only the last one.
         """
         line = "; ".join(part.strip() for part in command.splitlines() if part.strip())
         with contextlib.suppress(OSError), (self.hp_dir / "history").open("a", encoding="utf-8") as f:
@@ -335,8 +318,12 @@ class TaskSession:
         # kept as-is for stages > 1 (announce + enter pair happens together at stage advance);
         # stage 1's initial intro flow uses `greet_once()` / `enter_stage()` separately so the
         # on_enter fires AFTER the top-level intro + brief + announce (not before them).
+        stage = current_stage(self.progress)
         outs: list[str] = self.greet_once()
-        outs.extend(self.enter_stage())
+        if stage is None:
+            return outs
+        sm = self.meta.stages[stage]
+        outs.extend(self._perform_all(sm.on_enter, self._ctx("", self.tries[stage], stage)))
         return outs
 
     def greet_once(self) -> list[str]:
@@ -348,11 +335,10 @@ class TaskSession:
         return self._perform_all(self.meta.voice.hello, self._ctx("", 0, stage))
 
     def enter_stage(self) -> list[str]:
-        """Fire the shown stage's `on_enter` only (no `voice.hello`), once -- a silent pass re-enters."""
-        stage = shown_stage(self.meta, current_stage(self.progress))
-        if stage is None or stage in self._entered:
+        """Fire the current stage's `on_enter` only (no `voice.hello`)."""
+        stage = current_stage(self.progress)
+        if stage is None:
             return []
-        self._entered.add(stage)
         sm = self.meta.stages[stage]
         return self._perform_all(sm.on_enter, self._ctx("", self.tries[stage], stage))
 
@@ -463,22 +449,19 @@ class TaskSession:
         if self._last_progress_ts is None:
             self._last_progress_ts = ts
         sm = self.meta.stages[stage]
-        shown = shown_stage(self.meta, stage)             # a silent stage: the next goal faces the student
-        shown = stage if shown is None else shown
-        face = self.meta.stages[shown]
         out = output                                      # the console's captured stdout (may be "")
-        if not _is_neutral(command, face.neutral):
-            self.tries[shown] += 1
-        ctx = self._ctx(command, self.tries[shown], stage, out)
+        if not _is_neutral(command, sm.neutral):
+            self.tries[stage] += 1
+        ctx = self._ctx(command, self.tries[stage], stage, out)
         self._perform_all(self.meta.react, ctx)          # per-command catch-all handlers
         accepted, key = self._accept(stage, sm, command, out, ts, rc=rc)
         accepted, key, hint = self._apply_policy(sm, command, accepted, key)
         if accepted:
             self._on_pass(stage, ctx, ts)
         elif hint is None:
-            action = match_rule(face.hints, tries=self.tries[shown],
+            action = match_rule(sm.hints, tries=self.tries[stage],
                                 idle=_elapsed(self._last_progress_ts, ts),
-                                command=command, output=out, fired=self._fired[shown])
+                                command=command, output=out, fired=self._fired[stage])
             if action is not None:
                 hint = perform_action(action, ctx, render=self.render, runner=self.student,
                                       hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)

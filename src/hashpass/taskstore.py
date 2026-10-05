@@ -37,7 +37,6 @@ class StageMeta:
     match_output: bool = False         # `observe output`: accept by the command's stdout, not FS
     deny: tuple[str, ...] = ()         # base commands that MAY NOT be the accepting command
     allow: tuple[str, ...] = ()        # if set, ONLY these base commands may be the accepting command
-    silent: bool = False               # shows nothing; the next visible stage's goal/hints are shown
 
 
 @dataclass(frozen=True)
@@ -175,7 +174,6 @@ def _stage_to_dict(stage: StageMeta) -> dict:
         "match_output": stage.match_output,
         "deny": list(stage.deny),
         "allow": list(stage.allow),
-        "silent": stage.silent,
     }
 
 
@@ -193,7 +191,6 @@ def _stage_from_dict(data: dict) -> StageMeta:
         match_output=data.get("match_output", False),
         deny=tuple(data.get("deny", [])),
         allow=tuple(data.get("allow", [])),
-        silent=bool(data.get("silent", False)),
     )
 
 

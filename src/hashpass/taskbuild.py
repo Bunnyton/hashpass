@@ -263,7 +263,6 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
             match_output=s.match_output,
             deny=s.deny,
             allow=s.allow,
-            silent=s.silent,
         )
         for i, s in enumerate(recipe.stages)
     )

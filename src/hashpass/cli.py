@@ -473,19 +473,18 @@ def _reset_workdir(path: Path) -> None:
 
 def _announce_stage(session: object, io: Io) -> None:
     """
-    Print the goal the student faces (no number: the student does not know the count).
+    Print the current stage goal (no number: the student does not know the count).
 
-    A `stage silent` is never announced: its next visible stage's goal is shown instead, and only
-    once -- passing the silent stage advances progress without repeating that goal.
+    A goal identical to the previous stage's is not printed again: a stage that only tracks the
+    path (`chmod` by letters, opened in vim) shares the goal of the stage after it.
     """
     stage = current_stage(session.progress)
-    stages = session.meta.stages
-    while stage is not None and stage < len(stages) and getattr(stages[stage], "silent", False):
-        stage += 1
-    if stage is None or stage >= len(stages) or getattr(session, "_announced", None) == stage:
+    if stage is None:
         return
-    session._announced = stage                   # noqa: SLF001 -- console-side announce memo
-    io.write(f"\n\u2500\u2500  {stages[stage].message}\n")
+    message = session.meta.stages[stage].message
+    if stage > 0 and session.meta.stages[stage - 1].message == message:
+        return
+    io.write(f"\n\u2500\u2500  {message}\n")
 
 
 _SOLVED_BANNER = ("\n\x1b[1;32m╭────────────╮\n"
@@ -697,9 +696,11 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
         return
     session.enter()                          # next stage's on_enter
     _announce_stage(session, io)
-    if res.stage is not None and getattr(session.meta.stages[res.stage], "silent", False):
-        # The command that took the right path (`chmod +x test1`) usually also reached the goal
-        # the student was looking at: grade it now, not on the next command.
+    stages = session.meta.stages
+    nxt = current_stage(session.progress)
+    if res.stage is not None and nxt is not None and stages[nxt].message == stages[res.stage].message:
+        # A path-tracking stage shares its goal with the next one, and the command that passed it
+        # usually reached that goal too: grade it now, not on the next command.
         _advance_and_announce(session, io)
 
 
