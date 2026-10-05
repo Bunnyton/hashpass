@@ -16,7 +16,8 @@ settings
 say "Один файл скопировать легко. А если их три десятка, да ещё по папкам?"
 read brief.md
 
-stage "Скопируй всё содержимое /home/student/dir1 в /home/student/dir2 одной командой"
+stage
+  "Скопируй всё содержимое /home/student/dir1 в /home/student/dir2 одной командой"
   solve cp -r /home/student/dir1/. /home/student/dir2/
   check exec grade
   neutral ls cat pwd

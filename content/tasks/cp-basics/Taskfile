@@ -16,7 +16,8 @@ settings
 say "Копия — вторая жизнь файла. Знакомимся с cp."
 read brief.md
 
-stage "Положи копию /home/student/copy_me.txt в каталог /home/student/wait_file"
+stage
+  "Положи копию /home/student/copy_me.txt в каталог /home/student/wait_file"
   solve cp /home/student/copy_me.txt /home/student/wait_file/
   variant cp /home/student/copy_me.txt /home/student/wait_file/copy_me.txt
   observe /home/student/wait_file/copy_me.txt /home/student/copy_me.txt

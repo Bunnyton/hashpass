@@ -25,11 +25,15 @@ image logtask:1
 run mkdir -p /var/log/app
 run printf 'ERROR one\\nok\\nERROR two\\n' > /var/log/app/a.log
 
-stage "collect ERROR lines"
+stage
+
+  "collect ERROR lines"
   solve grep -rh ERROR /var/log/app > /errors.txt
   observe /errors.txt
 
-stage "count them"
+stage
+
+  "count them"
   solve wc -l < /errors.txt > /count.txt
   observe /count.txt
 """
@@ -60,7 +64,7 @@ def test_build_task_derives_and_stores_artifacts(tmp_path, base_tar):
 @pytest.mark.tier1
 def test_build_task_rejects_passes_below_two(tmp_path):
     store = ImageStore(tmp_path / "images")
-    recipe = parse_recipe('image t:1\nstage "x"\n  solve echo hi\n  observe o\n')
+    recipe = parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  observe o\n')
     # guard fires before any build/nspawn, so the (absent) base_tar is never read
     with pytest.raises(ValueError, match="passes must be >= 2"):
         build_task(recipe, store, base_tar=tmp_path / "none.tar", workdir=tmp_path / "b", passes=1)
@@ -71,7 +75,7 @@ _RECIPE = (
     'settings\n  type-mode dramatic\n  type-speed 30\n'
     'voice\n  hello say "hi"\n  bye exec bye.sh\n'
     'react on command exec watch.sh\n'
-    'stage "one"\n'
+    'stage\n  "one"\n'
     '  solve echo hi\n  observe o\n'
     '  on enter exec seed.sh\n'
     '  on pass say "nice"\n'
@@ -103,12 +107,16 @@ _CACHED = """\
 image ctask:1
 hidden hid
 
-stage "first"
+stage
+
+  "first"
   solve echo a > /a.txt
   observe /a.txt
   hint tries 2 say "look around"
 
-stage "second"
+stage
+
+  "second"
   solve echo b > /b.txt
   observe /b.txt
 """

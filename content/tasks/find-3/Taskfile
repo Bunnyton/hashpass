@@ -14,7 +14,8 @@ settings
 say "Имена обманчивы: похожих много, нужных — единицы."
 read brief.md
 
-stage "Найди в /home/student/search все каталоги, чьё имя начинается с level4"
+stage
+  "Найди в /home/student/search все каталоги, чьё имя начинается с level4"
   solve find /home/student/search -type d -name "level4*"
   check exec grade
   neutral ls cat pwd cd

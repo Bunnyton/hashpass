@@ -18,7 +18,8 @@ settings
 say "Почта пришла. Почти вся — реклама."
 read brief.md
 
-stage "Выведи из /home/student/mailbox/key_here.txt только строку со словом СЕКРЕТ"
+stage
+  "Выведи из /home/student/mailbox/key_here.txt только строку со словом СЕКРЕТ"
   solve grep СЕКРЕТ /home/student/mailbox/key_here.txt
   variant cat /home/student/mailbox/key_here.txt | grep СЕКРЕТ
   observe output

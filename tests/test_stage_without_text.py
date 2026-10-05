@@ -1,4 +1,4 @@
-"""Tier1: a plain stage that only tracks the path -- same goal as the next one, prints nothing."""
+"""Tier1: a stage without text continues the goal on screen and is graded by the same command."""
 from types import SimpleNamespace
 
 import pytest
@@ -25,9 +25,9 @@ def _session(state: dict, messages: list[str]) -> SimpleNamespace:
 
 
 @pytest.mark.tier1
-def test_the_same_goal_twice_in_a_row_is_announced_once(monkeypatch):
+def test_a_stage_without_text_prints_nothing_and_is_graded_at_once(monkeypatch):
     state = {"stage": 0}
-    messages = [_GOAL, _GOAL, "Дальше"]
+    messages = [_GOAL, "", "Дальше"]
     session = _session(state, messages)
     monkeypatch.setattr(cli, "current_stage",
                         lambda _p: state["stage"] if state["stage"] < len(messages) else None)
@@ -36,5 +36,5 @@ def test_the_same_goal_twice_in_a_row_is_announced_once(monkeypatch):
     cli._announce_stage(session, io)                                   # noqa: SLF001
     cli._render_observe(session, "chmod +x test1", "", None, 0, io)    # noqa: SLF001
     text = "".join(shown)
-    assert text.count(_GOAL) == 1                    # the path stage did not repeat the goal
+    assert text.count(_GOAL) == 1 and text.count("──") == len(messages) - 1   # no empty goal line
     assert state["stage"] == messages.index("Дальше") and "Дальше" in text   # the same command was graded for stage 2 at once

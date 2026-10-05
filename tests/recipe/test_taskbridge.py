@@ -10,11 +10,11 @@ def test_recipe_to_taskcode_projects_stages():
     text = (
         "image pipe:1\n"
         "run seed the env\n"
-        'stage "one"\n'
+        'stage\n  "one"\n'
         "  solve sort f > s\n"
         "  observe s\n"
         "  exclude .cache\n"
-        'stage "two"\n'
+        'stage\n  "two"\n'
         "  solve:\n"
         "    uniq s > u\n"
         "    wc -l < u > n\n"

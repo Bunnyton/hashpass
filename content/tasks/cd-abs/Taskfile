@@ -14,7 +14,8 @@ settings
 say "Файлы — половина мира. Вторая половина — каталоги."
 read brief.md
 
-stage "Доберись до /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и покажи свой абсолютный путь"
+stage
+  "Доберись до /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и покажи свой абсолютный путь"
   solve:
     cd /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
     pwd

@@ -14,7 +14,8 @@ settings
 say "Продолжаем осваивать find. Сегодня — точность до этажа."
 read brief.md
 
-stage "Найди только файлы, лежащие ровно на 3-м уровне вложенности в /home/student/search"
+stage
+  "Найди только файлы, лежащие ровно на 3-м уровне вложенности в /home/student/search"
   solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
   check exec grade
   neutral ls cat pwd cd

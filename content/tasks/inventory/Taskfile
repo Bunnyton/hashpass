@@ -14,7 +14,8 @@ settings
 say "Тебя взяли кладовщиком. Первый день, первое поручение."
 read brief.md
 
-stage "Составь опись /home/student/warehouse в файле /home/student/inventory.txt"
+stage
+  "Составь опись /home/student/warehouse в файле /home/student/inventory.txt"
   solve ls /home/student/warehouse > /home/student/inventory.txt
   variant ls -1 /home/student/warehouse > /home/student/inventory.txt
   observe /home/student/inventory.txt

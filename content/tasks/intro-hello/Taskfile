@@ -11,7 +11,8 @@ settings
 say "Здравствуй, оператор. Прежде чем что-то ломать, стоит познакомиться."
 read brief.md
 
-stage "Спроси у системы, кто ты?"
+stage
+  "Спроси у системы, кто ты?"
   solve whoami
   variant id -un
   observe output

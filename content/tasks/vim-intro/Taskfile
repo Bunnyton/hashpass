@@ -20,13 +20,15 @@ settings
 say "Те самые три буквы. VIM. Мощнее, чем кажется."
 read brief.md
 
-stage "Пройди в vimtutor первый урок — до конца, вместе с :wq"
+stage
+  "Пройди в vimtutor первый урок — до конца, вместе с :wq"
   accept cmd "vimtutor" ok
   neutral ls cat pwd
   on pass say "Урок пройден на учебной копии. Теперь — на настоящем файле."
   hint idle 300 say "Застрял внутри vim? Как выйти — в конце теории."
 
-stage "Почини в vim упражнения в /home/student/lesson1.txt"
+stage
+  "Почини в vim упражнения в /home/student/lesson1.txt"
   solve true
   check exec invim /home/student/lesson1.txt
   neutral ls cat pwd
@@ -34,7 +36,7 @@ stage "Почини в vim упражнения в /home/student/lesson1.txt"
   hint tries 6 say "Лишняя буква, недостающее слово, обрывок в конце строки — каким клавишам урока они соответствуют?"
   hint idle 240 say "Изменения попадают в файл только после сохранения."
 
-stage "Почини в vim упражнения в /home/student/lesson1.txt"
+stage
   solve:
     sed -i -e 's/^---> Ммыышшь.*/---> Мышь в норке тихо грызёт сыр./' -e 's/^---> Кот на окне жмурится\./---> Рыжий кот на тёплом окне сладко жмурится./' -e 's/^---> Без труда не выловишь$/---> Без труда не выловишь и рыбку из пруда./' /home/student/lesson1.txt
   check exec lesson /home/student/lesson1.txt

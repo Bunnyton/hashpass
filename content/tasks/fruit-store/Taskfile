@@ -16,7 +16,8 @@ settings
 say "Утро в ларьке. Пора разобрать вчерашний журнал продаж."
 read brief.md
 
-stage "Отсортируй журнал /home/student/store/sold.txt — результат в sorted.txt рядом"
+stage
+  "Отсортируй журнал /home/student/store/sold.txt — результат в sorted.txt рядом"
   solve sort /home/student/store/sold.txt > /home/student/store/sorted.txt
   observe /home/student/store/sorted.txt
   neutral ls cat pwd less
@@ -25,7 +26,8 @@ stage "Отсортируй журнал /home/student/store/sold.txt — рез
   hint tries 6 say "Загугли: «linux отсортировать строки файла» и «bash вывод команды в файл»."
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
-stage "Убери повторы из sorted.txt — результат в /home/student/store/unique.txt"
+stage
+  "Убери повторы из sorted.txt — результат в /home/student/store/unique.txt"
   solve uniq /home/student/store/sorted.txt > /home/student/store/unique.txt
   observe /home/student/store/unique.txt
   neutral ls cat pwd less
@@ -34,7 +36,8 @@ stage "Убери повторы из sorted.txt — результат в /home
   hint tries 6 say "Загугли: «linux удалить повторяющиеся строки из файла». Название команды очень короткое."
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
-stage "Сколько строк в unique.txt? Только число — в /home/student/store/howmany.txt"
+stage
+  "Сколько строк в unique.txt? Только число — в /home/student/store/howmany.txt"
   solve wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt
   observe /home/student/store/howmany.txt
   neutral ls cat pwd less

@@ -14,7 +14,8 @@ settings
 say "Бывает, годится любое из двух. Учим find говорить «или»."
 read brief.md
 
-stage "Найди в /home/student/search файлы, чьё имя начинается с level2 ИЛИ содержит цифру 3"
+stage
+  "Найди в /home/student/search файлы, чьё имя начинается с level2 ИЛИ содержит цифру 3"
   solve find /home/student/search -type f \( -name "level2*" -o -name "*3*" \)
   check exec grade
   neutral ls cat pwd cd

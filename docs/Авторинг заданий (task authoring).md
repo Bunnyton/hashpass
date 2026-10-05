@@ -33,7 +33,8 @@ CLI пока нет, поэтому «команды» = короткие Python
 image hello-grep:1
 run  printf 'alpha\nTODO fix\nbeta\n' > /notes.txt
 
-stage "Вытащи строку с TODO из /notes.txt в /found.txt"
+stage
+  "Вытащи строку с TODO из /notes.txt в /found.txt"
   solve   grep TODO /notes.txt > /found.txt
   observe /found.txt
 ```
@@ -104,7 +105,10 @@ hidden grade/                        # → /hp/work, невидим студен
 
 ### Блок `stage` (задание)
 
-`stage "<сообщение>"` открывает стадию; её тело — с отступом. Стадий может быть несколько
+`stage` открывает стадию (без текста); её тело — с отступом. То, что читает студент, — отдельная
+строка в кавычках: перед первым `stage` (текст задачи, этапы дальше только проверяют путь решения)
+или внутри этапа (если этап один или у этапа своя промежуточная цель). Этап без текста ничего не
+печатает. Комментарии `#` — как в sh: целой строкой или с `#` в начале слова вне кавычек. Стадий может быть несколько
 (проходятся по порядку; стадия N видит эффекты стадий 0..N-1).
 
 | Под-директива | Синтаксис | Что делает |
@@ -125,7 +129,8 @@ hidden grade/                        # → /hp/work, невидим студен
 | `on pass` | `on pass <действие>` | Действие при прохождении стадии. |
 
 ```
-stage "Собери строки ERROR из /var/log/app в /errors.txt"
+stage
+  "Собери строки ERROR из /var/log/app в /errors.txt"
   solve    grep -rh ERROR /var/log/app > /errors.txt
   observe  /errors.txt
   exclude  .cache *.log
@@ -138,7 +143,8 @@ stage "Собери строки ERROR из /var/log/app в /errors.txt"
 Многокомандный `solve:` (важно — `solve:` без инлайна, команды на следующих строках глубже):
 
 ```
-stage "Отсортируй и посчитай уникальные"
+stage
+  "Отсортируй и посчитай уникальные"
   solve:
     sort /fruits.txt > /sorted.txt
     uniq /sorted.txt > /unique.txt
@@ -368,14 +374,16 @@ srv = make_server(store, users, secrets.token_bytes(32))   # binds 127.0.0.1:0 �
 ```
 image proc-audit:1
 
-stage "Установи procps (apt) и запиши dpkg-статус в /install-status.txt"
+stage
+  "Установи procps (apt) и запиши dpkg-статус в /install-status.txt"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y procps >/dev/null 2>&1
     dpkg -s procps | grep '^Status:' > /install-status.txt
   observe /install-status.txt
 
-stage "Запусти фоновый sleep 600 и посчитай sleep-процессы через pgrep в /proc-count.txt"
+stage
+  "Запусти фоновый sleep 600 и посчитай sleep-процессы через pgrep в /proc-count.txt"
   solve:
     sleep 600 &
     sleep 0.3

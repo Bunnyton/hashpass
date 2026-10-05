@@ -27,7 +27,8 @@ say "Введу тебя в курс дела, прежде чем начнём.
 read theory.md
 
 # --- Задание 1: наблюдаемый артефакт (без привилегий) + `on enter read` + реактивная cmd-подсказка ---
-stage "Оставь отчёт: в /home/student/report.txt — одно слово ГОТОВО"
+stage
+  "Оставь отчёт: в /home/student/report.txt — одно слово ГОТОВО"
   solve:
     echo ГОТОВО > /home/student/report.txt
   observe /home/student/report.txt
@@ -43,7 +44,8 @@ stage "Оставь отчёт: в /home/student/report.txt — одно сло�
 # нескольких `variant`-решений: их канонизация оставляет только «3» — какой командой не важно.
 # `allow` — в консоли выполняются ТОЛЬКО эти команды (+ neutral-навигация): `echo 3`-подстава даже
 # не запустится (шелл её заблокирует). Посчитать надо по-настоящему — grep/awk/wc.
-stage "Напечатай, сколько строк в /var/log/app/service.log содержат ERROR — ровно число"
+stage
+  "Напечатай, сколько строк в /var/log/app/service.log содержат ERROR — ровно число"
   solve grep -c ERROR /var/log/app/service.log
   variant grep ERROR /var/log/app/service.log | wc -l
   variant awk '/ERROR/{c++} END{print c}' /var/log/app/service.log
@@ -59,7 +61,8 @@ stage "Напечатай, сколько строк в /var/log/app/service.log
 # `check exec <команда>` запускает проверку прямо строкой (exit 0 = принято). Скрипт не нужен;
 # и это шаг-часовой (sentinel) — `solve` при сборке НЕ выполняется (apt не гоняется во время build).
 # `on enter exec intro2` — пример действия-скрипта из скрытого слоя.
-stage "Установи пакет sl"
+stage
+  "Установи пакет sl"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y sl >/dev/null 2>&1
@@ -75,14 +78,16 @@ stage "Установи пакет sl"
 # --- Задание 4: проверяем сам ЗАПУСК команды — прямо в DSL, без скрытой проверки ---
 # `accept cmd "<команда>" ok` принимает шаг по САМОЙ команде студента (у поезда нет следа
 # на ФС): позиционные слова образца по порядку, опции где угодно; `ok` — успешное завершение.
-stage "Запусти установленный поезд"
+stage
+  "Запусти установленный поезд"
   accept cmd "sl" ok
   neutral ls cat less
   on pass say "Поезд ушёл. А sl -F — улетит."
   hint idle 240 say "Имя команды совпадает с именем пакета."
 
 # --- Задание 5: скрытая проверка из скрытого слоя судит ответ ---
-stage "Запиши в /home/student/secret фразу, которая открывает пещеру"
+stage
+  "Запиши в /home/student/secret фразу, которая открывает пещеру"
   solve:
     echo open-sesame > /home/student/secret
   check exec grade

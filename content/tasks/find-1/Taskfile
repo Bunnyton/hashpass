@@ -14,7 +14,8 @@ settings
 say "find — швейцарский нож поиска. Ключей — вагон."
 read brief.md
 
-stage "Перечисли всё в /home/student/search не глубже 3-го уровня вложенности"
+stage
+  "Перечисли всё в /home/student/search не глубже 3-го уровня вложенности"
   solve find /home/student/search -maxdepth 3
   check exec grade
   neutral ls cat pwd cd

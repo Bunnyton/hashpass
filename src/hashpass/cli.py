@@ -473,18 +473,17 @@ def _reset_workdir(path: Path) -> None:
 
 def _announce_stage(session: object, io: Io) -> None:
     """
-    Print the current stage goal (no number: the student does not know the count).
+    Print the current stage's text (no number: the student does not know the count).
 
-    A goal identical to the previous stage's is not printed again: a stage that only tracks the
-    path (`chmod` by letters, opened in vim) shares the goal of the stage after it.
+    A stage without text prints nothing: it continues the goal already on screen (e.g. a stage that
+    only tracks the path -- `chmod` by letters, opened in vim -- before the result stage).
     """
     stage = current_stage(session.progress)
     if stage is None:
         return
     message = session.meta.stages[stage].message
-    if stage > 0 and session.meta.stages[stage - 1].message == message:
-        return
-    io.write(f"\n\u2500\u2500  {message}\n")
+    if message:
+        io.write(f"\n\u2500\u2500  {message}\n")
 
 
 _SOLVED_BANNER = ("\n\x1b[1;32m╭────────────╮\n"
@@ -696,11 +695,10 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
         return
     session.enter()                          # next stage's on_enter
     _announce_stage(session, io)
-    stages = session.meta.stages
     nxt = current_stage(session.progress)
-    if res.stage is not None and nxt is not None and stages[nxt].message == stages[res.stage].message:
-        # A path-tracking stage shares its goal with the next one, and the command that passed it
-        # usually reached that goal too: grade it now, not on the next command.
+    if nxt is not None and not session.meta.stages[nxt].message:
+        # A stage without text continues the goal on screen, and the command that passed the
+        # previous stage usually reached it too: grade it now, not on the next command.
         _advance_and_announce(session, io)
 
 

@@ -8,7 +8,9 @@ image logtask:1
 run mkdir -p /var/log/app
 run printf 'ERROR one\\nok\\nERROR two\\n' > /var/log/app/a.log
 
-stage "collect ERROR lines"
+stage
+
+  "collect ERROR lines"
   solve grep -rh ERROR /var/log/app > /errors.txt
   observe /errors.txt
 

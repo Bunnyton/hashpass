@@ -15,7 +15,8 @@ settings
 say "У find десятки критериев. -empty и -not — сегодняшние гости."
 read brief.md
 
-stage "Найди в /home/student/search все непустые файлы"
+stage
+  "Найди в /home/student/search все непустые файлы"
   solve find /home/student/search -type f -not -empty
   check exec grade
   neutral ls cat pwd cd

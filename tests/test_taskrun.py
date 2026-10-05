@@ -24,7 +24,9 @@ image logtask:1
 run mkdir -p /var/log/app
 run printf 'ERROR one\\nok\\nERROR two\\n' > /var/log/app/a.log
 
-stage "collect ERROR lines"
+stage
+
+  "collect ERROR lines"
   solve grep -rh ERROR /var/log/app > /errors.txt
   observe /errors.txt
 """
@@ -53,7 +55,9 @@ _ACCEPT_CMD = """\
 image acmdtask:1
 run mkdir -p /var/log/app
 
-stage "run the check yourself"
+stage
+
+  "run the check yourself"
   accept cmd "grep -r ERROR"
 """
 
@@ -80,7 +84,9 @@ run printf 'ERROR one\\nERROR two\\n' > /var/log/app/a.log
 settings
   similarity 60
 
-stage "count the errors"
+stage
+
+  "count the errors"
   solve grep -c ERROR /var/log/app/a.log
   observe output
 """
@@ -109,7 +115,9 @@ run printf 'ERROR one\\nok\\nERROR two\\n' > /var/log/app/a.log
 settings
   similarity 100
 
-stage "count the errors, any way you like"
+stage
+
+  "count the errors, any way you like"
   solve grep -c ERROR /var/log/app/a.log
   variant grep ERROR /var/log/app/a.log | wc -l
   variant awk '/ERROR/{c++} END{print c}' /var/log/app/a.log
@@ -141,7 +149,9 @@ run printf 'ERROR one\\nERROR two\\n' > /var/log/app/a.log
 settings
   similarity 100
 
-stage "count the errors -- but actually compute it"
+stage
+
+  "count the errors -- but actually compute it"
   solve grep -c ERROR /var/log/app/a.log
   observe output
   allow grep awk wc
@@ -169,7 +179,9 @@ _CHECK = """\
 image verifytask:1
 hidden {hidden}
 
-stage "create the flag"
+stage
+
+  "create the flag"
   solve touch /done
   check exec verify.sh
 """
@@ -198,7 +210,9 @@ _SIDE = """\
 image sidetask:1
 hidden {hidden}
 
-stage "write the marker"
+stage
+
+  "write the marker"
   solve echo done > /marker
   observe /marker
   on enter exec seed.sh
@@ -364,7 +378,9 @@ settings
   type-mode normal
   type-speed 2000
 
-stage "collect ERROR lines (case-insensitive)"
+stage
+
+  "collect ERROR lines (case-insensitive)"
   solve grep -rih ERROR /var/log/app > /errors.txt
   observe /errors.txt
   hint cmd grep missing -i say "add -i for case-insensitive 🔎"

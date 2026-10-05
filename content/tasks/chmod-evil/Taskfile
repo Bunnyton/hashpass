@@ -19,7 +19,8 @@ settings
 say "Тварь ты дрожащая или право имеешь? chmod поможет разобраться."
 read brief.md
 
-stage "Выставь файлу /home/student/target/test1 права --x--x--x"
+stage
+  "Выставь файлу /home/student/target/test1 права --x--x--x"
   solve chmod +x /home/student/target/test1
   check exec symbolic /home/student/target/test1
   neutral ls cat pwd
@@ -27,13 +28,14 @@ stage "Выставь файлу /home/student/target/test1 права --x--x--x
   hint tries 6 say "man chmod, символьный режим: u/g/o/a и +/-."
   hint idle 240 say "Перечитай цель: три тройки, в каждой — только x."
 
-stage "Выставь файлу /home/student/target/test1 права --x--x--x"
+stage
   solve chmod +x /home/student/target/test1
   check exec sh -c 'test "$(stat -c %a /home/student/target/test1)" = "111"'
   neutral ls cat pwd
   on pass say "u, g, o — три адресата; a — все сразу. Ты только что раздал x всем одной буквой."
 
-stage "Выставь файлу /home/student/target/test2 права -w-rw-r--"
+stage
+  "Выставь файлу /home/student/target/test2 права -w-rw-r--"
   solve chmod u+w,g+rw,o+r /home/student/target/test2
   check exec symbolic /home/student/target/test2
   neutral ls cat pwd
@@ -41,14 +43,15 @@ stage "Выставь файлу /home/student/target/test2 права -w-rw-r--
   hint tries 6 say "man chmod: несколько режимов через запятую."
   hint idle 240 say "Перечитай цель: -w- | rw- | r--. Кто получает что?"
 
-stage "Выставь файлу /home/student/target/test2 права -w-rw-r--"
+stage
   solve:
     chmod u+w,g+rw,o+r /home/student/target/test2
   check exec sh -c 'test "$(stat -c %a /home/student/target/test2)" = "264"'
   neutral ls cat pwd
   on pass say "Кроме + и - есть ещё =: u=rw оставит владельцу ровно rw, что бы там ни было раньше."
 
-stage "Выставь файлу /home/student/target/test3 права rwxr-xr-x"
+stage
+  "Выставь файлу /home/student/target/test3 права rwxr-xr-x"
   solve chmod u+rwx,go+rx /home/student/target/test3
   check exec symbolic /home/student/target/test3
   neutral ls cat pwd
@@ -56,7 +59,7 @@ stage "Выставь файлу /home/student/target/test3 права rwxr-xr-x
   hint tries 6 say "man chmod: буквы категорий объединяются."
   hint idle 240 say "Перечитай цель: rwx | r-x | r-x."
 
-stage "Выставь файлу /home/student/target/test3 права rwxr-xr-x"
+stage
   solve chmod u+rwx,go+rx /home/student/target/test3
   check exec sh -c 'test "$(stat -c %a /home/student/target/test3)" = "755"'
   neutral ls cat pwd

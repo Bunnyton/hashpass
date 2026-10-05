@@ -10,7 +10,8 @@ settings
 say "Есть двери, в которые student не пускают. Но ключ от них лежит рядом."
 read brief.md
 
-stage "Создай файл /home/file.txt"
+stage
+  "Создай файл /home/file.txt"
   solve sudo touch /home/file.txt
   observe /home/file.txt
   neutral ls cat pwd
@@ -20,7 +21,8 @@ stage "Создай файл /home/file.txt"
   hint tries 6 say "man sudo, первые строки."
   hint idle 240 say "Перечитай цель и теорию: одна команда, один префикс."
 
-stage "А теперь удали /home/file.txt"
+stage
+  "А теперь удали /home/file.txt"
   solve sudo rm -f /home/file.txt
   check exec test ! -e /home/file.txt
   neutral ls cat pwd

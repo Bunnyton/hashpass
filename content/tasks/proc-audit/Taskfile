@@ -11,7 +11,8 @@ hidden hp
 say "Тебя позвали на аудит системы. Инструментов нет — только руки и apt."
 read brief.md
 
-stage "Поставь пакет psmisc и запиши его строку Status: в /home/student/install-status.txt"
+stage
+  "Поставь пакет psmisc и запиши его строку Status: в /home/student/install-status.txt"
   solve:
     sudo apt-get update >/dev/null 2>&1
     sudo apt-get install -y psmisc >/dev/null 2>&1
@@ -25,7 +26,8 @@ stage "Поставь пакет psmisc и запиши его строку Stat
   hint tries 6 say "Загугли: «grep строка начинающаяся с»."
   hint idle 300 say "Перечитай цель: установить, спросить dpkg, одну строку — в файл."
 
-stage "Запусти в фоне один sleep 600 и запиши в /home/student/proc-count.txt, сколько процессов sleep сейчас живо"
+stage
+  "Запусти в фоне один sleep 600 и запиши в /home/student/proc-count.txt, сколько процессов sleep сейчас живо"
   solve:
     sleep 600 &
     sleep 0.3

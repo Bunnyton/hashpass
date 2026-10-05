@@ -17,7 +17,8 @@ settings
 say "На новом месте первым делом оглядываются."
 read brief.md
 
-stage "Посмотри, что лежит в /home/student/room"
+stage
+  "Посмотри, что лежит в /home/student/room"
   solve ls /home/student/room
   check exec grade
   neutral cat pwd

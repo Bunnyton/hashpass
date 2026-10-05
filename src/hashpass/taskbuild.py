@@ -225,7 +225,7 @@ def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task:
     total = len(recipe.stages)
     for i, stage in enumerate(recipe.stages):
         mode = _acceptance_of(stage)
-        label = f"  stage {i + 1}/{total}: {stage.message[:56]}"
+        label = f"  stage {i + 1}/{total}: {stage.message[:56] or '(без текста)'}"
         if mode in ("handler", "command"):
             _report(progress, f"{label} ({mode})")
             checks.append(StageChecks(canonical={}))       # sentinel; runtime uses handler/accept_cmds

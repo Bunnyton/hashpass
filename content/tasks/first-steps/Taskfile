@@ -10,7 +10,8 @@ settings
 say "Здравствуй, оператор. Первое поручение — простое."
 read intro.md
 
-stage "Создай в домашнем каталоге файл hello.txt, внутри — слово hello"
+stage
+  "Создай в домашнем каталоге файл hello.txt, внутри — слово hello"
   solve echo hello > hello.txt
   observe hello.txt
   neutral ls cat pwd

@@ -20,7 +20,8 @@ settings
 say "Права держат тебя снаружи. Но группу можно сменить — и войти."
 read brief.md
 
-stage "Смени группу файла /home/student/.secret/rock.txt на student"
+stage
+  "Смени группу файла /home/student/.secret/rock.txt на student"
   solve sudo chgrp student /home/student/.secret/rock.txt
   check exec sh -c 'test "$(stat -c %G /home/student/.secret/rock.txt)" = "student"'
   neutral ls cat pwd cd

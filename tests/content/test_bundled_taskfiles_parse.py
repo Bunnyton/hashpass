@@ -22,9 +22,8 @@ def test_bundled_taskfile_parses(task_dir: Path) -> None:
     assert recipe.version, f"{task_dir.name}: missing image version"
     # at least one stage
     assert recipe.stages, f"{task_dir.name}: no stages defined"
-    # every stage has a message the student sees
-    for i, st in enumerate(recipe.stages):
-        assert st.message, f"{task_dir.name}: stage {i} has empty message"
+    # the student sees the task's text from the start (stages after it may only check the path)
+    assert recipe.stages[0].message, f"{task_dir.name}: no text for the student at the start"
     # any hidden layer referenced must actually exist under this task dir
     hidden = recipe.hidden
     if hidden:

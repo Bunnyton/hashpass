@@ -10,7 +10,8 @@ settings
 say "Голая система скучна. Пора её чем-нибудь наполнить."
 read brief.md
 
-stage "Установи самую свежую версию пакета sl"
+stage
+  "Установи самую свежую версию пакета sl"
   solve:
     sudo apt-get update >/dev/null 2>&1
     sudo apt-get install -y sl >/dev/null 2>&1

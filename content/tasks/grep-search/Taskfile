@@ -16,7 +16,8 @@ settings
 say "Иголка в стоге сена? Настало время grep."
 read brief.md
 
-stage "Покажи строку с КЛЮЧ: из дерева /home/student/haystack — только её, без имени файла"
+stage
+  "Покажи строку с КЛЮЧ: из дерева /home/student/haystack — только её, без имени файла"
   solve grep -rh КЛЮЧ /home/student/haystack
   observe output
   neutral ls cat pwd cd
