@@ -15,7 +15,7 @@ say "rm — remove. Крушить, ломать! Но по правилам."
 read brief.md
 
 stage
-  "Очисти /home/student/workdir до нуля, скрытое тоже — сам каталог оставь"
+  say "Очисти /home/student/workdir до нуля, скрытое тоже — сам каталог оставь"
   solve:
     rm -rf /home/student/workdir/*
     rm -rf /home/student/workdir/.[!.]*

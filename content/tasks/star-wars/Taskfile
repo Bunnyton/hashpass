@@ -15,7 +15,7 @@ say "Модуль базовых команд позади. Держи приз,
 read brief.md
 
 stage
-  "Подключись к telehack.com и посмотри «Звёздные войны»"
+  say "Подключись к telehack.com и посмотри «Звёздные войны»"
   accept cmd "telnet"
   neutral ls cat pwd
   on pass say "На telehack.com есть ещё игры: набери help после входа."

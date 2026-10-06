@@ -1,5 +1,5 @@
 """Line-based, indentation-aware parser for image/task recipes (Imagefile = Taskfile)."""
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from hashpass.recipe.model import (
@@ -47,7 +47,6 @@ class _Acc:
     react: list[Action] = field(default_factory=list)
     intro: list[Action] = field(default_factory=list)
     pending: list[Action] = field(default_factory=list)   # top-level actions seen after a stage
-    task_text: str = ""                                    # a quoted line before the stages
     settings: Settings | None = None
 
 
@@ -473,25 +472,25 @@ def _parse_stage_block(header_value: str, lines: list[tuple[int, str]],
     """
     Parse a `stage` header + its indented body; return (StageSpec, next-top-index).
 
-    `stage` takes no text. What the student reads is a bare quoted line in the body
-    (`"Спроси у системы, кто ты?"`); a stage without one prints nothing (it only tracks the path).
+    `stage` takes no text. What the student reads is a `say "…"` in the body, shown as the stage's
+    goal line when it starts; a stage without one prints nothing (it only checks the path).
     """
     if header_value:
-        msg = (f"stage takes no text (got {header_value!r}): put what the student reads on its own "
-               'quoted line inside the stage, e.g.  "Спроси у системы, кто ты?"')
+        msg = (f"stage takes no text (got {header_value!r}): put what the student reads in a `say` "
+               'inside the stage, e.g.  say "Спроси у системы, кто ты?"')
         raise ValueError(msg)
     sacc = _StageAcc(message="")
     i = start
     while i < len(lines) and lines[i][0] > 0:
         indent, content = lines[i]
-        if content.startswith('"'):
+        kw, value = _kw_value(content)
+        if kw == "say":
             if sacc.message:
-                msg = f"a stage has one text line; got a second one: {content}"
+                msg = f"a stage has one `say` (its text); got a second one: {content}"
                 raise ValueError(msg)
-            sacc.message = _unquote(content)
+            sacc.message = _unquote(value.removeprefix("dramatic ").strip())
             i += 1
             continue
-        kw, value = _kw_value(content)
         if kw == "solve:":
             if value:
                 msg = f"'solve:' takes no inline content; put commands on indented lines: {value!r}"
@@ -577,33 +576,14 @@ def _parse_settings_block(lines: list[tuple[int, str]], start: int, acc: _Acc) -
 _BLOCK_PARSERS = {"voice": _parse_voice_block, "settings": _parse_settings_block}
 
 
-def _take_task_text(content: str, acc: _Acc) -> None:
-    """Take a quoted top-level line: the task's text, said once before its stages (they check the path)."""
-    if acc.stages or acc.task_text:
-        msg = f"the task text goes once, before the first stage: {content}"
-        raise ValueError(msg)
-    acc.task_text = _unquote(content)
-
-
-def _with_task_text(stage: StageSpec, acc: _Acc) -> StageSpec:
-    """Give the task text to the first stage (it is what the console shows at the start)."""
-    if not acc.task_text or acc.stages:
-        return stage
-    if stage.message:
-        msg = (f"the task text is set twice: before the stages ({acc.task_text!r}) and in the first "
-               f"stage ({stage.message!r}) -- keep one")
-        raise ValueError(msg)
-    return replace(stage, message=acc.task_text)
-
-
 def parse_recipe(text: str) -> Recipe:
     """
     Parse Imagefile/Taskfile text into a Recipe (image directives + task + interactivity).
 
     Top-level (column 0): `image <name>:<ver>` (required, once), `from`, `copy`, `run`,
     `hidden <src>`, `readme <file>`, `react on command <action>`, the `settings`/`voice`
-    blocks, and `stage` blocks. A stage body holds an optional quoted text line (what the student
-    reads) and `solve`/`observe`/`exclude`/`neutral`/`check`/`on enter|pass`/`hint <cond> <action>`.
+    blocks, and `stage` blocks. A stage body holds an optional `say "…"` (its text, the goal line) and
+    `solve`/`observe`/`exclude`/`neutral`/`check`/`on enter|pass`/`hint <cond> <action>`.
     `#` comments are dropped like in sh (whole lines, and `#` starting a word outside quotes).
     Unknown directives raise ValueError.
 
@@ -620,17 +600,13 @@ def parse_recipe(text: str) -> Recipe:
         if indent != 0:
             msg = f"unexpected indentation (no open block): {content!r}"
             raise ValueError(msg)
-        if content.startswith('"'):
-            _take_task_text(content, acc)
-            i += 1
-            continue
         kw, value = _kw_value(content)
         if kw == "stage":
             if acc.pending:
                 msg = "top-level actions between stages: put them before the first stage or after the last"
                 raise ValueError(msg)
             stage, i = _parse_stage_block(value, lines, i + 1)
-            acc.stages.append(_with_task_text(stage, acc))
+            acc.stages.append(stage)
             continue
         block = _BLOCK_PARSERS.get(kw)
         if block is not None:
@@ -642,9 +618,10 @@ def parse_recipe(text: str) -> Recipe:
         else:
             handler(value, acc)
         i += 1
-    if acc.stages and not acc.stages[0].message:
-        msg = ("the first stage has no text: put what the student should do on a quoted line before "
-               "the stages (or inside the first stage)")
+    if acc.stages and not acc.stages[0].message and not acc.intro:
+        # The task's text is said once: by `say`/`read` before the stages (they then only check the
+        # solution path) or by a `say` in the first stage.
+        msg = "the first stage has no text and nothing is said before it: add a `say` or `read`"
         raise ValueError(msg)
     # `image` is optional: an unnamed recipe gets name "" and is named at build time
     # (CLI `-t`, else the Taskfile's directory). image_ref/build resolve it then.

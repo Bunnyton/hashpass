@@ -28,7 +28,7 @@ read theory.md
 
 # --- Задание 1: наблюдаемый артефакт (без привилегий) + `on enter read` + реактивная cmd-подсказка ---
 stage
-  "Оставь отчёт: в /home/student/report.txt — одно слово ГОТОВО"
+  say "Оставь отчёт: в /home/student/report.txt — одно слово ГОТОВО"
   solve:
     echo ГОТОВО > /home/student/report.txt
   observe /home/student/report.txt
@@ -45,7 +45,7 @@ stage
 # `allow` — в консоли выполняются ТОЛЬКО эти команды (+ neutral-навигация): `echo 3`-подстава даже
 # не запустится (шелл её заблокирует). Посчитать надо по-настоящему — grep/awk/wc.
 stage
-  "Напечатай, сколько строк в /var/log/app/service.log содержат ERROR — ровно число"
+  say "Напечатай, сколько строк в /var/log/app/service.log содержат ERROR — ровно число"
   solve grep -c ERROR /var/log/app/service.log
   variant grep ERROR /var/log/app/service.log | wc -l
   variant awk '/ERROR/{c++} END{print c}' /var/log/app/service.log
@@ -62,7 +62,7 @@ stage
 # и это шаг-часовой (sentinel) — `solve` при сборке НЕ выполняется (apt не гоняется во время build).
 # `on enter exec intro2` — пример действия-скрипта из скрытого слоя.
 stage
-  "Установи пакет sl"
+  say "Установи пакет sl"
   solve:
     apt-get update >/dev/null 2>&1
     apt-get install -y sl >/dev/null 2>&1
@@ -79,7 +79,7 @@ stage
 # `accept cmd "<команда>" ok` принимает шаг по САМОЙ команде студента (у поезда нет следа
 # на ФС): позиционные слова образца по порядку, опции где угодно; `ok` — успешное завершение.
 stage
-  "Запусти установленный поезд"
+  say "Запусти установленный поезд"
   accept cmd "sl" ok
   neutral ls cat less
   on pass say "Поезд ушёл. А sl -F — улетит."
@@ -87,7 +87,7 @@ stage
 
 # --- Задание 5: скрытая проверка из скрытого слоя судит ответ ---
 stage
-  "Запиши в /home/student/secret фразу, которая открывает пещеру"
+  say "Запиши в /home/student/secret фразу, которая открывает пещеру"
   solve:
     echo open-sesame > /home/student/secret
   check exec grade

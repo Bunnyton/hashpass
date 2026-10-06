@@ -86,7 +86,7 @@ hidden grade/
 
 stage
 
-  "Collect ERROR lines into errors.txt"
+  say "Collect ERROR lines into errors.txt"
   solve   grep -rh ERROR /var/log/app > errors.txt
   observe errors.txt
   exclude .cache *.log
@@ -123,14 +123,14 @@ def test_parse_task_recipe_full_stage():
 def test_parse_solve_block_and_multiple_stages():
     text = (
         "image pipe:1\n\n"
-        'stage\n  "one"\n'
+        'stage\n  say "one"\n'
         "  solve:\n"
         "    sort f > s\n"
         "    uniq s > u\n"
         "  observe u\n"
         "  on pass exec a.sh\n"
         "  on pass exec b.sh\n\n"
-        'stage\n  "two"\n'
+        'stage\n  say "two"\n'
         "  solve wc -l < u > n\n"
         "  observe n\n"
     )
@@ -152,16 +152,16 @@ def test_plain_image_recipe_has_no_stages():
 @pytest.mark.parametrize(
     ("text", "match"),
     [
-        ('image t:1\nstage\n  "x"\n  observe f\n', "no 'solve'"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  check verify.sh\n', "expected an 'exec"),
+        ('image t:1\nstage\n  say "x"\n  observe f\n', "no 'solve'"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  check verify.sh\n', "expected an 'exec"),
         ("image t:1\n  solve echo hi\n", "unexpected indentation"),
-        ('image t:1\nstage\n  "x"\n  solve:\n  observe f\n', "empty 'solve:' block"),
-        ('image t:1\nstage\n  "x"\n  solve: echo hi\n    echo bye\n', "no inline content"),
-        ('image t:1\nstage\n  "x"\n  solve: echo hi\n', "no inline content"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  on exit exec x.sh\n', "unknown stage event"),
+        ('image t:1\nstage\n  say "x"\n  solve:\n  observe f\n', "empty 'solve:' block"),
+        ('image t:1\nstage\n  say "x"\n  solve: echo hi\n    echo bye\n', "no inline content"),
+        ('image t:1\nstage\n  say "x"\n  solve: echo hi\n', "no inline content"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  on exit exec x.sh\n', "unknown stage event"),
         ("image t:1\nhidden a/\nhidden b/\n", "duplicate 'hidden'"),
         ("image t:1\nreadme a.txt\nreadme b.txt\n", "duplicate 'readme'"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  check exec a.sh\n  check exec b.sh\n', "duplicate 'check'"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  check exec a.sh\n  check exec b.sh\n', "duplicate 'check'"),
         ("image t:1\nhidden a/ b/\n", "single <src>"),
         ("image t:1\nreadme a b\n", "single <file>"),
     ],
@@ -182,32 +182,32 @@ def test_settings_similarity_parsed_and_bounded():
 
 @pytest.mark.tier1
 def test_accept_cmd_parsed_and_accepts_without_solve():
-    r = parse_recipe('image t:1\nstage\n  "x"\n  accept cmd "grep -r ERROR"\n  accept cmd "rg ERROR"\n')
+    r = parse_recipe('image t:1\nstage\n  say "x"\n  accept cmd "grep -r ERROR"\n  accept cmd "rg ERROR"\n')
     assert r.stages[0].accept_cmds == ("grep -r ERROR", "rg ERROR")
     assert r.stages[0].solve == ()          # an accept-cmd-only stage needs no `solve`
     with pytest.raises(ValueError, match="one quoted command start"):
-        parse_recipe('image t:1\nstage\n  "x"\n  accept cmd grep bare\n')
+        parse_recipe('image t:1\nstage\n  say "x"\n  accept cmd grep bare\n')
 
 
 @pytest.mark.tier1
 def test_observe_output_sets_match_flag():
-    r = parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  observe output\n')
+    r = parse_recipe('image t:1\nstage\n  say "x"\n  solve echo hi\n  observe output\n')
     assert r.stages[0].match_output is True
     assert r.stages[0].observe == ()             # `output` is not an FS path
-    mixed = parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  observe /f output\n')
+    mixed = parse_recipe('image t:1\nstage\n  say "x"\n  solve echo hi\n  observe /f output\n')
     assert mixed.stages[0].match_output is True
     assert mixed.stages[0].observe == ("/f",)
 
 
 @pytest.mark.tier1
 def test_solve_block_still_parses_after_inline_guard():
-    r = parse_recipe('image t:1\nstage\n  "x"\n  solve:\n    echo one\n    echo two\n  observe o\n')
+    r = parse_recipe('image t:1\nstage\n  say "x"\n  solve:\n    echo one\n    echo two\n  observe o\n')
     assert r.stages[0].solve == ("echo one", "echo two")
 
 
 @pytest.mark.tier1
 def test_variants_inline_and_block_parse_as_alternative_solutions():
-    text = ('image t:1\nstage\n  "x"\n'
+    text = ('image t:1\nstage\n  say "x"\n'
             '  solve grep -c ERROR /f\n'
             '  variant grep ERROR /f | wc -l\n'
             '  variant:\n'
@@ -221,24 +221,24 @@ def test_variants_inline_and_block_parse_as_alternative_solutions():
 @pytest.mark.tier1
 def test_variant_without_observe_is_rejected():
     with pytest.raises(ValueError, match="no 'observe' to derive"):
-        parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  variant echo hi\n')
+        parse_recipe('image t:1\nstage\n  say "x"\n  solve echo hi\n  variant echo hi\n')
 
 
 @pytest.mark.tier1
 def test_deny_and_allow_command_policy_parse():
-    d = parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  observe output\n  deny grep rg\n')
+    d = parse_recipe('image t:1\nstage\n  say "x"\n  solve echo hi\n  observe output\n  deny grep rg\n')
     assert d.stages[0].deny == ("grep", "rg")
-    a = parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  observe output\n  allow awk wc\n')
+    a = parse_recipe('image t:1\nstage\n  say "x"\n  solve echo hi\n  observe output\n  allow awk wc\n')
     assert a.stages[0].allow == ("awk", "wc")
     with pytest.raises(ValueError, match="both 'deny' and 'allow'"):
-        parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  observe output\n'
+        parse_recipe('image t:1\nstage\n  say "x"\n  solve echo hi\n  observe output\n'
                      '  deny grep\n  allow awk\n')
 
 
 @pytest.mark.tier1
 def test_hint_conditions_and_actions():
     text = (
-        'image t:1\nstage\n  "x"\n  solve echo hi\n'
+        'image t:1\nstage\n  say "x"\n  solve echo hi\n'
         '  hint tries 5 say "look in /var/log 👀"\n'
         '  hint cmd grep missing -i say "add -i"\n'
         "  hint idle 90 exec idle.sh\n"
@@ -257,7 +257,7 @@ def test_hint_conditions_and_actions():
 
 @pytest.mark.tier1
 def test_cmd_condition_has_and_missing():
-    text = ('image t:1\nstage\n  "x"\n  solve echo hi\n'
+    text = ('image t:1\nstage\n  say "x"\n  solve echo hi\n'
             "  hint cmd grep has -r missing -i exec f.sh\n")
     cond = parse_recipe(text).stages[0].hints[0].condition
     assert cond == CmdCond("grep", ("-r",), ("-i",))
@@ -266,7 +266,7 @@ def test_cmd_condition_has_and_missing():
 @pytest.mark.tier1
 def test_on_enter_pass_say_show_and_dramatic():
     text = (
-        'image t:1\nstage\n  "x"\n  solve echo hi\n'
+        'image t:1\nstage\n  say "x"\n  solve echo hi\n'
         "  on enter exec seed.sh\n"
         '  on pass say "first!"\n'
         '  on pass say dramatic "the end."\n'
@@ -291,7 +291,7 @@ def test_voice_settings_react_top_level():
         "  hello exec greet.sh\n"
         '  bye say "gg"\n'
         "react on command exec watch.sh\n"
-        'stage\n  "x"\n  solve echo hi\n'
+        'stage\n  say "x"\n  solve echo hi\n'
     )
     r = parse_recipe(text)
     assert r.settings == Settings(type_mode="dramatic", type_speed=60, pager=True)
@@ -314,10 +314,10 @@ def test_backcompat_flipped_reserved_cases_now_parse():
     r = parse_recipe('image t:1\nvoice\n  hello say "hi"\n')
     assert r.voice.hello == (SayAction("hi"),)
     # was: 'hint tries 3 say hi' raised "phase 3"
-    r1 = parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  hint tries 3 say "hi"\n')
+    r1 = parse_recipe('image t:1\nstage\n  say "x"\n  solve echo hi\n  hint tries 3 say "hi"\n')
     assert r1.stages[0].hints[0].condition == TriesCond(3)
     # was: 'on pass say "yo"' raised "phase 3"
-    r2 = parse_recipe('image t:1\nstage\n  "x"\n  solve echo hi\n  on pass say "yo"\n')
+    r2 = parse_recipe('image t:1\nstage\n  say "x"\n  solve echo hi\n  on pass say "yo"\n')
     assert r2.stages[0].on_pass == (SayAction("yo"),)
 
 
@@ -325,17 +325,17 @@ def test_backcompat_flipped_reserved_cases_now_parse():
 @pytest.mark.parametrize(
     ("text", "match"),
     [
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  hint bogus 3 say "hi"\n', "unknown hint condition"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  hint tries 3\n', "requires an action"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  hint tries x say "h"\n', "needs an integer"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  hint output "ERR\n', "unterminated"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  check say "no"\n', "requires an 'exec"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  on pass show art.txt\n', "show file"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  hint bogus 3 say "hi"\n', "unknown hint condition"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  hint tries 3\n', "requires an action"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  hint tries x say "h"\n', "needs an integer"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  hint output "ERR\n', "unterminated"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  check say "no"\n', "requires an 'exec"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  on pass show art.txt\n', "show file"),
         ("image t:1\nsettings\n  type-mode turbo\n", "type-mode must be"),
         ("image t:1\nsettings\n  pager on\nsettings\n  pager off\n", "duplicate 'settings'"),
         ('image t:1\nvoice\n  yo say "hi"\n', "unknown voice directive"),
         ("image t:1\nreact do exec f.sh\n", "react must be"),
-        ('image t:1\nstage\n  "x"\n  solve echo hi\n  say "loose"\n', "unknown directive"),
+        ('image t:1\nstage\n  say "x"\n  solve echo hi\n  say "loose"\n', "one `say`"),
     ],
 )
 def test_parse_errors(text, match):
@@ -345,7 +345,7 @@ def test_parse_errors(text, match):
 
 @pytest.mark.tier1
 def test_observe_bool_parses_into_existence_paths():
-    r = parse_recipe('image t:1\nstage\n  "x"\n  solve touch /f\n  observe bool /usr/games/sl /var/run\n')
+    r = parse_recipe('image t:1\nstage\n  say "x"\n  solve touch /f\n  observe bool /usr/games/sl /var/run\n')
     s = r.stages[0]
     assert s.observe_bool == ("/usr/games/sl", "/var/run")
     assert s.observe == () and s.match_output is False
@@ -355,10 +355,10 @@ def test_observe_bool_parses_into_existence_paths():
 def test_accept_cmd_ok_requires_a_successful_exit():
     # `accept cmd "…" ok`: the command must also exit 0 -- a run of cmatrix that dies on a
     # missing library is not «запустил cmatrix».
-    r = parse_recipe('image t:1\nstage\n  "x"\n  accept cmd "cmatrix" ok\n  accept cmd "sl"\n')
+    r = parse_recipe('image t:1\nstage\n  say "x"\n  accept cmd "cmatrix" ok\n  accept cmd "sl"\n')
     assert r.stages[0].accept_cmds == ("cmatrix", "sl")
     assert r.stages[0].accept_ok is True
-    plain = parse_recipe('image t:1\nstage\n  "x"\n  accept cmd "cmatrix"\n')
+    plain = parse_recipe('image t:1\nstage\n  say "x"\n  accept cmd "cmatrix"\n')
     assert plain.stages[0].accept_ok is False
     with pytest.raises(ValueError, match="accept cmd"):
-        parse_recipe('image t:1\nstage\n  "x"\n  accept cmd "cmatrix" nope\n')
+        parse_recipe('image t:1\nstage\n  say "x"\n  accept cmd "cmatrix" nope\n')

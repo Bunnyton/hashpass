@@ -18,8 +18,8 @@ _FORBIDDEN = re.compile(
 # with the task and is read there, so it speaks the world's language too; a file NAME (Taskfile)
 # is fine in a comment.
 _FORBIDDEN_AUTHOR = re.compile(r"стади|этап|грейдер|засчит|зач[её]т|(?<![\w/])/hp\b", re.IGNORECASE)
-# A bare quoted line (the task/stage text), `say "…"`, `say dramatic "…"`, an unquoted `say …`.
-_SAY = re.compile(r'(?:^\s*|\bsay(?:\s+dramatic)?\s+)(?:"((?:[^"\\]|\\.)*)"|(?<=say )(\S.*))')
+# `say "…"` (also a stage's text), `say dramatic "…"`, and an unquoted `say …` to end of line.
+_SAY = re.compile(r'\bsay(?:\s+dramatic)?\s+(?:"((?:[^"\\]|\\.)*)"|(\S.*))')
 _USER_ROOT = re.compile(r"^\s*user\s+root\b", re.MULTILINE)
 _ROOT_REASON = re.compile(r"^#\s*root:", re.MULTILINE)
 

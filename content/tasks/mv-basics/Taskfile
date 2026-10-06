@@ -23,7 +23,7 @@ say "cp — copy, mv — move. А ещё mv умеет то, о чём не го
 read brief.md
 
 stage
-  "В /home/student/workspace файл file5 должен называться file2"
+  say "В /home/student/workspace файл file5 должен называться file2"
   solve mv /home/student/workspace/file5 /home/student/workspace/file2
   observe /home/student/workspace/file2
   observe bool /home/student/workspace/file5

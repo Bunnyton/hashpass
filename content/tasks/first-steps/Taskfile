@@ -11,7 +11,7 @@ say "Здравствуй, оператор. Первое поручение —
 read intro.md
 
 stage
-  "Создай в домашнем каталоге файл hello.txt, внутри — слово hello"
+  say "Создай в домашнем каталоге файл hello.txt, внутри — слово hello"
   solve echo hello > hello.txt
   observe hello.txt
   neutral ls cat pwd

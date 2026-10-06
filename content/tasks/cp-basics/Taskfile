@@ -17,7 +17,7 @@ say "Копия — вторая жизнь файла. Знакомимся с 
 read brief.md
 
 stage
-  "Положи копию /home/student/copy_me.txt в каталог /home/student/wait_file"
+  say "Положи копию /home/student/copy_me.txt в каталог /home/student/wait_file"
   solve cp /home/student/copy_me.txt /home/student/wait_file/
   variant cp /home/student/copy_me.txt /home/student/wait_file/copy_me.txt
   observe /home/student/wait_file/copy_me.txt /home/student/copy_me.txt

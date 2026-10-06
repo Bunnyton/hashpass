@@ -18,7 +18,7 @@ say "Не всё, что лежит в каталоге, видно с перв�
 read brief.md
 
 stage
-  "Покажи всё содержимое /home/student/attic, включая скрытое, в длинном формате"
+  say "Покажи всё содержимое /home/student/attic, включая скрытое, в длинном формате"
   solve ls -la /home/student/attic
   check exec grade
   neutral cat pwd

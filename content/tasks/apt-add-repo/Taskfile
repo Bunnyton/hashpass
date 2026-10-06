@@ -13,7 +13,7 @@ say "Список пакетов apt берёт из репозиториев. �
 read brief.md
 
 stage
-  "Пропиши репозиторий из брифа в файл /etc/apt/sources.list.d/custom.list"
+  say "Пропиши репозиторий из брифа в файл /etc/apt/sources.list.d/custom.list"
   solve:
     echo 'deb http://deb.debian.org/debian trixie-backports main' | sudo tee /etc/apt/sources.list.d/custom.list >/dev/null
   observe /etc/apt/sources.list.d/custom.list
@@ -26,7 +26,7 @@ stage
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
 
 stage
-  "Дай apt узнать о новом репозитории"
+  say "Дай apt узнать о новом репозитории"
   solve sudo apt-get update >/dev/null 2>&1
   accept cmd "apt update" ok
   accept cmd "apt-get update" ok

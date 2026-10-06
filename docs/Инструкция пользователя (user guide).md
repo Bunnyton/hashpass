@@ -158,7 +158,7 @@ image hello-report:1
 run mkdir -p /home/student
 
 stage
-  "Запишите слово ГОТОВО в файл /home/student/report.txt"
+  say "Запишите слово ГОТОВО в файл /home/student/report.txt"
   solve echo ГОТОВО > /home/student/report.txt
   observe /home/student/report.txt
 ```

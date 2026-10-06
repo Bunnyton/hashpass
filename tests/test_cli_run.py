@@ -10,7 +10,7 @@ run printf 'ERROR one\\nok\\nERROR two\\n' > /var/log/app/a.log
 
 stage
 
-  "collect ERROR lines"
+  say "collect ERROR lines"
   solve grep -rh ERROR /var/log/app > /errors.txt
   observe /errors.txt
 

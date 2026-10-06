@@ -18,7 +18,7 @@ say "На новом месте первым делом оглядываются
 read brief.md
 
 stage
-  "Посмотри, что лежит в /home/student/room"
+  say "Посмотри, что лежит в /home/student/room"
   solve ls /home/student/room
   check exec grade
   neutral cat pwd

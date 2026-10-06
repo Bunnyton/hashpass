@@ -26,7 +26,7 @@ run printf 'ERROR one\\nok\\nERROR two\\n' > /var/log/app/a.log
 
 stage
 
-  "collect ERROR lines"
+  say "collect ERROR lines"
   solve grep -rh ERROR /var/log/app > /errors.txt
   observe /errors.txt
 """
@@ -57,7 +57,7 @@ run mkdir -p /var/log/app
 
 stage
 
-  "run the check yourself"
+  say "run the check yourself"
   accept cmd "grep -r ERROR"
 """
 
@@ -86,7 +86,7 @@ settings
 
 stage
 
-  "count the errors"
+  say "count the errors"
   solve grep -c ERROR /var/log/app/a.log
   observe output
 """
@@ -117,7 +117,7 @@ settings
 
 stage
 
-  "count the errors, any way you like"
+  say "count the errors, any way you like"
   solve grep -c ERROR /var/log/app/a.log
   variant grep ERROR /var/log/app/a.log | wc -l
   variant awk '/ERROR/{c++} END{print c}' /var/log/app/a.log
@@ -151,7 +151,7 @@ settings
 
 stage
 
-  "count the errors -- but actually compute it"
+  say "count the errors -- but actually compute it"
   solve grep -c ERROR /var/log/app/a.log
   observe output
   allow grep awk wc
@@ -181,7 +181,7 @@ hidden {hidden}
 
 stage
 
-  "create the flag"
+  say "create the flag"
   solve touch /done
   check exec verify.sh
 """
@@ -212,7 +212,7 @@ hidden {hidden}
 
 stage
 
-  "write the marker"
+  say "write the marker"
   solve echo done > /marker
   observe /marker
   on enter exec seed.sh
@@ -380,7 +380,7 @@ settings
 
 stage
 
-  "collect ERROR lines (case-insensitive)"
+  say "collect ERROR lines (case-insensitive)"
   solve grep -rih ERROR /var/log/app > /errors.txt
   observe /errors.txt
   hint cmd grep missing -i say "add -i for case-insensitive 🔎"

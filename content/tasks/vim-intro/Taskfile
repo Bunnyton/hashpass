@@ -21,14 +21,14 @@ say "Те самые три буквы. VIM. Мощнее, чем кажется
 read brief.md
 
 stage
-  "Пройди в vimtutor первый урок — до конца, вместе с :wq"
+  say "Пройди в vimtutor первый урок — до конца, вместе с :wq"
   accept cmd "vimtutor" ok
   neutral ls cat pwd
   on pass say "Урок пройден на учебной копии. Теперь — на настоящем файле."
   hint idle 300 say "Застрял внутри vim? Как выйти — в конце теории."
 
 stage
-  "Почини в vim упражнения в /home/student/lesson1.txt"
+  say "Почини в vim упражнения в /home/student/lesson1.txt"
   solve true
   check exec invim /home/student/lesson1.txt
   neutral ls cat pwd

@@ -17,7 +17,7 @@ say "Утро в ларьке. Пора разобрать вчерашний ж
 read brief.md
 
 stage
-  "Отсортируй журнал /home/student/store/sold.txt — результат в sorted.txt рядом"
+  say "Отсортируй журнал /home/student/store/sold.txt — результат в sorted.txt рядом"
   solve sort /home/student/store/sold.txt > /home/student/store/sorted.txt
   observe /home/student/store/sorted.txt
   neutral ls cat pwd less
@@ -27,7 +27,7 @@ stage
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 stage
-  "Убери повторы из sorted.txt — результат в /home/student/store/unique.txt"
+  say "Убери повторы из sorted.txt — результат в /home/student/store/unique.txt"
   solve uniq /home/student/store/sorted.txt > /home/student/store/unique.txt
   observe /home/student/store/unique.txt
   neutral ls cat pwd less
@@ -37,7 +37,7 @@ stage
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 stage
-  "Сколько строк в unique.txt? Только число — в /home/student/store/howmany.txt"
+  say "Сколько строк в unique.txt? Только число — в /home/student/store/howmany.txt"
   solve wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt
   observe /home/student/store/howmany.txt
   neutral ls cat pwd less

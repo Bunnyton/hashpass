@@ -17,7 +17,7 @@ say "Чу-чух. Чу-чух. Чу-чух…"
 read brief.md
 
 stage
-  "Удали пакет sl из системы"
+  say "Удали пакет sl из системы"
   solve sudo apt-get remove -y sl
   check exec sh -c '! command -v sl >/dev/null 2>&1 && ! test -x /usr/games/sl'
   neutral ls cat pwd

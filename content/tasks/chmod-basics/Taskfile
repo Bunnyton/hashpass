@@ -22,7 +22,7 @@ say "Кто может читать твои файлы, а кто — нет? �
 read brief.md
 
 stage
-  "Выставь каталогу /home/student/perm_dir права drwxr----x"
+  say "Выставь каталогу /home/student/perm_dir права drwxr----x"
   solve chmod 741 /home/student/perm_dir
   check exec sh -c 'test "$(stat -c %a /home/student/perm_dir)" = "741"'
   neutral ls cat pwd

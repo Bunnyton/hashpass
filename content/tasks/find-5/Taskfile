@@ -16,7 +16,7 @@ say "У find десятки критериев. -empty и -not — сегодн�
 read brief.md
 
 stage
-  "Найди в /home/student/search все непустые файлы"
+  say "Найди в /home/student/search все непустые файлы"
   solve find /home/student/search -type f -not -empty
   check exec grade
   neutral ls cat pwd cd

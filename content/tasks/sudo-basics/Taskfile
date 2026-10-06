@@ -11,7 +11,7 @@ say "Есть двери, в которые student не пускают. Но к
 read brief.md
 
 stage
-  "Создай файл /home/file.txt"
+  say "Создай файл /home/file.txt"
   solve sudo touch /home/file.txt
   observe /home/file.txt
   neutral ls cat pwd
@@ -22,7 +22,7 @@ stage
   hint idle 240 say "Перечитай цель и теорию: одна команда, один префикс."
 
 stage
-  "А теперь удали /home/file.txt"
+  say "А теперь удали /home/file.txt"
   solve sudo rm -f /home/file.txt
   check exec test ! -e /home/file.txt
   neutral ls cat pwd

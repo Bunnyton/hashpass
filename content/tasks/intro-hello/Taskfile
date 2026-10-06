@@ -12,7 +12,7 @@ say "Здравствуй, оператор. Прежде чем что-то л�
 read brief.md
 
 stage
-  "Спроси у системы, кто ты?"
+  say "Спроси у системы, кто ты?"
   solve whoami
   variant id -un
   observe output

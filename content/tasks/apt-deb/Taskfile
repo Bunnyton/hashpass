@@ -17,7 +17,7 @@ say "Иногда пакет лежит на диске .deb-файлом. Ст�
 read brief.md
 
 stage
-  "Скачай .deb по ссылке из брифа и установи из него cmatrix"
+  say "Скачай .deb по ссылке из брифа и установи из него cmatrix"
   solve:
     wget -q http://ftp.debian.org/debian/pool/main/c/cmatrix/cmatrix_2.0-3_amd64.deb
     sudo apt-get install -y ./cmatrix_2.0-3_amd64.deb >/dev/null 2>&1
@@ -33,7 +33,7 @@ stage
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
 
 stage
-  "А теперь запусти cmatrix — и выйди из него клавишей q"
+  say "А теперь запусти cmatrix — и выйди из него клавишей q"
   accept cmd "cmatrix" ok
   neutral ls cat pwd
   on pass say "cmatrix -r — цветной дождь. А cmatrix -h расскажет остальное. Выход всё так же q."

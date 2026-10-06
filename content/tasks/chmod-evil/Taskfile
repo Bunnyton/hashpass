@@ -20,7 +20,7 @@ say "Тварь ты дрожащая или право имеешь? chmod по
 read brief.md
 
 stage
-  "Выставь файлу /home/student/target/test1 права --x--x--x"
+  say "Выставь файлу /home/student/target/test1 права --x--x--x"
   solve chmod +x /home/student/target/test1
   check exec symbolic /home/student/target/test1
   neutral ls cat pwd
@@ -35,7 +35,7 @@ stage
   on pass say "u, g, o — три адресата; a — все сразу. Ты только что раздал x всем одной буквой."
 
 stage
-  "Выставь файлу /home/student/target/test2 права -w-rw-r--"
+  say "Выставь файлу /home/student/target/test2 права -w-rw-r--"
   solve chmod u+w,g+rw,o+r /home/student/target/test2
   check exec symbolic /home/student/target/test2
   neutral ls cat pwd
@@ -51,7 +51,7 @@ stage
   on pass say "Кроме + и - есть ещё =: u=rw оставит владельцу ровно rw, что бы там ни было раньше."
 
 stage
-  "Выставь файлу /home/student/target/test3 права rwxr-xr-x"
+  say "Выставь файлу /home/student/target/test3 права rwxr-xr-x"
   solve chmod u+rwx,go+rx /home/student/target/test3
   check exec symbolic /home/student/target/test3
   neutral ls cat pwd

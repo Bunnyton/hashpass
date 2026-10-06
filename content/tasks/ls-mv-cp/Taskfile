@@ -20,7 +20,7 @@ say "Три подвала, в каждом — этажи. Карту не да
 read brief.md
 
 stage
-  "Найди в /home/student/subdir_1, subdir_2 или subdir_3 строку phrase:… и покажи только её"
+  say "Найди в /home/student/subdir_1, subdir_2 или subdir_3 строку phrase:… и покажи только её"
   solve cat /home/student/subdir_2/lvl1/lvl2/prize.txt | grep phrase
   variant grep -rh phrase /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3
   observe output

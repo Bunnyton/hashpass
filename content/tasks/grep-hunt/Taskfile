@@ -17,7 +17,7 @@ say "Тебе достался устаревший проект. Разгреб
 read brief.md
 
 stage
-  "Собери строки с TODO из /home/student/legacy/notes.txt в файл /home/student/todos.txt"
+  say "Собери строки с TODO из /home/student/legacy/notes.txt в файл /home/student/todos.txt"
   solve grep TODO /home/student/legacy/notes.txt > /home/student/todos.txt
   variant grep -F TODO /home/student/legacy/notes.txt > /home/student/todos.txt
   observe /home/student/todos.txt
