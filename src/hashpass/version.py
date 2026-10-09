@@ -1,96 +1,90 @@
-"""Version + best-effort self-update from GitHub releases of the same repo."""
-import contextlib
+"""Version + self-update on launch: track the `main` branch of the GitHub repo by commit."""
 import json
 import os
 import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from collections.abc import Callable
-from pathlib import Path
+from importlib import metadata
 
-__version__ = "0.3.4"  # bump this AND pyproject, then tag a GitHub release, to ship an update
+__version__ = "0.3.4"  # informational; updates follow the commit on `main`, not this number
 
 _REPO = "Bunnyton/hashpass"
-_LATEST_URL = f"https://api.github.com/repos/{_REPO}/releases/latest"
+_REPO_URL = f"https://github.com/{_REPO}"
+_BRANCH = "main"
 _ENV_NO_UPDATE = "HASHPASS_NO_UPDATE"
-_ENV_SPEC = "HASHPASS_UPDATE_SPEC"  # override the pip install target (e.g. a subdir dist)
-_CHECK_INTERVAL = 24 * 3600
-_STAMP = "update.json"
+_ENV_UPDATED = "HASHPASS_JUST_UPDATED"   # set across the re-exec so one launch updates at most once
+_LS_REMOTE_TIMEOUT = 4.0
 
 
-def is_newer(latest: str, current: str) -> bool:
-    """Return whether `latest` is a strictly higher dotted-numeric version than `current`."""
-    def parts(value: str) -> list[int]:
-        out: list[int] = []
-        for chunk in value.lstrip("vV").split("."):
-            digits = "".join(c for c in chunk if c.isdigit())
-            out.append(int(digits) if digits else 0)
-        return out
+def installed_commit() -> str | None:
+    """
+    Return the commit this copy was pip-installed from (`git+…@main`), else None.
 
-    a, b = parts(latest), parts(current)
-    width = max(len(a), len(b))
-    a += [0] * (width - len(a))
-    b += [0] * (width - len(b))
-    return a > b
-
-
-def latest_release(url: str = _LATEST_URL, *, timeout: float = 5.0) -> str | None:
-    """Return the latest release tag from GitHub, or None on any failure (offline-safe)."""
+    pip records it in the dist-info's `direct_url.json`. An editable/local install (a developer
+    checkout) has no vcs commit -> None, so it is never replaced behind the developer's back.
+    """
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310  (fixed https URL)
-            tag = json.loads(resp.read().decode("utf-8")).get("tag_name")
-    except (urllib.error.URLError, ValueError, OSError, TimeoutError):
+        info = json.loads(metadata.distribution("hashpass").read_text("direct_url.json") or "")
+    except (metadata.PackageNotFoundError, ValueError, OSError):
         return None
-    return str(tag) if tag else None
+    vcs = info.get("vcs_info") or {}
+    if _REPO.lower() not in str(info.get("url", "")).lower():
+        return None
+    return str(vcs.get("commit_id") or "") or None
 
 
-def _should_check(home: Path, *, now: float) -> bool:
+def remote_commit(timeout: float = _LS_REMOTE_TIMEOUT) -> str | None:
+    """Return the current commit of `main` on GitHub (`git ls-remote`), or None offline."""
     try:
-        last = json.loads((home / _STAMP).read_text(encoding="utf-8")).get("last", 0)
-    except (OSError, ValueError):
-        last = 0
-    return (now - float(last)) >= _CHECK_INTERVAL
+        out = subprocess.run(["git", "ls-remote", _REPO_URL, f"refs/heads/{_BRANCH}"],
+                             capture_output=True, text=True, timeout=timeout, check=True,
+                             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).stdout
+    except (subprocess.SubprocessError, OSError):
+        return None
+    sha = out.split()[0] if out.split() else ""
+    return sha if len(sha) == 40 else None   # noqa: PLR2004  (a full git sha)
 
 
-def _write_stamp(home: Path, *, now: float) -> None:
-    with contextlib.suppress(OSError):
-        home.mkdir(parents=True, exist_ok=True)
-        (home / _STAMP).write_text(json.dumps({"last": now}), encoding="utf-8")
-
-
-def _pip_install(tag: str) -> bool:
-    spec = os.environ.get(_ENV_SPEC, f"git+https://github.com/{_REPO}@{tag}")
+def _pip_install(commit: str) -> bool:
+    pip = [sys.executable, "-m", "pip", "install", "--user", "--quiet", "--upgrade",
+           "--force-reinstall", "--no-deps"]
     try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "--user", "--quiet",
-                        "--break-system-packages", spec], check=True, timeout=600)
+        helptext = subprocess.run([*pip[:4], "--help"], capture_output=True, text=True,
+                                  timeout=60, check=False).stdout
+        if "--break-system-packages" in helptext:     # PEP 668 distros; old pip lacks the flag
+            pip.append("--break-system-packages")
+        subprocess.run([*pip, f"git+{_REPO_URL}@{commit}"], check=True, timeout=600)
     except (subprocess.SubprocessError, OSError):
         return False
     return True
 
 
-def check_and_update(home: Path, module: str, argv: list[str], *,  # noqa: PLR0913
-                     now: float | None = None,
-                     fetch: Callable[[], str | None] = latest_release,
+def check_and_update(module: str, argv: list[str], *,  # noqa: PLR0913
+                     fetch: Callable[[], str | None] = remote_commit,
+                     installed: Callable[[], str | None] = installed_commit,
+                     write: Callable[[str], object] = sys.stderr.write,
                      reexec: bool = True) -> bool:
     """
-    On launch: if a newer GitHub release exists, pip-install it and re-exec (best-effort).
+    On every launch: if `main` moved past the installed commit, pip-install it and re-exec.
 
-    Checked at most once per day (stamped in <home>/update.json). Disabled by `--no-update` or
-    HASHPASS_NO_UPDATE. Any failure or offline state is swallowed and the tool continues on the
-    current version. Returns True when an update was installed.
+    Best-effort: offline, a non-git install, or a failed pip leaves the current copy running.
+    Disabled by `--no-update` or HASHPASS_NO_UPDATE. Returns True when an update was installed.
     """
-    if os.environ.get(_ENV_NO_UPDATE) or "--no-update" in argv:
+    if os.environ.get(_ENV_NO_UPDATE) or os.environ.get(_ENV_UPDATED) or "--no-update" in argv:
         return False
-    now = time.time() if now is None else now
-    if not _should_check(home, now=now):
+    current = installed()
+    if current is None:
         return False
-    _write_stamp(home, now=now)
     latest = fetch()
-    if not latest or not is_newer(latest, __version__) or not _pip_install(latest):
+    if not latest or latest == current:
         return False
-    sys.stderr.write(f"hashpass: обновлено до {latest}\n")
+    write(f"\x1b[36mобновляю {module} ({current[:7]} → {latest[:7]})…\x1b[0m\n")
+    if not _pip_install(latest):
+        write("\x1b[33mобновить не удалось — работаю на текущей версии\x1b[0m\n")
+        return False
+    write(f"\x1b[32m{module} обновлён\x1b[0m\n")
     if reexec:
+        os.environ[_ENV_UPDATED] = "1"
+        argv = [a for a in argv if a != "--no-update"]
         os.execv(sys.executable, [sys.executable, "-m", module, *argv])  # noqa: S606
     return True

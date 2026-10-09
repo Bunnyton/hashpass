@@ -2155,8 +2155,7 @@ def run_main(parser: argparse.ArgumentParser,
     """
     real_argv = list(argv) if argv is not None else sys.argv[1:]
     with contextlib.suppress(Exception):   # self-update is best-effort; never block the CLI
-        check_and_update(resolve_root(os.environ, default_home=Path.home()),
-                         parser.prog, real_argv)
+        check_and_update(parser.prog, real_argv)
     args = parser.parse_args(argv)
     try:
         env = build_env()

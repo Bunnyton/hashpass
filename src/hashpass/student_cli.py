@@ -15,6 +15,8 @@ def build_parser() -> argparse.ArgumentParser:
                                      description="Регистрация, загрузка и запуск заданий hashpass.")
     parser.add_argument("--version", action="version",
                         version=f"hashpass {version.__version__}")
+    parser.add_argument("--no-update", action="store_true",
+                        help="не обновляться при запуске (иначе ставится свежий main с GitHub)")
     sub = parser.add_subparsers(dest="command")
     p_reg = sub.add_parser("register", help="регистрация на пуле (логин + группа)")
     p_reg.add_argument("--pool", help="адрес пула (иначе $HASHPASS_POOL или сохранённый)")

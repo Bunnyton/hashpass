@@ -24,6 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hashengine",
         description="Сборка, публикация и запуск пула заданий hashpass (для авторов).")
+    parser.add_argument("--no-update", action="store_true",
+                        help="не обновляться при запуске (иначе ставится свежий main с GitHub)")
     sub = parser.add_subparsers(dest="command")
     p_build = sub.add_parser("build", help="собрать образ/задание из Taskfile")
     p_build.add_argument("taskfile")
