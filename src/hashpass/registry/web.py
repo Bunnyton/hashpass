@@ -25,7 +25,7 @@ echo "Установка hashpass (__ROLE__); пул: $POOL"
 # Package names and the install command follow the host's package manager (Debian/Ubuntu,
 # Arch, Fedora); the task containers are Debian regardless of the host.
 if command -v pacman >/dev/null 2>&1; then
-  PKG_INSTALL="sudo pacman -S --needed"; P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd
+  PKG_INSTALL="sudo pacman -S --needed --noconfirm"; P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd
 elif command -v dnf >/dev/null 2>&1; then
   PKG_INSTALL="sudo dnf install -y"; P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
 else
@@ -37,9 +37,14 @@ python3 -m pip --version >/dev/null 2>&1 || missing="$missing $P_PIP"
 command -v git >/dev/null 2>&1 || missing="$missing git"
 command -v systemd-nspawn >/dev/null 2>&1 || missing="$missing $P_NSPAWN"
 if [ -n "$missing" ]; then
-  echo "не хватает зависимостей:$missing" >&2
-  echo "установите их и повторите:  $PKG_INSTALL$missing" >&2
-  exit 1
+  # Install them right here (sudo asks for the password on /dev/tty, so `curl | bash` works).
+  echo "ставлю недостающие пакеты:$missing"
+  # shellcheck disable=SC2086  # word-splitting of the command and the package list is intended
+  if ! $PKG_INSTALL$missing </dev/tty; then
+    echo "не удалось поставить:$missing" >&2
+    echo "поставьте вручную и повторите:  $PKG_INSTALL$missing" >&2
+    exit 1
+  fi
 fi
 # `--upgrade --force-reinstall --no-deps`: pip normally sees "hashpass X.Y.Z is
 # already installed" and does nothing -- even when the git branch has moved and

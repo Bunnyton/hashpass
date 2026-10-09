@@ -102,10 +102,10 @@ def test_install_script_targets_pool_and_pip():
     assert "pip install --user" in script
     assert "git+https://github.com/Bunnyton/hashpass@main" in script
     assert "pool.json" in script
-    # preflight checks all tools before the download; the install line comes after them
+    # preflight installs every missing tool before the download; the pip line comes after
     for tool in ("python3", "python3 -m pip --version", "git"):
         assert tool in script
-    assert script.index("не хватает зависимостей") < script.index("pip install --user")
+    assert script.index("ставлю недостающие пакеты") < script.index("pip install --user")
 
 
 @pytest.mark.tier1
@@ -142,6 +142,7 @@ def test_install_script_puts_user_bin_on_path():
 def test_install_script_names_packages_for_the_hosts_package_manager():
     """Arch: pacman + python-pip; Debian/Ubuntu: apt + python3-pip; systemd-nspawn is checked."""
     script = render_install_script("http://pool.example/")
-    assert 'PKG_INSTALL="sudo pacman -S --needed"; P_PY=python; P_PIP=python-pip' in script
+    assert 'PKG_INSTALL="sudo pacman -S --needed --noconfirm"; P_PY=python; P_PIP=python-pip' in script
+    assert "if ! $PKG_INSTALL$missing </dev/tty; then" in script          # installs, not just hints
     assert 'PKG_INSTALL="sudo apt install -y"' in script
     assert "command -v systemd-nspawn" in script
