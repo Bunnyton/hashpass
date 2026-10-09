@@ -94,3 +94,59 @@ def test_task_row_status_labels() -> None:
     assert r.status_label() == "не решено · зачтено"      # server credit only (done elsewhere)
     r.hidden = True
     assert r.status_label() == "закрыто"
+
+
+def _env(tmp_path: Path) -> _StubEnv:
+    env = _StubEnv(images=tmp_path / "images", root=tmp_path / "root",
+                   registry=tmp_path / "registry")
+    for p in (env.images, env.root, env.registry):
+        p.mkdir(parents=True, exist_ok=True)
+    return env
+
+
+def _leaves(app: PoolTUI) -> list[str]:
+    from textual.widgets import Tree  # noqa: PLC0415
+    tree = app.query_one("#tasks", Tree)
+    return [str(n.label) for b in tree.root.children for n in (b.children or [b])]
+
+
+@pytest.mark.tier1
+def test_tui_shows_hidden_tasks_to_staff_with_ref(tmp_path: Path) -> None:
+    """An author/admin sees a hidden task's ref with a «скрыто» badge -- not «закрыто», not empty."""
+    entries = [{"number": 1, "ref": "lab:1", "block_name": "Б", "available": False,
+                "hidden": True, "preview": True, "digest": ""}]
+
+    async def _drive() -> None:
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "teacher", "tok")
+        app.client = _StubClient(entries)
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            leaves = _leaves(app)
+            assert any("lab:1" in s and "скрыто" in s for s in leaves), leaves
+            assert app.rows[0].hidden is False
+            await pilot.press("q")
+
+    asyncio.run(_drive())
+
+
+class _DownClient(_StubClient):
+    def catalog(self, *, token: str) -> list[dict]:  # noqa: ARG002
+        msg = "не удалось подключиться к пулу https://x:8080: wrong version number"
+        raise RuntimeError(msg)
+
+
+@pytest.mark.tier1
+def test_tui_reports_unreachable_pool_instead_of_empty(tmp_path: Path) -> None:
+    """A failed /catalog must say the pool is unreachable, not «в пуле пока нет заданий»."""
+
+    async def _drive() -> None:
+        app = PoolTUI(_env(tmp_path), "https://x:8080", "teacher", "tok")
+        app.client = _DownClient([])
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            leaves = " ".join(_leaves(app))
+            assert "нет заданий" not in leaves
+            assert "не удалось подключиться" in leaves
+            await pilot.press("q")
+
+    asyncio.run(_drive())

@@ -23,7 +23,7 @@
 </div>
 </details>
 </div>
-<p class='sub'>Перетащите задание, чтобы изменить его номер или блок. Скрытое видно студенту как «№N · закрыто», но не показывает, какое именно.</p>
+<p class='sub'>Перетащите задание, чтобы изменить его номер или блок. Скрытое видно студенту как «№N · закрыто», но не показывает, какое именно; автор и админ видят его в hashpass и могут запустить. Чтобы открывать задания по одному — «⋯ → Скрыть все задания» у блока, затем «Показать» у нужного.</p>
 {% if blocks %}
 <div id='cat'>
 {% for b in blocks %}
@@ -43,6 +43,20 @@
 <input type='hidden' name='open' value='{{ '0' if b.open else '1' }}'>
 <button class='menu-item' type='submit'>{{ 'Скрыть' if b.open else 'Сделать доступным' }}</button>
 </form>
+{% if b.tasks | rejectattr('hidden') | list %}
+<form class='inline' method='post' action='/web/blocks/hide-tasks' title='блок остаётся открытым — открывайте задания по одному'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<input type='hidden' name='hidden' value='1'>
+<button class='menu-item' type='submit'>Скрыть все задания</button>
+</form>
+{% endif %}
+{% if b.tasks | selectattr('hidden') | list %}
+<form class='inline' method='post' action='/web/blocks/hide-tasks'>
+<input type='hidden' name='block_id' value='{{ b.id }}'>
+<input type='hidden' name='hidden' value='0'>
+<button class='menu-item' type='submit'>Показать все задания</button>
+</form>
+{% endif %}
 <form class='inline' method='post' action='/web/blocks/remove'>
 <input type='hidden' name='block_id' value='{{ b.id }}'>
 <button class='menu-item danger' type='submit'>Удалить блок</button>

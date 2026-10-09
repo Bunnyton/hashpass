@@ -7,6 +7,7 @@ order. Availability is per block: a task is open to students iff its block is op
 """
 import json
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -180,6 +181,24 @@ class Catalog:
                     t["hidden"] = hidden
                     self._save(data)
                     return True
+        return False
+
+    def set_block_tasks_hidden(self, block_id: str, *, hidden: bool,
+                               may: Callable[[str], bool] = lambda _ref: True) -> bool:
+        """
+        Hide (or show) every task of a block that `may(ref)` allows; return whether the block existed.
+
+        This is how a teacher opens a block's tasks one by one: hide them all, keep the block
+        open, then show single tasks with `set_task_hidden`.
+        """
+        data = self._load()
+        for b in data.get("blocks", []):
+            if b.get("id") == block_id:
+                for t in b.get("tasks", []):
+                    if may(f"{t.get('name')}:{t.get('version')}"):
+                        t["hidden"] = hidden
+                self._save(data)
+                return True
         return False
 
     def remove_task(self, ref: str) -> bool:

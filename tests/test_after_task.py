@@ -169,3 +169,14 @@ def test_failed_submit_is_still_reported(tmp_path, monkeypatch):
     out: list[str] = []
     assert cli.cmd_pool_run(env, "1", cli.Io(read=lambda _p: "q", write=out.append, clock=lambda: "")) == 0
     assert any("нет связи" in s for s in out)
+
+
+@pytest.mark.tier1
+def test_next_entry_includes_hidden_tasks_for_staff_preview():
+    """Author/admin walk through a hidden block too: `preview` makes a locked task runnable."""
+    entries = [
+        {"number": 1, "ref": "b/a:1", "available": True, "hidden": False},
+        {"number": 2, "ref": "b/b:1", "available": False, "hidden": True, "preview": True},
+        {"number": 3, "ref": "b/c:1", "available": False, "hidden": True},
+    ]
+    assert cli._next_entry(entries, "b/a:1")["ref"] == "b/b:1"           # noqa: SLF001

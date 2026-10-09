@@ -1826,11 +1826,16 @@ def _require_pool_identity(env: Home, io: Io) -> tuple[str, str]:
     return url, user
 
 
+def runnable(entry: dict[str, object]) -> bool:
+    """Whether this viewer may run a catalog task: open to students, or a staff `preview`."""
+    return bool(entry.get("available", True) or entry.get("preview", False))
+
+
 def pull_new(env: Home, url: str, token: str, *, workers: int = 8) -> tuple[int, int]:
     """Pull catalog images (parallel) + changed task bundles; return (layers, tasks) fetched."""
     store = ImageStore(env.images)
     client = RemoteRegistry(url)
-    entries = [e for e in client.catalog(token=token) if e.get("available", True)]  # skip locked
+    entries = [e for e in client.catalog(token=token) if runnable(e)]  # skip locked
     layers = client.pull_many([str(e["ref"]) for e in entries], store, workers=workers, refresh=True)
 
     def _task(entry: dict[str, object]) -> str | None:
@@ -1911,7 +1916,8 @@ def pool_status(env: Home, url: str, token: str, user: str) -> list[dict[str, ob
         server = mine.get(ref, {}).get("status") if isinstance(mine.get(ref), dict) else None
         rows.append({"number": entry["number"], "title": ref,   # a task's name is its image ref
                      "ref": ref, "local": ref in solved, "server": server,
-                     "available": entry.get("available", True),
+                     "available": runnable(entry),
+                     "preview": bool(entry.get("preview", False)),
                      "block": str(entry.get("block_name", ""))})
     return rows
 
@@ -1919,6 +1925,8 @@ def pool_status(env: Home, url: str, token: str, user: str) -> list[dict[str, ob
 def _status_badge(row: dict[str, object]) -> str:
     if not row.get("available", True):
         return "\x1b[2mнедоступно\x1b[0m"          # visible, but locked right now
+    if row.get("preview"):
+        return "\x1b[33mскрыто от студентов\x1b[0m"  # author/admin: locked for students, runnable here
     if row.get("server") == "passed":
         return "\x1b[32mзачтено\x1b[0m"
     if row.get("local"):
@@ -2025,7 +2033,8 @@ def _next_entry(entries: list[dict[str, object]], current_ref: str,
     if current is None:
         return None
     todo = sorted((e for e in entries
-                   if e.get("available", True) and not e.get("hidden", False)
+                   if (runnable(e) if e.get("preview") else
+                       e.get("available", True) and not e.get("hidden", False))
                    and str(e.get("ref")) not in solved and e is not current),
                   key=lambda e: int(e.get("number") or 0))
     ahead = [e for e in todo if int(e.get("number") or 0) > int(current.get("number") or 0)]
@@ -2071,7 +2080,7 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
     """Run ONE pool task; return (exit code, solved) -- None when nothing was graded (locked/failed)."""
     client0 = RemoteRegistry(url)
     entry = next((e for e in client0.catalog(token=token) if str(e["ref"]) == ref), None)
-    if entry is not None and not entry.get("available", True):
+    if entry is not None and not runnable(entry):
         io.write("\x1b[33mзадание сейчас недоступно\x1b[0m\n")   # visible in the list, but locked
         return 0, None
     outcome: dict[str, bool | None] = {"solved": None}   # stays None unless the console ran
@@ -2103,6 +2112,9 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
         except (urllib.error.URLError, RuntimeError, ValueError) as exc:
             io.write(f"\x1b[33mне зачтено (нет связи?): {exc}\x1b[0m\n"
                      "\x1b[2m  позже нажмите s в меню для самопроверки\x1b[0m\n")
+            return
+        if result.get("status") == "unavailable" and entry and entry.get("preview"):
+            io.write("\x1b[2mзадание скрыто от студентов — прогон автора не засчитывается\x1b[0m\n")
             return
         if result.get("status") != "passed":             # success is silent: «РЕШЕНО» was shown
             io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"

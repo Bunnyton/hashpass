@@ -276,6 +276,8 @@ class PoolServer:
                          self._web_block_remove, methods=["POST"])
         app.add_url_rule("/web/blocks/toggle", "web_block_toggle",
                          self._web_block_toggle, methods=["POST"])
+        app.add_url_rule("/web/blocks/hide-tasks", "web_block_hide_tasks",
+                         self._web_block_hide_tasks, methods=["POST"])
 
     # -- response helpers ---------------------------------------------------
 
@@ -505,10 +507,19 @@ class PoolServer:
         return self._json(HTTPStatus.OK, profile)
 
     def _route_catalog(self) -> Response:
-        if self._token_user() is None:
+        """
+        Return the ordered catalog.
+
+        `available` is always the STUDENT view; for an author/admin a locked task also carries
+        `preview: true` -- they see its ref and may run it (no credit).
+        """
+        user = self._token_user()
+        if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
-        return self._json(HTTPStatus.OK,
-                          {"catalog": [e.as_dict() for e in self.catalog().entries()]})
+        staff = self.users.role(user) in _AUTHOR_ROLES
+        rows = [e.as_dict() | ({"preview": True} if staff and not e.available else {})
+                for e in self.catalog().entries()]
+        return self._json(HTTPStatus.OK, {"catalog": rows})
 
     def _route_catalog_layout(self) -> Response:
         """
@@ -1145,6 +1156,16 @@ class PoolServer:
             return self._redirect("/web/login")
         self.catalog().set_block_open(request.form.get("block_id", ""),
                                       open_=request.form.get("open", "") == "1")
+        return self._redirect("/web/images")
+
+    def _web_block_hide_tasks(self) -> Response:
+        """Hide/show every task of a block at once -- only the ones this author may write."""
+        user = self._session_role(_AUTHOR_ROLES)
+        if user is None:
+            return self._redirect("/web/login")
+        self.catalog().set_block_tasks_hidden(
+            request.form.get("block_id", ""), hidden=request.form.get("hidden", "") == "1",
+            may=lambda ref: self._may_write(user, ref.partition(":")[0]))
         return self._redirect("/web/images")
 
 

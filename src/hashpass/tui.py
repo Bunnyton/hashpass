@@ -6,7 +6,8 @@ Enter on a block collapses/expands it (native Tree behaviour, nothing to relearn
 Right: a splash card on empty selection, a rich task-detail card on a highlighted
 task. Statuses are words (решено / зачтено / не начато / грузится). Hidden tasks
 render as "№N · закрыто" without the ref -- the student sees the slot but not
-which task it is. Bindings honour both English AND Russian keyboard layouts, so
+which task it is; an author/admin (`preview` from the pool) sees the ref with a
+«скрыто» badge and can run it. Bindings honour both English AND Russian keyboard layouts, so
 q/й, r/к, s/ы all work regardless of the OS layout.
 
 If the runtime `textual` package isn't installed, `cli.cmd_pool_home` falls back
@@ -21,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Tree
@@ -55,6 +57,7 @@ class TaskRow:
     local: bool = False             # solved on this machine (offline mark)
     state: str = "ожидает"          # local download state: ожидает / грузится / готово / ошибка
     hidden: bool = False            # locked to the student: block closed OR per-task hidden
+    preview: bool = False           # locked for students, but this viewer (author/admin) may run it
 
     def status_label(self) -> str:
         """One-line status without Rich markup (used by tests / plain-text callers)."""
@@ -82,6 +85,8 @@ class TaskRow:
         local_dot = "[green]●[/] решено" if self.local else "[dim]○ не решено[/]"
         server_dot = "[green]●[/] зачтено" if self.server == "passed" else "[dim]○ не зачтено[/]"
         tail = f"   {local_dot}   {server_dot}"
+        if self.preview:
+            tail += "   [yellow]· скрыто[/]"
         if self.state == "грузится":
             tail += "   [cyan]· грузится[/]"
         elif self.state == "ошибка":
@@ -117,6 +122,7 @@ class PoolTUI(App):
         self.client = RemoteRegistry(url)
         self.store = ImageStore(env.images)
         self.rows: list[TaskRow] = []
+        self._load_error: str | None = None    # why the catalog could not be fetched
         self._rows_lock = threading.Lock()
         self._pool: ThreadPoolExecutor | None = None
 
@@ -157,12 +163,15 @@ class PoolTUI(App):
         """Fetch catalog + progress + local-solved, rebuild `self.rows`, redraw the tree."""
         from hashpass.cli import (  # noqa: PLC0415  (avoid cycle at module load)
             load_solved,
+            runnable,
             task_dir,
         )
         try:
             entries = self.client.catalog(token=self.token)
-        except Exception:                                  # noqa: BLE001 (offline)
+            self._load_error = None
+        except Exception as exc:                           # noqa: BLE001 (offline)
             entries = []
+            self._load_error = str(exc) or type(exc).__name__
         solved = load_solved(self.env)
         try:
             mine = self.client.progress(token=self.token).get(self.user, {})
@@ -171,7 +180,7 @@ class PoolTUI(App):
         rows: list[TaskRow] = []
         for e in entries:
             ref = str(e["ref"])
-            hidden = not e.get("available", True)
+            hidden = not runnable(e)
             digest = str(e.get("digest", ""))
             ready = False
             if self.store.exists(ref):
@@ -184,7 +193,8 @@ class PoolTUI(App):
                 ref=ref, number=int(e.get("number") or 0), block=str(e.get("block_name", "")),
                 available=bool(e.get("available", True)), digest=digest,
                 server=server_status, local=ref in solved,
-                state="готово" if ready else "ожидает", hidden=hidden))
+                state="готово" if ready else "ожидает", hidden=hidden,
+                preview=bool(e.get("preview", False))))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
@@ -214,7 +224,10 @@ class PoolTUI(App):
         with self._rows_lock:
             rows_snapshot = list(self.rows)
         if not rows_snapshot:
-            tree.root.add_leaf("[dim]в пуле пока нет заданий[/]")
+            if self._load_error:
+                tree.root.add_leaf(f"[red]{escape(self._load_error)}[/]")
+            else:
+                tree.root.add_leaf("[dim]в пуле пока нет заданий[/]")
             return
         by_block: dict[str, list[TaskRow]] = {}
         order: list[str] = []
