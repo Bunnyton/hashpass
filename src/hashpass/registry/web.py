@@ -38,9 +38,27 @@ fi
 # have from the first install and don't want to churn on every rerun).  If new
 # runtime deps ever land, run install.sh a second time WITHOUT --no-deps, or
 # `pip install --upgrade flask textual` by hand.
-python3 -m pip install --user --break-system-packages --upgrade --force-reinstall --no-deps \\
+# --break-system-packages is needed on PEP 668 distros (Debian 12+, Ubuntu 23.04+) but an
+# older pip (Ubuntu 22.04: pip 22.0) rejects the unknown flag -- pass it only when supported.
+BSP=""
+python3 -m pip install --help 2>/dev/null | grep -q -- --break-system-packages && BSP="--break-system-packages"
+python3 -m pip install --user $BSP --upgrade --force-reinstall --no-deps \\
     "git+https://github.com/__REPO__@main"
-python3 -m pip install --user --break-system-packages --upgrade "flask>=3.0" "textual>=1.0"
+python3 -m pip install --user $BSP --upgrade "flask>=3.0" "textual>=1.0"
+# `pip --user` puts the commands into ~/.local/bin. Ubuntu's ~/.profile adds that dir to PATH
+# only if it ALREADY existed at login -- on a first install it did not, so `hashpass` was
+# «command not found». Persist it in the shell rc files, and say how to pick it up right now.
+BIN="$(python3 -m site --user-base)/bin"
+PATH_LINE='case ":$PATH:" in *":'"$BIN"':"*) ;; *) export PATH="'"$BIN"':$PATH" ;; esac  # hashpass'
+for rc in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.zshrc"; do
+  case "$rc" in *.zshrc) [ -f "$rc" ] || continue ;; esac
+  grep -qsF "$PATH_LINE" "$rc" || printf '\\n%s\\n' "$PATH_LINE" >> "$rc"
+done
+case ":$PATH:" in
+  *":$BIN:"*) ;;
+  *) echo "Команды установлены в $BIN; этот каталог добавлен в PATH (~/.bashrc, ~/.profile)."
+     echo "В уже открытом терминале выполните:  source ~/.bashrc   (или откройте новый терминал)" ;;
+esac
 mkdir -p "$HOME/.hashpass"
 printf '{"url": "%s", "user": ""}\\n' "$POOL" > "$HOME/.hashpass/pool.json"
 __EXTRA__
@@ -61,7 +79,7 @@ def _install_script(pool_url: str, *, role: str, nxt: str, extra: str = ":") -> 
 
 def render_install_script(pool_url: str) -> str:
     """Return the student install script (installs `hashpass`, seeds the pool URL into pool.json)."""
-    return _install_script(pool_url, role="student", nxt="Запустите:  hashpass")
+    return _install_script(pool_url, role="student", nxt="Запустите:  hashpass   (без sudo — пароль sudo он спросит сам)")
 
 
 def render_engine_install_script(pool_url: str) -> str:

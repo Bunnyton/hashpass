@@ -122,3 +122,13 @@ def test_install_script_passes_shellcheck():
     proc = subprocess.run(["shellcheck", "-s", "bash", "-"], input=script,
                           text=True, capture_output=True, check=False)
     assert proc.returncode == 0, proc.stdout
+
+
+@pytest.mark.tier1
+def test_install_script_puts_user_bin_on_path():
+    """Ubuntu: ~/.local/bin is not on PATH after a first `pip --user` install -> persist it."""
+    script = render_install_script("http://pool.example/")
+    assert 'BIN="$(python3 -m site --user-base)/bin"' in script
+    assert '"$HOME/.bashrc" "$HOME/.profile"' in script
+    assert "source ~/.bashrc" in script
+    assert 'grep -q -- --break-system-packages && BSP="--break-system-packages"' in script
