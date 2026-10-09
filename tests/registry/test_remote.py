@@ -123,9 +123,9 @@ def test_pull_records_pool_digest_and_refresh_repulls_only_when_changed(registry
     calls: list[str] = []
     original_download = RemoteRegistry.download_image
 
-    def _counting_download(self, ref, dest) -> str:
+    def _counting_download(self, ref, dest, **kw) -> str:  # noqa: ANN003
         calls.append(ref)
-        return original_download(self, ref, dest)
+        return original_download(self, ref, dest, **kw)
 
     monkeypatch.setattr(RemoteRegistry, "download_image", _counting_download)
     assert anon.pull_many([ref], dest, refresh=True) == []            # same digest -> nothing

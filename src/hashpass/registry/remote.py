@@ -14,6 +14,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from http import HTTPStatus
@@ -36,6 +37,10 @@ from hashpass.registry.token import token_expiry
 _TIMEOUT = 30
 _DIGEST_HEADER = "X-Image-Digest"
 _COPY_CHUNK = 1 << 20
+_PROGRESS_CHUNK = 1 << 16    # finer reads when a download reports progress (smooth bars)
+
+# Download progress: (ref, bytes so far, total bytes or None while unknown).
+Progress = Callable[[str, int, int | None], None]
 
 # The pool is reached directly (loopback in tests), so this client must NOT route through an
 # ambient HTTP(S)_PROXY -- a sandbox/corp proxy would intercept 127.0.0.1 and answer 500. An empty
@@ -108,14 +113,29 @@ class RemoteRegistry:
             return [raw, "https://" + raw[len("http://"):]]
         return ["https://" + raw, "http://" + raw]
 
-    def _open_once(self, req: urllib.request.Request,
-                   sink: BinaryIO | None = None) -> tuple[bytes, dict[str, str]]:
-        """Open one request; return (body, headers). With `sink`, stream the body there instead."""
+    def _open_once(self, req: urllib.request.Request, sink: BinaryIO | None = None,
+                   on_bytes: Callable[[int, int | None], None] | None = None,
+                   ) -> tuple[bytes, dict[str, str]]:
+        """
+        Open one request; return (body, headers). With `sink`, stream the body there instead.
+
+        `on_bytes(done, total)` is called as a streamed body arrives (total from Content-Length).
+        """
         def _drain(resp) -> tuple[bytes, dict[str, str]]:
             headers = dict(resp.headers.items())
             if sink is None:
                 return resp.read(), headers
-            shutil.copyfileobj(resp, sink, _COPY_CHUNK)
+            if on_bytes is None:
+                shutil.copyfileobj(resp, sink, _COPY_CHUNK)
+                return b"", headers
+            length = headers.get("Content-Length", "")
+            total = int(length) if length.isdigit() else None
+            done = 0
+            on_bytes(done, total)
+            while chunk := resp.read(_PROGRESS_CHUNK):
+                sink.write(chunk)
+                done += len(chunk)
+                on_bytes(done, total)
             return b"", headers
         try:
             with _DIRECT.open(req, timeout=_TIMEOUT) as resp:
@@ -128,9 +148,11 @@ class RemoteRegistry:
             with _DIRECT_INSECURE.open(req, timeout=_TIMEOUT) as resp:   # self-signed: trust it
                 return _drain(resp)
 
-    def _request(self, method: str, path: str, *, data: bytes | BinaryIO | None = None,
-                 headers: dict[str, str] | None = None,
-                 sink: BinaryIO | None = None) -> tuple[bytes, dict[str, str]]:
+    def _request(self, method: str, path: str, *,  # noqa: PLR0913
+                 data: bytes | BinaryIO | None = None,
+                 headers: dict[str, str] | None = None, sink: BinaryIO | None = None,
+                 on_bytes: Callable[[int, int | None], None] | None = None,
+                 ) -> tuple[bytes, dict[str, str]]:
         """
         Like the old _send, but also returns response headers and can stream to `sink`.
 
@@ -144,7 +166,7 @@ class RemoteRegistry:
             req = urllib.request.Request(  # noqa: S310  (scheme is http/https by construction)
                 f"{base}{path}", data=data, method=method, headers=dict(headers or {}))
             try:
-                out = self._open_once(req, sink)
+                out = self._open_once(req, sink, on_bytes)
             except urllib.error.HTTPError:
                 self._resolved_base = base          # the server answered -> this scheme is right
                 raise
@@ -259,7 +281,8 @@ class RemoteRegistry:
             raise
         return headers.get(_DIGEST_HEADER) or None
 
-    def download_image(self, ref: str, dest: Path) -> str:
+    def download_image(self, ref: str, dest: Path, *,
+                       on_bytes: Callable[[int, int | None], None] | None = None) -> str:
         """
         Stream `ref`'s blob into `dest`, verifying sha256 against X-Image-Digest when present.
 
@@ -268,7 +291,8 @@ class RemoteRegistry:
         """
         name, version = split_ref(ref)
         with dest.open("wb") as sink:
-            _body, headers = self._request("GET", f"/image/{name}/{version}", sink=sink)
+            _body, headers = self._request("GET", f"/image/{name}/{version}", sink=sink,
+                                           on_bytes=on_bytes)
         expected = headers.get(_DIGEST_HEADER, "")
         if not expected:
             return ""
@@ -295,7 +319,8 @@ class RemoteRegistry:
         remote = self.image_digest(ref)
         return remote is not None and remote != store.get(ref).pool_digest
 
-    def _pull_one(self, item: str, store: ImageStore, *, refresh: bool) -> bool:
+    def _pull_one(self, item: str, store: ImageStore, *, refresh: bool,
+                  progress: Progress | None = None) -> bool:
         """
         Download one ref's blob into `<store>/.incoming/`, check it, unpack it; True if stored.
 
@@ -309,7 +334,8 @@ class RemoteRegistry:
         with tempfile.NamedTemporaryFile(dir=incoming, suffix=".tar.gz", delete=False) as tmp:
             path = Path(tmp.name)
         try:
-            digest = self.download_image(item, path)          # network (parallel in pull_many)
+            on_bytes = (lambda done, total: progress(item, done, total)) if progress else None
+            digest = self.download_image(item, path, on_bytes=on_bytes)   # network (parallel)
             info = inspect_image_blob(path)                   # structure only, no extraction
             declared, requested = f"{info.name}:{info.version}", normalize_ref(item)
             if declared != requested:
@@ -333,8 +359,13 @@ class RemoteRegistry:
                 and self._pull_one(item, store, refresh=True)]
 
     def pull_many(self, refs: list[str], store: ImageStore, *, workers: int = 8,
-                  refresh: bool = False) -> list[str]:
-        """Pull several refs + closures concurrently; `refresh` also re-pulls digest-stale ones."""
+                  refresh: bool = False, progress: Progress | None = None) -> list[str]:
+        """
+        Pull several refs + closures concurrently; `refresh` also re-pulls digest-stale ones.
+
+        `progress(ref, done, total)` reports each layer like `docker pull`: (ref, 0, None) for
+        every layer queued, then bytes as they stream in.
+        """
         needed: list[str] = []
         seen: set[str] = set()
         for ref in refs:
@@ -345,9 +376,13 @@ class RemoteRegistry:
         to_fetch = [item for item in needed if self._wants(item, store, refresh=refresh)]
         if not to_fetch:
             return []
+        if progress is not None:
+            for item in to_fetch:
+                progress(item, 0, None)
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            stored = list(pool.map(lambda item: self._pull_one(item, store, refresh=refresh),
-                                   to_fetch))
+            stored = list(pool.map(
+                lambda item: self._pull_one(item, store, refresh=refresh, progress=progress),
+                to_fetch))
         return [item for item, ok in zip(to_fetch, stored, strict=True) if ok]
 
     def push(self, store: ImageStore, ref: str, *, token: str | None = None,

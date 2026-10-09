@@ -50,7 +50,7 @@ def test_ensure_base_pulls_from_pool_and_only_repulls_when_digest_changes(regist
     assert store.get(ref).pool_digest == pool.image_digest(ref)
     downloads: list[str] = []
     monkeypatch.setattr(RemoteRegistry, "download_image",
-                        lambda self, r, d, _orig=RemoteRegistry.download_image: downloads.append(r) or _orig(self, r, d))
+                        lambda self, r, d, _orig=RemoteRegistry.download_image, **kw: downloads.append(r) or _orig(self, r, d, **kw))
     assert cli.ensure_base_image(env, store, pool=pool) == layer          # same digest: no download
     assert downloads == []
     _push_fake_base(registry, tmp_path, "v2")                             # author re-pushed the base
@@ -74,7 +74,7 @@ def test_ensure_base_pulls_legacy_base_once(registry, tmp_path, monkeypatch):
     layer = cli.ensure_base_image(env, store, pool=pool)
     assert (layer / "marker.txt").read_text(encoding="utf-8") == "legacy"
     calls: list[str] = []
-    monkeypatch.setattr(RemoteRegistry, "download_image", lambda _self, r, _d: calls.append(r))
+    monkeypatch.setattr(RemoteRegistry, "download_image", lambda _self, r, _d, **_kw: calls.append(r))
     assert cli.ensure_base_image(env, store, pool=pool) == layer
     assert calls == []
 

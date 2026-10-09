@@ -16,16 +16,17 @@ happens on this module's own import, before any function is called.
 """
 from __future__ import annotations
 
+import contextlib
+import queue
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer, Tree
+from textual.widgets import Footer, Static, Tree
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.remote import RemoteRegistry
@@ -34,7 +35,43 @@ from hashpass.taskdigest import task_digest
 if TYPE_CHECKING:
     from hashpass.cli import Home
 
-_DOWN_WORKERS = 6            # parallel background downloads
+_DOWN_WORKERS = 4            # layers of ONE task downloaded in parallel (tasks go one by one)
+_TICK = 0.2                  # seconds between repaints of a running download (only when dirty)
+_BAR = 24                    # width of a layer's progress bar in the downloads panel
+_TASK_LAYER = "задание (проверка)"   # pseudo-layer: the task bundle pulled after the images
+
+
+def _mb(n: int) -> str:
+    return f"{n / (1 << 20):.1f}"
+
+
+def _bar(frac: float, width: int = _BAR) -> str:
+    full = max(0, min(width, round(frac * width)))
+    return "█" * full + "░" * (width - full)
+
+
+@dataclass
+class LayerBar:
+    """One layer in the downloads panel, like a `docker pull` line."""
+
+    ref: str
+    done: int = 0
+    total: int | None = None
+    state: str = "ждёт"             # ждёт / качается / готово / ошибка
+
+    def line(self, width: int) -> str:
+        """Rich-markup line: name, bar, percent and megabytes (or a word while not streaming)."""
+        name = escape(self.ref.ljust(width))
+        if self.state == "готово":
+            return f"  {name}  [green]{_bar(1.0)}  готово[/]"
+        if self.state == "ошибка":
+            return f"  {name}  [red]ошибка[/]"
+        if self.state == "ждёт" or not self.total:
+            got = f"  {_mb(self.done)} МБ" if self.done else ""
+            return f"  {name}  [dim]{_bar(0.0)}  {self.state}{got}[/]"
+        frac = self.done / self.total
+        return (f"  {name}  [cyan]{_bar(frac)}[/] {frac * 100:3.0f}%  "
+                f"{_mb(self.done)}/{_mb(self.total)} МБ")
 
 def _read_line(prompt: str) -> str | None:
     """Read one line from the suspended terminal (the after-task choice); None at EOF."""
@@ -55,7 +92,8 @@ class TaskRow:
     digest: str
     server: str | None = None       # "passed" / "failed" / None (pool verdict)
     local: bool = False             # solved on this machine (offline mark)
-    state: str = "ожидает"          # local download state: ожидает / грузится / готово / ошибка
+    state: str = "ожидает"          # local download: ожидает / в очереди / грузится / готово / ошибка
+    progress: float = 0.0           # 0..1 while грузится (all layers together)
     hidden: bool = False            # locked to the student: block closed OR per-task hidden
     preview: bool = False           # locked for students, but this viewer (author/admin) may run it
 
@@ -66,10 +104,17 @@ class TaskRow:
         parts = []
         parts.append("решено" if self.local else "не решено")
         parts.append("зачтено" if self.server == "passed" else "не зачтено")
-        head = " · ".join(parts)
+        return " · ".join([*parts, self.download_word()])
+
+    def download_word(self) -> str:
+        """Plain download status: загружено / не загружено / в очереди / грузится N% / ошибка."""
         if self.state == "готово":
-            return head
-        return f"{head} · {self.state}"
+            return "загружено"
+        if self.state == "грузится":
+            return f"грузится {self.progress * 100:.0f}%"
+        if self.state == "ошибка":
+            return "ошибка загрузки"
+        return "в очереди" if self.state == "в очереди" else "не загружено"
 
     def tree_label(self) -> str:
         """
@@ -84,13 +129,19 @@ class TaskRow:
             return f"[dim]№{self.number} · закрыто[/]"
         local_dot = "[green]●[/] решено" if self.local else "[dim]○ не решено[/]"
         server_dot = "[green]●[/] зачтено" if self.server == "passed" else "[dim]○ не зачтено[/]"
-        tail = f"   {local_dot}   {server_dot}"
+        if self.state == "готово":
+            down = "[green]●[/] загружено"
+        elif self.state == "грузится":
+            down = f"[cyan]{_bar(self.progress, 10)} {self.progress * 100:3.0f}%[/]"
+        elif self.state == "в очереди":
+            down = "[cyan]◌ в очереди[/]"
+        elif self.state == "ошибка":
+            down = "[red]✗ ошибка загрузки[/]"
+        else:
+            down = "[dim]○ не загружено[/]"
+        tail = f"   {local_dot}   {server_dot}   {down}"
         if self.preview:
             tail += "   [yellow]· скрыто[/]"
-        if self.state == "грузится":
-            tail += "   [cyan]· грузится[/]"
-        elif self.state == "ошибка":
-            tail += "   [red]· ошибка[/]"
         return f"№{self.number} · {self.ref}{tail}"
 
 
@@ -102,6 +153,8 @@ class PoolTUI(App):
     Tree { padding: 1 2; background: $surface; }
     Tree > .tree--cursor { background: $accent 40%; color: $text; }
     Tree > .tree--highlight-line { background: $accent 20%; }
+    #downloads { height: auto; max-height: 14; padding: 0 2; border-top: solid $accent;
+                 display: none; }
     """
 
     # Textual binds against the character, not the physical key -- a Russian layout
@@ -124,7 +177,17 @@ class PoolTUI(App):
         self.rows: list[TaskRow] = []
         self._load_error: str | None = None    # why the catalog could not be fetched
         self._rows_lock = threading.Lock()
-        self._pool: ThreadPoolExecutor | None = None
+        # Background downloads, `docker pull` style: tasks queue up and go ONE BY ONE; the
+        # layers of the current task download in parallel, each with its own bar. The worker
+        # thread only mutates this state and sets `_dirty`; a timer repaints from the UI thread.
+        self._queue: queue.Queue[TaskRow | None] = queue.Queue()
+        self._jobs: dict[str, TaskRow] = {}          # queued or downloading, by ref
+        self._active: TaskRow | None = None
+        self._layers: dict[str, LayerBar] = {}
+        self._dl_lock = threading.Lock()
+        self._dirty = False
+        self._notes: list[str] = []                  # toasts from the worker, shown by the timer
+        self._leaf_nodes: dict[str, object] = {}          # ref -> its Tree leaf (relabelled in place)
 
     # -- lifecycle --------------------------------------------------------
 
@@ -142,20 +205,21 @@ class PoolTUI(App):
         tree.show_root = False
         tree.guide_depth = 3
         yield tree
+        yield Static("", id="downloads")
         yield Footer()
 
     def on_mount(self) -> None:
         """Load the catalog once; welcome the student; no ticking timer, no background pulls."""
         self.title = f"hashpass · {self.user}"
         self._reload_catalog()
-        self._pool = ThreadPoolExecutor(max_workers=_DOWN_WORKERS)
+        threading.Thread(target=self._download_worker, daemon=True).start()
+        self.set_interval(_TICK, self._tick)
         # Textual toast in the corner -- friendly hello, not a modal
         self.notify(f"Добро пожаловать, {self.user}!", severity="information", timeout=4)
 
     def on_unmount(self) -> None:
-        """Stop the on-demand download pool on quit."""
-        if self._pool is not None:
-            self._pool.shutdown(wait=False, cancel_futures=True)
+        """Stop the download worker on quit (a layer in flight is abandoned with the process)."""
+        self._queue.put(None)
 
     # -- data -------------------------------------------------------------
 
@@ -189,6 +253,11 @@ class PoolTUI(App):
             server_status = None
             if isinstance(mine.get(ref), dict):
                 server_status = str(mine[ref].get("status") or "") or None
+            job = self._jobs.get(ref)
+            if job is not None:              # downloading right now: keep the live row object
+                job.number, job.server, job.local = int(e.get("number") or 0), server_status, ref in solved
+                rows.append(job)
+                continue
             rows.append(TaskRow(
                 ref=ref, number=int(e.get("number") or 0), block=str(e.get("block_name", "")),
                 available=bool(e.get("available", True)), digest=digest,
@@ -199,21 +268,109 @@ class PoolTUI(App):
             self.rows = rows
         self._paint_tree()
 
-    def _download_row(self, row: TaskRow) -> None:
-        """Pull the row's image closure + task bundle; update `row.state` transitions."""
-        from hashpass.cli import task_dir  # noqa: PLC0415
-        try:
-            row.state = "грузится"
-            self.client.pull_many([row.ref], self.store, workers=2)
-            if self.store.exists(row.ref):
-                tdir = task_dir(row.ref, self.store)
-                if not tdir.exists() or task_digest(tdir) != row.digest:
-                    self.client.pull_task(row.ref, tdir, token=self.token)
-                row.state = "готово"
-            else:
+    def _enqueue(self, row: TaskRow) -> None:
+        """Queue a task for background download (tasks are fetched one at a time, in order)."""
+        row.state = "в очереди"
+        row.progress = 0.0
+        with self._dl_lock:
+            self._jobs[row.ref] = row
+            self._dirty = True
+        self._queue.put(row)
+
+    def _download_worker(self) -> None:
+        """Worker thread: take queued tasks one by one and download each (its layers in parallel)."""
+        while (row := self._queue.get()) is not None:
+            with self._dl_lock:
+                self._active, self._layers = row, {}
+                row.state = "грузится"
+                self._dirty = True
+            try:
+                self._download_row(row)
+            except Exception:                              # noqa: BLE001
                 row.state = "ошибка"
-        except Exception:                                  # noqa: BLE001
+            with self._dl_lock:
+                self._jobs.pop(row.ref, None)
+                self._active = None
+                self._notes.append(f"№{row.number} {row.ref}: загружено — Enter, чтобы запустить"
+                                   if row.state == "готово" else
+                                   f"№{row.number} {row.ref}: не удалось загрузить")
+                self._dirty = True
+
+    def _on_layer(self, ref: str, done: int, total: int | None) -> None:
+        """`pull_many` progress hook (worker threads): update the layer's bar and the row's %."""
+        with self._dl_lock:
+            bar = self._layers.setdefault(ref, LayerBar(ref))
+            bar.done, bar.total = done, total
+            bar.state = "ждёт" if total is None and not done else "качается"
+            if total is not None and done >= total:
+                bar.state = "готово"
+            known = [b for b in self._layers.values() if b.total]
+            if self._active is not None and known:
+                self._active.progress = (sum(min(b.done, b.total or 0) for b in known)
+                                         / sum(b.total or 0 for b in known))
+            self._dirty = True
+
+    def _download_row(self, row: TaskRow) -> None:
+        """
+        Pull the row's image closure + the base + its task bundle; set `row.state` at the end.
+
+        The base goes in the same parallel batch, so starting the task afterwards does not
+        stall on a big base download in the console.
+        """
+        from hashpass.cli import base_ref, task_dir  # noqa: PLC0415
+        refs = [row.ref]
+        with contextlib.suppress(Exception):               # no base on the pool -> task alone
+            if self.client.image_digest(base_ref()) is not None:
+                refs.append(base_ref())
+        self.client.pull_many(refs, self.store, workers=_DOWN_WORKERS, refresh=True,
+                              progress=self._on_layer)
+        with self._dl_lock:
+            for bar in self._layers.values():
+                bar.state = "готово"
+            self._dirty = True
+        if not self.store.exists(row.ref):
             row.state = "ошибка"
+            return
+        tdir = task_dir(row.ref, self.store)
+        if not tdir.exists() or task_digest(tdir) != row.digest:
+            self._on_layer(_TASK_LAYER, 0, None)
+            self.client.pull_task(row.ref, tdir, token=self.token)
+            with self._dl_lock:
+                self._layers[_TASK_LAYER].state = "готово"
+        row.progress = 1.0
+        row.state = "готово"
+
+    def _tick(self) -> None:
+        """Timer (UI thread): if the worker changed anything, relabel rows and redraw the panel."""
+        with self._dl_lock:
+            if not self._dirty:
+                return
+            self._dirty = False
+            notes, self._notes = self._notes, []
+            text = self._downloads_text()
+        for ref, node in self._leaf_nodes.items():
+            row = node.data
+            if isinstance(row, TaskRow) and (ref in self._jobs or row.state != "ожидает"):
+                node.set_label(row.tree_label())
+        panel = self.query_one("#downloads", Static)
+        panel.update(text)
+        panel.display = bool(text)
+        for note in notes:
+            self.notify(note, timeout=4)
+
+    def _downloads_text(self) -> str:
+        """Render the downloads panel: the current task's layers, `docker pull` style ('' when idle)."""
+        row = self._active
+        if row is None:
+            return ""
+        waiting = sum(1 for r in self._jobs.values() if r is not row)
+        head = f"[b]Загрузка №{row.number} {escape(row.ref)}[/]"
+        if waiting:
+            head += f"   [dim]в очереди ещё: {waiting}[/]"
+        if not self._layers:
+            return head + "\n  [dim]проверяю слои…[/]"
+        width = max(len(r) for r in self._layers)
+        return "\n".join([head, *(b.line(width) for b in self._layers.values())])
 
     # -- render -----------------------------------------------------------
 
@@ -221,6 +378,7 @@ class PoolTUI(App):
         """Rebuild the Tree from `self.rows`, grouping tasks under their block."""
         tree = self.query_one("#tasks", Tree)
         tree.clear()
+        self._leaf_nodes = {}
         with self._rows_lock:
             rows_snapshot = list(self.rows)
         if not rows_snapshot:
@@ -244,7 +402,7 @@ class PoolTUI(App):
                     f"[dim]{visible_open}/{len(block_rows)} готово[/]")
             b_node = tree.root.add(head, expand=True)
             for row in block_rows:
-                b_node.add_leaf(row.tree_label(), data=row)
+                self._leaf_nodes[row.ref] = b_node.add_leaf(row.tree_label(), data=row)
         # focus the tree so arrow keys work immediately
         tree.focus()
 
@@ -266,14 +424,13 @@ class PoolTUI(App):
         if row.hidden:
             self._flash("Задание закрыто преподавателем")
             return
-        if row.state != "готово":
-            self._flash(f"Загружаю {row.ref}…")
-            self.refresh()
-            self._download_row(row)
-            self._paint_tree()   # let the row label reflect the new state
-            if row.state != "готово":
-                self._flash(f"Не удалось загрузить {row.ref}: {row.state}")
-                return
+        if row.state in ("в очереди", "грузится"):
+            self._flash(f"{row.ref} уже загружается — запустится по Enter, когда будет готово")
+            return
+        if row.state != "готово":   # ожидает / ошибка -> download in the background, UI stays live
+            self._enqueue(row)
+            self._flash(f"Загружаю {row.ref} в фоне — можно выбирать другие задания")
+            return
         from hashpass.cli import Io, _now_iso, cmd_pool_run  # noqa: PLC0415
         # The run happens inside suspend(), where the real terminal is visible: messages go to
         # sys.stdout so the student sees «пул недоступен …» / «собираю локально» before a long

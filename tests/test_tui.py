@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -83,15 +84,19 @@ def test_tui_boots_with_tree_of_blocks_and_tasks(tmp_path: Path) -> None:
 def test_task_row_status_labels() -> None:
     """A TaskRow computes the right two-badge status across states (local × server)."""
     r = TaskRow(ref="a:1", number=1, block="B", available=True, digest="")
-    assert r.status_label() == "не решено · не зачтено · ожидает"
+    assert r.status_label() == "не решено · не зачтено · не загружено"
+    r.state = "в очереди"
+    assert r.status_label() == "не решено · не зачтено · в очереди"
+    r.state, r.progress = "грузится", 0.42
+    assert r.status_label() == "не решено · не зачтено · грузится 42%"
     r.state = "готово"
-    assert r.status_label() == "не решено · не зачтено"
+    assert r.status_label() == "не решено · не зачтено · загружено"
     r.local = True
-    assert r.status_label() == "решено · не зачтено"      # locally done, pool hasn't credited
+    assert r.status_label() == "решено · не зачтено · загружено"   # locally done, not credited
     r.server = "passed"
-    assert r.status_label() == "решено · зачтено"         # both -- fully done
+    assert r.status_label() == "решено · зачтено · загружено"      # both -- fully done
     r.local = False
-    assert r.status_label() == "не решено · зачтено"      # server credit only (done elsewhere)
+    assert r.status_label() == "не решено · зачтено · загружено"   # server credit only
     r.hidden = True
     assert r.status_label() == "закрыто"
 
@@ -147,6 +152,67 @@ def test_tui_reports_unreachable_pool_instead_of_empty(tmp_path: Path) -> None:
             leaves = " ".join(_leaves(app))
             assert "нет заданий" not in leaves
             assert "не удалось подключиться" in leaves
+            await pilot.press("q")
+
+    asyncio.run(_drive())
+
+
+class _SlowClient(_StubClient):
+    """Downloads two layers in parallel, reporting progress; blocks until `go` is set."""
+
+    def __init__(self, entries: list[dict], go: threading.Event) -> None:
+        super().__init__(entries)
+        self.go = go
+
+    def image_digest(self, _ref: str) -> str | None:
+        return "sha"                                   # the pool has a base -> it joins the batch
+
+    def pull_many(self, refs: list[str], _store: object, **kw: object) -> list[str]:
+        progress = kw["progress"]
+        layers = [*refs]
+        for ref in layers:
+            progress(ref, 0, None)
+        for ref in layers:
+            progress(ref, 512, 1024)
+        self.go.wait(5)
+        for ref in layers:
+            progress(ref, 1024, 1024)
+        return layers
+
+
+@pytest.mark.tier1
+def test_tui_downloads_in_background_with_layer_bars(tmp_path: Path, monkeypatch) -> None:
+    """Enter on a not-downloaded task queues it; the UI stays live, the panel shows per-layer bars."""
+    from hashpass import cli  # noqa: PLC0415
+    monkeypatch.setattr(cli, "base_ref", lambda: "bunnyton/debian:trixie")
+    env = _env(tmp_path)
+    entries = [{"number": 1, "ref": "lab:1", "block_name": "Б", "available": True, "digest": ""}]
+    go = threading.Event()
+
+    async def _drive() -> None:
+        app = PoolTUI(env, "http://pool.example", "stud", "tok")
+        app.client = _SlowClient(entries, go)
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            assert "не загружено" in " ".join(_leaves(app))
+            app.store.exists = lambda _ref: False      # the stub pull stores nothing -> «ошибка»
+            from textual.widgets import Tree  # noqa: PLC0415
+            tree = app.query_one("#tasks", Tree)
+            tree.move_cursor(app._leaf_nodes["lab:1"])  # noqa: SLF001
+            await pilot.press("enter")               # Enter on a task = queue the download
+            await pilot.pause(0.6)
+            panel = str(app.query_one("#downloads").content)
+            assert "lab:1" in panel and "bunnyton/debian:trixie" in panel, panel
+            assert "50%" in panel and "0.0/0.0 МБ" in panel, panel
+            assert "грузится" in app.rows[0].status_label() or app.rows[0].state == "грузится"
+            go.set()
+            for _ in range(30):
+                await pilot.pause(0.1)
+                if app.rows[0].state != "грузится":
+                    break
+            await pilot.pause(0.4)
+            assert app.rows[0].state == "ошибка"         # finished (stub stored nothing)
+            assert str(app.query_one("#downloads").content) == ""   # panel hides when idle
             await pilot.press("q")
 
     asyncio.run(_drive())

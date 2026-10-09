@@ -196,11 +196,11 @@ def test_cmd_pool_run_survives_failing_base_download_with_local_base(registry, t
     local.set_pool_digest(cli.base_ref(), "0" * 64)
     orig_download = RemoteRegistry.download_image
 
-    def failing_download(self, ref, dest):  # noqa: ANN202
+    def failing_download(self, ref, dest, **kw):  # noqa: ANN202, ANN003
         if ref == cli.base_ref():
             msg = f"digest mismatch for {ref}: torn"
             raise ValueError(msg)
-        return orig_download(self, ref, dest)
+        return orig_download(self, ref, dest, **kw)
 
     monkeypatch.setattr(RemoteRegistry, "download_image", failing_download)
     ran = _stub_cmd_run(monkeypatch)
