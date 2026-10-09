@@ -1,16 +1,12 @@
-# cat-file — читаем файлы: cat. Ключ спрятан в одном из пяти писем; студент знает ls (прошлое
-# задание) и cat (теория этого). Приёмка — скрытая проверка по выводу последней команды
-# (HP_LAST_OUT): ключ показан на экране — неважно, какой командой.
+# cat-file — читаем файлы: cat. Исходная задумка: в домашнем каталоге лежит key_here.txt, полный
+# рекламы, и где-то в ней — ключ. ls (прошлое задание) находит файл, cat (теория этого) читает.
+# Приёмка — скрытая проверка по выводу последней команды (HP_LAST_OUT): ключ показан на экране.
 
 image cat-file:1
 
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/bank-notice.txt --kind ads --lines 28 --seed 110
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/newsletter-09.txt --kind ads --lines 34 --seed 111
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/promo-summer.txt --kind ads --lines 22 --seed 112
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/spam-2019.txt --kind ads --lines 30 --seed 113 --plant 'КЛЮЧ: black-cat-on-a-mat@0.6'
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/from-grandma.txt --kind prose --lines 26 --seed 114
-copy data/mailbox /home/student/mailbox
-run chown -R student:student /home/student/mailbox
+# data: key_here.txt сделан руками — 52 строки «Здесь может быть ваша реклама», ключ на 42-й (как в исходном задании)
+copy data/key_here.txt /home/student/key_here.txt
+run chown student:student /home/student/key_here.txt
 
 hidden hp
 
@@ -21,13 +17,13 @@ say "Окей, тебе пригодится всё, чему тебя учил�
 read brief.md
 
 stage
-  say "Найди ключ! Он где-то в письмах в /home/student/mailbox"
-  solve cat /home/student/mailbox/spam-2019.txt
+  say "Найди ключ!"
+  solve cat /home/student/key_here.txt
   check exec grade
   neutral ls pwd cd
-  on pass say "Ключ лежал в спаме — так часто и бывает. А cat умеет открыть и несколько файлов разом: cat a.txt b.txt."
-  hint tries 5 say "Писем несколько, а ключ — в одном. Все открыл?"
-  hint tries 8 say "Сначала посмотри, какие письма лежат в mailbox, потом открывай каждое командой из теории."
+  on pass say "Пятьдесят строк рекламы ради одной строки — привыкай, логи бывают такими же. А cat умеет открыть и несколько файлов разом: cat a.txt b.txt."
+  hint tries 3 say "Что вообще лежит у тебя в домашнем каталоге?"
+  hint tries 6 say "Файл нашёл? Открой его командой из теории."
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale
