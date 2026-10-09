@@ -1,0 +1,39 @@
+# pipes — конвейер: | отдаёт вывод одной команды другой, > кладёт вывод в файл.
+# Шаг 1 — два фильтра подряд (ERROR и postgres), одним словом их не поймать;
+# шаг 2 — тот же результат в файл. Приёмка — по результату (вывод, затем файл).
+
+image pipes:1
+
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/server/app.log --kind log --lines 800 --seed 210 --sprinkle ERROR --sprinkle-count 60
+copy data/server /home/student/server
+run chown -R student:student /home/student/server
+
+hidden hp
+
+settings
+  pager on
+
+say "Ночью сервер ругался. Утром — разбор полётов."
+read brief.md
+
+stage
+  say "Покажи из /home/student/server/app.log только ошибки (ERROR) службы postgres"
+  solve grep ERROR /home/student/server/app.log | grep postgres
+  observe output
+  neutral ls cat pwd cd
+  on pass say "Звеньев может быть больше двух: добавь третье — | grep web, и останутся ошибки postgres только на web-серверах."
+  hint tries 3 say "grep ERROR даёт шестьдесят строк, а нужны только про postgres. Что если отфильтровать уже отфильтрованное?"
+  hint tries 6 say "Перечитай в брифе, что делает вертикальная черта."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+
+stage
+  say "Сохрани эти строки в /home/student/postgres-errors.txt — для отчёта"
+  solve grep ERROR /home/student/server/app.log | grep postgres > /home/student/postgres-errors.txt
+  observe /home/student/postgres-errors.txt
+  neutral ls cat pwd cd
+  on pass say "А >> дописывает в конец, не стирая. Повтори команду с >> и загляни в файл через cat."
+  hint tries 3 say "Строки уже есть на экране. Как отправить их в файл, а не на экран?"
+  hint tries 6 say "В брифе есть значок, который кладёт вывод в файл."
+  hint idle 240 say "Долгая пауза. Перечитай цель: какие строки и в какой файл."
+
+exec finale

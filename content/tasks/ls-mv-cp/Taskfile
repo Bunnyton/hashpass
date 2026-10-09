@@ -21,14 +21,15 @@ read brief.md
 
 stage
   say "Найди в /home/student/subdir_1, subdir_2 или subdir_3 строку phrase:… и покажи только её"
-  solve cat /home/student/subdir_2/lvl1/lvl2/prize.txt | grep phrase
+  solve grep phrase /home/student/subdir_2/lvl1/lvl2/prize.txt
+  variant cat /home/student/subdir_2/lvl1/lvl2/prize.txt | grep phrase
   variant grep -rh phrase /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3
   observe output
   neutral ls cd pwd
   on pass say "На дне подвала набери pwd, а потом cd без аргументов — и ты сразу дома."
   hint cmd cat say "Файл открыт — покажи только нужную строку."
   hint tries 4 say "Все три subdir до самого дна?"
-  hint tries 8 say "У grep есть ключ для поиска по всем подкаталогам."
+  hint tries 8 say "Нашёл файл со строкой? Вспомни, какая команда показывает из файла только строки с нужным словом."
   hint idle 300 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale

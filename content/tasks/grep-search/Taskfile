@@ -23,7 +23,7 @@ stage
   neutral ls cat pwd cd
   on pass say "grep -rn добавит номер строки, grep -ri — забудет про регистр. Попробуй оба на haystack."
   hint output "Is a directory" say "grep: это каталог. Как заставить его зайти внутрь?"
-  hint cmd grep has -r say "Нашёл! Но впереди имя файла. grep --help | grep -i filename."
+  hint cmd grep has -r say "Нашёл! Но впереди имя файла. Загляни в grep --help: какой ключ про filename?"
   hint tries 3 say "grep ищет не только в одном файле. Что дать вместо имени?"
   hint tries 6 say "man grep, «File and Directory Selection»."
   hint idle 240 say "Перечитай цель: одна строка, без пути к файлу."
