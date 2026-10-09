@@ -18,6 +18,7 @@ CONCEPTS = {
     "пайп |": ("pipes", re.compile(
         r"\S\s*(?<!\|)\|(?!\|)\s*(?:sudo\s+)?"
         r"(?:grep|less|more|wc|sort|uniq|head|tail|tee|cat|awk|sed|cut|tr|xargs)\b")),
+    "grep": ("grep-search", re.compile(r"(?<![\w-])grep\s+(?:-\w+\s+)*[\w\"'«]")),
     "перенаправление >": ("inventory", re.compile(r"[\w'\"]\s*>>?\s*[~/\w][\w./-]*")),
 }
 _SAY = re.compile(r'\bsay(?:\s+dramatic)?\s+"((?:[^"\\]|\\.)*)"')

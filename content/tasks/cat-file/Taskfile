@@ -1,12 +1,14 @@
-# cat-file — читаем файлы: cat, и первый grep. Приёмка — по выводу (одна строка с СЕКРЕТ).
+# cat-file — читаем файлы: cat. Ключ спрятан в одном из пяти писем; студент знает ls (прошлое
+# задание) и cat (теория этого). Приёмка — скрытая проверка по выводу последней команды
+# (HP_LAST_OUT): ключ показан на экране — неважно, какой командой.
 
 image cat-file:1
 
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/key_here.txt --kind ads --lines 320 --seed 101 --plant 'СЕКРЕТ: black-cat-on-a-mat@0.58'
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/bank-notice.txt --kind ads --lines 60 --seed 110
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/newsletter-09.txt --kind ads --lines 90 --seed 111
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/promo-summer.txt --kind ads --lines 45 --seed 112
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/spam-2019.txt --kind ads --lines 70 --seed 113
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/bank-notice.txt --kind ads --lines 28 --seed 110
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/newsletter-09.txt --kind ads --lines 34 --seed 111
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/promo-summer.txt --kind ads --lines 22 --seed 112
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/spam-2019.txt --kind ads --lines 30 --seed 113 --plant 'КЛЮЧ: black-cat-on-a-mat@0.6'
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/mailbox/from-grandma.txt --kind prose --lines 26 --seed 114
 copy data/mailbox /home/student/mailbox
 run chown -R student:student /home/student/mailbox
 
@@ -15,19 +17,17 @@ hidden hp
 settings
   pager on
 
-say "Почта пришла. Почти вся — реклама."
+say "Окей, тебе пригодится всё, чему тебя учили."
 read brief.md
 
 stage
-  say "Выведи из /home/student/mailbox/key_here.txt только строку со словом СЕКРЕТ"
-  solve grep СЕКРЕТ /home/student/mailbox/key_here.txt
-  variant cat /home/student/mailbox/key_here.txt | grep СЕКРЕТ
-  observe output
-  neutral ls pwd
-  on pass say "На будущее: grep -n покажет ещё и номер строки — попробуй прямо сейчас."
-  hint cmd cat say "Триста строк, а нужна одна. Чем бы её отфильтровать?"
-  hint tries 3 say "В теории была команда, которая печатает не всё, а только строки с нужным словом."
-  hint tries 6 say "man grep — или загугли: «вывести из файла строки содержащие слово linux»."
+  say "Найди ключ! Он где-то в письмах в /home/student/mailbox"
+  solve cat /home/student/mailbox/spam-2019.txt
+  check exec grade
+  neutral ls pwd cd
+  on pass say "Ключ лежал в спаме — так часто и бывает. А cat умеет открыть и несколько файлов разом: cat a.txt b.txt."
+  hint tries 5 say "Писем несколько, а ключ — в одном. Все открыл?"
+  hint tries 8 say "Сначала посмотри, какие письма лежат в mailbox, потом открывай каждое командой из теории."
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale
