@@ -17,7 +17,6 @@ happens on this module's own import, before any function is called.
 from __future__ import annotations
 
 import contextlib
-import queue
 import sys
 import threading
 from dataclasses import dataclass
@@ -180,7 +179,10 @@ class PoolTUI(App):
         # Background downloads, `docker pull` style: tasks queue up and go ONE BY ONE; the
         # layers of the current task download in parallel, each with its own bar. The worker
         # thread only mutates this state and sets `_dirty`; a timer repaints from the UI thread.
-        self._queue: queue.Queue[TaskRow | None] = queue.Queue()
+        self._pending: list[TaskRow] = []            # download order; Enter moves a row first
+        self._wake = threading.Condition(threading.Lock())
+        self._stopping = False
+        self._autoload = True                        # start downloading everything on launch
         self._jobs: dict[str, TaskRow] = {}          # queued or downloading, by ref
         self._active: TaskRow | None = None
         self._layers: dict[str, LayerBar] = {}
@@ -219,7 +221,9 @@ class PoolTUI(App):
 
     def on_unmount(self) -> None:
         """Stop the download worker on quit (a layer in flight is abandoned with the process)."""
-        self._queue.put(None)
+        with self._wake:
+            self._stopping = True
+            self._wake.notify()
 
     # -- data -------------------------------------------------------------
 
@@ -267,19 +271,42 @@ class PoolTUI(App):
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
+        if self._autoload:
+            self._autoqueue()
 
-    def _enqueue(self, row: TaskRow) -> None:
-        """Queue a task for background download (tasks are fetched one at a time, in order)."""
-        row.state = "в очереди"
-        row.progress = 0.0
-        with self._dl_lock:
-            self._jobs[row.ref] = row
-            self._dirty = True
-        self._queue.put(row)
+    def _enqueue(self, row: TaskRow, *, first: bool = False) -> None:
+        """Queue a task for background download (one task at a time); `first` jumps the queue."""
+        with self._wake:
+            if row in self._pending:
+                self._pending.remove(row)
+            if first:
+                self._pending.insert(0, row)
+            else:
+                self._pending.append(row)
+            row.state = "в очереди"
+            row.progress = 0.0
+            with self._dl_lock:
+                self._jobs[row.ref] = row
+                self._dirty = True
+            self._wake.notify()
+
+    def _autoqueue(self) -> None:
+        """Queue every runnable task that is not downloaded yet, in catalog order (docker-pull)."""
+        with self._rows_lock:
+            todo = [r for r in self.rows
+                    if not r.hidden and r.state in ("ожидает", "ошибка") and r.ref not in self._jobs]
+        for row in todo:
+            self._enqueue(row)
+
+    def _next_job(self) -> TaskRow | None:
+        with self._wake:
+            while not self._pending and not self._stopping:
+                self._wake.wait()
+            return None if self._stopping else self._pending.pop(0)
 
     def _download_worker(self) -> None:
         """Worker thread: take queued tasks one by one and download each (its layers in parallel)."""
-        while (row := self._queue.get()) is not None:
+        while (row := self._next_job()) is not None:
             with self._dl_lock:
                 self._active, self._layers = row, {}
                 row.state = "грузится"
@@ -424,11 +451,15 @@ class PoolTUI(App):
         if row.hidden:
             self._flash("Задание закрыто преподавателем")
             return
-        if row.state in ("в очереди", "грузится"):
-            self._flash(f"{row.ref} уже загружается — запустится по Enter, когда будет готово")
+        if row.state == "грузится":
+            self._flash(f"{row.ref} загружается — Enter, когда будет готово")
+            return
+        if row.state == "в очереди":
+            self._enqueue(row, first=True)
+            self._flash(f"{row.ref} — следующим в загрузке")
             return
         if row.state != "готово":   # ожидает / ошибка -> download in the background, UI stays live
-            self._enqueue(row)
+            self._enqueue(row, first=True)
             self._flash(f"Загружаю {row.ref} в фоне — можно выбирать другие задания")
             return
         from hashpass.cli import Io, _now_iso, cmd_pool_run  # noqa: PLC0415
@@ -461,7 +492,7 @@ class PoolTUI(App):
         sys.stdout.flush()
 
     def action_refresh(self) -> None:
-        """r: reload the catalog. Nothing downloads here -- Enter on a row does that."""
+        """r: reload the catalog; tasks not downloaded yet join the background queue."""
         self._reload_catalog()
 
     def action_resync(self) -> None:

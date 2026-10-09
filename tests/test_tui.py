@@ -181,38 +181,58 @@ class _SlowClient(_StubClient):
 
 
 @pytest.mark.tier1
-def test_tui_downloads_in_background_with_layer_bars(tmp_path: Path, monkeypatch) -> None:
-    """Enter on a not-downloaded task queues it; the UI stays live, the panel shows per-layer bars."""
+def test_tui_starts_downloading_on_launch_with_layer_bars(tmp_path: Path, monkeypatch) -> None:
+    """On launch every open task queues itself (docker-pull); the panel shows per-layer bars."""
     from hashpass import cli  # noqa: PLC0415
     monkeypatch.setattr(cli, "base_ref", lambda: "bunnyton/debian:trixie")
     env = _env(tmp_path)
-    entries = [{"number": 1, "ref": "lab:1", "block_name": "Б", "available": True, "digest": ""}]
+    entries = [{"number": 1, "ref": "lab:1", "block_name": "Б", "available": True, "digest": ""},
+               {"number": 2, "ref": "lab:2", "block_name": "Б", "available": True, "digest": ""},
+               {"number": 3, "ref": "shut:1", "block_name": "Б", "available": False, "digest": ""}]
     go = threading.Event()
 
     async def _drive() -> None:
         app = PoolTUI(env, "http://pool.example", "stud", "tok")
         app.client = _SlowClient(entries, go)
         async with app.run_test(size=(120, 30)) as pilot:
-            await pilot.pause()
-            assert "не загружено" in " ".join(_leaves(app))
             app.store.exists = lambda _ref: False      # the stub pull stores nothing -> «ошибка»
-            from textual.widgets import Tree  # noqa: PLC0415
-            tree = app.query_one("#tasks", Tree)
-            tree.move_cursor(app._leaf_nodes["lab:1"])  # noqa: SLF001
-            await pilot.press("enter")               # Enter on a task = queue the download
-            await pilot.pause(0.6)
+            await pilot.pause(0.6)                      # no key pressed: downloads start by themselves
             panel = str(app.query_one("#downloads").content)
-            assert "lab:1" in panel and "bunnyton/debian:trixie" in panel, panel
-            assert "50%" in panel and "0.0/0.0 МБ" in panel, panel
-            assert "грузится" in app.rows[0].status_label() or app.rows[0].state == "грузится"
+            assert "Загрузка №1 lab:1" in panel and "bunnyton/debian:trixie" in panel, panel
+            assert "50%" in panel and "в очереди ещё: 1" in panel, panel
+            states = [r.state for r in app.rows]
+            assert states == ["грузится", "в очереди", "ожидает"], states   # closed task is skipped
             go.set()
-            for _ in range(30):
+            for _ in range(40):
                 await pilot.pause(0.1)
-                if app.rows[0].state != "грузится":
+                if all(r.state == "ошибка" for r in app.rows[:2]):
                     break
             await pilot.pause(0.4)
-            assert app.rows[0].state == "ошибка"         # finished (stub stored nothing)
+            assert [r.state for r in app.rows[:2]] == ["ошибка", "ошибка"]
             assert str(app.query_one("#downloads").content) == ""   # panel hides when idle
+            await pilot.press("q")
+
+    asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_enter_on_a_queued_task_moves_it_first(tmp_path: Path) -> None:
+    """Enter on a task waiting in the queue makes it the next one to download."""
+
+    async def _drive() -> None:
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "stud", "tok")
+        app._autoload = False  # noqa: SLF001
+        app.client = _StubClient([])
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            rows = [TaskRow(ref=f"t:{i}", number=i, block="Б", available=True, digest="")
+                    for i in (1, 2, 3)]
+            with app._wake:  # noqa: SLF001  (hold the worker so the queue stays put)
+                app._stopping = True  # noqa: SLF001
+            for r in rows:
+                app._enqueue(r)  # noqa: SLF001
+            app._enqueue(rows[2], first=True)  # noqa: SLF001
+            assert [r.ref for r in app._pending] == ["t:3", "t:1", "t:2"]  # noqa: SLF001
             await pilot.press("q")
 
     asyncio.run(_drive())

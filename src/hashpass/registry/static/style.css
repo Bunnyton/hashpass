@@ -139,7 +139,21 @@ code,.mono{font-family:var(--mono);font-size:.92em}
 .titem .num{color:var(--faint);font-weight:600;min-width:2.6em}
 .titem .ref{flex:1}
 .titem .sp{flex:1}
-.titem.dragging{opacity:.35}
+.titem{touch-action:pan-y;user-select:none}
+.titem .grip{touch-action:none;padding:4px 2px}
+.titem.floating{position:fixed;z-index:50;margin:0;pointer-events:none;cursor:grabbing;
+  box-shadow:var(--shadow-lg);border-color:var(--accent);transform:rotate(.6deg) scale(1.015)}
+.titem-ph{list-style:none;border:2px dashed var(--accent);border-radius:var(--radius-sm);
+  background:var(--accent-soft);opacity:.7}
+.block.drop-target{outline:2px solid var(--accent-soft);outline-offset:2px}
+body.drag-active,body.drag-active *{cursor:grabbing !important;user-select:none}
+.titem.just-moved{animation:moved .7s ease-out}
+@keyframes moved{from{background:var(--accent-soft)}to{background:var(--surface2)}}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;z-index:60;
+  background:var(--text);color:var(--surface);padding:9px 16px;border-radius:999px;font-weight:600;
+  font-size:14px;box-shadow:var(--shadow-lg);transition:opacity .2s,transform .2s;pointer-events:none}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.bad{background:var(--danger)}
 .task-hidden{opacity:.55}
 .pill.sm{padding:1px 7px;font-size:11px}
 .empty{padding:32px 20px;text-align:center}

@@ -23,7 +23,7 @@
 </div>
 </details>
 </div>
-<p class='sub'>Перетащите задание, чтобы изменить его номер или блок. Скрытое видно студенту как «№N · закрыто», но не показывает, какое именно; автор и админ видят его в hashpass и могут запустить. Чтобы открывать задания по одному — «⋯ → Скрыть все задания» у блока, затем «Показать» у нужного.</p>
+<p class='sub'>Перетащите задание (за строку или ⠿), чтобы изменить его номер или блок; Esc — отменить. По шагу — «⋯ → Выше / Ниже». Скрытое видно студенту как «№N · закрыто», но не показывает, какое именно; автор и админ видят его в hashpass и могут запустить. Чтобы открывать задания по одному — «⋯ → Скрыть все задания» у блока, затем «Показать» у нужного.</p>
 {% if blocks %}
 <div id='cat'>
 {% for b in blocks %}
@@ -66,7 +66,7 @@
 </div>
 <ul class='tasklist' data-block-id='{{ b.id }}'>
 {% for e in b.tasks %}
-<li class='titem{% if e.hidden %} task-hidden{% endif %}' draggable='true' data-ref='{{ e.ref }}'>
+<li class='titem{% if e.hidden %} task-hidden{% endif %}' data-ref='{{ e.ref }}'>
 <span class='grip' title='перетащите'>⠿</span>
 <b class='num'>№{{ e.number }}</b>
 <span class='mono ref'>{{ e.ref }}</span>
@@ -76,6 +76,8 @@
 <summary class='menu-dot' title='действия'>⋯</summary>
 <div class='menu-list card'>
 <a class='menu-item' href='/web/image/{{ e.ref_url }}'>Редактировать</a>
+<button class='menu-item' type='button' data-move='up'>↑ Выше</button>
+<button class='menu-item' type='button' data-move='down'>↓ Ниже</button>
 <form class='inline' method='post' action='/web/tasks/toggle'>
 <input type='hidden' name='ref' value='{{ e.ref }}'>
 <input type='hidden' name='hidden' value='{{ '0' if e.hidden else '1' }}'>
