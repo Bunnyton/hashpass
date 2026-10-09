@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
 from functools import cache
@@ -16,10 +17,34 @@ _PW_FIELDS = 4
 ROLES = ("student", "author", "admin")
 
 MIN_PASSWORD_LEN = 8
+# safe as a login AND as a per-user progress filename
+LOGIN_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+LOGIN_RULE = ("логин — латиницей, одним словом: буквы, цифры и . _ - (до 64 символов), "
+              "например nikitin.vn")
 
 
 class WeakPasswordError(ValueError):
     """A chosen password does not meet the pool's password policy."""
+
+
+class BadLoginError(ValueError):
+    """A login the pool cannot store (non-Latin letters, spaces, @, too long)."""
+
+
+def validate_login(user: str) -> None:
+    """Raise BadLoginError (in Russian, naming what is wrong) unless `user` matches LOGIN_RE."""
+    if LOGIN_RE.match(user):
+        return
+    if any(c.isspace() for c in user):
+        why = "в логине не должно быть пробелов"
+    elif any(c.isalpha() and not c.isascii() for c in user):
+        why = "логин пишется латиницей (английскими буквами)"
+    elif len(user) > 64:  # noqa: PLR2004
+        why = "логин длиннее 64 символов"
+    else:
+        why = "в логине недопустимые символы"
+    msg = f"{why}; {LOGIN_RULE}"
+    raise BadLoginError(msg)
 
 
 def validate_password(password: str) -> None:

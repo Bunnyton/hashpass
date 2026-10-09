@@ -45,7 +45,13 @@ from hashpass.recipe.model import (
 from hashpass.recipe.parse import load_recipe
 from hashpass.registry.config import load_config
 from hashpass.registry.creds import CredentialCache
-from hashpass.registry.passwords import UserStore, WeakPasswordError, validate_password
+from hashpass.registry.passwords import (
+    BadLoginError,
+    UserStore,
+    WeakPasswordError,
+    validate_login,
+    validate_password,
+)
 from hashpass.registry.refs import split_ref
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.server import make_server
@@ -1688,12 +1694,9 @@ def cmd_register(env: Home, pool_url: str | None = None, io: Io | None = None) -
     if not url:
         msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
         raise RuntimeError(msg)
-    user = (io.read("логин: ") or "").strip()
+    user = _read_login(io)
     group = (io.read("группа (необязательно, напр. ИУ7-31): ") or "").strip()
     comment = (io.read("комментарий (необязательно): ") or "").strip()
-    if not user:
-        msg = "логин обязателен для регистрации"
-        raise RuntimeError(msg)
     password = _prompt_new_password(io)
     RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, group, comment)
     save_pool(env, url, user)
@@ -1732,6 +1735,29 @@ def cmd_pool_login(env: Home, pool_url: str | None = None, io: Io | None = None)
     return 0
 
 
+def _http_error_reason(exc: urllib.error.HTTPError) -> str:
+    """Return the pool's `{"error": …}` text from an HTTP error body ('' when there is none)."""
+    try:
+        return str(json.loads(exc.read() or b"{}").get("error", ""))
+    except (ValueError, OSError, AttributeError):
+        return ""
+
+
+def _read_login(io: Io) -> str:
+    """Ask for a login until it is one the pool can store (checked here, before any password)."""
+    while True:
+        user = (io.read("логин: ") or "").strip()
+        if not user:
+            msg = "логин обязателен"
+            raise RuntimeError(msg)
+        try:
+            validate_login(user)
+        except BadLoginError as exc:
+            io.write(f"\x1b[33m{exc}\x1b[0m\n")
+            continue
+        return user
+
+
 def _register_interactive(client: RemoteRegistry, user: str, io: Io,
                           *, password: str | None = None) -> None:
     """
@@ -1752,8 +1778,14 @@ def _register_interactive(client: RemoteRegistry, user: str, io: Io,
         try:
             client.register(user, pw, group, comment)
         except urllib.error.HTTPError as exc:
-            if exc.code == HTTPStatus.BAD_REQUEST:                   # weak password
-                io.write("\x1b[33mПароль слишком слабый — выберите другой.\x1b[0m\n")
+            if exc.code == HTTPStatus.BAD_REQUEST:
+                reason = _http_error_reason(exc)
+                # Only a PASSWORD complaint is worth another password prompt. Any other 400
+                # (a login the pool cannot store) used to be read as «слабый пароль» and
+                # looped forever, however good the password.
+                if "пароль" not in reason:
+                    raise RuntimeError(reason or "пул отклонил регистрацию") from exc
+                io.write(f"\x1b[33m{reason} — выберите другой пароль.\x1b[0m\n")
                 password = None                                       # discard reused one, prompt fresh
                 continue
             if exc.code == HTTPStatus.CONFLICT:
@@ -1810,10 +1842,7 @@ def _require_pool_identity(env: Home, io: Io) -> tuple[str, str]:
         if not url:
             msg = "не задан адрес пула (HASHPASS_POOL)"
             raise RuntimeError(msg)
-    user = (io.read("логин: ") or "").strip()
-    if not user:
-        msg = "логин обязателен"
-        raise RuntimeError(msg)
+    user = _read_login(io)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     try:
         client.login(user, getpass.getpass("пароль: "))

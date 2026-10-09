@@ -31,7 +31,14 @@ from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
 from hashpass.registry.catalog import Catalog
 from hashpass.registry.config import ServerConfig, save_config
-from hashpass.registry.passwords import ROLES, UserStore, WeakPasswordError, validate_password
+from hashpass.registry.passwords import (
+    LOGIN_RE,
+    LOGIN_RULE,
+    ROLES,
+    UserStore,
+    WeakPasswordError,
+    validate_password,
+)
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
@@ -54,7 +61,7 @@ from hashpass.taskdigest import task_digest
 
 _BEARER = "Bearer "
 _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
-_USER_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # safe as a login + a per-user progress filename
+_USER_RE = LOGIN_RE  # safe as a login + a per-user progress filename
 _AUTHOR_ROLES = ("author", "admin")
 _MAX_COMMENT = 500
 _MAX_ATTACH = 8 * 1024 * 1024   # per-file attachment cap (8 MiB)
@@ -434,7 +441,7 @@ class PoolServer:
         return self._json(HTTPStatus.OK,
                           {"token": issue_token(self.secret, user, now=time.time())})
 
-    def _route_register(self) -> Response:
+    def _route_register(self) -> Response:   # noqa: PLR0911
         if not self.config.registration_open:
             return self._empty(HTTPStatus.FORBIDDEN)
         data = request.get_json(silent=True) or {}
@@ -445,8 +452,10 @@ class PoolServer:
         group = str(data.get("group", "")).strip()
         comment = str(data.get("comment", "")).strip()[:_MAX_COMMENT]
         # login + password are required; group/comment are metadata and may be empty
-        if not _USER_RE.match(user) or not password:
-            return self._empty(HTTPStatus.BAD_REQUEST)
+        if not _USER_RE.match(user):
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": LOGIN_RULE})
+        if not password:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": "пароль не задан"})
         try:
             validate_password(password)
         except WeakPasswordError as exc:

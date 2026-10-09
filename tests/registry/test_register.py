@@ -105,3 +105,47 @@ def test_admin_endpoints_are_role_gated(registry):
     with pytest.raises(urllib.error.HTTPError) as exc2:
         c.set_role("st", "admin", token="bogus")  # noqa: S106  (bad token literal for the 401 path)
     assert exc2.value.code == HTTPStatus.UNAUTHORIZED
+
+
+@pytest.mark.tier2
+def test_register_bad_login_says_so(registry):
+    """A login the pool cannot store (Cyrillic, spaces, @) is reported as a LOGIN problem."""
+    c = RemoteRegistry(registry.base_url)
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        c.register("Иван Петров", "pass123!", group="G")
+    assert exc.value.code == HTTPStatus.BAD_REQUEST
+    assert "логин" in json.loads(exc.value.read())["error"]
+
+
+@pytest.mark.tier2
+def test_interactive_register_bad_login_does_not_loop_on_password(registry, monkeypatch):
+    """Was: every 400 read as «Пароль слишком слабый» -> endless password prompts (Arch report)."""
+    from hashpass import cli  # noqa: PLC0415
+    asked: list[str] = []
+    monkeypatch.setattr(cli.getpass, "getpass", lambda p: asked.append(p) or "pass123!")
+    io = cli.Io(read=lambda _p: "", write=lambda _s: None, clock=lambda: "")
+    with pytest.raises(RuntimeError, match="логин"):
+        cli._register_interactive(RemoteRegistry(registry.base_url), "Иван", io,  # noqa: SLF001
+                                  password="pass123!")  # noqa: S106
+    assert asked == []          # the reused password is not re-asked: the LOGIN is the problem
+
+
+@pytest.mark.tier1
+def test_validate_login():
+    from hashpass.registry.passwords import BadLoginError, validate_login  # noqa: PLC0415
+    validate_login("ivan.petrov-1_2")
+    for bad in ("", "Иван", "a b", "me@x", "x" * 65):
+        with pytest.raises(BadLoginError):
+            validate_login(bad)
+
+
+@pytest.mark.tier1
+def test_login_prompt_reasks_on_full_name_in_cyrillic():
+    """«Никитин В. Н.» is re-asked with a reason (spaces); a Latin login then goes through."""
+    from hashpass import cli  # noqa: PLC0415
+    answers = iter(["Никитин В. Н.", "Никитин", "nikitin.vn"])
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: next(answers), write=out.append, clock=lambda: "")
+    assert cli._read_login(io) == "nikitin.vn"  # noqa: SLF001
+    text = "".join(out)
+    assert "не должно быть пробелов" in text and "латиницей" in text and "nikitin.vn" in text
