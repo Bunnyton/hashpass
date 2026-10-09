@@ -129,6 +129,19 @@ def test_install_script_puts_user_bin_on_path():
     """Ubuntu: ~/.local/bin is not on PATH after a first `pip --user` install -> persist it."""
     script = render_install_script("http://pool.example/")
     assert 'BIN="$(python3 -m site --user-base)/bin"' in script
-    assert '"$HOME/.bashrc" "$HOME/.profile"' in script
-    assert "source ~/.bashrc" in script
+    assert 'add_line "$HOME/.bashrc" "$PATH_LINE"' in script
+    assert 'add_line "$HOME/.profile" "$PATH_LINE"' in script
+    assert 'add_line "$HOME/.zshrc" "$PATH_LINE"' in script        # zsh (Arch, macOS-style setups)
+    assert "fish/conf.d/hashpass.fish" in script                       # fish has its own syntax
+    assert "contains -- '$BIN' \\$PATH; or set -gx PATH '$BIN' \\$PATH" in script
+    assert 'RC_HINT="source ~/.bashrc"' in script
     assert 'grep -q -- --break-system-packages && BSP="--break-system-packages"' in script
+
+
+@pytest.mark.tier1
+def test_install_script_names_packages_for_the_hosts_package_manager():
+    """Arch: pacman + python-pip; Debian/Ubuntu: apt + python3-pip; systemd-nspawn is checked."""
+    script = render_install_script("http://pool.example/")
+    assert 'PKG_INSTALL="sudo pacman -S --needed"; P_PY=python; P_PIP=python-pip' in script
+    assert 'PKG_INSTALL="sudo apt install -y"' in script
+    assert "command -v systemd-nspawn" in script

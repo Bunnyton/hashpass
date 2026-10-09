@@ -22,13 +22,23 @@ set -euo pipefail
 POOL="__POOL__"
 echo "Установка hashpass (__ROLE__); пул: $POOL"
 # Preflight: everything the install needs must be present BEFORE we download anything.
+# Package names and the install command follow the host's package manager (Debian/Ubuntu,
+# Arch, Fedora); the task containers are Debian regardless of the host.
+if command -v pacman >/dev/null 2>&1; then
+  PKG_INSTALL="sudo pacman -S --needed"; P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd
+elif command -v dnf >/dev/null 2>&1; then
+  PKG_INSTALL="sudo dnf install -y"; P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
+else
+  PKG_INSTALL="sudo apt install -y"; P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
+fi
 missing=""
-command -v python3 >/dev/null 2>&1 || missing="$missing python3"
-python3 -m pip --version >/dev/null 2>&1 || missing="$missing python3-pip"
+command -v python3 >/dev/null 2>&1 || missing="$missing $P_PY"
+python3 -m pip --version >/dev/null 2>&1 || missing="$missing $P_PIP"
 command -v git >/dev/null 2>&1 || missing="$missing git"
+command -v systemd-nspawn >/dev/null 2>&1 || missing="$missing $P_NSPAWN"
 if [ -n "$missing" ]; then
   echo "не хватает зависимостей:$missing" >&2
-  echo "установите их и повторите, напр.:  sudo apt install -y$missing" >&2
+  echo "установите их и повторите:  $PKG_INSTALL$missing" >&2
   exit 1
 fi
 # `--upgrade --force-reinstall --no-deps`: pip normally sees "hashpass X.Y.Z is
@@ -46,18 +56,34 @@ python3 -m pip install --user $BSP --upgrade --force-reinstall --no-deps \\
     "git+https://github.com/__REPO__@main"
 python3 -m pip install --user $BSP --upgrade "flask>=3.0" "textual>=1.0"
 # `pip --user` puts the commands into ~/.local/bin. Ubuntu's ~/.profile adds that dir to PATH
-# only if it ALREADY existed at login -- on a first install it did not, so `hashpass` was
-# «command not found». Persist it in the shell rc files, and say how to pick it up right now.
+# only if it ALREADY existed at login, Arch never does -- so `hashpass` was «command not found».
+# Persist it for bash (~/.bashrc + ~/.profile), zsh (~/.zshrc) and fish (conf.d), idempotently,
+# and say how to pick it up in the terminal that is already open.
 BIN="$(python3 -m site --user-base)/bin"
+USER_SHELL="$(basename "${SHELL:-bash}")"
 PATH_LINE='case ":$PATH:" in *":'"$BIN"':"*) ;; *) export PATH="'"$BIN"':$PATH" ;; esac  # hashpass'
-for rc in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.zshrc"; do
-  case "$rc" in *.zshrc) [ -f "$rc" ] || continue ;; esac
-  grep -qsF "$PATH_LINE" "$rc" || printf '\\n%s\\n' "$PATH_LINE" >> "$rc"
-done
+add_line() {   # add_line FILE LINE -- append LINE once
+  mkdir -p "$(dirname "$1")"
+  grep -qsF "$2" "$1" || printf '\\n%s\\n' "$2" >> "$1"
+}
+add_line "$HOME/.bashrc" "$PATH_LINE"
+add_line "$HOME/.profile" "$PATH_LINE"
+if [ "$USER_SHELL" = zsh ] || [ -f "$HOME/.zshrc" ]; then
+  add_line "$HOME/.zshrc" "$PATH_LINE"
+fi
+FISH_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/hashpass.fish"
+if [ "$USER_SHELL" = fish ] || command -v fish >/dev/null 2>&1; then
+  add_line "$FISH_CONF" "contains -- '$BIN' \\$PATH; or set -gx PATH '$BIN' \\$PATH  # hashpass"
+fi
+case "$USER_SHELL" in
+  zsh)  RC_HINT="source ~/.zshrc" ;;
+  fish) RC_HINT="source $FISH_CONF" ;;
+  *)    RC_HINT="source ~/.bashrc" ;;
+esac
 case ":$PATH:" in
   *":$BIN:"*) ;;
-  *) echo "Команды установлены в $BIN; этот каталог добавлен в PATH (~/.bashrc, ~/.profile)."
-     echo "В уже открытом терминале выполните:  source ~/.bashrc   (или откройте новый терминал)" ;;
+  *) echo "Команды установлены в $BIN; этот каталог добавлен в PATH."
+     echo "В уже открытом терминале выполните:  $RC_HINT   (или откройте новый терминал)" ;;
 esac
 mkdir -p "$HOME/.hashpass"
 printf '{"url": "%s", "user": ""}\\n' "$POOL" > "$HOME/.hashpass/pool.json"
