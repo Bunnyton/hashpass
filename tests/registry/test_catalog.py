@@ -75,3 +75,17 @@ def test_migrates_legacy_flat_catalog(tmp_path):
     assert [e.ref for e in cat.entries()] == ["a:1", "b:1"]   # one block, number order
     assert len(cat.blocks()) == 1
     assert cat.blocks()[0].open is True
+
+
+@pytest.mark.tier1
+def test_republish_keeps_task_in_its_block_and_updates_digest(tmp_path):
+    """`push --task` of a task already in the catalog must not move it to the last block."""
+    cat = Catalog(tmp_path / "catalog.json")
+    first = cat.add_block("Знакомство")
+    cat.add_task("ns/a:1", "d1", block_id=first)
+    cat.add_block("Архив")
+    cat.set_task_hidden("ns/a:1", hidden=True)
+    cat.add_task("ns/a:1", "d2")                      # re-push (no block given)
+    entry = cat.find("ns/a:1")
+    assert (entry.block_name, entry.digest, entry.hidden) == ("Знакомство", "d2", True)
+    assert len(cat.entries()) == 1

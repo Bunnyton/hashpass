@@ -143,3 +143,10 @@ def test_cmd_catalog_layout_explains_a_pool_without_the_route(tmp_path, monkeypa
     quiet = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "")
     with pytest.raises(RuntimeError, match="обновите hashengine на сервере"):
         cli.cmd_catalog_layout(env, ["Первый: a:1"], "http://pool.test", quiet)
+
+
+@pytest.mark.tier1
+def test_parse_layout_specs_leaves_block_open_state_to_the_pool():
+    """Deploy must not re-open a block the teacher closed: specs carry no `open`."""
+    blocks = cli.parse_layout_specs(["Знакомство: a:1"], "bunnyton")
+    assert "open" not in blocks[0]

@@ -157,10 +157,23 @@ class Catalog:
         return False
 
     def add_task(self, ref: str, digest: str, *, block_id: str | None = None) -> None:
-        """Append a task (auto-numbered by position) to a block (default: the last/created block)."""
+        """
+        Append a task (auto-numbered by position) to a block (default: the last/created block).
+
+        A task already in the catalog and no explicit `block_id` (a re-publish: `push --task`)
+        keeps its block, place and hidden flag -- only its digest is updated. Moving it to the
+        last block on every deploy is how a whole catalog once ended up in «Архив».
+        """
         name, _, version = ref.partition(":")
         data = self._load()
         blocks = data.setdefault("blocks", [])
+        if block_id is None:
+            for b in blocks:
+                for t in b.get("tasks", []):
+                    if f"{t.get('name')}:{t.get('version')}" == ref:
+                        t["digest"] = digest
+                        self._save(data)
+                        return
         if not blocks:
             blocks.append({"id": _new_id(), "name": "Задания", "open": True, "tasks": []})
         target = next((b for b in blocks if b.get("id") == block_id), None) or blocks[-1]

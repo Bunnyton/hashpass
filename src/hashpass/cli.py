@@ -1525,7 +1525,8 @@ def parse_layout_specs(specs: list[str], owner: str) -> list[dict[str, object]]:
             msg = f"блок задаётся как «Название: ref ref …», получено: {spec!r}"
             raise ValueError(msg)
         refs = [r if "/" in r else f"{owner}/{r}" for r in rest.split()]
-        blocks.append({"name": name.strip(), "open": True, "tasks": refs})
+        # no "open": an existing block keeps the teacher's open/closed state, a new one opens
+        blocks.append({"name": name.strip(), "tasks": refs})
     return blocks
 
 

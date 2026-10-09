@@ -9,6 +9,7 @@
 # Использование:
 #   cd content/tasks && ./deploy.sh
 #   ./deploy.sh --dry            # только собрать, не пушить
+#   ./deploy.sh --layout         # только раскладка каталога по BLOCKS (без сборки и push)
 #
 # Каждое задание собирается из своей папки; на пул уходит образ + Taskfile-attachment,
 # и задание добавляется в каталог (--task).
@@ -16,10 +17,12 @@
 set -euo pipefail
 DRY=""
 FORCE=""
+LAYOUT_ONLY=""
 for a in "$@"; do
     case "$a" in
-        --dry)   DRY="1" ;;
-        --force) FORCE="--force" ;;
+        --dry)    DRY="1" ;;
+        --force)  FORCE="--force" ;;
+        --layout) LAYOUT_ONLY="1" ;;
     esac
 done
 
@@ -66,7 +69,7 @@ if [[ -z "$DRY" ]]; then
     }
 fi
 
-if [[ -z "$DRY" ]]; then
+if [[ -z "$DRY" && -z "$LAYOUT_ONLY" ]]; then
     echo "── базовый образ (bunnyton/debian:trixie) ──"
     # БЕЗ $FORCE: тег фиксированный, `push base` сам сравнивает digest ЭТОГО пула с тем,
     # что эта машина на него заливала: уходит база, пересобранная здесь (новый runtime) или
@@ -80,11 +83,12 @@ fi
 
 declare -A REF_OF
 for name in "${TASKS[@]}"; do
-    echo
-    echo "=== $name ==="
     # image_ref = 'first-steps:1'; on the pool it lives under <login>/first-steps:1
     image_ref=$(grep -E '^image ' "$name/Taskfile" | head -1 | awk '{print $2}')
     REF_OF[$name]="$USER_LOGIN/$image_ref"
+    [[ -n "$LAYOUT_ONLY" ]] && continue
+    echo
+    echo "=== $name ==="
     (
         cd "$name"
         hashengine build Taskfile
