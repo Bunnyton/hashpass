@@ -91,6 +91,15 @@ code,.mono{font-family:var(--mono);font-size:.92em}
 .hero .sub{margin:14px auto 0;font-size:17px;max-width:56ch}
 .steps{list-style:none;margin:26px auto 20px;padding:0;max-width:640px;display:flex;flex-direction:column;gap:10px;text-align:left}
 .steps li{display:flex;gap:12px;align-items:center}
+/* apt/pacman toggle on the front page: pure CSS (radio + :checked), works without JS */
+.pm-r{position:absolute;opacity:0;pointer-events:none}
+.seg{display:inline-flex;gap:2px;margin-top:22px;padding:3px;border-radius:10px;background:var(--surface2);border:1px solid var(--border)}
+.seg label{padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;color:var(--muted)}
+.steps.pm-pacman{display:none}
+#pm-pacman:checked~.steps.pm-apt{display:none}
+#pm-pacman:checked~.steps.pm-pacman{display:flex}
+#pm-apt:checked~.seg label[for=pm-apt],#pm-pacman:checked~.seg label[for=pm-pacman]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+#pm-apt:focus-visible~.seg label[for=pm-apt],#pm-pacman:focus-visible~.seg label[for=pm-pacman]{outline:2px solid var(--accent)}
 .steps .step-n{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
   font-weight:700;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
 .steps .cmd{flex:1;margin:0}

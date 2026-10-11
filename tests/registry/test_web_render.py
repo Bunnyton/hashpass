@@ -26,6 +26,22 @@ def test_front_shows_install_command():
 
 
 @pytest.mark.tier1
+def test_front_prepares_the_system_before_the_script_apt_or_pacman():
+    """The page installs every dependency BEFORE install.sh (which re-checks); apt/pacman toggle."""
+    html = render_front("http://pool.example/")
+    assert "sudo apt update" in html
+    assert "sudo apt install -y curl git python3-pip systemd-container" in html
+    assert "sudo pacman -Syu --needed --noconfirm curl git python python-pip" in html
+    assert "id='pm-apt'" in html
+    assert "id='pm-pacman'" in html
+    assert html.index("id='pm-apt'") < html.index("checked")      # apt is the default
+    for pm in ("pm-apt", "pm-pacman"):                            # each list ends with the script
+        block = html[html.index(f"class='steps {pm}'"):]
+        block = block[:block.index("</ol>")]
+        assert "curl -fsSL http://pool.example/install.sh | bash" in block
+
+
+@pytest.mark.tier1
 def test_login_form_and_error():
     assert "type='password'" in render_login()
     assert "class='err'" not in render_login()
@@ -144,7 +160,7 @@ def test_install_script_puts_user_bin_on_path():
 def test_install_script_names_packages_for_the_hosts_package_manager():
     """Arch: pacman + python-pip; Debian/Ubuntu: apt + python3-pip; systemd-nspawn is checked."""
     script = render_install_script("http://pool.example/")
-    assert 'PKG_INSTALL="sudo pacman -S --needed --noconfirm"' in script
+    assert 'PKG_INSTALL="sudo pacman -Syu --needed --noconfirm"' in script   # no partial upgrade
     assert "P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd" in script
     assert "if ! $PKG_INSTALL$missing </dev/tty; then" in script          # installs, not just hints
     assert 'PKG_INSTALL="sudo apt install -y"' in script

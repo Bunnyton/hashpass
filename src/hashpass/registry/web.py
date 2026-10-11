@@ -26,7 +26,8 @@ echo "Установка hashpass (__ROLE__); пул: $POOL"
 # Package names and the install command follow the host's package manager (Debian/Ubuntu,
 # Arch, Fedora); the task containers are Debian regardless of the host.
 if command -v pacman >/dev/null 2>&1; then
-  PKG_REFRESH="sudo pacman -Sy"; PKG_INSTALL="sudo pacman -S --needed --noconfirm"
+  # -Syu, not -Sy + -S: a partial upgrade is unsupported on Arch
+  PKG_REFRESH=":"; PKG_INSTALL="sudo pacman -Syu --needed --noconfirm"
   P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd
 elif command -v dnf >/dev/null 2>&1; then
   PKG_REFRESH=":"; PKG_INSTALL="sudo dnf install -y"
@@ -151,14 +152,24 @@ def render_engine_install_script(pool_url: str) -> str:
 _PW_HINT = "Не короче 8 символов, минимум одна буква, одна цифра и один спецсимвол."
 
 
+# What the front page has the student run BEFORE install.sh, per package manager (the script
+# re-checks and installs anything still missing). systemd-nspawn ships in Arch's base `systemd`.
+PREPARE = (
+    ("apt", "apt (Debian, Ubuntu)",
+     ("sudo apt update", "sudo apt install -y curl git python3-pip systemd-container")),
+    ("pacman", "pacman (Arch)",
+     ("sudo pacman -Syu --needed --noconfirm curl git python python-pip",)),
+)
+
+
 def render_front(pool_url: str) -> str:
-    """Public front page: what the pool is + the one-line student install command."""
+    """Public front page: what the pool is + prepare-the-system steps (apt/pacman) + install.sh."""
     url = pool_url.rstrip("/")
     # A self-signed HTTPS pool needs curl -k to fetch the installer (the pip step uses GitHub's
     # real cert, so it is unaffected); a plain-http pool does not.
     flags = "-fsSLk" if pool_url.startswith("https://") else "-fsSL"
     return _env.get_template("front.html.j2").render(
-        title="hashpass", nav=False, active="", url=url, flags=flags)
+        title="hashpass", nav=False, active="", url=url, flags=flags, prepare=PREPARE)
 
 
 def render_login(error: str = "") -> str:
