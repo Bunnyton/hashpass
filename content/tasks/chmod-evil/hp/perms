@@ -1,0 +1,4 @@
+#!/bin/sh
+# perms PATH MODE GROUP — принято, если у /home/student/PATH ровно эти права и группа (владелец — student).
+want=$(printf '%s' "$3" | sed 's/^0*//; s/^$/0/')
+[ "$(stat -c '%a %U %G' "/home/student/$2" 2>/dev/null)" = "$want student $4" ]
