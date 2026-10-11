@@ -146,7 +146,7 @@ def test_install_script_passes_shellcheck():
 def test_install_script_puts_user_bin_on_path():
     """Ubuntu: ~/.local/bin is not on PATH after a first `pip --user` install -> persist it."""
     script = render_install_script("http://pool.example/")
-    assert 'BIN="$(python3 -m site --user-base)/bin"' in script
+    assert 'BIN="$("$PY" -m site --user-base)/bin"' in script
     assert 'add_line "$HOME/.bashrc" "$PATH_LINE"' in script
     assert 'add_line "$HOME/.profile" "$PATH_LINE"' in script
     assert 'add_line "$HOME/.zshrc" "$PATH_LINE"' in script        # zsh (Arch, macOS-style setups)
@@ -162,8 +162,8 @@ def test_install_script_names_packages_for_the_hosts_package_manager():
     script = render_install_script("http://pool.example/")
     assert 'PKG_INSTALL="sudo pacman -Syu --needed --noconfirm"' in script   # no partial upgrade
     assert "P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd" in script
-    assert "if ! $PKG_INSTALL$missing </dev/tty; then" in script          # installs, not just hints
-    assert 'PKG_INSTALL="sudo apt install -y"' in script
+    assert 'if ! $PKG_INSTALL$missing <"$TTY"; then' in script          # installs, not just hints
+    assert 'PKG_INSTALL="sudo env DEBIAN_FRONTEND=noninteractive apt install -y"' in script
     assert "command -v systemd-nspawn" in script
 
 
@@ -183,3 +183,37 @@ def test_install_script_retries_pip_trusting_hosts_on_self_signed():
     for host in ("github.com", "codeload.github.com", "pypi.org", "files.pythonhosted.org"):
         assert host in script
     assert "http.sslVerify=false" in script          # git ls-remote behind the same proxy
+
+
+@pytest.mark.tier1
+def test_install_script_brings_python_313_when_the_system_one_is_older():
+    """The package needs >=3.13; Ubuntu 22.04/24.04 and Debian 12 ship older -> the script fetches it."""
+    script = render_install_script("http://pool.example/")
+    assert "sys.version_info < (3, 13)" in script
+    assert "ppa:deadsnakes/ppa" in script                  # Ubuntu
+    assert "python3.13 python3.13-venv" in script
+    assert "sudo dnf install -y python3.13" in script      # Fedora
+    assert "python install 3.13" in script                 # anything else: uv's standalone CPython
+    assert "ensurepip" in script
+    assert "bootstrap.pypa.io/get-pip.py" in script
+    # every pip/site call after the probe goes through the chosen interpreter
+    tail = script[script.index('PY=""'):]
+    assert "python3 -m" not in tail
+    assert '"$PY" -m pip install --user' in tail
+    assert 'BIN="$("$PY" -m site --user-base)/bin"' in tail
+
+
+@pytest.mark.tier1
+def test_front_page_does_not_mention_python_313():
+    """Python 3.13 is the script's business only (user's call): the page lists plain packages."""
+    assert "3.13" not in render_front("http://pool.example/")
+    assert "deadsnakes" not in render_front("http://pool.example/")
+
+
+@pytest.mark.tier1
+def test_install_script_works_without_a_controlling_tty():
+    """`ssh host 'curl … | bash'`, su -, CI: no /dev/tty -> `</dev/tty` must not abort the install."""
+    script = render_install_script("http://pool.example/")
+    assert script.count("</dev/tty") == 1                  # only the probe itself
+    assert "TTY=/dev/tty; ( : </dev/tty ) 2>/dev/null || TTY=/dev/null" in script
+    assert 'PKG_INSTALL="sudo env DEBIAN_FRONTEND=noninteractive apt install -y"' in script

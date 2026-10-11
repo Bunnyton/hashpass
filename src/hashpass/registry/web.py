@@ -22,6 +22,9 @@ _INSTALL_TEMPLATE = """\
 set -euo pipefail
 POOL="__POOL__"
 echo "Установка hashpass (__ROLE__); пул: $POOL"
+# sudo/apt read the password and answers from the terminal, not from the `curl |` pipe; with no
+# controlling terminal (ssh without -t, su -, CI) /dev/tty does not open -> /dev/null instead.
+TTY=/dev/tty; ( : </dev/tty ) 2>/dev/null || TTY=/dev/null
 # Preflight: everything the install needs must be present BEFORE we download anything.
 # Package names and the install command follow the host's package manager (Debian/Ubuntu,
 # Arch, Fedora); the task containers are Debian regardless of the host.
@@ -34,7 +37,8 @@ elif command -v dnf >/dev/null 2>&1; then
   P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
 else
   # A fresh Debian/Ubuntu has stale package lists -> «Unable to locate package» without an update.
-  PKG_REFRESH="sudo apt update"; PKG_INSTALL="sudo apt install -y"
+  # noninteractive: tzdata/needrestart must not stop the install with a dialog
+  PKG_REFRESH="sudo apt update"; PKG_INSTALL="sudo env DEBIAN_FRONTEND=noninteractive apt install -y"
   P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
 fi
 missing=""
@@ -47,22 +51,66 @@ if ! command -v systemd-nspawn >/dev/null 2>&1 || ! command -v machinectl >/dev/
   missing="$missing $P_NSPAWN"
 fi
 if [ -n "$missing" ]; then
-  # Install them right here (sudo asks for the password on /dev/tty, so `curl | bash` works).
+  # Install them right here (sudo asks for the password on the terminal, so `curl | bash` works).
   echo "ставлю недостающие пакеты:$missing"
-  $PKG_REFRESH </dev/tty || true
+  $PKG_REFRESH <"$TTY" || true
   # shellcheck disable=SC2086  # word-splitting of the command and the package list is intended
-  if ! $PKG_INSTALL$missing </dev/tty; then
+  if ! $PKG_INSTALL$missing <"$TTY"; then
     echo "не удалось поставить:$missing" >&2
     echo "поставьте вручную и повторите:  $PKG_INSTALL$missing" >&2
     exit 1
   fi
 fi
-# Install ONE commit's tarball, not a `git+` URL: a git clone drags the whole history
-# (hundreds of MB), the tarball is a few MB. The sha in the URL is also what the self-update
-# compares against (version.installed_commit).
 # A school network may intercept TLS with a self-signed cert: then git/pip refuse GitHub, and
 # the second try skips verification for exactly the hosts the install talks to.
 TRUSTED="__TRUSTED__"
+# hashpass needs Python >= 3.13; Ubuntu 22.04/24.04 and Debian 12 ship older ones. Pick a new
+# enough interpreter, else install one: Ubuntu -> deadsnakes PPA, Fedora -> dnf, anything else ->
+# a standalone CPython via uv (no root). Every pip/site call below goes through "$PY".
+py_ok() { "$1" -c 'import sys; sys.exit(sys.version_info < (3, 13))' >/dev/null 2>&1; }
+PY=""
+for c in python3 python3.14 python3.13; do
+  if command -v "$c" >/dev/null 2>&1 && py_ok "$c"; then PY="$(command -v "$c")"; break; fi
+done
+if [ -z "$PY" ]; then
+  echo "нужен Python 3.13 (в системе $(python3 --version 2>&1 || echo 'его нет')) -- ставлю"
+  if command -v apt >/dev/null 2>&1 && grep -qiE '^(ID|ID_LIKE)=.*ubuntu' /etc/os-release; then
+    sudo env DEBIAN_FRONTEND=noninteractive apt install -y software-properties-common <"$TTY" || true
+    sudo add-apt-repository -y ppa:deadsnakes/ppa <"$TTY" || true
+    sudo env DEBIAN_FRONTEND=noninteractive apt install -y python3.13 python3.13-venv <"$TTY" || true
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y python3.13 <"$TTY" || true
+  fi
+  if command -v python3.13 >/dev/null 2>&1 && py_ok python3.13; then
+    PY="$(command -v python3.13)"
+  else
+    UV="$(command -v uv || echo "$HOME/.local/bin/uv")"
+    if [ ! -x "$UV" ]; then
+      { curl -fsSL https://astral.sh/uv/install.sh || curl -kfsSL https://astral.sh/uv/install.sh; } \
+        | env UV_NO_MODIFY_PATH=1 sh
+    fi
+    "$UV" python install 3.13
+    PY="$("$UV" python find 3.13)"
+  fi
+fi
+if [ -z "$PY" ] || ! py_ok "$PY"; then
+  echo "не удалось поставить Python 3.13 -- поставьте его вручную и повторите" >&2
+  exit 1
+fi
+echo "Python: $PY ($("$PY" --version))"
+if ! "$PY" -m pip --version >/dev/null 2>&1; then   # deadsnakes/uv Pythons come without pip
+  if ! "$PY" -m ensurepip --user >/dev/null 2>&1; then
+    GETPIP="$(mktemp)"
+    curl -fsSL -o "$GETPIP" https://bootstrap.pypa.io/get-pip.py \
+      || curl -kfsSL -o "$GETPIP" https://bootstrap.pypa.io/get-pip.py
+    "$PY" "$GETPIP" --user --break-system-packages \
+      || PIP_TRUSTED_HOST="$TRUSTED" "$PY" "$GETPIP" --user --break-system-packages
+    rm -f "$GETPIP"
+  fi
+fi
+# Install ONE commit's tarball, not a `git+` URL: a git clone drags the whole history
+# (hundreds of MB), the tarball is a few MB. The sha in the URL is also what the self-update
+# compares against (version.installed_commit).
 SHA="$(git ls-remote "https://github.com/__REPO__" refs/heads/main 2>/dev/null | cut -f1 || true)"
 if [ -z "$SHA" ]; then
   SHA="$(git -c http.sslVerify=false ls-remote "https://github.com/__REPO__" refs/heads/main | cut -f1)"
@@ -74,13 +122,13 @@ fi
 # --break-system-packages is needed on PEP 668 distros (Debian 12+, Ubuntu 23.04+) but an
 # older pip (Ubuntu 22.04: pip 22.0) rejects the unknown flag -- pass it only when supported.
 BSP=""
-python3 -m pip install --help 2>/dev/null | grep -q -- --break-system-packages && BSP="--break-system-packages"
+"$PY" -m pip install --help 2>/dev/null | grep -q -- --break-system-packages && BSP="--break-system-packages"
 pip_install() {   # pip_install ARGS... -- retry trusting the hosts above on a TLS failure
   # shellcheck disable=SC2086  # $BSP is empty or one flag
-  python3 -m pip install --user $BSP "$@" && return 0
+  "$PY" -m pip install --user $BSP "$@" && return 0
   echo "повторяю без проверки сертификата (самоподписанный прокси в сети?)" >&2
   # shellcheck disable=SC2086
-  PIP_TRUSTED_HOST="$TRUSTED" python3 -m pip install --user $BSP "$@"
+  PIP_TRUSTED_HOST="$TRUSTED" "$PY" -m pip install --user $BSP "$@"
 }
 # `--upgrade --force-reinstall --no-deps`: pip normally sees "hashpass X.Y.Z is
 # already installed" and does nothing -- even when `main` has moved and we forgot to
@@ -93,7 +141,7 @@ pip_install --upgrade "flask>=3.0" "textual>=1.0"
 # only if it ALREADY existed at login, Arch never does -- so `hashpass` was «command not found».
 # Persist it for bash (~/.bashrc + ~/.profile), zsh (~/.zshrc) and fish (conf.d), idempotently,
 # and say how to pick it up in the terminal that is already open.
-BIN="$(python3 -m site --user-base)/bin"
+BIN="$("$PY" -m site --user-base)/bin"
 USER_SHELL="$(basename "${SHELL:-bash}")"
 PATH_LINE='case ":$PATH:" in *":'"$BIN"':"*) ;; *) export PATH="'"$BIN"':$PATH" ;; esac  # hashpass'
 add_line() {   # add_line FILE LINE -- append LINE once
