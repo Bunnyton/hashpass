@@ -17,7 +17,7 @@ say "Иногда пакет лежит на диске .deb-файлом. Ст�
 read brief.md
 
 stage
-  say "Скачай .deb по ссылке из брифа и установи из него cmatrix"
+  say "Скачай cmatrix .deb-файлом и установи из него"
   solve:
     wget -q http://ftp.debian.org/debian/pool/main/c/cmatrix/cmatrix_2.0-3_amd64.deb
     sudo apt-get install -y ./cmatrix_2.0-3_amd64.deb >/dev/null 2>&1
@@ -25,11 +25,11 @@ stage
   neutral ls cat pwd
   on pass say "dpkg -L cmatrix перечислит все файлы, которые принёс пакет. Найди, где лежит сам бинарь."
   hint output "command not found" say "Такой скачивалки нет. Их как минимум две — загугли."
-  hint output "dependency problems" say "dpkg сам сказал, чего не хватает. В теории есть, чем доделать."
+  hint output "dependency problems" say "dpkg ставит ровно этот файл и не достаёт зависимости из репозитория. Доделать умеет apt: sudo apt -f install (fix-broken) — или ставь сразу через apt: sudo apt install ./файл.deb."
   hint output "Unmet dependencies" say "apt отказался — и в последней строке сам написал, что попробовать. Прочитай её."
   hint output "Permission denied" say "Установщику не хватило прав. Как обычный пользователь одалживает права администратора на одну команду?"
-  hint tries 3 say "Файл скачался (ls)? Дальше — по теории."
-  hint tries 6 say "man dpkg — «install»; apt тоже умеет ставить ./файл.deb."
+  hint tries 3 say "Файл скачался (ls)? Теперь установка из файла — тут поможет поиск."
+  hint tries 6 say "Загугли: «debian установить пакет из deb файла». Низкоуровневый установщик называется dpkg."
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
 
 stage

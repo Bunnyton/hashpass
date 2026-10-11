@@ -11,17 +11,21 @@ say "Голая система скучна. Пора её чем-нибудь �
 read brief.md
 
 stage
-  say "Установи самую свежую версию пакета sl"
-  solve:
-    sudo apt-get update >/dev/null 2>&1
-    sudo apt-get install -y sl >/dev/null 2>&1
+  say "Установи самую свежую версию sl (нужен интернет)"
+  accept cmd "apt update" ok
+  accept cmd "apt-get update" ok
+  neutral ls cat pwd
+  hint cmd apt has install say "Ставится-то ставится — но самая ли свежая? Перечитай в теории про «4 месяца назад»."
+  hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
+  hint tries 4 say "Самую свежую — значит, сначала apt должен узнать, что нового в репозиториях."
+  hint idle 240 say "Долгая пауза. Перечитай цель и теорию."
+
+stage
+  solve sudo apt-get install -y sl
   check exec command -v sl || test -x /usr/games/sl
   neutral ls cat pwd
   on pass say "Поезд ходит на каждую опечатку ls. Попробуй sl -l — вагоны поедут назад. А sl -F… сам увидишь."
-  hint output "Unable to locate package" say "apt не нашёл пакет. Когда обновлялся список? Шагов два."
-  hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
-  hint tries 3 say "Прочитай ответ apt — он говорит прямым текстом."
-  hint tries 6 say "Загугли: «apt установить пакет debian». Или apt --help."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
+  hint output "Unable to locate package" say "apt не нашёл пакет. Проверь имя — две буквы."
+  hint tries 3 say "Список обновлён — теперь сама установка."
 
 exec finale
