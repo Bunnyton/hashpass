@@ -1,0 +1,5 @@
+#!/bin/sh
+# Принято: rock.txt прочитан обычным cat (без sudo).
+case "$1" in cat\ *) ;; *) exit 1 ;; esac
+case "${HP_LAST_OUT:-}" in *"Rock never dies"*) exit 0 ;; esac
+exit 1

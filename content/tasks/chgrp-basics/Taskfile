@@ -1,10 +1,10 @@
-# chgrp-basics — сменить группу файла, чтобы получить к нему доступ.
+# chgrp-basics — группа файла (исходник docs/Задания «chgrp (26)»): .secret/rock.txt принадлежит
+# root:FiveFingerDeathPunch. Работают только chgrp (можно с sudo) и cd/cat/ls/echo — без sudo:
+# прочитать файл через sudo cat не выйдет, нужно сменить группу и прочитать обычным cat.
 
 image chgrp-basics:1
 
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/secret/rock.txt --kind prose --lines 80 --seed 103 --plant 'Rock never dies. key{ready-to-rock}@0.5'
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/secret/setlist-2024.txt --kind prose --lines 40 --seed 104
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/secret/rider.md --kind notes --lines 30 --seed 105
+# data: data/secret/rock.txt — арт из исходника + подпись
 copy data/secret /home/student/.secret
 run chown -R student:student /home/student/.secret
 run groupadd -f FiveFingerDeathPunch
@@ -21,15 +21,22 @@ say "Права держат тебя снаружи. Но группу можн
 read brief.md
 
 stage
-  say "Смени группу файла /home/student/.secret/rock.txt на student"
-  solve sudo chgrp student /home/student/.secret/rock.txt
-  check exec sh -c 'test "$(stat -c %G /home/student/.secret/rock.txt)" = "student"'
-  neutral ls cat pwd cd
-  on pass say "Загляни внутрь — ключ ждёт. А id покажет все твои группы вместе с их номерами."
-  hint output "Operation not permitted" say "Чей файл — того и право менять. Одолжи права."
-  hint output "Permission denied" say "Читать пока нельзя. Задача — не прочитать, а сменить группу."
-  hint tries 3 say "ls -l .secret/rock.txt — какая там группа? Какая команда меняет именно её?"
-  hint tries 6 say "man chgrp — SYNOPSIS. Или загугли: «изменить группу файла linux»."
-  hint idle 240 say "Перечитай цель: группа — student, файл — в .secret."
+  say "Прочитай /home/student/.secret/rock.txt"
+  solve:
+    sudo chgrp student /home/student/.secret/rock.txt
+    cat /home/student/.secret/rock.txt
+  check exec rocked
+  allow chgrp cat
+  neutral ls cd echo pwd
+  block cat match "^sudo " say "Команда запрещена"
+  block ls match "^sudo " say "Команда запрещена"
+  block cd match "^sudo " say "Команда запрещена"
+  block echo match "^sudo " say "Команда запрещена"
+  on pass say "id покажет все твои группы вместе с их номерами."
+  hint output "Permission denied" say "Файл не твой и группа не твоя. Чью из двух поменять проще?"
+  hint output "Operation not permitted" say "Сменить группу чужого файла может только root. А одолжить его права chgrp — можно."
+  hint tries 3 say "ls -l .secret/rock.txt — кто владелец, какая группа, что разрешено группе?"
+  hint tries 6 say "man chgrp — SYNOPSIS."
+  hint idle 240 say "Долгая пауза. Перечитай вывод ls -l."
 
 exec finale

@@ -1,8 +1,11 @@
-# chmod-basics — права: числовая запись. Каталогу perm_dir — drwxr----x (741).
+# chmod-basics — права (исходник docs/Задания «chmod (25)»): в perm_dir права сломаны (каталог 000,
+# file.txt 777 и группа minimal, exec_me.sh 005). Шаг 1: каталогу drwxr----x — побитовой записью
+# (буквенную консоль не пустит). Шаг 2: настроить права так, чтобы exec_me.sh запускался, но не
+# мог запустить file.txt («Имеешь право(а)!»). После — доза про относительную запись (для chmod-evil).
 
 image chmod-basics:1
 
-# data: data/perm_dir/file.txt, exec_me.sh — руками; остальные — mkdata (ниже)
+# data: data/perm_dir/file.txt, exec_me.sh — из исходника; остальные — mkdata (ниже)
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/notes.md --kind notes --lines 35 --seed 120
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/build.log --kind log --lines 60 --seed 121
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/plan.txt --kind prose --lines 25 --seed 122
@@ -10,8 +13,12 @@ image chmod-basics:1
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/changelog.md --kind notes --lines 45 --seed 124
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/perm_dir/draft.txt --kind prose --lines 30 --seed 125
 copy data/perm_dir /home/student/perm_dir
-run chmod -R 777 /home/student/perm_dir
+run groupadd -f minimal
 run chown -R student:student /home/student/perm_dir
+run chgrp minimal /home/student/perm_dir/file.txt
+run chmod 777 /home/student/perm_dir/file.txt
+run chmod 005 /home/student/perm_dir/exec_me.sh
+run chmod 000 /home/student/perm_dir
 
 hidden hp
 
@@ -22,13 +29,30 @@ say "Кто может читать твои файлы, а кто — нет? �
 read brief.md
 
 stage
-  say "Выставь каталогу /home/student/perm_dir права drwxr----x"
+  say "В perm_dir нарушены права. Выставь каталогу права drwxr----x — побитовой записью"
   solve chmod 741 /home/student/perm_dir
   check exec sh -c 'test "$(stat -c %a /home/student/perm_dir)" = "741"'
-  neutral ls cat pwd
-  on pass say "stat -c %a perm_dir покажет права цифрами — сверь с тем, что ставил."
-  hint tries 3 say "ls -ld perm_dir — какая тройка не сошлась?"
-  hint tries 6 say "r=4, w=2, x=1 — три суммы по отдельности."
-  hint idle 240 say "Перечитай цель: rwx | r-- | --x. Три цифры."
+  block chmod match " [ugoa]*[-+=][rwxXst]" say "Только побитовая запись — цифрами (chmod 754 …)."
+  neutral ls cat pwd cd
+  on pass say "Каталог открыт. Загляни внутрь — там кое-кто просит помощи."
+  hint output "Permission denied" say "Каталог закрыт даже для тебя. Но владелец — ты, а права меняет владелец."
+  hint tries 3 say "ls -ld perm_dir — сравни с тем, что нужно: какая тройка не сошлась?"
+  hint tries 6 say "Каждая тройка — одна цифра: сумма r=4, w=2, x=1."
+  hint idle 240 say "Перечитай цель: rwx | r-- | --x."
+
+stage
+  say "Сделай так, чтобы exec_me.sh запускался, но не мог запустить file.txt"
+  solve:
+    chmod 700 /home/student/perm_dir/exec_me.sh
+    chmod 664 /home/student/perm_dir/file.txt
+    /home/student/perm_dir/exec_me.sh
+  check exec allowed
+  neutral ls cat pwd cd
+  on pass read symbolic.md
+  hint output "Permission denied" say "Запустить не дали. Чьи права у exec_me.sh — и какая тройка твоя?"
+  hint output "Что-то не так" say "file.txt запустился — и права ему вернули на 777. Кто должен лишиться права на запуск?"
+  hint tries 4 say "Сначала прочитай exec_me.sh — он сам говорит, чего хочет."
+  hint tries 8 say "ls -l: у файлов три тройки. Ты — владелец; какая цифра отвечает за x владельца?"
+  hint idle 240 say "Долгая пауза. Запусти exec_me.sh и прочитай, что он ответит."
 
 exec finale
