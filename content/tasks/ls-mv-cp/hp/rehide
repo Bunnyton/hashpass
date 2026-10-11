@@ -1,0 +1,29 @@
+#!/bin/sh
+# Исходник «grep (12)»: фраза уходит со старого места, подвалов становится больше (тот же скрипт
+# инфраструктуры: subdir_N/level1/level2/level3, 15 файлов на каталог), и фраза прячется в
+# случайный файл. Выполняется в живой системе студента (apply).
+cd /home/student || exit 0
+q='«Терпение должны иметь мы, пока осядет муть и вода чистой станет»'
+for f in $(grep -rl 'Терпение должны' subdir_* 2>/dev/null); do sed -i '/Терпение должны/d' "$f"; done
+rnd() { od -An -N4 -tu4 /dev/urandom | tr -d ' '; }
+name() { tr -dc 'a-zA-Z0-9' </dev/urandom | head -c "$1"; }
+for i in 5 6 7 8 9 10 11 12 13 14; do
+  d="subdir_$i"; l1="$d/level1_$(name 4)"; l2="$l1/level2_$(name 4)"; l3="$l2/level3_$(name 4)"
+  mkdir -p "$l3"
+  for dir in "$d" "$l1" "$l2" "$l3"; do
+    j=1
+    while [ "$j" -le 15 ]; do
+      fb="file_$(name 6)"
+      case $(( $(rnd) % 4 )) in
+        0) echo "Content of $fb" > "$dir/$fb.txt" ;;
+        1) echo "<?php echo '$fb'; ?>" > "$dir/$fb.php" ;;
+        2) echo "{\"id\": $j, \"name\": \"$fb\"}" > "$dir/$fb.json" ;;
+        *) printf '# %s\\nThis is a config file\n' "$fb" > "$dir/$fb.conf" ;;
+      esac
+      j=$((j + 1))
+    done
+  done
+done
+f=$(find subdir_* -type f | awk -v r="$(rnd)" '{a[NR]=$0} END{print a[r % NR + 1]}')
+echo "$q" >> "$f"
+chown -R student:student subdir_*

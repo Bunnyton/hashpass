@@ -710,8 +710,10 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
         # Keys stay host-side (`res.local_key`), compared under the hood -- nothing on-screen.
         _finish(session, io)
         return
-    session.enter()                          # next stage's on_enter
+    # announce the next goal FIRST, then its on_enter (the step's dose of theory) -- the same
+    # order as the intro and as a pass found by the background FS check.
     _announce_stage(session, io)
+    session.enter_stage()
     nxt = current_stage(session.progress)
     if nxt is not None and not session.meta.stages[nxt].message:
         # A stage without text continues the goal on screen, and the command that passed the

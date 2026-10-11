@@ -386,6 +386,7 @@ def test_render_observe_no_forced_phrase_completion_fires_outro(monkeypatch):
                 advanced=True, stage=3, local_key=key),
             fire_outro=lambda: writes.append("<outro>"),
             enter=lambda: writes.append("<enter>"),
+            enter_stage=lambda: writes.append("<enter>"),
         )
         monkeypatch.setattr(cli, "current_stage", lambda _p: stage_left)
         cli._render_observe(session, "cmd", "out", None, None, io)  # noqa: SLF001
@@ -428,7 +429,8 @@ def test_mid_task_pass_prints_no_solved_banner(monkeypatch):
         progress=object(), meta=SimpleNamespace(stages=[SimpleNamespace(message=f"g{i}") for i in range(2)]),
         observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
             advanced=True, stage=0, local_key=""),
-        fire_outro=lambda: writes.append("<outro>"), enter=lambda: writes.append("<enter>"))
+        fire_outro=lambda: writes.append("<outro>"), enter=lambda: writes.append("<enter>"),
+        enter_stage=lambda: writes.append("<enter>"))
     monkeypatch.setattr(cli, "current_stage", lambda _p: 1)
     cli._render_observe(session, "cmd", "out", None, None, io)  # noqa: SLF001
     assert "РЕШЕНО" not in "".join(writes)
@@ -495,3 +497,22 @@ def test_policy_reply_carries_block_rules_base64(monkeypatch):
     assert (allow, deny, neutral) == ("", "", "ls")
     assert base64.b64decode(blocks).decode().split("\x1f") == [
         "cd", "unless", "^cd +/home/student/", "no no no, mister fish!"]
+
+
+@pytest.mark.tier1
+def test_render_observe_announces_the_next_goal_before_its_on_enter(monkeypatch):
+    """Advance by a command: «──  <goal>» first, then the stage's on_enter (its dose of theory)."""
+    writes: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
+    session = SimpleNamespace(
+        progress=object(),
+        meta=SimpleNamespace(stages=[SimpleNamespace(message=f"goal {i}") for i in range(3)]),
+        observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
+            advanced=True, stage=1, local_key=""),
+        enter=lambda: writes.append("<enter>"),
+        enter_stage=lambda: writes.append("<enter>"),
+    )
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 1)
+    monkeypatch.setattr(cli, "_announce_stage", lambda _s, _io: writes.append("<announce>"))
+    cli._render_observe(session, "cmd", "out", None, None, io)  # noqa: SLF001
+    assert writes.index("<announce>") < writes.index("<enter>")

@@ -1,18 +1,16 @@
-# ls-mv-cp — обход дерева ограниченным набором: в консоли работают только ls, cd, cat, cp, mv, rm
-# (+ pwd). Ключ спрятан в одном из ~50 коротких файлов четырёх деревьев. Руками — долго; смысл
-# задания — увидеть, что всё нужное уже пройдено: cat принимает много файлов, а * стоит в любом
-# уровне пути — и хватает одной команды. Приёмка — скрытая проверка по выводу последней команды
-# (HP_LAST_OUT): ключ показан на экране.
+# ls-mv-cp — поиск руками и автоматом (исходники docs/Задания «ls_mv_cp (11)» и «grep (12)» —
+# одним заданием). Шаг 1: фраза спрятана в одном из файлов четырёх деревьев, а работают только
+# cd ls cat mv rm cp (решается и одной командой: cat со звёздочками). Шаг 2: «автоматизируй
+# поиск» — фраза перепрятана в случайный файл, деревьев стало четырнадцать, ограничение снято:
+# «найди нужную команду сам. Just Google it!». Приёмка обоих шагов — фраза в выводе последней
+# команды (скрытая проверка по HP_LAST_OUT).
 
 image ls-mv-cp:1
 
-# data: for i in 1 2 3 4; do python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/subdir_$i --seed 23$i --depth 3 --dirs 5 --files 12 --lines 1-2; done
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py plant data/subdir_3/staging_2022/reports6/photo.cfg --line '«Терпение должны иметь мы, пока осядет муть и вода чистой станет» key{f2bf3954874ecebd}' --at 1
-copy data/subdir_1 /home/student/subdir_1
-copy data/subdir_2 /home/student/subdir_2
-copy data/subdir_3 /home/student/subdir_3
-copy data/subdir_4 /home/student/subdir_4
-run chown -R student:student /home/student/subdir_1 /home/student/subdir_2 /home/student/subdir_3 /home/student/subdir_4
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py subdirs data --count 4 --files 3 --seed 251
+# data: фраза дописана в конец 5-го по порядку файла третьего уровня (subdir_1/…/level3_0J5f/file_B2nJ2l.json)
+copy data /home/student
+run chown -R student:student /home/student
 
 hidden hp
 
@@ -23,14 +21,26 @@ say "Четыре подвала, в каждом — этажи. Карту н�
 read brief.md
 
 stage
-  say "Найди ключ к следующему заданию — он в одном из файлов /home/student/subdir_1 … subdir_4"
-  solve cat /home/student/subdir_3/staging_2022/reports6/photo.cfg
-  check exec grade
+  say "Найди в файлах subdir_1 … subdir_4 строку «Терпение должны иметь мы…» и выведи её на экран"
+  solve cat /home/student/subdir_1/level1_2GyK/level2_AB3p/level3_0J5f/file_B2nJ2l.json
+  check exec found
   allow cat cp mv rm
   neutral ls cd pwd
-  on pass say "Сорок восемь файлов — одна команда: звёздочка на каждом уровне пути, cat subdir_*/*/*/*. Руками ушло бы минут десять."
-  hint tries 4 say "Файлов десятки. Открывать по одному долго — а сколько файлов cat берёт за раз?"
-  hint tries 8 say "Перечитай в брифе, где ещё может стоять звёздочка."
+  on pass say "Нашёл! Руками, честно — и это только четыре подвала."
+  hint tries 4 say "cat, как и cp, принимает сколько угодно файлов. А звёздочка подставит их имена — хоть на каждом уровне пути."
+  hint tries 8 say "Мешает лишнее? То, что уже проверил, можно убрать: rm -rf. И не забывай про Tab."
+  hint idle 300 say "Долгая пауза. Перечитай цель и вывод последней команды."
+
+stage
+  say "Теперь придумай, как автоматизировать поиск: фраза перепрятана, а подвалов стало четырнадцать"
+  solve grep -r Терпение /home/student
+  check exec found
+  on enter apply rehide
+  on enter say "Команды — всё те же: cd, ls, cat, mv, rm, cp."
+  on enter say "Ладно, я же не изверг! Хотя... Тебе доступно неограниченное количество команд. Но придётся самому найти нужные. Just Google it!"
+  on pass say "Шестьсот с лишним файлов — одна команда. Вот зачем нужны правильные инструменты."
+  hint tries 4 say "Загугли: «linux найти файл по тексту внутри» — первая же ссылка подскажет команду."
+  hint tries 8 say "Нашёл команду? Спроси у неё --help: как искать во всех вложенных каталогах сразу?"
   hint idle 300 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale
