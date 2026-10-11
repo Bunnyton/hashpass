@@ -1,46 +1,37 @@
-# vim-intro — знакомство с vim: урок 1.1 vimtutor, затем те же приёмы (x, i, A, :wq) на своём файле.
-# Шаг 1 принимается по запуску vimtutor (его копия урока стирается при выходе — проверять нечего);
-# шаг 2 — два шага с ОДНОЙ целью: первый проходит, когда файл открыли в vim (hp/invim смотрит на
-# саму команду; sed не проходит), второй — по файлу: hp/lesson сверяет строки со стрелкой с образцами.
+# vim-intro — vim (исходник docs/Задания «vim intro (24)»): ./task.sh открывает vim -O edit.txt
+# true.txt; искажённый отрывок «Онегина» надо исправить, чтобы он совпал с эталоном рядом
+# (:diffthis, Ctrl+w l/h — в шапке самого файла), проверка — ./check.sh. В консоли работают только
+# ./task.sh, ./check.sh, ls и vimtutor. Принято после выхода из vim, когда файлы совпали.
 
 image vim-intro:1
 
 # vim (и vimtutor) в базе нет.
 run apt-get update >/dev/null 2>&1
 run DEBIAN_FRONTEND=noninteractive apt-get install -y vim >/dev/null 2>&1
-# data: data/lesson1.txt написан руками по образцу упражнений урока 1.1 (x, i, A)
-copy data/lesson1.txt /home/student/lesson1.txt
-run chown student:student /home/student/lesson1.txt
+# data: data/vim — edit.txt, true.txt, task.sh, check.sh из исходника
+copy data/vim /home/student
+run chown student:student /home/student/edit.txt /home/student/task.sh /home/student/check.sh
+run chmod 755 /home/student/task.sh /home/student/check.sh
+run chown root:root /home/student/true.txt
+run chmod 444 /home/student/true.txt
 
 hidden hp
 
 settings
   pager on
 
-say "Те самые три буквы. VIM. Мощнее, чем кажется."
+say "Те самые три буквы..."
 read brief.md
 
 stage
-  say "Пройди в vimtutor первый урок — до конца, вместе с :wq"
-  accept cmd "vimtutor" ok
-  neutral ls cat pwd
-  on pass say "Урок пройден на учебной копии. Теперь — на настоящем файле."
-  hint idle 300 say "Застрял внутри vim? Как выйти — в конце теории."
-
-stage
-  say "Почини в vim упражнения в /home/student/lesson1.txt"
-  solve true
-  check exec invim /home/student/lesson1.txt
-  neutral ls cat pwd
-  hint tries 3 say "cat lesson1.txt: какие строки со стрелкой ещё не совпадают с образцом?"
-  hint tries 6 say "Лишняя буква, недостающее слово, обрывок в конце строки — каким клавишам урока они соответствуют?"
-  hint idle 240 say "Изменения попадают в файл только после сохранения."
-
-stage
-  solve:
-    sed -i -e 's/^---> Ммыышшь.*/---> Мышь в норке тихо грызёт сыр./' -e 's/^---> Кот на окне жмурится\./---> Рыжий кот на тёплом окне сладко жмурится./' -e 's/^---> Без труда не выловишь$/---> Без труда не выловишь и рыбку из пруда./' /home/student/lesson1.txt
-  check exec lesson /home/student/lesson1.txt
-  neutral ls cat pwd
-  on pass say "В учебнике семь уроков: по одному в день — и через неделю vim перестанет пугать."
+  say "Отредактируй edit.txt, чтобы он в точности совпадал с текстом сбоку. Начни с ./task.sh"
+  solve cp /home/student/true.txt /home/student/edit.txt
+  check exec same
+  allow ./task.sh task.sh ./check.sh check.sh vimtutor
+  neutral ls
+  on pass say "Вот теперь ты знаешь vim чуть-чуть. Остальное — в vimtutor: семь уроков, по одному в день."
+  hint output "Внимательнее, салага!" say "Различия ещё есть. :diffthis в обоих окнах подсветит каждое."
+  hint tries 4 say "Как выйти из vim, сохранив оба окна? Посмотри в шапку файла — там всё сказано."
+  hint idle 300 say "Застрял? В шапке edit.txt — как сравнить окна, переключиться и выйти."
 
 exec finale
