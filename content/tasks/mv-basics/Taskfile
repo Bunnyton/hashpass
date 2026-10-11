@@ -1,38 +1,50 @@
-# mv-basics — перемещение и переименование. Наблюдаем новое имя И отсутствие старого:
-# cp вместо mv не проходит.
+# mv-basics — mv (исходник docs/Задания «mv (9)»): сначала перенести всё содержимое dir в ТЕКУЩУЮ
+# директорию (понятия «текущая» и «.»), потом «переименуй file5 в file2. Думай!» — что mv
+# переименовывает, студент догадывается сам. Награда — сам file2: в нём текст про расширения.
 
 image mv-basics:1
 
-# data: data/workspace/file5 — руками; остальные — mkdata (ниже)
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file1 --kind prose --lines 12 --seed 230
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file3 --kind prose --lines 15 --seed 231
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file4 --kind prose --lines 18 --seed 232
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file6 --kind prose --lines 21 --seed 233
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file7 --kind prose --lines 24 --seed 234
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file8 --kind prose --lines 27 --seed 235
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/workspace/file9 --kind prose --lines 30 --seed 236
-copy data/workspace /home/student/workspace
-run chown -R student:student /home/student/workspace
+# data: data/dir/file5 — текст исходника; остальные — mkdata (ниже)
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file1 --kind prose --lines 12 --seed 230
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file3 --kind prose --lines 15 --seed 231
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file4 --kind prose --lines 18 --seed 232
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file6 --kind prose --lines 21 --seed 233
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file7 --kind prose --lines 24 --seed 234
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file8 --kind prose --lines 27 --seed 235
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file9 --kind prose --lines 30 --seed 236
+copy data/dir /home/student/dir
+run chown -R student:student /home/student/dir
 
 hidden hp
 
 settings
   pager on
 
-say "cp — copy, mv — move. А ещё mv умеет то, о чём не говорит его имя."
+say "cp — copy, mv — move."
 read brief.md
 
 stage
-  say "В /home/student/workspace файл file5 должен называться file2"
-  solve mv /home/student/workspace/file5 /home/student/workspace/file2
-  observe /home/student/workspace/file2
-  observe bool /home/student/workspace/file5
-  neutral ls cat pwd
-  on pass say "mv переименовывает и каталоги, и сразу несколько файлов в другой каталог. Перенеси file2 в новый каталог done."
-  hint output "No such file or directory" say "Какой файл не нашёлся? Сверь имя с ls."
-  hint cmd cp say "Теперь файлов два, а нужен один с новым именем."
-  hint tries 3 say "Загляни в workspace: file5 ещё там? file2 уже появился?"
-  hint tries 6 say "man mv — второй абзац DESCRIPTION."
+  say "Перенеси всё содержимое директории dir в текущую"
+  solve mv /home/student/dir/file1 /home/student/dir/file3 /home/student/dir/file4 /home/student/dir/file5 /home/student/dir/file6 /home/student/dir/file7 /home/student/dir/file8 /home/student/dir/file9 /home/student/
+  check exec moved
+  neutral ls cat pwd cd
+  on pass say "dir опустел, всё здесь."
+  hint output "No such file or directory" say "Чего mv не нашёл? Сверь имя с ls."
+  hint cmd cp say "Это копия: в dir всё осталось. Нужен перенос."
+  hint tries 3 say "Где ты сейчас? pwd скажет. Как назвать «сюда» в пути — сказано в теории."
+  hint tries 6 say "Файлов много — вспомни звёздочку из уроков про cp."
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+
+stage
+  say "Теперь переименуй file5 в file2. Думай. Думай!"
+  solve mv /home/student/file5 /home/student/file2
+  observe /home/student/file2
+  observe bool /home/student/file5
+  neutral ls cat pwd cd
+  on pass exec cat /home/student/file2
+  hint cmd cp say "Теперь файлов два, а нужен один — с новым именем."
+  hint tries 3 say "Какая команда меняет у файла место? А имя — не часть ли его места?"
+  hint tries 6 say "man mv — первые строки DESCRIPTION."
+  hint idle 240 say "Долгая пауза. Думай. Думай!"
 
 exec finale

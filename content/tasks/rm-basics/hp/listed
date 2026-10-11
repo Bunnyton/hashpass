@@ -1,0 +1,5 @@
+#!/bin/sh
+# Принято: последней командой был ls, и в выводе — содержимое workdir.
+case "$1" in ls|ls\ *) ;; *) exit 1 ;; esac
+case "${HP_LAST_OUT:-}" in *subdir_1*) exit 0 ;; esac
+exit 1

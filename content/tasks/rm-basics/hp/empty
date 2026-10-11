@@ -1,0 +1,3 @@
+#!/bin/sh
+# Принято: в workdir не осталось ничего, даже скрытого; сам каталог на месте.
+test -d /home/student/workdir && test -z "$(ls -A /home/student/workdir 2>/dev/null)"

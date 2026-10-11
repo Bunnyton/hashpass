@@ -1,8 +1,13 @@
-# rm-basics — удаление: всё содержимое workdir, включая скрытое; сам каталог остаётся.
+# rm-basics — rm (исходник docs/Задания «rm (10)»): зайти в workdir и ls; «удали всё» — rm -r со
+# звёздочкой; ls -a показывает, что скрытое осталось (и розыгрыш .look_at_me.txt объясняет, что
+# `*` не берёт скрытые); «Крушить, ломать!» — добить скрытое, rm без звёздочки консоль не пустит.
+# Каждый rm — одной командой.
 
 image rm-basics:1
 
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/workdir --seed 240 --depth 2 --dirs 5 --files 40 --lines 1-8 --plant '.secret_junk=спрятанный мусор' --plant '.hidden_junk/inside.txt=ещё мусор' --plant .cache/index.bin= --plant '.cache/pages/1.html=<html>мусор</html>' --plant .old_config=junk=1
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py subdirs data/workdir --count 6 --files 5 --seed 241
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py subdirs data/workdir --count 6 --files 5 --seed 242 --hidden
+# data: data/workdir/.look_at_me.txt — текст исходника, руками
 copy data/workdir /home/student/workdir
 run chown -R student:student /home/student/workdir
 
@@ -11,21 +16,41 @@ hidden hp
 settings
   pager on
 
-say "rm — remove. Крушить, ломать! Но по правилам."
+say "rm — remove. Крушить, ломать! Но сначала осмотрись."
 read brief.md
 
 stage
-  say "Очисти /home/student/workdir до нуля, скрытое тоже — сам каталог оставь"
-  solve:
-    rm -rf /home/student/workdir/*
-    rm -rf /home/student/workdir/.[!.]*
-  check exec sh -c 'test -d /home/student/workdir && test -z "$(ls -A /home/student/workdir 2>/dev/null)"'
-  neutral ls cat pwd
-  on pass say "Ты только что удалил скрытое. Помни: rm не спрашивает и корзины у него нет — вот почему ls -a идёт первым."
-  hint output "Is a directory" say "rm отказался: это каталог. В теории был ключ."
-  hint tries 3 say "Проверь, что осталось: ls показывает пусто? А ls -a?"
-  hint tries 6 say "Что в теории сказано про звёздочку и имена с точкой? Или загугли: «bash glob скрытые файлы»."
-  hint tries 10 say "Один шаблон — для видимого, другой — для имён с точкой; в одной команде их может быть оба."
+  say "Сразу к делу: перейди в директорию workdir и выполни ls"
+  solve ls /home/student/workdir
+  check exec listed
+  neutral pwd
+  on pass say "Видишь всё это? Сейчас его не станет."
+  hint tries 3 say "Сначала переход, потом ls."
+
+stage
+  say "Удали всё в текущей директории"
+  solve rm -r /home/student/workdir/subdir_1 /home/student/workdir/subdir_2 /home/student/workdir/subdir_3 /home/student/workdir/subdir_4 /home/student/workdir/subdir_5 /home/student/workdir/subdir_6
+  check exec wiped
+  neutral ls pwd cd cat
+  on pass say "Готово? Проверь."
+  hint output "Is a directory" say "rm не трогает каталоги без спроса. Чтобы снести каталог со всем содержимым, нужен ключ -r (recursive); -f (force) не задаёт лишних вопросов."
+  hint tries 3 say "Каталогов много, а rm — одной командой. Вспомни звёздочку."
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+
+stage
+  say "Сделай ls -a"
+  accept cmd "ls -a" ok
+  neutral pwd cd cat
+  hint tries 3 say "Тот же ls, только с ключом -a."
+
+stage
+  say "Крушить, ломать!"
+  solve rm -rf /home/student/workdir/.subdir_1 /home/student/workdir/.subdir_2 /home/student/workdir/.subdir_3 /home/student/workdir/.subdir_4 /home/student/workdir/.subdir_5 /home/student/workdir/.subdir_6 /home/student/workdir/.look_at_me.txt
+  check exec empty
+  block rm unless "\*" say "А где же звёздочка?"
+  neutral ls pwd cd cat
+  on pass say "Теперь пусто по-настоящему. rm не спрашивает и корзины у него нет — вот почему ls -a идёт первым."
+  hint tries 3 say "Что осталось после ls -a? Загляни в то, что похоже на записку."
+  hint idle 240 say "Долгая пауза. Перечитай вывод ls -a."
 
 exec finale
