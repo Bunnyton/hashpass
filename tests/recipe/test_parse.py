@@ -362,3 +362,18 @@ def test_accept_cmd_ok_requires_a_successful_exit():
     assert plain.stages[0].accept_ok is False
     with pytest.raises(ValueError, match="accept cmd"):
         parse_recipe('image t:1\nstage\n  say "x"\n  accept cmd "cmatrix" nope\n')
+
+
+@pytest.mark.tier1
+def test_block_rule_parse():
+    """`block <cmd> match|unless "<ERE>" say "<msg>"` -- refuse a command by its arguments."""
+    r = parse_recipe('image t:1\nstage\n  say "x"\n  solve cd /home/student/a\n  observe output\n'
+                     '  block cd unless "^cd +/home/student/" say "no no no, mister fish!"\n'
+                     '  block cat match "^sudo " say "Сначала без sudo"\n')
+    b = r.stages[0].blocks
+    assert [(x.base, x.mode, x.pattern, x.message) for x in b] == [
+        ("cd", "unless", "^cd +/home/student/", "no no no, mister fish!"),
+        ("cat", "match", "^sudo ", "Сначала без sudo")]
+    with pytest.raises(ValueError, match="block"):
+        parse_recipe('image t:1\nstage\n  say "x"\n  solve true\n  observe output\n'
+                     '  block cd sometimes "x" say "y"\n')

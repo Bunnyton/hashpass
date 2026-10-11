@@ -6,6 +6,7 @@ from pathlib import Path
 from hashpass.imagestore.store import ImageStore, StoredImage
 from hashpass.recipe.model import (
     Action,
+    BlockRule,
     CmdCond,
     Condition,
     ExecAction,
@@ -37,6 +38,7 @@ class StageMeta:
     match_output: bool = False         # `observe output`: accept by the command's stdout, not FS
     deny: tuple[str, ...] = ()         # base commands that MAY NOT be the accepting command
     allow: tuple[str, ...] = ()        # if set, ONLY these base commands may be the accepting command
+    blocks: tuple[BlockRule, ...] = () # commands the console refuses by their arguments (`block`)
 
 
 @dataclass(frozen=True)
@@ -174,6 +176,8 @@ def _stage_to_dict(stage: StageMeta) -> dict:
         "match_output": stage.match_output,
         "deny": list(stage.deny),
         "allow": list(stage.allow),
+        "blocks": [{"base": b.base, "mode": b.mode, "pattern": b.pattern, "message": b.message}
+                   for b in stage.blocks],
     }
 
 
@@ -191,6 +195,7 @@ def _stage_from_dict(data: dict) -> StageMeta:
         match_output=data.get("match_output", False),
         deny=tuple(data.get("deny", [])),
         allow=tuple(data.get("allow", [])),
+        blocks=tuple(BlockRule(**b) for b in data.get("blocks", [])),
     )
 
 

@@ -88,3 +88,14 @@ def test_stage_meta_accept_ok_round_trips(tmp_path):
                   acceptance="command", accept_cmds=("sl",)),))
     save_meta(plain, tmp_path / "plain.json")
     assert load_meta(tmp_path / "plain.json").stages[0].accept_ok is False
+
+
+@pytest.mark.tier1
+def test_stage_meta_block_rules_round_trip(tmp_path):
+    from hashpass.recipe.model import BlockRule  # noqa: PLC0415
+    rule = BlockRule("rm", "unless", r"\*", "А где же звёздочка?")
+    meta = TaskMeta(image_ref="t:1", stages=(
+        StageMeta(message="", neutral=(), check=None, on_enter=(), on_pass=(),
+                  acceptance="handler", blocks=(rule,)),))
+    save_meta(meta, tmp_path / "m.json")
+    assert load_meta(tmp_path / "m.json").stages[0].blocks == (rule,)

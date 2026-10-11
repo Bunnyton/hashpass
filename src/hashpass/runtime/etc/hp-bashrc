@@ -108,14 +108,15 @@ if [ -n "${HP_PORT-}" ]; then
         pol=$(hp-io policy 2>/dev/null) || return
         [ -z "$pol" ] && return
 
-        local allow_s deny_s neutral_s
-        IFS=';' read -r allow_s deny_s neutral_s <<< "$pol"
-        [ -z "$allow_s" ] && [ -z "$deny_s" ] && return
+        local allow_s deny_s neutral_s blocks_s
+        IFS=';' read -r allow_s deny_s neutral_s blocks_s <<< "$pol"
+        [ -z "$allow_s" ] && [ -z "$deny_s" ] && [ -z "$blocks_s" ] && return
 
-        local -a allow deny neutral
+        local -a allow deny neutral blocks
         if [ -n "$allow_s" ];   then IFS=',' read -ra allow   <<< "$allow_s";   fi
         if [ -n "$deny_s" ];    then IFS=',' read -ra deny    <<< "$deny_s";    fi
         if [ -n "$neutral_s" ]; then IFS=',' read -ra neutral <<< "$neutral_s"; fi
+        if [ -n "$blocks_s" ];  then IFS=',' read -ra blocks  <<< "$blocks_s";  fi
 
         # Walk each pipeline / && || ; segment; the base command is the first token
         # (skipping a leading `sudo`).
@@ -132,9 +133,26 @@ if [ -n "${HP_PORT-}" ]; then
                 base="${toks[1]}"
             fi
             [ -z "$base" ] && continue
-            local blocked=0
+            local blocked=0 msg="Команда «$base» запрещена."
             local d
             for d in "${deny[@]}"; do [ "$d" = "$base" ] && blocked=1 && break; done
+            # `block` rules judge the RAW segment (as typed: `*` unexpanded, `sudo` kept): each is
+            # base64 of `base␟mode␟pattern␟message`; `match` refuses on a match, `unless` refuses
+            # when the pattern is absent.
+            local b rb rm rp rmsg trimmed
+            trimmed="${seg#"${seg%%[![:space:]]*}"}"
+            if [ "$blocked" -ne 1 ]; then
+                for b in "${blocks[@]}"; do
+                    IFS=$'\x1f' read -r rb rm rp rmsg <<< "$(printf '%s' "$b" | base64 -d 2>/dev/null)"
+                    [ "$rb" = "$base" ] || continue
+                    if [[ "$trimmed" =~ $rp ]]; then
+                        [ "$rm" = match ] && blocked=1
+                    else
+                        [ "$rm" = unless ] && blocked=1
+                    fi
+                    if [ "$blocked" -eq 1 ]; then msg="$rmsg"; break; fi
+                done
+            fi
             if [ "$blocked" -ne 1 ] && [ ${#allow[@]} -gt 0 ]; then
                 local ok=0 a
                 for a in "${allow[@]}" "${neutral[@]}" cd exit; do
@@ -143,9 +161,12 @@ if [ -n "${HP_PORT-}" ]; then
                 [ "$ok" -eq 0 ] && blocked=1
             fi
             if [ "$blocked" -eq 1 ]; then
-                # `builtin echo` so shadowing `echo` doesn't recurse when the message runs.
-                eval "$base() { builtin echo \"Команда «$base» запрещена.\"; return 1; }"
-                __hp_shadow+=("$base")
+                # Shadow what actually RUNS: `sudo cat` executes sudo (which never sees shell
+                # functions), so the word to shadow is the segment's first token, not the base.
+                # `builtin printf` so shadowing `printf`/`echo` doesn't recurse.
+                local run="${toks[0]}"
+                eval "$run() { builtin printf '%s\\n' $(printf '%q' "$msg"); return 1; }"
+                __hp_shadow+=("$run")
             fi
         done <<< "$flat"
     }

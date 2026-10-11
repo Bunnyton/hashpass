@@ -18,6 +18,22 @@ class RunStep:
 
 
 @dataclass(frozen=True)
+class BlockRule:
+    """
+    A `block <cmd> match|unless "<ERE>" say "<msg>"` rule: refuse a command by its arguments.
+
+    The console checks the raw command segment (as typed: `*` unexpanded, `sudo` kept) against
+    `pattern` (bash ERE); `match` blocks when it matches, `unless` blocks when it does not. A
+    blocked command does not run -- the shell prints `message` instead.
+    """
+
+    base: str
+    mode: str          # "match" | "unless"
+    pattern: str
+    message: str
+
+
+@dataclass(frozen=True)
 class ExecAction:
     """An `exec <file-or-command>` action: run a hidden-layer script or shell command (§6)."""
 
@@ -131,6 +147,7 @@ class StageSpec:
     variants: tuple[tuple[str, ...], ...] = ()  # alt `variant` solutions; reference = output COMMON to all
     deny: tuple[str, ...] = ()           # `deny <cmd...>`: base commands forbidden to pass the stage
     allow: tuple[str, ...] = ()          # `allow <cmd...>`: ONLY these base commands may pass the stage
+    blocks: tuple[BlockRule, ...] = ()   # `block <cmd> match|unless "<ERE>" say "<msg>"`
 
 
 @dataclass(frozen=True)

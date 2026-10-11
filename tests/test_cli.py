@@ -480,3 +480,18 @@ def test_parse_cmd_request_reads_the_exit_status_token():
     assert cli._parse_cmd_request(f"cmd {cmd} {out}  rc=0")[3] == 0               # noqa: SLF001
     assert cli._parse_cmd_request(f"cmd {cmd} {out} 1.5")[3] is None              # noqa: SLF001
     assert cli._parse_cmd_request(f"cmd {cmd} {out} 1.5 rc=0")[2] == 1.5          # noqa: SLF001, PLR2004
+
+
+@pytest.mark.tier1
+def test_policy_reply_carries_block_rules_base64(monkeypatch):
+    import base64  # noqa: PLC0415
+
+    from hashpass.recipe.model import BlockRule  # noqa: PLC0415
+    rule = BlockRule("cd", "unless", "^cd +/home/student/", "no no no, mister fish!")
+    session = SimpleNamespace(progress=object(), meta=SimpleNamespace(stages=[
+        SimpleNamespace(allow=(), deny=(), neutral=("ls",), blocks=(rule,))]))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 0)
+    allow, deny, neutral, blocks = cli._policy_reply(session).rstrip("\n").split(";")  # noqa: SLF001
+    assert (allow, deny, neutral) == ("", "", "ls")
+    assert base64.b64decode(blocks).decode().split("\x1f") == [
+        "cd", "unless", "^cd +/home/student/", "no no no, mister fish!"]

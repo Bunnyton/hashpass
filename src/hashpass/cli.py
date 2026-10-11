@@ -675,12 +675,23 @@ def _authenticity(history: list[dict[str, object]]) -> dict[str, object]:
 
 
 def _policy_reply(session: object) -> str:
-    """Return the current stage's command policy as `<allow>;<deny>;<neutral>` (comma-joined)."""
+    """
+    Return the current stage's command policy as `<allow>;<deny>;<neutral>[;<blocks>]`.
+
+    Lists are comma-joined; each `block` rule travels as base64 of `base␟mode␟pattern␟message`
+    (free text never collides with the `;`/`,` separators).
+    """
     stage = current_stage(session.progress)
     if stage is None:
         return ""
     sm = session.meta.stages[stage]
-    return f"{','.join(sm.allow)};{','.join(sm.deny)};{','.join(sm.neutral)}\n"
+    line = f"{','.join(sm.allow)};{','.join(sm.deny)};{','.join(sm.neutral)}"
+    blocks = getattr(sm, "blocks", ())
+    if blocks:
+        line += ";" + ",".join(
+            base64.b64encode(f"{b.base}\x1f{b.mode}\x1f{b.pattern}\x1f{b.message}".encode()).decode()
+            for b in blocks)
+    return line + "\n"
 
 
 def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913, PLR0917

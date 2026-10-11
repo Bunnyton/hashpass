@@ -445,3 +445,18 @@ def test_check_current_grades_passively(tmp_path, base_tar):
         assert res.local_key is not None
     finally:
         session.teardown()
+
+
+@pytest.mark.tier1
+def test_policy_violation_block_rule_by_arguments():
+    from hashpass.recipe.model import BlockRule  # noqa: PLC0415
+    sm = _sm(blocks=(BlockRule("cd", "unless", r"^cd +/home/student/", "абсолютный путь!"),
+                     BlockRule("rm", "unless", r"\*", "А где же звёздочка?"),
+                     BlockRule("cat", "match", r"^sudo ", "без sudo")))
+    assert _policy_violation(sm, "cd dir1/dir2") == "абсолютный путь!"
+    assert _policy_violation(sm, "cd /home/student/dir1") is None
+    assert _policy_violation(sm, "rm -rf .hidden") == "А где же звёздочка?"
+    assert _policy_violation(sm, "rm -rf .*") is None
+    assert _policy_violation(sm, "sudo cat rock.txt") == "без sudo"
+    assert _policy_violation(sm, "cat rock.txt") is None
+    assert _policy_violation(sm, "ls && cd ..") == "абсолютный путь!"   # any segment

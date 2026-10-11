@@ -14,10 +14,16 @@ Taskfile as a comment and can be re-run.
                   [--plant a/b/level4_alpha/] [--plant docs/key.txt=КЛЮЧ: x]
                   (no directory is left empty -- git would drop it; use `run mkdir -p` for those)
     mkdata.py stats DIR                # per-depth counts, to tune a seed
+    mkdata.py gentree DIR --levels 6 --dirs 3 --files 5 --ratio 0.5 --prefix level --seed 7
+                  (port of the course's gentree: levelN_i_xxxxx names encode the depth -- find tasks)
+    mkdata.py subdirs DIR --count 4 --files 3 --seed 8 [--hidden]
+                  (port of the ls_mv_cp/rm/grep infra script: subdir_N/level1_xxxx/level2_xxxx/
+                   level3_xxxx, file_xxxxxx.{txt,php,json,conf} in every dir; --hidden → .subdir_N)
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import random
 import sys
 from pathlib import Path
@@ -231,6 +237,65 @@ def cmd_stats(a: argparse.Namespace) -> int:
     return 0
 
 
+_GT_EXTS = ["txt", "log", "json", "csv", "xml", "md", "conf", ""]
+_ALNUM = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+
+def cmd_gentree(a: argparse.Namespace) -> int:
+    """Port of gentree: every level has `files` files and `dirs` subdirs; names carry the level."""
+    rnd = random.Random(a.seed)
+
+    def suffix(n: int) -> str:
+        return "".join(rnd.choice(_ALNUM) for _ in range(n))
+
+    def level(base: Path, lvl: int) -> None:
+        base.mkdir(parents=True, exist_ok=True)
+        for i in range(1, a.files + 1):
+            ext = rnd.choice(_GT_EXTS)
+            name = f"{a.prefix}{lvl}_{i}_{suffix(5)}" + (f".{ext}" if ext else "")
+            body = ""
+            if rnd.random() < a.ratio:
+                raw = bytes(rnd.randrange(256) for _ in range(rnd.randint(128, 1024)))
+                body = base64.b64encode(raw).decode()[: rnd.randint(64, 512)]
+            (base / name).write_text(body, encoding="utf-8")
+        if lvl < a.levels:
+            for j in range(1, a.dirs + 1):
+                level(base / f"{a.prefix}{lvl}_{j}_{suffix(5)}", lvl + 1)
+
+    level(Path(a.dir), 1)
+    return cmd_stats(a)
+
+
+def cmd_subdirs(a: argparse.Namespace) -> int:
+    """Port of the ls_mv_cp/rm/grep infra script (one chain level1/level2/level3 per subdir)."""
+    rnd = random.Random(a.seed)
+
+    def suffix(n: int) -> str:
+        return "".join(rnd.choice(_ALNUM + _ALNUM.upper()[:26]) for _ in range(n))
+
+    root = Path(a.dir)
+    for i in range(1, a.count + 1):
+        base = root / f"{'.' if a.hidden else ''}subdir_{i}"
+        chain = [base]
+        for lvl in (1, 2, 3):
+            chain.append(chain[-1] / f"level{lvl}_{suffix(4)}")
+        chain[-1].mkdir(parents=True, exist_ok=True)
+        for d in chain:
+            for j in range(1, a.files + 1):
+                fb = f"file_{suffix(6)}"
+                kind = rnd.randrange(4)
+                if kind == 0:
+                    (d / f"{fb}.txt").write_text(f"Content of {fb}\n", encoding="utf-8")
+                elif kind == 1:
+                    (d / f"{fb}.php").write_text(f"<?php echo '{fb}'; ?>\n", encoding="utf-8")
+                elif kind == 2:
+                    (d / f"{fb}.json").write_text(f'{{"id": {j}, "name": "{fb}"}}\n', encoding="utf-8")
+                else:
+                    (d / f"{fb}.conf").write_text(f"# {fb}\\nThis is a config file\n",
+                                                  encoding="utf-8")
+    return 0
+
+
 def cmd_plant(a: argparse.Namespace) -> int:
     p = Path(a.file)
     lines = p.read_text(encoding="utf-8").splitlines()
@@ -271,6 +336,22 @@ def main(argv: list[str] | None = None) -> int:
     st = sub.add_parser("stats", help="per-depth counts of a tree")
     st.add_argument("dir")
     st.set_defaults(fn=cmd_stats)
+    gt = sub.add_parser("gentree", help="levelN_i_xxxxx tree (port of the course's gentree)")
+    gt.add_argument("dir")
+    gt.add_argument("--levels", type=int, default=6)
+    gt.add_argument("--dirs", type=int, default=3)
+    gt.add_argument("--files", type=int, default=5)
+    gt.add_argument("--ratio", type=float, default=0.5, help="share of files with data")
+    gt.add_argument("--prefix", default="level")
+    gt.add_argument("--seed", type=int, default=1)
+    gt.set_defaults(fn=cmd_gentree)
+    sd = sub.add_parser("subdirs", help="subdir_N/level1..3 infra of ls_mv_cp/rm/grep")
+    sd.add_argument("dir")
+    sd.add_argument("--count", type=int, default=4)
+    sd.add_argument("--files", type=int, default=3)
+    sd.add_argument("--seed", type=int, default=1)
+    sd.add_argument("--hidden", action="store_true", help=".subdir_N instead of subdir_N")
+    sd.set_defaults(fn=cmd_subdirs)
     pl = sub.add_parser("plant", help="insert a line into an existing file")
     pl.add_argument("file")
     pl.add_argument("--line", required=True)

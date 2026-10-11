@@ -1,9 +1,11 @@
 """Line-based, indentation-aware parser for image/task recipes (Imagefile = Taskfile)."""
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from hashpass.recipe.model import (
     Action,
+    BlockRule,
     CmdCond,
     Condition,
     CopyStep,
@@ -70,6 +72,20 @@ class _StageAcc:
     variants: list[list[str]] = field(default_factory=list)
     deny: list[str] = field(default_factory=list)
     allow: list[str] = field(default_factory=list)
+    blocks: list[BlockRule] = field(default_factory=list)
+
+
+_BLOCK = re.compile(r'^(\S+)\s+(match|unless)\s+"((?:[^"\\]|\\.)*)"\s+say\s+"(.*)"$')
+
+
+def _parse_block(value: str) -> BlockRule:
+    """Parse `block <cmd> match|unless "<ERE>" say "<msg>"`."""
+    m = _BLOCK.match(value.strip())
+    if m is None:
+        msg = f'block wants <cmd> match|unless "<pattern>" say "<message>": {value!r}'
+        raise ValueError(msg)
+    return BlockRule(base=m.group(1), mode=m.group(2),
+                     pattern=m.group(3).replace('\\"', '"'), message=m.group(4))
 
 
 def _strip_comment(line: str) -> str:
@@ -429,6 +445,8 @@ def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
         _apply_check(value, sacc)
     elif kw == "hint":
         sacc.hints.append(_parse_hint(value))
+    elif kw == "block":
+        sacc.blocks.append(_parse_block(value))
     elif kw == "on":
         _apply_on(value, sacc)
     else:
@@ -464,6 +482,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         variants=tuple(tuple(v) for v in sacc.variants),
         deny=tuple(sacc.deny),
         allow=tuple(sacc.allow),
+        blocks=tuple(sacc.blocks),
     )
 
 

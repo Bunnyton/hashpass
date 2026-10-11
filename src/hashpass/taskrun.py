@@ -73,6 +73,23 @@ def _base_cmds(command: str) -> list[str]:
     return out
 
 
+def _blocked(sm: StageMeta, command: str) -> str | None:
+    """Return the message of the first `block` rule this command trips (any segment), else None."""
+    for raw in _SEG_SPLIT.split(command):
+        seg = raw.strip()
+        words = seg.split()
+        if not words:
+            continue
+        base = words[1] if words[0] == "sudo" and len(words) > 1 else words[0]
+        for rule in getattr(sm, "blocks", ()):
+            if rule.base != base:
+                continue
+            hit = re.search(rule.pattern, seg) is not None
+            if hit == (rule.mode == "match"):
+                return rule.message
+    return None
+
+
 def _policy_violation(sm: StageMeta, command: str) -> str | None:
     """
     Message if `command` breaks the stage's command policy, else None (used to GATE acceptance).
@@ -81,6 +98,9 @@ def _policy_violation(sm: StageMeta, command: str) -> str | None:
     the accepting command must use one of the whitelisted base commands. Applied only to a command
     that would otherwise pass, so navigation (`ls`, `cd`) never trips it.
     """
+    blocked = _blocked(sm, command)
+    if blocked is not None:
+        return blocked
     bases = _base_cmds(command)
     if sm.deny:
         bad = next((b for b in bases if b in sm.deny), None)

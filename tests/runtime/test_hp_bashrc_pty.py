@@ -107,3 +107,61 @@ def test_prompt_gets_a_solved_label_once_the_host_says_so(tmp_path):
     child.expect(pexpect.EOF)
     assert [r for r in _requests(log) if r.startswith("cmd ")] == [
         "cmd echo one", "cmd echo two", "cmd echo three"]
+
+
+def _policy_shim(tmp_path: Path, policy: str) -> Path:
+    """Write an hp-io that answers `policy` with the given line (and logs everything else)."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (tmp_path / "policy").write_text(policy + "\n", encoding="utf-8")
+    shim = bindir / "hp-io"
+    shim.write_text('#!/bin/sh\nprintf \'%s\\n\' "$1" >> "$HP_IO_LOG"\n'
+                    '[ "$1" = policy ] && cat "$HP_POLICY"\nexit 0\n', encoding="utf-8")
+    shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
+    return bindir
+
+
+def _rule(base: str, mode: str, pattern: str, message: str) -> str:
+    return base64.b64encode(f"{base}\x1f{mode}\x1f{pattern}\x1f{message}".encode()).decode()
+
+
+@pytest.mark.tier1
+def test_block_rules_refuse_commands_by_their_arguments(tmp_path):
+    """`block` (cd only absolute, rm only with *, no sudo cat): refused commands do NOT run."""
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    work = tmp_path / "w"
+    (work / "sub").mkdir(parents=True)
+    (work / "keep.txt").write_text("x", encoding="utf-8")
+    rules = ",".join([_rule("cd", "unless", "^cd +/", "no no no, mister fish!"),
+                      _rule("rm", "unless", r"\*", "А где же звёздочка?"),
+                      _rule("cat", "match", "^sudo ", "Сначала без sudo")])
+    bindir = _policy_shim(tmp_path, f";;ls;{rules}")
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+           "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
+           "HOME": str(work), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 120), cwd=str(work))
+    child.expect("❯")
+    child.sendline("cd sub")                              # relative -> refused, stays put
+    child.expect("no no no, mister fish!")
+    child.expect("❯")
+    child.sendline("pwd")
+    child.expect(str(work) + r"\r?\n")
+    child.expect("❯")
+    child.sendline(f"cd {work}/sub && pwd")               # absolute -> runs
+    child.expect(str(work / "sub"))
+    child.expect("❯")
+    child.sendline(f"rm {work}/keep.txt")                 # no star -> refused, file survives
+    child.expect("А где же звёздочка")
+    child.expect("❯")
+    assert (work / "keep.txt").exists()
+    child.sendline("sudo cat /etc/hostname")              # sudo cat -> refused before sudo runs
+    child.expect("Сначала без sudo")
+    child.expect("❯")
+    child.sendline(f"rm {work}/kee*")                     # with a star -> runs
+    child.expect("❯")
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+    assert not (work / "keep.txt").exists()
