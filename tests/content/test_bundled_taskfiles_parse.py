@@ -38,14 +38,14 @@ def test_bundled_taskfile_parses(task_dir: Path) -> None:
 
 
 def _collect_files(recipe) -> set[str]:
-    """Every file name referenced by `read`/`exec` in intro/outro and per-stage voice."""
-    from hashpass.recipe.model import ExecAction, ReadAction  # noqa: PLC0415
+    """Every hidden-layer file referenced by `read`/`apply`/bare `exec` in intro/outro and voice."""
+    from hashpass.recipe.model import ApplyAction, ExecAction, ReadAction  # noqa: PLC0415
     out: set[str] = set()
     def _grab(action: object) -> None:
-        if isinstance(action, ReadAction):
+        if isinstance(action, (ReadAction, ApplyAction)):
             out.add(action.path)
-        elif isinstance(action, ExecAction):
-            out.add(action.value)
+        elif isinstance(action, ExecAction) and len(action.value.split()) == 1:
+            out.add(action.value)          # `exec <cmd args…>` is a shell command, not a file
     for action in (*(recipe.intro or ()), *(recipe.outro or ())):
         _grab(action)
     for st in recipe.stages:
