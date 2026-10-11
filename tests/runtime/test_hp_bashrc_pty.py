@@ -2,6 +2,7 @@
 import base64
 import os
 import stat
+import threading
 from pathlib import Path
 
 import pytest
@@ -165,3 +166,62 @@ def test_block_rules_refuse_commands_by_their_arguments(tmp_path):
     child.sendline("exit")
     child.expect(pexpect.EOF)
     assert not (work / "keep.txt").exists()
+
+
+_HP_IO = Path(__file__).resolve().parents[2] / "src" / "hashpass" / "runtime" / "usr" / "local" / "bin" / "hp-io"
+
+
+def _pager_host(answers: list[bytes]) -> tuple[int, threading.Thread]:
+    """Run a one-shot fake host: reply with three pages split by 0x01 and record each pager answer."""
+    import socket  # noqa: PLC0415
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+
+    def serve() -> None:
+        conn, _ = srv.accept()
+        with conn:
+            conn.recv(64)                                   # the request line
+            for page in (b"page-one\n", b"page-two\n"):
+                conn.sendall(page + b"\x01")
+                answers.append(conn.recv(16))
+                if answers[-1] == b"q":                     # skipped: the rest without pauses
+                    break
+            conn.sendall(b"page-three\n")
+        srv.close()
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    return srv.getsockname()[1], t
+
+
+@pytest.mark.tier1
+def test_pager_answers_q_to_skip_the_rest():
+    """hp-io: «q» at a page break tells the host to print the rest at once (no more pauses)."""
+    answers: list[bytes] = []
+    port, t = _pager_host(answers)
+    child = pexpect.spawn("bash", [str(_HP_IO), "hello"], env={**os.environ, "HP_PORT": str(port)},
+                          encoding="utf-8", timeout=10)
+    child.expect("пропустить: q")
+    child.sendline("q")
+    child.expect("page-three")
+    child.expect(pexpect.EOF)
+    t.join(5)
+    assert answers == [b"q"]
+
+
+@pytest.mark.tier1
+def test_pager_enter_goes_on_page_by_page():
+    answers: list[bytes] = []
+    port, t = _pager_host(answers)
+    child = pexpect.spawn("bash", [str(_HP_IO), "hello"], env={**os.environ, "HP_PORT": str(port)},
+                          encoding="utf-8", timeout=10)
+    child.expect("пропустить: q")
+    child.sendline("")
+    child.expect("page-two")
+    child.expect("пропустить: q")
+    child.sendcontrol("c")                                 # Ctrl+C = skip, and hp-io survives it
+    child.expect("page-three")
+    child.expect(pexpect.EOF)
+    t.join(5)
+    assert answers == [b"x", b"q"]

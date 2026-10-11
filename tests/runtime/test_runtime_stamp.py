@@ -10,8 +10,8 @@ _RUNTIME = Path(__file__).resolve().parents[2] / "src" / "hashpass" / "runtime"
 
 # Bump BOTH when the runtime tree changes: the stamp (etc/hp-base-version) and this hash.
 # Without a bump, `push base` finds the tag unchanged and students never get the new runtime.
-_STAMP = "31"
-_TREE_SHA256 = "4c16d2f8bb03710068ebc955f0dde0f4731dc10ebbc1a438a29d83267a084091"
+_STAMP = "32"
+_TREE_SHA256 = "c0f8b5782a7a3038c1d7ffa6c16a28050d99f8692dff1cef9f5db233dfe49ffb"
 
 
 def _tree_hash() -> str:

@@ -779,11 +779,14 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
         with contextlib.suppress(OSError):
             conn.sendall(text.encode())
 
-    def pause() -> None:
-        # page break: send the 0x01 control byte and block until the console reports Enter.
-        with contextlib.suppress(OSError):
+    def pause() -> bool:
+        # page break: send the 0x01 control byte and block until the console answers -- Enter
+        # (go on) or «q» / Ctrl+C (show the rest at once). A dropped console counts as «q».
+        try:
             conn.sendall(b"\x01")
-            conn.recv(16)
+            return conn.recv(16).strip() in (b"q", b"")
+        except OSError:
+            return True
 
     io = Io(read=lambda _p: None, write=router.write, clock=clock)
     router.to(sink)

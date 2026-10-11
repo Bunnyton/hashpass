@@ -476,3 +476,31 @@ def test_apply_runs_the_hidden_script_in_the_live_system_without_hp(tmp_path):
     argv, binds, _ = runner.calls[0]
     assert argv == ["sh", "-c", "#!/bin/sh\necho done > /home/student/x\n"]
     assert not binds                                  # live machine: no /hp, nothing leaks
+
+
+@pytest.mark.tier1
+def test_paginate_fills_the_real_screen_and_counts_wrapped_lines():
+    """A page is as tall as the terminal (not a fixed 18 lines); a long line takes several rows."""
+    from hashpass.taskrun import _paginate  # noqa: PLC0415
+    text = "\n".join(f"строка {i}" for i in range(40))
+    assert len(_paginate(text, height=50, width=80)) == 1          # 40 short lines fit a 50-row screen
+    assert len(_paginate(text, height=24, width=80)) == 2  # noqa: PLR2004
+    wide = "\n".join("x" * 200 for _ in range(10))                 # each takes 3 rows at width 80
+    assert len(_paginate(wide, height=20, width=80)) == 2  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_read_pause_can_skip_the_rest(tmp_path):
+    """At a page break the reader may answer «q»: the rest is shown at once, no more pauses."""
+    from hashpass.recipe.model import ReadAction  # noqa: PLC0415
+    (tmp_path / "work").mkdir()
+    (tmp_path / "work" / "long.md").write_text("\n---\n".join(f"page {i}" for i in range(4)),
+                                                encoding="utf-8")
+    chunks: list[str] = []
+    r = Renderer(Settings(type_mode="normal"), sink=chunks.append, sleep=lambda _s: None)
+    pauses: list[int] = []
+    perform_action(ReadAction("long.md"), _CTX, render=r, runner=_FakeRunner(""), hp_dir=tmp_path,
+                   pause=lambda: pauses.append(1) or True)      # True = «skip the rest»
+    shown = "".join(chunks)
+    assert pauses == [1]                                         # asked once, then no more
+    assert all(f"page {i}" in shown for i in range(4))           # nothing is lost

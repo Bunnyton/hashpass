@@ -127,7 +127,20 @@ def _elapsed(start_ts: str, now_ts: str) -> float:
         return 0.0
 
 
-_READ_PAGE_LINES = 18   # auto page height for `read` when no `---` marker splits it sooner
+_PAGE_RESERVE = 3       # rows kept free under a page: the «далее» line and the prompt
+_PAGE_MIN = 8
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _screen() -> tuple[int, int]:
+    """
+    Rows and columns of the student's terminal.
+
+    The console (`systemd-nspawn` in the foreground) runs on the SAME terminal as this host
+    process, so its size is ours; off a terminal (tests) a classic 80x24 is assumed.
+    """
+    size = shutil.get_terminal_size(fallback=(80, 24))
+    return size.lines, size.columns
 
 
 def _no_pause() -> None:
@@ -159,20 +172,51 @@ def _read_narrative(path: str, hp_dir: Path, rootfs: Path, workdir: str) -> str:
     return resolved.read_text(encoding="utf-8", errors="replace")
 
 
-def _paginate(text: str, height: int = _READ_PAGE_LINES) -> list[str]:
-    """Split narrative into pages: first on `---` marker lines, then by screen height."""
+def _paginate(text: str, height: int | None = None, width: int | None = None) -> list[str]:
+    """
+    Split narrative into pages: first on `---` marker lines, then by what fits on the screen.
+
+    A page fills the real terminal (minus a few rows for the «далее» line and the prompt); a
+    line longer than the width counts as the rows it wraps into (colour codes take no room).
+    """
+    rows, cols = _screen()
+    height = height if height is not None else max(_PAGE_MIN, rows - _PAGE_RESERVE)
+    width = max(1, width if width is not None else cols)
     pages: list[str] = []
     for section in re.split(r"(?m)^---[ \t]*$", text):
         lines = section.strip("\n").splitlines()
         if not any(ln.strip() for ln in lines):
             continue
-        pages.extend("\n".join(lines[i:i + height]) for i in range(0, len(lines), height))
+        page: list[str] = []
+        used = 0
+        for ln in lines:
+            need = max(1, -(-len(_ANSI.sub("", ln)) // width))
+            if page and used + need > height:
+                pages.append("\n".join(page))
+                page, used = [], 0
+            page.append(ln)
+            used += need
+        if page:
+            pages.append("\n".join(page))
     return pages or [text]
+
+
+def _render_pages(pages: list[str], render: Renderer, pause: Callable[[], bool | None]) -> None:
+    """
+    Stream pages with a pause between them; a pause that answers True («q») skips ahead.
+
+    Skipping loses nothing: the rest is printed at once, without further pauses.
+    """
+    skip = False
+    for idx, page in enumerate(pages):
+        render.render(page + "\n", mode="instant" if skip else "normal")
+        if not skip and idx < len(pages) - 1:
+            skip = bool(pause())
 
 
 def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # noqa: PLR0913
                    runner: NspawnRunner, hp_dir: Path, workdir: str = "/",
-                   pause: Callable[[], None] = _no_pause) -> str:
+                   pause: Callable[[], bool | None] = _no_pause) -> str:
     """
     Render one delegated action and return the text shown.
 
@@ -199,11 +243,7 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
         return render.show_file(resolved)
     if isinstance(action, ReadAction):
         text = _read_narrative(action.path, Path(hp_dir), runner.rootfs, workdir)
-        pages = _paginate(render_markdown(text))
-        for idx, page in enumerate(pages):
-            render.render(page + "\n", mode="normal")   # even, streamed reveal
-            if idx < len(pages) - 1:
-                pause()                                   # wait for Enter between pages
+        _render_pages(_paginate(render_markdown(text)), render, pause)
         return text
     if isinstance(action, ApplyAction):
         # The script TEXT travels, not the /hp tree: it runs in the student's live system (root),
@@ -326,7 +366,7 @@ class TaskSession:
         self._greeted = False
         self._said_bye = False
         self._last_progress_ts: str | None = None
-        self.pause: Callable[[], None] = _no_pause   # pager pause hook (set by the console driver)
+        self.pause: Callable[[], bool | None] = _no_pause   # pager pause (True = skip the rest)
 
     def _record(self, command: str) -> None:
         """
@@ -388,11 +428,7 @@ class TaskSession:
 
     def read_text(self, text: str) -> None:
         """Render a Markdown STRING as paged, streamed narrative (the readme briefing)."""
-        pages = _paginate(render_markdown(text))
-        for idx, page in enumerate(pages):
-            self.render.render(page + "\n", mode="normal")
-            if idx < len(pages) - 1:
-                self.pause()
+        _render_pages(_paginate(render_markdown(text)), self.render, self.pause)
 
     def _accept(self, stage: int, sm: StageMeta, command: str,  # noqa: PLR0913
                 out: str, ts: str, *, rc: int | None = None) -> tuple[bool, str | None]:
