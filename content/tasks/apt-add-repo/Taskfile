@@ -1,6 +1,7 @@
-# apt-add-repo — добавить репозиторий: строка в sources.list.d + apt update.
-# Репозиторий — trixie-backports: в базе его нет (там только trixie/-updates/-security), так что
-# apt update действительно скачает новый список, а не скажет «configured multiple times».
+# apt-add-repo — сторонний репозиторий (исходник docs/Задания «apt add repo (21)»): добавить
+# репозиторий Docker по официальной инструкции — ключ подписи в /etc/apt/keyrings, запись с
+# signed-by в sources.list.d, затем apt update. Принято: ключ и запись на месте, apt update
+# скачал списки download.docker.com, и последней командой был сам apt update.
 
 image apt-add-repo:1
 
@@ -9,31 +10,26 @@ hidden hp
 settings
   pager on
 
-say "Список пакетов apt берёт из репозиториев. Можно добавить свой."
+say "Список пакетов apt берёт из репозиториев. Можно добавить и чужой."
 read brief.md
 
 stage
-  say "Пропиши репозиторий из брифа в файл /etc/apt/sources.list.d/custom.list"
+  say "Добавь один из самых популярных репозиториев — Docker"
   solve:
-    echo 'deb http://deb.debian.org/debian trixie-backports main' | sudo tee /etc/apt/sources.list.d/custom.list >/dev/null
-  observe /etc/apt/sources.list.d/custom.list
-  neutral ls cat pwd
-  on pass say "Файл лежит в /etc/apt/sources.list.d — загляни, что там ещё, кроме твоего."
-  hint output "command not found" say "Файл из одной строки делается и без редактора — вспомни hello.txt."
-  hint output "Permission denied" say "Перечитай в брифе, кто на самом деле выполняет >, — там же и обход."
-  hint tries 3 say "cat файл: одна строка, символ в символ как в брифе?"
-  hint tries 8 say "Загугли: «bash создать файл с одной строкой без редактора»."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
-
-stage
-  say "Дай apt узнать о новом репозитории"
-  solve sudo apt-get update >/dev/null 2>&1
-  accept cmd "apt update" ok
-  accept cmd "apt-get update" ok
-  neutral ls cat pwd
-  on pass say "apt policy покажет, откуда теперь берутся пакеты. Твой источник — в списке."
-  hint output "Permission denied" say "apt отказал: прав не хватает. Как обычный пользователь одалживает права администратора на одну команду?"
-  hint tries 3 say "Первый из двух шагов задания про sl."
-  hint idle 240 say "apt --help — там есть действие, которое обновляет список пакетов."
+    sudo apt-get update
+    sudo apt-get install -y ca-certificates curl
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt-get update
+  check exec added
+  neutral ls cat pwd cd
+  on pass say "apt policy покажет, откуда теперь берутся пакеты. Docker — в списке."
+  hint output "Permission denied" say "Прав не хватает: всё в /etc принадлежит root. Как одолжить его права на одну команду?"
+  hint output "curl: command not found" say "Инструкция начинается не с ключа: сначала ставят то, чем его скачивают."
+  hint output "NO_PUBKEY" say "apt не верит репозиторию: ключа подписи нет там, куда указывает signed-by."
+  hint tries 9 say "Шаги идут по порядку: инструменты, ключ, запись, update. Какой ещё не сделан? Загляни в /etc/apt/keyrings и /etc/apt/sources.list.d."
+  hint idle 300 say "Долгая пауза. Сверь свои команды с инструкцией строчка за строчкой."
 
 exec finale

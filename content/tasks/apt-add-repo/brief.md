@@ -1,18 +1,24 @@
-# apt: добавить репозиторий
+# Сторонний репозиторий
 
-Мы уже говорили, что репозиториев может быть несколько. Каждый описан
-одной строкой в файле `/etc/apt/sources.list.d/<имя>.list`. Сегодняшний
-репозиторий — backports: свежие версии программ, пересобранные для стабильного
-Debian. В системе его пока нет:
+Мы уже говорили, что репозиториев может быть несколько. Чтобы добавить новый, нужно
+положить в систему его **ключ подписи** (по нему apt проверяет, что пакеты настоящие) и
+внести **запись** о репозитории в `/etc/apt/sources.list.d/`.
 
-    deb http://deb.debian.org/debian trixie-backports main
+Производители обычно сами пишут, как это сделать. Вот инструкция Docker для Debian —
+выполни её:
 
-Каталог `/etc/apt/` принадлежит root, а перенаправление `>` выполняет
-**твоя оболочка** — `sudo echo …` тут не поможет. Чтобы отдать саму запись
-команде с правами администратора, есть `tee` — она печатает то, что получила,
-и одновременно кладёт это в файл:
+    sudo apt update
+    sudo apt install ca-certificates curl
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-    echo 'какая-то строка' | sudo tee /etc/other.conf
+    # Add the repository to Apt sources:
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt update
 
-Полноценный сторонний репозиторий (например, Docker) требует ещё
-установить ключ подписи и `signed-by=...` — но принцип тот же.
+`$( … )` подставляет вывод команды прямо в строку — здесь это архитектура и кодовое имя
+версии Debian.
