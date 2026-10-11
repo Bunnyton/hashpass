@@ -100,10 +100,12 @@ def test_install_script_targets_pool_and_pip():
     assert script.startswith("#!/usr/bin/env bash")
     assert 'POOL="http://pool.example"' in script
     assert "pip install --user" in script
-    assert "git+https://github.com/Bunnyton/hashpass@main" in script
+    assert "git+https://" not in script                         # a full clone of the history is slow
+    assert "https://github.com/Bunnyton/hashpass/archive/$SHA.tar.gz" in script
     assert "pool.json" in script
     # preflight installs every missing tool before the download; the pip line comes after
-    for tool in ("python3", "python3 -m pip --version", "git"):
+    for tool in ("python3", "python3 -m pip --version", "command -v git", "command -v curl",
+                 "command -v machinectl"):
         assert tool in script
     assert script.index("ставлю недостающие пакеты") < script.index("pip install --user")
 
@@ -142,7 +144,26 @@ def test_install_script_puts_user_bin_on_path():
 def test_install_script_names_packages_for_the_hosts_package_manager():
     """Arch: pacman + python-pip; Debian/Ubuntu: apt + python3-pip; systemd-nspawn is checked."""
     script = render_install_script("http://pool.example/")
-    assert 'PKG_INSTALL="sudo pacman -S --needed --noconfirm"; P_PY=python; P_PIP=python-pip' in script
+    assert 'PKG_INSTALL="sudo pacman -S --needed --noconfirm"' in script
+    assert "P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd" in script
     assert "if ! $PKG_INSTALL$missing </dev/tty; then" in script          # installs, not just hints
     assert 'PKG_INSTALL="sudo apt install -y"' in script
     assert "command -v systemd-nspawn" in script
+
+
+@pytest.mark.tier1
+def test_install_script_refreshes_apt_lists_before_install():
+    """A fresh Debian/Ubuntu has stale lists -> `apt install` fails with «Unable to locate package»."""
+    script = render_install_script("http://pool.example/")
+    assert 'PKG_INSTALL="sudo apt update && sudo apt install -y"' not in script   # eval-free form
+    assert 'PKG_REFRESH="sudo apt update"' in script
+    assert script.index("$PKG_REFRESH") < script.index("$PKG_INSTALL$missing")
+
+
+@pytest.mark.tier1
+def test_install_script_retries_pip_trusting_hosts_on_self_signed():
+    script = render_install_script("http://pool.example/")
+    assert "PIP_TRUSTED_HOST=" in script
+    for host in ("github.com", "codeload.github.com", "pypi.org", "files.pythonhosted.org"):
+        assert host in script
+    assert "http.sslVerify=false" in script          # git ls-remote behind the same proxy

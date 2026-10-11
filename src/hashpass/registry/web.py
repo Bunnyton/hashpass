@@ -5,6 +5,7 @@ from urllib.parse import quote
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from hashpass.registry.reference import normalise as _norm_cmd
+from hashpass.version import TRUSTED_HOSTS
 
 _REPO = "Bunnyton/hashpass"
 _TEMPLATES = Path(__file__).parent / "templates"
@@ -25,20 +26,29 @@ echo "Установка hashpass (__ROLE__); пул: $POOL"
 # Package names and the install command follow the host's package manager (Debian/Ubuntu,
 # Arch, Fedora); the task containers are Debian regardless of the host.
 if command -v pacman >/dev/null 2>&1; then
-  PKG_INSTALL="sudo pacman -S --needed --noconfirm"; P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd
+  PKG_REFRESH="sudo pacman -Sy"; PKG_INSTALL="sudo pacman -S --needed --noconfirm"
+  P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd
 elif command -v dnf >/dev/null 2>&1; then
-  PKG_INSTALL="sudo dnf install -y"; P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
+  PKG_REFRESH=":"; PKG_INSTALL="sudo dnf install -y"
+  P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
 else
-  PKG_INSTALL="sudo apt install -y"; P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
+  # A fresh Debian/Ubuntu has stale package lists -> «Unable to locate package» without an update.
+  PKG_REFRESH="sudo apt update"; PKG_INSTALL="sudo apt install -y"
+  P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
 fi
 missing=""
 command -v python3 >/dev/null 2>&1 || missing="$missing $P_PY"
 python3 -m pip --version >/dev/null 2>&1 || missing="$missing $P_PIP"
 command -v git >/dev/null 2>&1 || missing="$missing git"
-command -v systemd-nspawn >/dev/null 2>&1 || missing="$missing $P_NSPAWN"
+command -v curl >/dev/null 2>&1 || missing="$missing curl"
+# the task consoles are systemd-nspawn machines driven by machinectl (both in systemd-container)
+if ! command -v systemd-nspawn >/dev/null 2>&1 || ! command -v machinectl >/dev/null 2>&1; then
+  missing="$missing $P_NSPAWN"
+fi
 if [ -n "$missing" ]; then
   # Install them right here (sudo asks for the password on /dev/tty, so `curl | bash` works).
   echo "ставлю недостающие пакеты:$missing"
+  $PKG_REFRESH </dev/tty || true
   # shellcheck disable=SC2086  # word-splitting of the command and the package list is intended
   if ! $PKG_INSTALL$missing </dev/tty; then
     echo "не удалось поставить:$missing" >&2
@@ -46,20 +56,38 @@ if [ -n "$missing" ]; then
     exit 1
   fi
 fi
-# `--upgrade --force-reinstall --no-deps`: pip normally sees "hashpass X.Y.Z is
-# already installed" and does nothing -- even when the git branch has moved and
-# we forgot to bump the version.  --force-reinstall reinstalls the package no
-# matter what; --no-deps avoids touching flask/textual/etc. (which we already
-# have from the first install and don't want to churn on every rerun).  If new
-# runtime deps ever land, run install.sh a second time WITHOUT --no-deps, or
-# `pip install --upgrade flask textual` by hand.
+# Install ONE commit's tarball, not a `git+` URL: a git clone drags the whole history
+# (hundreds of MB), the tarball is a few MB. The sha in the URL is also what the self-update
+# compares against (version.installed_commit).
+# A school network may intercept TLS with a self-signed cert: then git/pip refuse GitHub, and
+# the second try skips verification for exactly the hosts the install talks to.
+TRUSTED="__TRUSTED__"
+SHA="$(git ls-remote "https://github.com/__REPO__" refs/heads/main 2>/dev/null | cut -f1 || true)"
+if [ -z "$SHA" ]; then
+  SHA="$(git -c http.sslVerify=false ls-remote "https://github.com/__REPO__" refs/heads/main | cut -f1)"
+fi
+if [ -z "$SHA" ]; then
+  echo "не удалось узнать версию hashpass на GitHub (нет сети?)" >&2
+  exit 1
+fi
 # --break-system-packages is needed on PEP 668 distros (Debian 12+, Ubuntu 23.04+) but an
 # older pip (Ubuntu 22.04: pip 22.0) rejects the unknown flag -- pass it only when supported.
 BSP=""
 python3 -m pip install --help 2>/dev/null | grep -q -- --break-system-packages && BSP="--break-system-packages"
-python3 -m pip install --user $BSP --upgrade --force-reinstall --no-deps \\
-    "git+https://github.com/__REPO__@main"
-python3 -m pip install --user $BSP --upgrade "flask>=3.0" "textual>=1.0"
+pip_install() {   # pip_install ARGS... -- retry trusting the hosts above on a TLS failure
+  # shellcheck disable=SC2086  # $BSP is empty or one flag
+  python3 -m pip install --user $BSP "$@" && return 0
+  echo "повторяю без проверки сертификата (самоподписанный прокси в сети?)" >&2
+  # shellcheck disable=SC2086
+  PIP_TRUSTED_HOST="$TRUSTED" python3 -m pip install --user $BSP "$@"
+}
+# `--upgrade --force-reinstall --no-deps`: pip normally sees "hashpass X.Y.Z is
+# already installed" and does nothing -- even when `main` has moved and we forgot to
+# bump the version.  --force-reinstall reinstalls the package no matter what;
+# --no-deps avoids touching flask/textual/etc. (installed by the next line).
+pip_install --upgrade --force-reinstall --no-deps \
+    "https://github.com/__REPO__/archive/$SHA.tar.gz"
+pip_install --upgrade "flask>=3.0" "textual>=1.0"
 # `pip --user` puts the commands into ~/.local/bin. Ubuntu's ~/.profile adds that dir to PATH
 # only if it ALREADY existed at login, Arch never does -- so `hashpass` was «command not found».
 # Persist it for bash (~/.bashrc + ~/.profile), zsh (~/.zshrc) and fish (conf.d), idempotently,
@@ -103,6 +131,7 @@ def _install_script(pool_url: str, *, role: str, nxt: str, extra: str = ":") -> 
     return (_INSTALL_TEMPLATE
             .replace("__POOL__", pool_url.rstrip("/"))
             .replace("__REPO__", _REPO)
+            .replace("__TRUSTED__", " ".join(TRUSTED_HOSTS))
             .replace("__ROLE__", role)
             .replace("__EXTRA__", extra)
             .replace("__NEXT__", nxt))

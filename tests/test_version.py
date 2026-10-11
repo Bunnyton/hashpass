@@ -1,10 +1,13 @@
 """Tier1: self-update on launch -- follow the commit on `main`, best-effort, at most once."""
+import subprocess
+
 import pytest
 
 from hashpass import version
 from hashpass.version import check_and_update
 
 OLD, NEW = "a" * 40, "b" * 40
+TWO_TRIES = 2
 
 
 @pytest.fixture(autouse=True)
@@ -77,3 +80,65 @@ def test_installed_commit_reads_pip_direct_url(monkeypatch):
 
     monkeypatch.setattr(version.metadata, "distribution", lambda _n: _Dist())
     assert version.installed_commit() == OLD
+
+
+@pytest.mark.tier1
+def test_installed_commit_reads_archive_url(monkeypatch):
+    """The installer pulls one commit's tarball (fast), not a full git clone -- sha is in the URL."""
+    class _Dist:
+        def read_text(self, _name: str) -> str:
+            return (f'{{"url": "https://github.com/Bunnyton/hashpass/archive/{OLD}.tar.gz", '
+                    '"archive_info": {}}')
+
+    monkeypatch.setattr(version.metadata, "distribution", lambda _n: _Dist())
+    assert version.installed_commit() == OLD
+
+
+class _Run:
+    """Fake subprocess.run: fail the first `fail` pip installs with an SSL error, record the rest."""
+
+    def __init__(self, fail: int) -> None:
+        self.fail, self.calls = fail, []
+
+    def __call__(self, cmd: list[str], **kw: object) -> subprocess.CompletedProcess:
+        if "--help" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        self.calls.append((cmd, kw.get("env")))
+        if len(self.calls) <= self.fail:
+            raise subprocess.CalledProcessError(1, cmd, stderr="CERTIFICATE_VERIFY_FAILED self-signed")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+
+@pytest.mark.tier1
+def test_pip_install_uses_commit_tarball(monkeypatch):
+    run = _Run(fail=0)
+    monkeypatch.setattr(version.subprocess, "run", run)
+    assert version._pip_install(NEW)  # noqa: SLF001 is True
+    assert run.calls[0][0][-1] == f"https://github.com/Bunnyton/hashpass/archive/{NEW}.tar.gz"
+
+
+@pytest.mark.tier1
+def test_pip_install_retries_trusting_hosts_on_self_signed(monkeypatch):
+    """A school MITM proxy with a self-signed cert: the second try trusts github/pypi."""
+    run = _Run(fail=1)
+    monkeypatch.setattr(version.subprocess, "run", run)
+    assert version._pip_install(NEW)  # noqa: SLF001 is True
+    assert len(run.calls) == TWO_TRIES
+    trusted = (run.calls[1][1] or {}).get("PIP_TRUSTED_HOST", "")
+    for host in ("github.com", "codeload.github.com", "pypi.org", "files.pythonhosted.org"):
+        assert host in trusted.split()
+
+
+@pytest.mark.tier1
+def test_remote_commit_retries_without_ssl_verify(monkeypatch):
+    calls = []
+
+    def run(cmd: list[str], **_kw: object) -> subprocess.CompletedProcess:
+        calls.append(cmd)
+        if "http.sslVerify=false" not in cmd:
+            raise subprocess.CalledProcessError(128, cmd, stderr="SSL certificate problem: self-signed")
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"{NEW}\trefs/heads/main\n", stderr="")
+
+    monkeypatch.setattr(version.subprocess, "run", run)
+    assert version.remote_commit() == NEW
+    assert len(calls) == TWO_TRIES

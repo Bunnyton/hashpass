@@ -1,0 +1,11 @@
+# Kept out of the GitHub source tarball (`/archive/<sha>.tar.gz`) that install.sh and the
+# self-update pip-install: pip needs only pyproject.toml + src/. The old .deb packages alone
+# are ~80 MB. A `git clone` still has everything.
+/install/ export-ignore
+/docs/ export-ignore
+/docs* export-ignore
+/tests/ export-ignore
+/.claude/ export-ignore
+/.idea/ export-ignore
+/.obsidian/ export-ignore
+/reports/ export-ignore
