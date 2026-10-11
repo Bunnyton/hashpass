@@ -1,4 +1,7 @@
-# sudo-basics — знакомство с root и sudo: создать и удалить файл там, куда студенту нельзя.
+# sudo-basics — sudo (исходник docs/Задания «sudo (18)»): создать /home/file.txt и посмотреть о нём
+# полную информацию (владелец — root); удалить сначала БЕЗ sudo — упереться в отказ; потом с sudo;
+# и напоследок «попробуй sudo rm -rf / ;)» — rm сам откажется (--preserve-root), а мы покажем
+# FATALITY. Любой другой рекурсивный rm на последнем шаге консоль не пустит.
 
 image sudo-basics:1
 
@@ -7,28 +10,47 @@ hidden hp
 settings
   pager on
 
-say "Есть двери, в которые student не пускают. Но ключ от них лежит рядом."
+say "Есть двери, в которые обычного пользователя не пускают. Но ключ от них лежит рядом."
 read brief.md
 
 stage
-  say "Создай файл /home/file.txt"
-  solve sudo touch /home/file.txt
-  observe /home/file.txt
-  neutral ls cat pwd
-  on pass say "sudo пишет каждую команду в журнал — админ увидит, кто и что делал. sudo -l покажет, что тебе разрешено."
-  hint output "Permission denied" say "Доступ запрещён — тебе. А кто здесь может всё?"
-  hint tries 3 say "Кто владелец /home (ls -ld /home)? Как одолжить его права?"
-  hint tries 6 say "man sudo, первые строки."
-  hint idle 240 say "Перечитай цель и теорию: одна команда, один префикс."
+  say "Создай файл /home/file.txt и посмотри полную информацию о нём"
+  solve:
+    sudo touch /home/file.txt
+    ls -l /home/file.txt
+  check exec looked
+  block rm match "^sudo +rm +.*(-[a-zA-Z]*[rR]|--recursive)" say "Не рекомендую шутить с этой командой))"
+  neutral ls cat pwd cd
+  on pass say "Обрати внимание: владелец файла — root. А в /home создать файл обычных прав не хватает."
+  hint output "Permission denied" say "Доступ запрещён — тебе. А кто здесь может всё? Перечитай теорию."
+  hint tries 3 say "Файл создан? Полную информацию о файле показывает ls с ключом, который ты уже знаешь."
+  hint idle 240 say "Долгая пауза. Перечитай цель: создать и посмотреть."
 
 stage
-  say "А теперь удали /home/file.txt"
-  solve sudo rm -f /home/file.txt
+  say "А теперь удали его"
+  solve rm /home/file.txt
+  check exec refused
+  block rm match "^sudo " say "Сначала без sudo"
+  neutral ls cat pwd cd
+  on pass say "Не вышло: файл чужой — root'а, и каталог /home тоже его."
+  hint tries 3 say "Удаление — rm. Просто rm, без всяких приставок."
+
+stage
+  say "А теперь используй sudo"
+  solve sudo rm /home/file.txt
   check exec test ! -e /home/file.txt
-  neutral ls cat pwd
-  on pass say "sudo -i открывает целую сессию root. Загляни — промпт тот же, а полномочия другие. Не забудь exit."
-  hint output "Permission denied" say "Снова «доступ запрещён». Чей файл — того и права. Тот же приём, что и при создании файла."
-  hint tries 4 say "ls -l /home/file.txt — чей? Кто может удалить чужое?"
-  hint idle 240 say "Перечитай: тот же трюк, другая команда."
+  block rm match "^sudo +rm +.*(-[a-zA-Z]*[rR]|--recursive)" say "Не рекомендую шутить с этой командой))"
+  neutral ls cat pwd cd
+  on pass say "Но можно натворить бед, неправильно используя свои права. В обычной системе — больно, а здесь — можно попробовать."
+  hint tries 3 say "Тот же rm — с той же приставкой, что и при создании."
+
+stage
+  say "Попробуй sudo rm -rf /     ;)"
+  accept cmd "sudo rm -rf /"
+  block rm unless "^sudo +rm +-rf +/ *$|^(sudo +)?rm +[^-]" say "Не рекомендую шутить с этой командой))"
+  neutral ls cat pwd cd
+  on pass exec fatality
+  on pass say "Даже эта система будет плохо себя чувствовать после такого... Хорошо, что rm и сам знает: корень трогать нельзя."
+  hint tries 3 say "Набери ровно то, что предложено. Не бойся ;)"
 
 exec finale

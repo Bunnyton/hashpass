@@ -274,7 +274,7 @@ def _cmd_matches(pattern: str, command: str) -> bool:
     live console ships the LAST simple command of a pipeline/`&&` chain; the segment split
     matters for the test/`feed()` path, which sees the whole line.
     """
-    want = pattern.split()
+    want = _without_sudo(pattern).split()   # the pattern may spell `sudo` too
     if not want:
         return False
     want_pos = [w for w in want if not _is_option(w)]

@@ -61,3 +61,12 @@ def test_accept_cmd_ok_requires_exit_zero_but_tolerates_an_unknown_status():
     assert _accepted_by_cmd(ok, "cmatrix", None) is True        # older console: status unknown
     plain = _stage("telnet")
     assert _accepted_by_cmd(plain, "telnet telehack.com", 1) is True   # no `ok`: failure counts
+
+
+@pytest.mark.tier1
+def test_accept_pattern_may_spell_sudo_too():
+    """`accept cmd "sudo rm -rf /"` -- the pattern's own sudo is dropped like the command's."""
+    from hashpass.taskrun import _cmd_matches  # noqa: PLC0415
+    assert _cmd_matches("sudo rm -rf /", "sudo rm -rf /")
+    assert _cmd_matches("sudo apt update", "sudo apt update")
+    assert not _cmd_matches("sudo rm -rf /", "sudo ls -la /")   # positional words still must match

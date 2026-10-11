@@ -1,0 +1,6 @@
+#!/bin/sh
+# Принято: файл создан (владелец root), и последней командой был ls -l, показавший его.
+[ "$(stat -c %U /home/file.txt 2>/dev/null)" = root ] || exit 1
+printf '%s\n' "$1" | grep -Eq '^(sudo +)?ls( .*)? -[A-Za-z]*l' || exit 1
+case "${HP_LAST_OUT:-}" in *file.txt*) exit 0 ;; esac
+exit 1
