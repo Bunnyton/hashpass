@@ -1,29 +1,27 @@
-# find-4 — оператор -o (ИЛИ) и экранированные скобки. Приёмка — по выводу.
+# find-4 — «или» (исходник «find 4 (16)»): файлы, чьё имя начинается с level2 ИЛИ содержит «3».
+# Доза про -o — в брифе (в исходнике была в теории find-1).
 
 image find-4:1
-
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 164 --depth 5 --dirs 35 --files 150 --lines 2-12 --plant level2_alpha.txt=alpha --plant level2_beta.log=beta --plant a/level2_deep.txt=deep --plant a/report3.md=report --plant a/b/lvl_3_data.txt=data --plant a/b/c/file_with_3_inside.txt=3 --plant plain.txt=plain --plant a/other.log=other --plant room3/ --plant level2_archive/
-copy data/search /home/student/search
-run chown -R student:student /home/student/search
+from find-1:1
 
 hidden hp
 
 settings
   pager on
 
-say "Бывает, годится любое из двух. Учим find говорить «или»."
+say "Бывает, годится любое из двух."
 read brief.md
 
 stage
-  say "Найди в /home/student/search файлы, чьё имя начинается с level2 ИЛИ содержит цифру 3"
+  say "Найди все файлы, которые начинаются с level2 или содержат в названии «3»"
   solve find /home/student/search -type f \( -name "level2*" -o -name "*3*" \)
   check exec grade
   neutral ls cat pwd cd
-  on pass say "А сколько файлов начинаются с level2 И содержат тройку — одновременно?"
-  hint output "syntax error near unexpected token" say "Ругается bash: скобки забрал себе. Экранируй их."
-  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
-  hint tries 3 say "Чего не хватает в выводе — level2 или тройки?"
-  hint tries 6 say "man find, OPERATORS: -o и скобки."
-  hint idle 240 say "Перечитай цель: ИЛИ, а не И. И только файлы."
+  on pass say "А сколько файлов начинаются с level2 И содержат тройку одновременно?"
+  hint output "syntax error near unexpected token" say "Это ругается bash: скобки он забрал себе. Экранируй их — \( и \)."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
+  hint tries 3 say "В выводе есть каталоги? Или не хватает части файлов? Проверь, к чему относится -type."
+  hint tries 6 say "man find, раздел OPERATORS: -o и скобки."
+  hint idle 240 say "Перечитай цель: «или», а не «и». И только файлы."
 
 exec finale

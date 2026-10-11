@@ -28,10 +28,19 @@ class Cmd:
                 self.args.append(token)
 
     def has_flag(self, flag: str) -> bool:
+        """
+        Whether the command carries `flag`.
+
+        `--long` matches a long option; `-x` a short letter anywhere in a bundle (`-la` has `-l`);
+        a longer single-dash word is first looked up whole (find-style `-mindepth`, `-type`) and
+        otherwise read as a bundle of letters (`-rf` == `-fr`).
+        """
         if flag.startswith("--"):
             return flag[2:] in self.long_flags
-        if flag.startswith("-"):
-            return flag[1:] in self.short_flags
+        if flag.startswith("-") and len(flag) > 1:
+            if len(flag) > 2 and flag in self.tokens:  # noqa: PLR2004  (more than one letter)
+                return True
+            return all(ch in self.short_flags for ch in flag[1:])
         return False
 
     def __eq__(self, other: object) -> bool:

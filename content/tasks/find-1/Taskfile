@@ -1,8 +1,11 @@
-# find-1 — знакомство с find: -maxdepth. Приёмка — по выводу.
+# find-1 — find и глубина (исходник docs/Задания «find (13)»): перечислить всё в search не глубже
+# 3-го уровня. cd запрещён («Куда собрался???»). Дерево — порт исходного gentree (имена levelN_*
+# хранят глубину; на этом держатся find-2 и find-3, они наследуют этот образ).
+# Приёмка — множество путей из вывода совпадает с find search -maxdepth 3 (порядок любой).
 
 image find-1:1
 
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 161 --depth 6 --dirs 45 --files 160 --lines 2-12
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py gentree data/search --levels 6 --dirs 2 --files 5 --ratio 0.5 --prefix level --seed 13
 copy data/search /home/student/search
 run chown -R student:student /home/student/search
 
@@ -15,15 +18,16 @@ say "find — швейцарский нож поиска. Ключей — ва�
 read brief.md
 
 stage
-  say "Перечисли всё в /home/student/search не глубже 3-го уровня вложенности"
+  say "Найди в директории search все файлы и директории, которые находятся не глубже 3-го уровня вложенности"
   solve find /home/student/search -maxdepth 3
   check exec grade
-  neutral ls cat pwd cd
-  on pass say "find -maxdepth 1 — это почти ls. Сравни: find search -maxdepth 1 и ls search."
-  hint output "paths must precede expression" say "Порядок: сначала где искать, потом критерии."
+  block cd match "^cd" say "Куда собрался??? Придётся тебе остаться здесь!"
+  neutral ls cat pwd
+  on pass say "Это только начало..."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
   hint output "unknown predicate" say "find не знает такого ключа — присмотрись к дефисам."
-  hint tries 3 say "Сравни вывод с ls -R search: лишние этажи или недостающие?"
-  hint tries 6 say "man find — ищи слово «depth». Или загугли: «find ограничить глубину поиска»."
-  hint idle 240 say "Сам каталог search — нулевой уровень."
+  hint tries 3 say "Сравни свой вывод с тем, что нужно: лишние этажи или недостающие?"
+  hint tries 6 say "man find — ищи слово «depth»."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale

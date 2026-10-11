@@ -26,3 +26,13 @@ def test_cmd_parse_eq_contains_similar():
 def test_parse_cmds_splits():
     cmds = parse_cmds("apt update && apt install sl ; echo done")
     assert [c.basecmd for c in cmds] == ["apt", "apt", "echo"]
+
+
+@pytest.mark.tier1
+def test_has_flag_knows_find_style_single_dash_words():
+    """`find -mindepth`/`-type`: a long single-dash option is a word, not a bundle of letters."""
+    c = Cmd("find search -mindepth 3 -maxdepth 3")
+    assert c.has_flag("-mindepth") and c.has_flag("-maxdepth")
+    assert not c.has_flag("-type")
+    assert Cmd("rm -rf dir").has_flag("-rf") and Cmd("rm -fr dir").has_flag("-rf")   # bundles
+    assert Cmd("ls -la").has_flag("-l") and not Cmd("ls -la").has_flag("-t")

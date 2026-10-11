@@ -1,29 +1,24 @@
-# find-5 — критерий -not -empty. Приёмка — по выводу.
+# find-5 — непустые файлы (исходник «find 5 (17)»).
 
 image find-5:1
-
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 165 --depth 5 --dirs 30 --files 140 --lines 2-12 --empty 0.5
-copy data/search /home/student/search
-run mkdir -p /home/student/search/tmp/empty_a /home/student/search/old/empty_b
-run chown -R student:student /home/student/search
+from find-1:1
 
 hidden hp
 
 settings
   pager on
 
-say "У find десятки критериев. -empty и -not — сегодняшние гости."
-read brief.md
+say "У find десятки критериев."
 
 stage
-  say "Найди в /home/student/search все непустые файлы"
+  say "Найди все непустые файлы в search"
   solve find /home/student/search -type f -not -empty
   check exec grade
   neutral ls cat pwd cd
-  on pass say "-empty находит и пустые каталоги. Сколько их в search? (подсказка: -type d)"
-  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
-  hint tries 3 say "ls -lR search: какие пустые? Как перевернуть предикат?"
-  hint tries 6 say "man find: «empty», «not». Или загугли: «find непустые файлы»."
-  hint idle 240 say "Перечитай цель: файлы (не каталоги), НЕпустые."
+  on pass say "Всё становится чуточку интереснее!))"
+  hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
+  hint tries 3 say "Пустой ли файл — find проверять умеет. А как перевернуть условие?"
+  hint tries 6 say "man find — слова «empty» и «not»."
+  hint idle 240 say "Перечитай цель: файлы (не каталоги), и только непустые."
 
 exec finale

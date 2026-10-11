@@ -1,29 +1,26 @@
-# find-3 — поиск по имени (-name). Приёмка — по выводу.
+# find-3 — каталоги 4-го уровня при помощи -name (исходник «find 3 (15)»). Хитрость: в этом дереве
+# уровень записан в самом имени (levelN_*), и -name заменяет -mindepth/-maxdepth — догадаться надо
+# самому. Принимается только команда с -name.
 
 image find-3:1
-
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 163 --depth 6 --dirs 40 --files 120 --lines 2-12 --plant 'a/b/c/level4_alpha/inside/readme.txt=Первый из трёх.' --plant 'x/y/z/level4_beta/inside/notes.txt=Второй из трёх.' --plant m/n/o/level4_gamma/ --plant 'a/level4_notes.txt=Я файл, а не каталог.' --plant 'x/y/level4.log=И я файл.' --plant 'docs/level4_plan.md=Тоже файл.' --plant a/b/level3_delta/ --plant m/level5_omega/ --plant x/y/z/lvl4_x/ --plant other/deep/tree/regular_dir/
-copy data/search /home/student/search
-run chown -R student:student /home/student/search
+from find-1:1
 
 hidden hp
 
 settings
   pager on
 
-say "Имена обманчивы: похожих много, нужных — единицы."
-read brief.md
+say "Имена обманчивы. Или наоборот — говорят больше, чем кажется."
 
 stage
-  say "Найди в /home/student/search все каталоги, чьё имя начинается с level4"
+  say "Найди все директории 4-го уровня — при помощи -name"
   solve find /home/student/search -type d -name "level4*"
   check exec grade
   neutral ls cat pwd cd
-  on enter say "Три каталога затерялись на четвёртом этаже. Имена у них похожие."
-  on pass say "-iname — то же, но без учёта регистра. А -name '*4*' найдёт всё с четвёркой где угодно в имени."
-  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
-  hint tries 3 say "«Начинается с…» — это имя плюс звёздочка. В кавычках."
-  hint tries 6 say "man find — предикат «name». Или загугли: «find найти каталоги по имени с шаблоном»."
-  hint idle 240 say "После level4 может быть что угодно."
+  on pass say "Имя может хранить больше, чем название. Здесь оно хранило глубину."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
+  hint tries 3 say "Посмотри внимательно на имена каталогов: что в них меняется от этажа к этажу?"
+  hint tries 6 say "Каталоги, а не файлы: у find есть ключ, который отсеивает по типу."
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
 
 exec finale

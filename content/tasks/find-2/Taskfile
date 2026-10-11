@@ -1,28 +1,26 @@
-# find-2 — точный уровень: -mindepth + -maxdepth + -type. Приёмка — по выводу.
+# find-2 — ровно 3-й уровень, только файлы (исходник «find 2 (14)»). -name запрещён: имена levelN_*
+# выдали бы уровень. Если вывести и каталоги (забыть -type f) — Стэйтем: «чтобы видеть, нужно смотреть».
 
 image find-2:1
-
-# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/search --seed 162 --depth 6 --dirs 40 --files 170 --lines 2-12
-copy data/search /home/student/search
-run chown -R student:student /home/student/search
+from find-1:1
 
 hidden hp
 
 settings
   pager on
 
-say "Продолжаем осваивать find. Сегодня — точность до этажа."
-read brief.md
+say "Продолжаем осваивать find."
 
 stage
-  say "Найди только файлы, лежащие ровно на 3-м уровне вложенности в /home/student/search"
+  say "Найди все файлы, которые находятся на 3-м уровне вложенности в search"
   solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
   check exec grade
+  block find match "-i?name" say "Нельзя использовать -name — уровень нужно найти, а не угадать по имени."
   neutral ls cat pwd cd
-  on pass say "Меняй -type f на -type d — и те же этажи покажут каталоги. Проверь."
-  hint output "paths must precede expression" say "find ругается на порядок: сначала ГДЕ, потом критерии."
-  hint tries 3 say "В выводе есть каталоги или чужие этажи? Условий три."
-  hint tries 6 say "man find: mindepth, maxdepth, type."
+  on pass say "Это только начало..."
+  hint cmd find has -mindepth missing -type exec statham
+  hint tries 3 say "-maxdepth отрезает то, что глубже. А что отрежет то, что выше?"
+  hint tries 6 say "man find — рядом с maxdepth живёт его брат."
   hint idle 240 say "Перечитай цель: ровно третий уровень и только файлы."
 
 exec finale
