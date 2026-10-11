@@ -1,0 +1,6 @@
+#!/bin/sh
+# Розыгрыш из исходника: файл, к которому студента отправили «за наградой», уже другой.
+f=/home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me/look_here.txt
+echo "Хватит ходить туда-сюда, нужно двигаться дальше!" > "$f"
+chown student:student "$f" 2>/dev/null
+exit 0

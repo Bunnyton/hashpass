@@ -62,7 +62,20 @@ class ReadAction:
     path: str
 
 
-Action = ExecAction | SayAction | ShowFileAction | ReadAction
+@dataclass(frozen=True)
+class ApplyAction:
+    """
+    An `apply <file>` action: run a hidden-layer script INSIDE the student's live system (root).
+
+    `exec` runs on a throwaway overlay with /hp bound -- its changes vanish by design. `apply`
+    is for changes the student must see (move data, rewrite a file after a step): the host reads
+    the script from the hidden layer and runs its text in the live machine, without /hp.
+    """
+
+    path: str
+
+
+Action = ExecAction | SayAction | ShowFileAction | ReadAction | ApplyAction
 
 
 @dataclass(frozen=True)

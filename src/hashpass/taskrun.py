@@ -20,7 +20,14 @@ from hashpass.key import local_key
 from hashpass.markdown import render_markdown
 from hashpass.play import capture_candidate
 from hashpass.progress import current_stage, mark_passed_local, new_progress
-from hashpass.recipe.model import Action, ExecAction, ReadAction, SayAction, ShowFileAction
+from hashpass.recipe.model import (
+    Action,
+    ApplyAction,
+    ExecAction,
+    ReadAction,
+    SayAction,
+    ShowFileAction,
+)
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import load_bundle
@@ -198,6 +205,15 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
             if idx < len(pages) - 1:
                 pause()                                   # wait for Enter between pages
         return text
+    if isinstance(action, ApplyAction):
+        # The script TEXT travels, not the /hp tree: it runs in the student's live system (root),
+        # so its changes are real and visible, and nothing of the hidden layer is mounted there.
+        script = (Path(hp_dir) / "work" / action.path).read_text(encoding="utf-8")
+        res = getattr(runner, "run_live", runner.run)(["sh", "-c", script])
+        if res.stdout:
+            render.render(res.stdout if res.stdout.endswith("\n") else res.stdout + "\n",
+                          mode="instant")
+        return res.stdout
     res = run_handler(runner, ExecAction(action.value), ctx, hp_dir=Path(hp_dir))
     out = res.stdout if res.stdout.endswith("\n") else res.stdout + "\n"
     render.render(out, mode="instant")   # program output (e.g. ASCII art) appears at once, not typed

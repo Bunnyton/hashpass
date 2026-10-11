@@ -1,4 +1,7 @@
-# cd-abs — навигация: абсолютные и относительные пути. Приёмка — по выводу pwd.
+# cd-abs — навигация (исходник docs/Задания «cd (6)»): сначала дойти до cd_to_me ТОЛЬКО абсолютным
+# путём и сделать ls; розыгрыш в look_here.txt велит подняться на уровень выше — и теперь ТОЛЬКО
+# через `cd ..`, после чего pwd. На неверный путь консоль отвечает репликами исходника; доза про
+# относительные пути приходит, когда студент упрётся в запрет абсолютного.
 
 image cd-abs:1
 
@@ -10,21 +13,34 @@ hidden hp
 
 settings
   pager on
+  similarity 100
 
 say "Файлы — половина мира. Вторая половина — каталоги."
 read brief.md
 
 stage
-  say "Доберись до /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и покажи свой абсолютный путь"
+  say "Перейди в dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и выполни там ls"
+  solve ls /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
+  check exec there
+  block cd unless "^cd +/home/student/" say "no no no, mister fish! Используй абсолютный путь"
+  neutral pwd
+  on pass say "Что-то нашлось. Загляни внутрь."
+  hint output "No such file or directory" say "Такого каталога нет. Путь от корня точно набран без опечаток? Tab их не делает."
+  hint tries 4 say "Абсолютный путь начинается от самого корня — с той же косой черты, что в теории."
+  hint idle 240 say "Долгая пауза. Перечитай цель: дойти и сделать ls."
+
+stage
   solve:
-    cd /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
+    cd /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9
     pwd
   observe output
+  block cd unless "^cd +(\./)?\.\./?$" say "Так, ты правда решил, что лучше будет использовать абсолютный путь?"
   neutral ls cat
-  on pass say "cd без аргументов вернёт домой откуда угодно. А cd - — на шаг назад. Проверь оба."
-  hint output "No such file or directory" say "bash говорит: такого каталога нет. Откуда ты идёшь — от корня или от того места, где стоишь?"
-  hint tries 5 say "Ты уже внутри? В теории есть команда, которая печатает, где ты."
-  hint tries 9 say "Путь можно набрать целиком, от самого корня."
-  hint idle 240 say "Перечитай цель: два действия — добраться и показать путь."
+  on pass say "Ты же использовал Tab, да? ;)"
+  on pass apply moved
+  on pass say "Ты почти у цели: вернись в cd_to_me — в look_here.txt тебя кое-что ждёт :)"
+  hint output "лучше будет использовать абсолютный путь" read relative.md
+  hint tries 3 say "А что написано в файле, который ты нашёл?"
+  hint idle 240 say "Долгая пауза. Перечитай look_here.txt."
 
 exec finale

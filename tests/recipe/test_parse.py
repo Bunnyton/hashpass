@@ -377,3 +377,13 @@ def test_block_rule_parse():
     with pytest.raises(ValueError, match="block"):
         parse_recipe('image t:1\nstage\n  say "x"\n  solve true\n  observe output\n'
                      '  block cd sometimes "x" say "y"\n')
+
+
+@pytest.mark.tier1
+def test_apply_action_parse_and_meta_round_trip():
+    from hashpass.recipe.model import ApplyAction  # noqa: PLC0415
+    from hashpass.taskstore import _action_from_dict, _action_to_dict  # noqa: PLC0415
+    r = parse_recipe('image t:1\nstage\n  say "x"\n  solve true\n  observe output\n'
+                     '  on enter apply rehide\n')
+    assert r.stages[0].on_enter == (ApplyAction("rehide"),)
+    assert _action_from_dict(_action_to_dict(ApplyAction("rehide"))) == ApplyAction("rehide")

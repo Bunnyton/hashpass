@@ -839,6 +839,8 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
         argv.append(f"--setenv=HP_PORT={grade_port}")
     argv += ["-D", str(runner.rootfs)]
     _reap_stale_machines()             # reclaim ptys from any interrupted prior runs
+    if hasattr(runner, "live_machine"):
+        runner.live_machine = machine  # `apply` actions now run inside this console's machine
     try:
         saved_tty = termios.tcgetattr(sys.stdin.fileno())
     except (termios.error, ValueError, OSError):
@@ -852,6 +854,8 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
         with contextlib.suppress(Exception):
             subprocess.run(["sudo", "machinectl", "terminate", machine],
                            check=False, capture_output=True)
+        if hasattr(runner, "live_machine"):
+            runner.live_machine = None
         if saved_tty is not None:
             with contextlib.suppress(termios.error, ValueError, OSError):
                 termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved_tty)

@@ -51,3 +51,22 @@ def test_nspawn_bind_and_setenv_are_per_run(tmp_path, base_tar):
         assert res2.stdout.strip() == "1"
     finally:
         r.teardown()
+
+
+@pytest.mark.tier1
+def test_run_live_goes_through_the_booted_console_machine(tmp_path, monkeypatch):
+    """The live console holds the student mount; `apply` must run INSIDE that machine."""
+    import subprocess  # noqa: PLC0415
+
+    from hashpass.runner import nspawn  # noqa: PLC0415
+    calls: list[list[str]] = []
+    monkeypatch.setattr(nspawn.subprocess, "run",
+                        lambda argv, **_kw: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""))
+    r = NspawnRunner(tmp_path)
+    r.live_machine = "hp-abc"
+    assert r.run_live(["sh", "-c", "echo x > /home/student/f"]).exit_code == 0
+    assert calls[-1] == ["sudo", "machinectl", "shell", "hp-abc", "/bin/sh", "-c",
+                         "echo x > /home/student/f"]
+    r.live_machine = None                                  # no console (build): plain run
+    r.run_live(["true"])
+    assert calls[-1][:2] == ["sudo", "systemd-nspawn"]

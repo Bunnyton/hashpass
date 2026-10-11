@@ -5,6 +5,7 @@ from pathlib import Path
 
 from hashpass.recipe.model import (
     Action,
+    ApplyAction,
     BlockRule,
     CmdCond,
     Condition,
@@ -181,7 +182,12 @@ def _parse_action(value: str) -> Action:
             msg = "read requires a file path"
             raise ValueError(msg)
         return ReadAction(rest.strip())
-    msg = f"expected an 'exec'/'say'/'show file'/'read' action, got: {value!r}"
+    if verb == "apply":
+        if not rest:
+            msg = "apply requires a script in the hidden layer"
+            raise ValueError(msg)
+        return ApplyAction(rest.strip())
+    msg = f"expected an 'exec'/'say'/'show file'/'read'/'apply' action, got: {value!r}"
     raise ValueError(msg)
 
 

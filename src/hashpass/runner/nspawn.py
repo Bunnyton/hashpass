@@ -35,6 +35,9 @@ class NspawnRunner:
         self._proc: subprocess.Popen | None = None
         self._machine: str | None = None
         self._hp = 0                      # per-handler fresh-overlay counter
+        # Set by the foreground console while it runs: that machine holds the student mount, so
+        # a live change (`apply`) must go INSIDE it -- a second `nspawn -D` on the mount is refused.
+        self.live_machine: str | None = None
 
     def prepare(self, lowers: list[Path]) -> None:
         """
@@ -100,6 +103,22 @@ class NspawnRunner:
             stdin=subprocess.DEVNULL,
         )
         return RunResult(p.stdout, p.stderr, p.returncode)
+
+    def run_live(self, argv: list[str]) -> RunResult:
+        """
+        Run in the student's LIVE system (root): inside the console's machine while it is up.
+
+        Without a console (build/derivation) it is a plain `run` on the student mount.
+        `machinectl shell` does not relay stdout, so only the exit code comes back.
+        """
+        if self.live_machine is None:
+            return self.run(argv)
+        p = subprocess.run(
+            ["sudo", "machinectl", "shell", self.live_machine, *(["/bin/sh", "-c", argv[2]]
+                                                                  if argv[:2] == ["sh", "-c"] else argv)],
+            capture_output=True, text=True, encoding="utf-8", check=False,
+        )
+        return RunResult("", p.stderr, p.returncode)
 
     def _run_bound(self, argv: list[str], binds: list[tuple[str, str]],
                    setenv: dict[str, str], *, user: str | None = None) -> RunResult:

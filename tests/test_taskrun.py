@@ -460,3 +460,19 @@ def test_policy_violation_block_rule_by_arguments():
     assert _policy_violation(sm, "sudo cat rock.txt") == "без sudo"
     assert _policy_violation(sm, "cat rock.txt") is None
     assert _policy_violation(sm, "ls && cd ..") == "абсолютный путь!"   # any segment
+
+
+@pytest.mark.tier1
+def test_apply_runs_the_hidden_script_in_the_live_system_without_hp(tmp_path):
+    """`apply <file>`: the script text comes from the hidden layer, runs WITHOUT the /hp bind."""
+    from hashpass.recipe.model import ApplyAction  # noqa: PLC0415
+    (tmp_path / "work").mkdir()
+    (tmp_path / "work" / "moved").write_text("#!/bin/sh\necho done > /home/student/x\n",
+                                             encoding="utf-8")
+    chunks: list[str] = []
+    r = Renderer(Settings(type_mode="normal"), sink=chunks.append, sleep=lambda _s: None)
+    runner = _FakeRunner("")
+    perform_action(ApplyAction("moved"), _CTX, render=r, runner=runner, hp_dir=tmp_path)
+    argv, binds, _ = runner.calls[0]
+    assert argv == ["sh", "-c", "#!/bin/sh\necho done > /home/student/x\n"]
+    assert not binds                                  # live machine: no /hp, nothing leaks

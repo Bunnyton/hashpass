@@ -6,6 +6,7 @@ from pathlib import Path
 from hashpass.imagestore.store import ImageStore, StoredImage
 from hashpass.recipe.model import (
     Action,
+    ApplyAction,
     BlockRule,
     CmdCond,
     Condition,
@@ -80,6 +81,8 @@ def _action_to_dict(action: Action) -> dict:
         return {"kind": "show", "path": action.path}
     if isinstance(action, ReadAction):
         return {"kind": "read", "path": action.path}
+    if isinstance(action, ApplyAction):
+        return {"kind": "apply", "path": action.path}
     msg = f"unknown action: {action!r}"
     raise TypeError(msg)
 
@@ -94,6 +97,8 @@ def _action_from_dict(data: dict) -> Action:
         return ShowFileAction(data["path"])
     if kind == "read":
         return ReadAction(data["path"])
+    if kind == "apply":
+        return ApplyAction(data["path"])
     msg = f"unknown action kind: {kind!r}"
     raise ValueError(msg)
 
