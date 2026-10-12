@@ -2105,59 +2105,20 @@ def _run_from_menu(env: Home, ref: str, io: Io) -> None:
     cmd_pool_run(env, ref, io)
 
 
-def _next_entry(entries: list[dict[str, object]], current_ref: str,
-                solved: frozenset[str] = frozenset()) -> dict[str, object] | None:
-    """
-    Return the next catalog task worth doing after `current_ref`, else None.
-
-    Open (available, not hidden) and not yet solved here; by number, the first one ahead of the
-    current task, else -- wrapping around -- the first one before it. None when the current
-    task is not in the catalog or nothing is left.
-    """
-    current = next((e for e in entries if str(e.get("ref")) == current_ref), None)
-    if current is None:
-        return None
-    todo = sorted((e for e in entries
-                   if (runnable(e) if e.get("preview") else
-                       e.get("available", True) and not e.get("hidden", False))
-                   and str(e.get("ref")) not in solved and e is not current),
-                  key=lambda e: int(e.get("number") or 0))
-    ahead = [e for e in todo if int(e.get("number") or 0) > int(current.get("number") or 0)]
-    return (ahead or todo)[0] if (ahead or todo) else None
-
-
-def _ask_after_task(io: Io, nxt: dict[str, object] | None) -> bool:
-    """After the verdict: Enter -> run the next task (True); q (or no input) -> back to the menu."""
-    if nxt is None:
-        io.write("\x1b[2mЭто было последнее доступное задание.\x1b[0m\n")
-        return False
-    title = str(nxt.get("name") or nxt.get("ref") or "").rsplit("/", 1)[-1]
-    answer = io.read(f"Enter — следующее задание ({title}), q — выйти в меню: ")
-    if answer is None:
-        return False
-    return answer.strip().lower() not in ("q", "й")
-
-
 def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     """
-    Student run: resolve a number/ref, run it, submit on completion, chain.
+    Student run: resolve a number/ref, run it, submit on completion -- then back to the menu.
 
     «РЕШЕНО» is shown INSIDE the console, under the finale (and as «[Решено]» in the prompt), so
-    after exit there is no verdict screen: straight to «next task (Enter) / menu (q)».
+    after exit there is no verdict screen and no «next task?» question (user, 2026-10-12: «после
+    exit пускай выходит сразу в меню») -- the caller's menu is the next screen.
     """
     io = io or _default_io()
     url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
-    client0 = RemoteRegistry(url)
-    ref = _resolve_pool_ref(client0, token, arg)
-    while True:
-        rc, solved = _run_pool_task(env, url, user, token, ref, io)
-        if solved is None:                                   # locked task or a failed run
-            return rc
-        nxt = _next_entry(client0.catalog(token=token), ref, frozenset(load_solved(env)))
-        if not _ask_after_task(io, nxt):
-            return rc
-        ref = str(nxt["ref"])
+    ref = _resolve_pool_ref(RemoteRegistry(url), token, arg)
+    rc, _solved = _run_pool_task(env, url, user, token, ref, io)
+    return rc
 
 
 def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa: PLR0913, PLR0917
