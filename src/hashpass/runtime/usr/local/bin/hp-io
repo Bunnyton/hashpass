@@ -14,8 +14,10 @@ export LC_ALL=C
 skipped=0
 skip_rest() { [ "$skipped" -eq 1 ] && return; skipped=1; printf 'q' >&3 2>/dev/null; }
 trap skip_rest INT
-# The tty would echo «^C» into the middle of the text being typed -- hide it for this reply.
-tty_was=$(stty -g </dev/tty 2>/dev/null) && stty -echoctl </dev/tty 2>/dev/null
+# The tty would echo «^C», and any key pressed while ~80 KB of colour art streams, into the middle
+# of the reply -- an echoed Enter inside an escape code tore the meme (2026-10-12). Silence the echo
+# for the reply; the keys stay queued and show at the next prompt.
+tty_was=$(stty -g </dev/tty 2>/dev/null) && stty -echo -echoctl </dev/tty 2>/dev/null
 trap '[ -n "$tty_was" ] && stty "$tty_was" </dev/tty 2>/dev/null' EXIT
 # Block for one byte, then drain whatever has already arrived (<= 64 KiB, 5 ms) in one read: a
 # typed character still shows the moment it lands, while a big reply (a colour meme, ~80 KB) no

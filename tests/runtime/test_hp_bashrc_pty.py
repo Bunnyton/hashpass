@@ -326,3 +326,74 @@ def test_bash_inside_a_root_shell_does_not_replay_the_intro(tmp_path):
     child.sendline("exit")
     child.expect(pexpect.EOF)
     assert "hello" not in _requests(log)
+
+
+@pytest.mark.tier1
+def test_hp_io_passes_a_big_reply_byte_for_byte():
+    # User (2026-10-12, a screenshot): the colour meme sometimes came out torn -- shifted rows,
+    # bits of escape codes and Cyrillic in the middle. hp-io drained the stream with
+    # `read -t 0.005 -N 65536`: a timed read can lose the byte in flight when its timer fires,
+    # and a big reply arriving in uneven pieces hits that again and again.
+    import random  # noqa: PLC0415
+    import socket  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+    import time  # noqa: PLC0415
+    rng = random.Random(7)
+    cols = 80
+    art = "".join(f"\x1b[38;2;{rng.randrange(256)};{rng.randrange(256)};{rng.randrange(256)}m▀"
+                  + ("\n" if i % cols == cols - 1 else "") for i in range(6000)).encode()
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+
+    def serve() -> None:
+        conn, _ = srv.accept()
+        with conn:
+            conn.recv(64)
+            pos = 0
+            while pos < len(art):
+                step = rng.choice((1, 7, 300, 4096, 20000))
+                conn.sendall(art[pos:pos + step])
+                pos += step
+                time.sleep(rng.choice((0, 0, 0.001, 0.004, 0.006)))
+        srv.close()
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    out = subprocess.run(["bash", str(_HP_IO), "hello"], capture_output=True, timeout=60, check=False,
+                         env={**os.environ, "HP_PORT": str(srv.getsockname()[1])}).stdout
+    t.join(5)
+    assert out == art, f"{len(out)} bytes out of {len(art)}"
+
+
+@pytest.mark.tier1
+def test_keys_typed_during_a_reply_do_not_land_inside_it():
+    # The torn meme (2026-10-12): keys pressed while ~80 KB of colour art streams were echoed by
+    # the tty into the middle of escape codes -- rows shifted, garbage after. hp-io silences the
+    # echo for the reply (the keys stay queued for the next prompt).
+    import socket  # noqa: PLC0415
+    import time  # noqa: PLC0415
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+
+    def serve() -> None:
+        conn, _ = srv.accept()
+        with conn:
+            conn.recv(64)
+            for _ in range(30):
+                conn.sendall(b"[ART]")
+                time.sleep(0.03)
+            conn.sendall(b"END\n")
+        srv.close()
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    child = pexpect.spawn("bash", [str(_HP_IO), "hello"],
+                          env={**os.environ, "HP_PORT": str(srv.getsockname()[1])},
+                          encoding="utf-8", timeout=10)
+    child.expect(r"\[ART\]")
+    child.send("zzz\r")                                     # impatient typing mid-reply
+    child.expect("END")
+    t.join(5)
+    assert "zzz" not in child.before
