@@ -24,7 +24,7 @@ stage
   solve sudo apt-get install -y sl
   check exec command -v sl || test -x /usr/games/sl
   neutral ls cat pwd
-  on pass say "Поезд ходит на каждую опечатку ls. Попробуй sl -l — вагоны поедут назад. А sl -F… сам увидишь."
+  on pass say "Поезд ходит на каждую опечатку ls. У sl есть и ключи: с -l едет маленький паровозик, а с -F поезд взлетает."
   hint output "Unable to locate package" say "apt не нашёл пакет. Проверь имя — две буквы."
   hint tries 3 say "Список обновлён — теперь сама установка."
 

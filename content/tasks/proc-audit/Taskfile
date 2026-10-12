@@ -34,7 +34,7 @@ stage
     pgrep -x sleep | wc -l > /home/student/proc-count.txt
   observe /home/student/proc-count.txt
   neutral ls cat pwd
-  on pass say "killall sleep — и все спящие проснутся мёртвыми. Проверь pgrep после."
+  on pass say "killall sleep — и все спящие проснутся мёртвыми: после него pgrep sleep не найдёт ни одного."
   hint tries 3 say "sleep ушёл в фон (видно [1] и номер)? Дальше — найти по имени и посчитать строки."
   hint tries 6 say "Загугли: «bash запустить команду в фоне» и «pgrep посчитать процессы»."
   hint idle 300 say "Перечитай цель: три действия — запустить, посчитать, записать число."

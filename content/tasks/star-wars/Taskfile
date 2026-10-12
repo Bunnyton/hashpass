@@ -18,7 +18,7 @@ stage
   say "Подключись к telehack.com и посмотри «Звёздные войны» — команда в брифе"
   accept cmd "telnet"
   neutral ls cat pwd
-  on pass say "На telehack.com есть ещё игры: набери help после входа."
+  on pass say "На telehack.com есть и другие игры — их список выдаёт help после входа."
   hint idle 300 say "Застрял внутри? Выход описан в брифе."
 
 exec finale

@@ -31,7 +31,7 @@ stage
   solve grep ERROR /home/student/server/app.log | grep postgres > /home/student/postgres-errors.txt
   observe /home/student/postgres-errors.txt
   neutral ls cat pwd cd
-  on pass say "А >> дописывает в конец, не стирая. Повтори команду с >> и загляни в файл через cat."
+  on pass say "Восемьсот строк, два фильтра — и в отчёте только нужное. Так и работают с логами каждый день."
   hint tries 3 say "Строки уже есть на экране. Как отправить их в файл, а не на экран?"
   hint tries 6 say "В брифе есть значок, который кладёт вывод в файл."
   hint idle 240 say "Долгая пауза. Перечитай цель: какие строки и в какой файл."

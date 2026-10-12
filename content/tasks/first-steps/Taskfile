@@ -15,7 +15,7 @@ stage
   solve echo hello > hello.txt
   observe hello.txt
   neutral ls cat pwd
-  on pass say "echo умеет и дописывать: >> добавит вторую строку. Попробуй, потом cat."
+  on pass say "echo умеет и дописывать: > пишет файл заново, а >> добавляет строку в конец."
   hint tries 3 say "Как отправить вывод команды в файл вместо экрана?"
   hint tries 6 say "Загугли: «bash записать строку в файл». Или man bash, раздел REDIRECTION."
   hint idle 240 say "Перечитай цель: имя файла и одно слово внутри. Проверь через cat."
