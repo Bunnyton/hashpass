@@ -85,3 +85,21 @@ def test_show_file_large_single_line_paged(tmp_path):
     r.show_file(f)
     assert chunks == ["Z" * 5000]  # paged whole, never typed
     assert sleeps == []
+
+
+@pytest.mark.tier1
+def test_colour_codes_cost_no_typing_time():
+    """
+    Send colour codes whole and instantly.
+
+    The narration bar is colour codes + «│ »; typed byte by byte they stalled every line's
+    start (the jerky rhythm after the bar appeared).
+    """
+    chunks: list[str] = []
+    sleeps: list[float] = []
+    r = Renderer(Settings(type_mode="normal", type_speed=50), sink=chunks.append, sleep=sleeps.append)
+    r.render("\x1b[36m│\x1b[0m ab")
+    assert "\x1b[36m" in chunks and "\x1b[0m" in chunks          # each code is ONE write
+    typed = [c for c in chunks if not c.startswith("\x1b")]
+    assert typed == ["│", " ", "a", "b"]
+    assert len(sleeps) == len(typed)                               # only visible chars are paced

@@ -1,4 +1,5 @@
 """Typewriter render layer (§7.2): paced system replies + instant command output; injectable."""
+import re
 import sys
 import time
 from collections.abc import Callable
@@ -21,6 +22,9 @@ _DRAMATIC_SLOW = 3.0
 _MIN_SPEED = 1
 _PAGER_LINES = 40
 _PAGER_BYTES = 4000  # a large single-line file is paged too, not just many-line files
+# One token = a whole ANSI escape sequence (colours of the narration bar, markdown styling) or a
+# single character. Typing codes byte by byte made every bar-prefixed line start with a stall.
+_TOKEN = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|.", re.DOTALL)
 
 
 def _stdout_write(text: str) -> None:
@@ -57,8 +61,11 @@ class Renderer:
         speed = max(self._settings.type_speed, _MIN_SPEED)
         dramatic = mode == _DRAMATIC
         char_delay = (_DRAMATIC_SLOW if dramatic else 1.0) / speed
-        for ch in text:
+        for m in _TOKEN.finditer(text):
+            ch = m.group(0)
             self._sink(ch)
+            if ch.startswith("\x1b"):
+                continue                 # a colour code is invisible: out whole, no typing time
             self._sleep(char_delay)
             if dramatic:
                 if ch in _PUNCT:

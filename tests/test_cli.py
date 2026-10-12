@@ -544,3 +544,17 @@ def test_the_goal_is_a_block_of_its_own(monkeypatch):
     text = "".join(writes)
     assert "ЗАДАНИЕ" in text and "Найди ключ!" in text
     assert text.startswith("\n") and text.endswith("\n\n")      # air around the block
+
+
+@pytest.mark.tier1
+def test_the_hosts_reply_to_a_command_is_set_off_by_a_blank_line():
+    """User: «после результата команды нужен отступ перед выводом» -- one blank line, once."""
+    out: list[str] = []
+    w = cli._gap_before_first(out.append)  # noqa: SLF001
+    for chunk in ("\x1b[36m", "│", " ", "hi\n"):
+        w(chunk)
+    assert "".join(out) == "\n\x1b[36m│ hi\n"
+    out.clear()
+    w = cli._gap_before_first(out.append)  # noqa: SLF001
+    w("\n┃ ЗАДАНИЕ\n")                                  # already starts with air: no double gap
+    assert "".join(out) == "\n┃ ЗАДАНИЕ\n"

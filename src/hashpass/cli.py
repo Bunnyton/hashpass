@@ -481,6 +481,24 @@ _GOAL_STYLE = "\x1b[1;33m"
 _GOAL_BAR = f"{_GOAL_STYLE}┃\x1b[0m "
 
 
+def _gap_before_first(sink: Callable[[str], None]) -> Callable[[str], None]:
+    """
+    Wrap `sink` so the first non-empty write is preceded by a blank line (unless it has one).
+
+    The host's reply to a command (hint, on pass, theory, goal) then never sticks to the
+    command's own output.
+    """
+    pending = [True]
+
+    def write(text: str) -> None:
+        if pending[0] and text:
+            pending[0] = False
+            if not text.startswith("\n"):
+                sink("\n")
+        sink(text)
+    return write
+
+
 def _announce_stage(session: object, io: Io) -> None:
     """
     Print the current stage's text (no number: the student does not know the count).
@@ -785,6 +803,9 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
     def sink(text: str) -> None:
         with contextlib.suppress(OSError):
             conn.sendall(text.encode())
+
+    if req.startswith("cmd "):
+        sink = _gap_before_first(sink)   # the reply to a command stands off its output
 
     def pause() -> bool:
         # page break: send the 0x01 control byte and block until the console answers -- Enter
