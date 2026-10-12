@@ -16,8 +16,9 @@ __HP_LOADED=1
 # A shell that had to recover it this way is NESTED: it hooks in silently -- only the console's
 # first shell greets the host (the greeting renders the intro; a second one would replay it).
 __hp_nested=0
-if [ -z "${HP_PORT-}" ] && [ -r /run/hp/port ]; then
-    HP_PORT=$(cat /run/hp/port 2>/dev/null)
+__hp_port_file=${HP_PORT_FILE:-/run/hp/port}          # overridable for the pty tests only
+if [ -z "${HP_PORT-}" ] && [ -r "$__hp_port_file" ]; then
+    HP_PORT=$(cat "$__hp_port_file" 2>/dev/null)
     export HP_PORT
     __hp_nested=1
 fi
@@ -236,10 +237,12 @@ if [ -n "${HP_PORT-}" ]; then
 
     # Greet the host once so it renders the intro / read / first stage announce -- from the
     # console's first shell only; a plain child `bash` inherits HP_GREETED, a `su -`/`sudo -i`
-    # shell is marked nested above.
+    # shell is marked nested above. Either way every child of THIS shell counts as greeted: a
+    # /bin/bash inside `sudo su` inherits the recovered port and must not replay the intro.
     if [ "$__hp_nested" -eq 0 ] && [ -z "${HP_GREETED-}" ]; then
         export HP_GREETED=1
         hp-io hello 2>/dev/null
     fi
+    export HP_GREETED=1
     __hp_cmd=""
 fi

@@ -301,3 +301,28 @@ def test_ctrl_c_while_typing_asks_the_host_to_skip():
     assert got == [b"q"]                                  # once, and nothing at the page break
     assert "пропустить" not in child.before
     assert "^C" not in child.before                       # the tty's ^C echo stays out of the text
+
+
+@pytest.mark.tier1
+def test_bash_inside_a_root_shell_does_not_replay_the_intro(tmp_path):
+    # User (2026-10-12): `sudo su` (or `sudo su - root`), then /bin/bash -- the whole intro, theory
+    # and goal came again. The root shell recovers the port from the port file (sudo scrubs the
+    # env) and stays quiet, but its child bash inherited the port without HP_GREETED and greeted.
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    (tmp_path / "port").write_text("1\n", encoding="utf-8")
+    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+           "HP_IO_LOG": str(log), "HP_PORT_FILE": str(tmp_path / "port"),
+           "HOME": str(tmp_path), "TERM": "dumb"}
+    for k in ("HP_PORT", "HP_GREETED"):
+        env.pop(k, None)                                  # what `sudo su` leaves of the env
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 100))
+    child.expect("❯")
+    child.sendline(f"bash --rcfile {_RC} -i")             # the student's /bin/bash in there
+    child.expect("❯")
+    child.sendline("exit")
+    child.expect("❯")
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+    assert "hello" not in _requests(log)
