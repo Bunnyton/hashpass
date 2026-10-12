@@ -36,5 +36,5 @@ def test_a_stage_without_text_prints_nothing_and_is_graded_at_once(monkeypatch):
     cli._announce_stage(session, io)                                   # noqa: SLF001
     cli._render_observe(session, "chmod +x test1", "", None, 0, io)    # noqa: SLF001
     text = "".join(shown)
-    assert text.count(_GOAL) == 1 and text.count("──") == len(messages) - 1   # no empty goal line
+    assert text.count(_GOAL) == 1 and text.count("ЗАДАНИЕ") == len(messages) - 1   # no empty goal line
     assert state["stage"] == messages.index("Дальше") and "Дальше" in text   # the same command was graded for stage 2 at once

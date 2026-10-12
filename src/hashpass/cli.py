@@ -477,6 +477,10 @@ def _reset_workdir(path: Path) -> None:
         empty.rmdir()
 
 
+_GOAL_STYLE = "\x1b[1;33m"
+_GOAL_BAR = f"{_GOAL_STYLE}┃\x1b[0m "
+
+
 def _announce_stage(session: object, io: Io) -> None:
     """
     Print the current stage's text (no number: the student does not know the count).
@@ -489,7 +493,9 @@ def _announce_stage(session: object, io: Io) -> None:
         return
     message = session.meta.stages[stage].message
     if message:
-        io.write(f"\n\u2500\u2500  {message}\n")
+        # The task stands apart from the system's talk (thin cyan bar) and from the student's own
+        # input (the plain prompt): a bold yellow bar, a label, air around it.
+        io.write(f"\n{_GOAL_BAR}{_GOAL_STYLE}ЗАДАНИЕ\x1b[0m\n{_GOAL_BAR}\x1b[1m{message}\x1b[0m\n\n")
 
 
 _SOLVED_BANNER = ("\n\x1b[1;32m╭────────────╮\n"
@@ -523,10 +529,9 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     if current_stage(session.progress) is None:
         _finish(session, io)   # the author's outro (voice bye / finale), then «РЕШЕНО»
     else:
-        # announce the next stage's goal FIRST, THEN fire its on_enter — same reason as the
-        # intro flow: on_enter reads like a targeted hint that closes the announce.
-        _announce_stage(session, io)
+        # the next step's theory (on_enter) first, then its goal -- as in the intro flow.
         session.enter_stage()
+        _announce_stage(session, io)
     return True
 
 
@@ -573,7 +578,9 @@ def _recv_request(conn: socket.socket) -> str:
 
 def _render_intro(session: object, readme: str | None, io: Io) -> None:
     """Open the session INSIDE the console: voice hello, the top-level intro, readme, first goal."""
-    # ORDER MATTERS: voice.hello → top-level intro → readme → announce → stage's on_enter.
+    # ORDER MATTERS: voice.hello → top-level intro → readme → stage's on_enter → announce.
+    # User (2026-10-12): «сначала должна быть теория и только потом название» -- the step's dose
+    # of theory comes first, the goal closes it, right before the prompt.
     # The stage-1 on_enter was previously fired at the very start (via `session.enter()`) which
     # smashed its text in front of the intro that motivates it — students saw "ls /home/student/room"
     # before the "Первая команда — самая простая" say.  Split it out so on_enter closes the intro
@@ -582,8 +589,8 @@ def _render_intro(session: object, readme: str | None, io: Io) -> None:
     session.fire_intro()                     # top-level `say`/`read`/`exec` before the stages
     if readme:
         session.read_text(readme)            # markdown, paged (Enter), even reveal
-    _announce_stage(session, io)
-    session.enter_stage()                    # stage-1 on_enter — right before the prompt
+    session.enter_stage()                    # stage-1 on_enter (its dose of theory)
+    _announce_stage(session, io)             # ...then the goal, right before the prompt
 
 
 # Escape sequences + stray control bytes, for cleaning a recorded terminal (script(1)) delta.
@@ -710,10 +717,10 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
         # Keys stay host-side (`res.local_key`), compared under the hood -- nothing on-screen.
         _finish(session, io)
         return
-    # announce the next goal FIRST, then its on_enter (the step's dose of theory) -- the same
-    # order as the intro and as a pass found by the background FS check.
-    _announce_stage(session, io)
+    # the step's theory (on_enter) FIRST, then its goal -- the same order as the intro and as a
+    # pass found by the background FS check.
     session.enter_stage()
+    _announce_stage(session, io)
     nxt = current_stage(session.progress)
     if nxt is not None and not session.meta.stages[nxt].message:
         # A stage without text continues the goal on screen, and the command that passed the

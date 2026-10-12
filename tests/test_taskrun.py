@@ -9,6 +9,7 @@ from hashpass.render import Renderer
 from hashpass.runner.nspawn import RunResult
 from hashpass.taskbuild import build_task
 from hashpass.taskrun import (
+    NARRATION_GUTTER,
     _base_cmds,
     _elapsed,
     _is_neutral,
@@ -338,7 +339,7 @@ def test_perform_say_renders_and_returns(tmp_path):
     # Return value is the RAW text (no trailing newline appended); the render itself
     # always ends with "\n" so consecutive say actions don't visually smash into each other.
     assert out == "hello there"
-    assert chunks == ["hello there\n"]
+    assert chunks == [NARRATION_GUTTER + "hello there\n"]   # the system's talk carries its bar
 
 
 @pytest.mark.tier1
@@ -504,3 +505,16 @@ def test_read_pause_can_skip_the_rest(tmp_path):
     shown = "".join(chunks)
     assert pauses == [1]                                         # asked once, then no more
     assert all(f"page {i}" in shown for i in range(4))           # nothing is lost
+
+
+@pytest.mark.tier1
+def test_system_talk_carries_a_gutter_but_program_output_does_not(tmp_path):
+    """Say/read lines get the narration bar; exec output (art, memes) stays untouched."""
+    from hashpass.taskrun import NARRATION_GUTTER  # noqa: PLC0415
+    chunks: list[str] = []
+    r = Renderer(Settings(type_mode="instant"), sink=chunks.append, sleep=lambda _s: None)
+    perform_action(SayAction("раз"), _CTX, render=r, runner=_FakeRunner(""), hp_dir=tmp_path)
+    assert "".join(chunks) == NARRATION_GUTTER + "раз\n"
+    chunks.clear()
+    perform_action(ExecAction("draw"), _CTX, render=r, runner=_FakeRunner("ART\n"), hp_dir=tmp_path)
+    assert "".join(chunks) == "ART\n"

@@ -500,8 +500,8 @@ def test_policy_reply_carries_block_rules_base64(monkeypatch):
 
 
 @pytest.mark.tier1
-def test_render_observe_announces_the_next_goal_before_its_on_enter(monkeypatch):
-    """Advance by a command: «──  <goal>» first, then the stage's on_enter (its dose of theory)."""
+def test_render_observe_gives_the_theory_before_the_next_goal(monkeypatch):
+    """User: «сначала должна быть теория и только потом название» -- on_enter, then the goal."""
     writes: list[str] = []
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
     session = SimpleNamespace(
@@ -515,4 +515,32 @@ def test_render_observe_announces_the_next_goal_before_its_on_enter(monkeypatch)
     monkeypatch.setattr(cli, "current_stage", lambda _p: 1)
     monkeypatch.setattr(cli, "_announce_stage", lambda _s, _io: writes.append("<announce>"))
     cli._render_observe(session, "cmd", "out", None, None, io)  # noqa: SLF001
-    assert writes.index("<announce>") < writes.index("<enter>")
+    assert writes.index("<enter>") < writes.index("<announce>")
+
+
+@pytest.mark.tier1
+def test_intro_gives_the_first_steps_theory_before_its_goal(monkeypatch):
+    writes: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
+    session = SimpleNamespace(
+        progress=object(), meta=SimpleNamespace(stages=[SimpleNamespace(message="goal 0")]),
+        greet_once=lambda: None, fire_intro=lambda: writes.append("<intro>"),
+        read_text=lambda _t: writes.append("<readme>"), enter_stage=lambda: writes.append("<enter>"))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 0)
+    monkeypatch.setattr(cli, "_announce_stage", lambda _s, _io: writes.append("<announce>"))
+    cli._render_intro(session, "brief", io)  # noqa: SLF001
+    assert writes == ["<intro>", "<readme>", "<enter>", "<announce>"]
+
+
+@pytest.mark.tier1
+def test_the_goal_is_a_block_of_its_own(monkeypatch):
+    """The task stands apart from talk and from the student's input: a labelled, bold block."""
+    writes: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
+    session = SimpleNamespace(progress=object(),
+                              meta=SimpleNamespace(stages=[SimpleNamespace(message="Найди ключ!")]))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 0)
+    cli._announce_stage(session, io)  # noqa: SLF001
+    text = "".join(writes)
+    assert "ЗАДАНИЕ" in text and "Найди ключ!" in text
+    assert text.startswith("\n") and text.endswith("\n\n")      # air around the block

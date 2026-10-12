@@ -3,6 +3,7 @@ import contextlib
 import re
 import shutil
 import sys
+import textwrap
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -132,6 +133,22 @@ _PAGE_MIN = 8
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
+# The system's own talk (say, read, hints) carries a thin cyan bar on every line, so it never
+# blends with the student's input (the plain prompt) or with the task (bold yellow bar, cli).
+NARRATION_GUTTER = "\x1b[36m│\x1b[0m "
+_GUTTER_COLS = 2
+
+
+def _narrate(text: str, *, wrap: bool = False) -> str:
+    """Prefix every line with the narration bar; `wrap` re-flows plain text to the terminal width."""
+    body = text.removesuffix("\n")
+    lines = body.split("\n")
+    if wrap:
+        width = max(20, _screen()[1] - _GUTTER_COLS)
+        lines = [part for ln in lines for part in (textwrap.wrap(ln, width) or [""])]
+    return "\n".join(NARRATION_GUTTER + ln for ln in lines) + "\n"
+
+
 def _screen() -> tuple[int, int]:
     """
     Rows and columns of the student's terminal.
@@ -180,6 +197,7 @@ def _paginate(text: str, height: int | None = None, width: int | None = None) ->
     line longer than the width counts as the rows it wraps into (colour codes take no room).
     """
     rows, cols = _screen()
+    cols -= _GUTTER_COLS                     # every page line carries the narration bar
     height = height if height is not None else max(_PAGE_MIN, rows - _PAGE_RESERVE)
     width = max(1, width if width is not None else cols)
     pages: list[str] = []
@@ -209,7 +227,7 @@ def _render_pages(pages: list[str], render: Renderer, pause: Callable[[], bool |
     """
     skip = False
     for idx, page in enumerate(pages):
-        render.render(page + "\n", mode="instant" if skip else "normal")
+        render.render(_narrate(page + "\n"), mode="instant" if skip else "normal")
         if not skip and idx < len(pages) - 1:
             skip = bool(pause())
 
@@ -231,8 +249,7 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
     # concatenate visually ("ls /home/student/roomПервая команда — самая простая…") and each
     # hint smashes into the shell's next prompt on the same line.
     if isinstance(action, SayAction):
-        text = action.text if action.text.endswith("\n") else action.text + "\n"
-        render.render(text, mode="dramatic" if action.dramatic else None)
+        render.render(_narrate(action.text, wrap=True), mode="dramatic" if action.dramatic else None)
         return action.text
     if isinstance(action, ShowFileAction):
         resolved = _resolve_asset(action.path, Path(hp_dir), runner.rootfs, workdir)
