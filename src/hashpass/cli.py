@@ -1487,9 +1487,13 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
 
 
 def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0913
-             publish: bool = False, force: bool = False, io: Io | None = None) -> int:
+             publish: bool = False, force: bool = False, block: str | None = None,
+             io: Io | None = None) -> int:
     """
-    Push a ref (+ its `from` closure); with `publish`, also add it to the catalog (auto-numbered).
+    Push a ref (+ its `from` closure); with `publish`, also add it to the catalog.
+
+    A newly published task lands HIDDEN (the author tests it first, then shows it), in `block`
+    when given (created if missing); a re-publish keeps its place and state.
 
     Resolves the registry (explicit → saved) and logs in inline if there is no cached token.
     `force=True` re-uploads even layers the server already holds (needed to overwrite a
@@ -1510,8 +1514,10 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
             msg = f"{ref} — не задание (нет артефактов task/); публиковать нечего"
             raise ValueError(msg)
         name, version = split_ref(ref)
-        _push_call(client.push_task, tdir, name, version, publish=True)
-        sys.stdout.write(f"опубликовано в каталог: {ref}\n")
+        _push_call(client.push_task, tdir, name, version, publish=True, block=block)
+        where = f" (блок «{block}»)" if block else ""
+        sys.stdout.write(f"опубликовано в каталог{where}: {ref} — новое задание скрыто от студентов, "
+                         "пока его не покажут в веб-каталоге\n")
     return 0
 
 
@@ -1584,7 +1590,8 @@ def cmd_catalog_layout(env: Home, specs: list[str], registry: str | None = None,
     wanted = {r for b in blocks for r in b["tasks"]}
     listed = {str(r.get("ref")) for r in rows}
     for row in rows:
-        io.write(f"№{row.get('number')}  {row.get('ref')}   [{row.get('block_name', '')}]\n")
+        hid = "  \x1b[2m(скрыто)\x1b[0m" if row.get("hidden") or not row.get("available", True) else ""
+        io.write(f"{row.get('ref')}   [{row.get('block_name', '')}]{hid}\n")
     for ref in sorted(wanted - listed):
         io.write(f"\x1b[33m⚠ не на пуле, пропущен: {ref}\x1b[0m\n")
     for ref in result.get("removed", []):
@@ -1607,9 +1614,9 @@ def cmd_remote_images(env: Home, registry: str | None = None, io: Io | None = No
     io = io or _default_io()
     url = _ensure_registry_login(env, registry, io)
     rows = RemoteRegistry(url, cache=CredentialCache(env.creds)).pool_images()
-    lines = [f"{'Образ':<30}{_COL_GAP}{'Тип':<8}{_COL_GAP}№"]
+    lines = [f"{'Образ':<30}{_COL_GAP}{'Тип':<8}{_COL_GAP}Блок"]
     lines += [f"{r['ref']!s:<30}{_COL_GAP}{_KIND_RU.get(str(r['kind']), str(r['kind'])):<8}{_COL_GAP}"
-              f"{r['number'] if r.get('number') is not None else ''}" for r in rows]
+              f"{r.get('block_name') or ''}" for r in rows]
     sys.stdout.write("\n".join(lines) + "\n")
     return 0
 
@@ -1994,12 +2001,12 @@ def _status_badge(row: dict[str, object]) -> str:
 def _render_pool_menu(rows: list[dict[str, object]], user: str) -> str:
     lines = [f"\x1b[1mВаши задания\x1b[0m ({user}):", ""]
     block = object()   # sentinel so the first block header always prints
-    for r in rows:
+    for pos, r in enumerate(rows, 1):     # a menu position to type, not a task number
         if r.get("block") != block:
             block = r.get("block")
             lock = "" if r.get("available", True) else "  \x1b[2m(закрыт)\x1b[0m"
             lines.append(f"\x1b[1m{block or 'Задания'}\x1b[0m{lock}" if block or lock else "Задания")
-        lines.append(f"  {r['number']:>2}. [{_status_badge(r)}] {r['title']}")
+        lines.append(f"  {pos:>2}. [{_status_badge(r)}] {r['title']}")
     lines.append("")
     return "\n".join(lines)
 
@@ -2062,19 +2069,19 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
         if choice == "s":
             _resync(env, url, user, token, io)
             continue
-        row = next((r for r in rows if str(r["number"]) == choice), None)
-        if not choice.isdigit() or row is None:
+        row = rows[int(choice) - 1] if choice.isdigit() and 0 < int(choice) <= len(rows) else None
+        if row is None:
             io.write("нет такого номера\n")
             continue
         if not row.get("available", True):
             io.write("\x1b[33mзадание сейчас недоступно\x1b[0m\n")
             continue
-        _run_from_menu(env, int(choice), io)
+        _run_from_menu(env, str(row["ref"]), io)
 
 
-def _run_from_menu(env: Home, number: int, io: Io) -> None:
+def _run_from_menu(env: Home, ref: str, io: Io) -> None:
     """Run a task from the text menu; `cmd_pool_run` itself shows the verdict and chains onward."""
-    cmd_pool_run(env, str(number), io)
+    cmd_pool_run(env, ref, io)
 
 
 def _next_entry(entries: list[dict[str, object]], current_ref: str,
@@ -2104,7 +2111,7 @@ def _ask_after_task(io: Io, nxt: dict[str, object] | None) -> bool:
         io.write("\x1b[2mЭто было последнее доступное задание.\x1b[0m\n")
         return False
     title = str(nxt.get("name") or nxt.get("ref") or "").rsplit("/", 1)[-1]
-    answer = io.read(f"Enter — следующее задание (№{nxt.get('number')} {title}), q — выйти в меню: ")
+    answer = io.read(f"Enter — следующее задание ({title}), q — выйти в меню: ")
     if answer is None:
         return False
     return answer.strip().lower() not in ("q", "й")

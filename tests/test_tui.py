@@ -198,7 +198,7 @@ def test_tui_starts_downloading_on_launch_with_layer_bars(tmp_path: Path, monkey
             app.store.exists = lambda _ref: False      # the stub pull stores nothing -> «ошибка»
             await pilot.pause(0.6)                      # no key pressed: downloads start by themselves
             panel = str(app.query_one("#downloads").content)
-            assert "Загрузка №1 lab:1" in panel and "bunnyton/debian:trixie" in panel, panel
+            assert "Загрузка lab:1" in panel and "bunnyton/debian:trixie" in panel, panel
             assert "50%" in panel and "в очереди ещё: 1" in panel, panel
             states = [r.state for r in app.rows]
             assert states == ["грузится", "в очереди", "ожидает"], states   # closed task is skipped

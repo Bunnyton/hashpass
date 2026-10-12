@@ -49,3 +49,23 @@ def test_catalog_requires_token(registry):
     with pytest.raises(urllib.error.HTTPError) as exc:
         c.catalog(token="bogus")  # noqa: S106  (bad token for the 401 path)
     assert exc.value.code == HTTPStatus.UNAUTHORIZED
+
+
+@pytest.mark.tier2
+def test_push_task_into_a_named_block_lands_hidden(registry, tmp_path):
+    """`hashengine push … --task --block B`: the task goes into block B, hidden until shown."""
+    from hashpass.registry.catalog import Catalog  # noqa: PLC0415
+    from hashpass.registry.remote import RemoteRegistry  # noqa: PLC0415
+    registry.users.add("a", "pw", role="admin")
+    ac = RemoteRegistry(registry.base_url)
+    atok = ac.login("a", "pw")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "f").write_text("x", encoding="utf-8")
+    registry.store.save("lab", "1", src, ())
+    td = tmp_path / "task"
+    td.mkdir()
+    (td / "task-meta.json").write_text('{"image_ref": "lab:1"}', encoding="utf-8")
+    ac.push_task(td, "lab", "1", publish=True, block="Знакомство", token=atok)
+    e = Catalog(registry.catalog_path).find("lab:1")
+    assert (e.block_name, e.hidden) == ("Знакомство", True)

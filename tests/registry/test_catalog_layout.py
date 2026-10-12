@@ -123,7 +123,7 @@ def test_cmd_catalog_layout_prints_numbering_and_warns_about_missing(registry, t
     assert cli.cmd_catalog_layout(env, ["Первый: c:1 a:1", "Второй: ghost:1"], registry.base_url,
                                   quiet) == 0
     text = "".join(out)
-    assert "№1  bunnyton/c:1   [Первый]" in text and "№2  bunnyton/a:1   [Первый]" in text
+    assert text.index("bunnyton/c:1   [Первый]") < text.index("bunnyton/a:1   [Первый]")   # order, no numbers
     assert "пропущен: bunnyton/ghost:1" in text
     assert [e["ref"] for e in RemoteRegistry(registry.base_url).catalog(token=cli._pool_token(env, registry.base_url))] == ["bunnyton/c:1", "bunnyton/a:1"]  # noqa: SLF001
 

@@ -28,13 +28,7 @@
     });
   }
 
-  function renumber() {
-    var n = 0;
-    document.querySelectorAll('.titem .num').forEach(function (el) { n += 1; el.textContent = '№' + n; });
-  }
-
   function save() {
-    renumber();
     fetch('/web/catalog/layout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

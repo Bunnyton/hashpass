@@ -23,7 +23,7 @@
 </div>
 </details>
 </div>
-<p class='sub'>Перетащите задание (за строку или ⠿), чтобы изменить его номер или блок; Esc — отменить. По шагу — «⋯ → Выше / Ниже». Скрытое видно студенту как «№N · закрыто», но не показывает, какое именно; автор и админ видят его в hashpass и могут запустить. Чтобы открывать задания по одному — «⋯ → Скрыть все задания» у блока, затем «Показать» у нужного.</p>
+<p class='sub'>Задания идут в том порядке, в каком стоят здесь: перетащите (за строку или ⠿), чтобы изменить порядок или блок; Esc — отменить; по шагу — «⋯ → Выше / Ниже». Новое опубликованное задание появляется <b>скрытым</b>: студенты его не видят, а автор и админ — видят в hashpass и могут проверить. Готово — «⋯ → Показать». Закрытый блок студентам тоже не виден.</p>
 {% if blocks %}
 <div id='cat'>
 {% for b in blocks %}
@@ -68,7 +68,6 @@
 {% for e in b.tasks %}
 <li class='titem{% if e.hidden %} task-hidden{% endif %}' data-ref='{{ e.ref }}'>
 <span class='grip' title='перетащите'>⠿</span>
-<b class='num'>№{{ e.number }}</b>
 <span class='mono ref'>{{ e.ref }}</span>
 {% if e.hidden %}<span class='pill closed sm'>скрыт</span>{% endif %}
 <span class='sp'></span>
@@ -107,7 +106,7 @@
 <li><a href='/web/image/{{ r.ref_url }}' class='imglist-row'>
 <span class='mono'>{{ r.ref }}</span>
 {% if r.kind == 'task' %}<span class='pill author sm'>задание</span>{% else %}<span class='pill sm'>образ</span>{% endif %}
-{% if r.number is not none %}<span class='pill sm'>№{{ r.number }}</span>{% endif %}
+{% if r.block_name %}<span class='pill sm'>{{ r.block_name }}</span>{% endif %}
 </a></li>
 {% endfor %}
 </ul>

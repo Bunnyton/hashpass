@@ -6,6 +6,7 @@ import pytest
 
 from hashpass import cli
 from hashpass.imagestore.store import ImageStore
+from hashpass.registry.catalog import Catalog
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.taskdigest import task_digest
@@ -36,6 +37,7 @@ def _publish(registry, tmp_path) -> tuple:
     td.mkdir()
     _make_task_dir(td)
     ac.push_task(td, "lab", "1", publish=True, token=atok)
+    Catalog(registry.catalog_path).set_task_hidden("lab:1", hidden=False)   # published hidden → show
     return td, atok
 
 

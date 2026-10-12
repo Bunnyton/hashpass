@@ -42,9 +42,11 @@ BLOCKS=(
 )
 # Порядок сборки/пуша — тот же, что в блоках (родитель из `from` раньше потомка).
 TASKS=()
+declare -A BLOCK_OF
 for block in "${BLOCKS[@]}"; do
     read -r -a names <<< "${block#*:}"
     TASKS+=("${names[@]}")
+    for n in "${names[@]}"; do BLOCK_OF[$n]="${block%%:*}"; done
 done
 # Must equal the namespace the images were built under -- `hashengine build` namespaces images
 # by the LOCAL login, and the pool now rejects a push whose ref namespace differs from the
@@ -93,7 +95,9 @@ for name in "${TASKS[@]}"; do
         cd "$name"
         hashengine build Taskfile
         if [[ -z "$DRY" ]]; then
-            hashengine push "$USER_LOGIN/$image_ref" --task $FORCE
+            # Сразу в свой блок; НОВОЕ задание появляется скрытым (автор проверяет в hashpass, потом
+            # «Показать» в веб-каталоге); уже опубликованное сохраняет место и видимость.
+            hashengine push "$USER_LOGIN/$image_ref" --task --block "${BLOCK_OF[$name]}" $FORCE
         fi
     )
 done

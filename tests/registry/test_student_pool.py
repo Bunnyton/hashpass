@@ -96,8 +96,8 @@ def test_pool_status_local_vs_server(registry, tmp_path):
     env = _env(tmp_path)
     c = RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds))
     tok = c.register("stud", "pass123!", group="G")
-    Catalog(registry.catalog_path).add_task("lab:1", "d1")
-    Catalog(registry.catalog_path).add_task("lab2:1", "d2")
+    Catalog(registry.catalog_path).add_task("lab:1", "d1", hidden=False)
+    Catalog(registry.catalog_path).add_task("lab2:1", "d2", hidden=False)
     cli.mark_solved(env, "lab:1")                          # solved locally only
     c.submit("lab2:1", "d2", passed=True, token=tok)       # credited on the server only
     rows = {r["number"]: r for r in cli.pool_status(env, registry.base_url, tok, "stud")}
@@ -114,8 +114,8 @@ def test_run_from_menu_delegates_to_pool_run_which_chains_itself(tmp_path, monke
     monkeypatch.setattr(cli, "cmd_pool_run", lambda _env, arg, _io=None: ran.append(arg) or 0)
     io = cli.Io(read=lambda _p: pytest.fail("the menu must not prompt"), write=lambda _s: None,
                 clock=lambda: "")
-    cli._run_from_menu(env, 1, io)   # noqa: SLF001
-    assert ran == ["1"]
+    cli._run_from_menu(env, "lab:1", io)   # noqa: SLF001  (the menu runs by ref)
+    assert ran == ["lab:1"]
 
 
 @pytest.mark.tier1

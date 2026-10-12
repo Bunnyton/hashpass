@@ -525,9 +525,11 @@ class PoolServer:
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
+        # A student sees only what is open to them -- hidden tasks and closed blocks are simply not
+        # there; an author/admin sees everything, the locked ones marked `preview`.
         staff = self.users.role(user) in _AUTHOR_ROLES
-        rows = [e.as_dict() | ({"preview": True} if staff and not e.available else {})
-                for e in self.catalog().entries()]
+        rows = [e.as_dict() | ({"preview": True} if not e.available else {})
+                for e in self.catalog().entries() if staff or e.available]
         return self._json(HTTPStatus.OK, {"catalog": rows})
 
     def _route_catalog_layout(self) -> Response:
@@ -760,8 +762,9 @@ class PoolServer:
                 unpack_task(request.get_data(cache=False, as_text=False), task_dir)
             except (ValueError, OSError, tarfile.TarError):
                 return self._empty(HTTPStatus.BAD_REQUEST)
-            if request.args.get("publish", "") == "1":   # `push --task`: add to the catalog (auto-№)
-                self.catalog().add_task(ref, task_digest(task_dir))
+            if request.args.get("publish", "") == "1":   # `push --task [--block B]`: into the catalog,
+                self.catalog().add_task(ref, task_digest(task_dir),   # hidden until shown
+                                        block_name=request.args.get("block") or None)
             return self._empty(HTTPStatus.CREATED)
         # GET (a task's grader is not public)
         if self._token_user() is None:

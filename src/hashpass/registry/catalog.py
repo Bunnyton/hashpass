@@ -67,6 +67,21 @@ def _migrate(old: dict[str, object]) -> dict[str, object]:
     return {"blocks": [{"id": _new_id(), "name": "Задания", "open": True, "tasks": tasks}]}
 
 
+def _target_block(blocks: list[dict], block_id: str | None, block_name: str | None) -> dict:
+    """Return the block to publish into: by id, else by name (created at the end), else the last."""
+    target = next((b for b in blocks if block_id is not None and b.get("id") == block_id), None)
+    if target is None and block_name:
+        target = next((b for b in blocks if b.get("name") == block_name), None)
+        if target is None:
+            target = {"id": _new_id(), "name": block_name, "open": True, "tasks": []}
+            blocks.append(target)
+    if target is None:
+        if not blocks:
+            blocks.append({"id": _new_id(), "name": "Задания", "open": True, "tasks": []})
+        target = blocks[-1]
+    return target
+
+
 class Catalog:
     """Blocks of tasks, persisted as JSON. Numbers/availability are derived from block order+state."""
 
@@ -156,33 +171,39 @@ class Catalog:
                 return True
         return False
 
-    def add_task(self, ref: str, digest: str, *, block_id: str | None = None) -> None:
+    def add_task(self, ref: str, digest: str, *, block_id: str | None = None,
+                 block_name: str | None = None, hidden: bool = True) -> None:
         """
-        Append a task (auto-numbered by position) to a block (default: the last/created block).
+        Publish a task into a block -- HIDDEN by default, so its author can test it first.
 
-        A task already in the catalog and no explicit `block_id` (a re-publish: `push --task`)
-        keeps its block, place and hidden flag -- only its digest is updated. Moving it to the
-        last block on every deploy is how a whole catalog once ended up in «Архив».
+        The block is `block_id`, else the one named `block_name` (created, open, at the end if it
+        does not exist), else the last block. A task already in the catalog keeps its place and
+        its hidden flag when re-published into the same block (or with no block given) -- only
+        the digest changes; moving it to an explicitly named other block keeps its flag too.
+        (Moving every re-publish to the last block once put a whole catalog into «Архив».)
         """
         name, _, version = ref.partition(":")
         data = self._load()
         blocks = data.setdefault("blocks", [])
-        if block_id is None:
-            for b in blocks:
-                for t in b.get("tasks", []):
-                    if f"{t.get('name')}:{t.get('version')}" == ref:
+
+        def is_ref(t: dict) -> bool:
+            return f"{t.get('name')}:{t.get('version')}" == ref
+
+        home = next((b for b in blocks for t in b.get("tasks", []) if is_ref(t)), None)
+        if home is not None:
+            same = block_id is None and block_name in (None, home.get("name"))
+            if same or block_id == home.get("id"):
+                for t in home["tasks"]:
+                    if is_ref(t):
                         t["digest"] = digest
-                        self._save(data)
-                        return
-        if not blocks:
-            blocks.append({"id": _new_id(), "name": "Задания", "open": True, "tasks": []})
-        target = next((b for b in blocks if b.get("id") == block_id), None) or blocks[-1]
-        target.setdefault("tasks", [])
-        target["tasks"] = [t for t in target["tasks"] if f"{t.get('name')}:{t.get('version')}" != ref]
+                self._save(data)
+                return
+            hidden = bool(next(t for t in home["tasks"] if is_ref(t)).get("hidden", False))
+        target = _target_block(blocks, block_id, block_name)
         for b in blocks:   # a ref lives in exactly one block
-            b["tasks"] = [t for t in b.get("tasks", [])
-                          if f"{t.get('name')}:{t.get('version')}" != ref]
-        target["tasks"].append({"name": name, "version": version, "digest": digest})
+            b["tasks"] = [t for t in b.get("tasks", []) if not is_ref(t)]
+        target.setdefault("tasks", []).append(
+            {"name": name, "version": version, "digest": digest, "hidden": hidden})
         self._save(data)
 
     def set_task_hidden(self, ref: str, *, hidden: bool) -> bool:

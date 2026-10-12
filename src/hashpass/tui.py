@@ -5,9 +5,8 @@ Left: a `Tree` of blocks -> tasks -- arrows navigate, Enter on a leaf runs it,
 Enter on a block collapses/expands it (native Tree behaviour, nothing to relearn).
 Right: a splash card on empty selection, a rich task-detail card on a highlighted
 task. Statuses are words (решено / зачтено / не начато / грузится). Hidden tasks
-render as "№N · закрыто" without the ref -- the student sees the slot but not
-which task it is; an author/admin (`preview` from the pool) sees the ref with a
-«скрыто» badge and can run it. Bindings honour both English AND Russian keyboard layouts, so
+are not sent to students at all; an author/admin (`preview` from the pool) sees
+the ref with a «скрыто» badge and can run it. No task numbers: order only. Bindings honour both English AND Russian keyboard layouts, so
 q/й, r/к, s/ы all work regardless of the OS layout.
 
 If the runtime `textual` package isn't installed, `cli.cmd_pool_home` falls back
@@ -125,7 +124,7 @@ class TaskRow:
         show `зачтено` without a local mark (done on another machine). Show both.
         """
         if self.hidden:
-            return f"[dim]№{self.number} · закрыто[/]"
+            return "[dim]закрыто[/]"
         local_dot = "[green]●[/] решено" if self.local else "[dim]○ не решено[/]"
         server_dot = "[green]●[/] зачтено" if self.server == "passed" else "[dim]○ не зачтено[/]"
         if self.state == "готово":
@@ -141,7 +140,7 @@ class TaskRow:
         tail = f"   {local_dot}   {server_dot}   {down}"
         if self.preview:
             tail += "   [yellow]· скрыто[/]"
-        return f"№{self.number} · {self.ref}{tail}"
+        return f"{self.ref}{tail}"
 
 
 class PoolTUI(App):
@@ -318,9 +317,9 @@ class PoolTUI(App):
             with self._dl_lock:
                 self._jobs.pop(row.ref, None)
                 self._active = None
-                self._notes.append(f"№{row.number} {row.ref}: загружено — Enter, чтобы запустить"
+                self._notes.append(f"{row.ref}: загружено — Enter, чтобы запустить"
                                    if row.state == "готово" else
-                                   f"№{row.number} {row.ref}: не удалось загрузить")
+                                   f"{row.ref}: не удалось загрузить")
                 self._dirty = True
 
     def _on_layer(self, ref: str, done: int, total: int | None) -> None:
@@ -391,7 +390,7 @@ class PoolTUI(App):
         if row is None:
             return ""
         waiting = sum(1 for r in self._jobs.values() if r is not row)
-        head = f"[b]Загрузка №{row.number} {escape(row.ref)}[/]"
+        head = f"[b]Загрузка {escape(row.ref)}[/]"
         if waiting:
             head += f"   [dim]в очереди ещё: {waiting}[/]"
         if not self._layers:
@@ -481,7 +480,7 @@ class PoolTUI(App):
     @staticmethod
     def _task_frame_start(row: TaskRow) -> None:
         """Clear the screen and print a thin ANSI banner before the task's own console starts."""
-        title = f"№{row.number}  ·  {row.ref}  ·  блок «{row.block or 'Задания'}»"
+        title = f"{row.ref}  ·  блок «{row.block or 'Задания'}»"
         bar = "─" * min(len(title) + 4, 78)
         sys.stdout.write("\x1b[2J\x1b[H")                      # clear + home
         sys.stdout.write(f"\x1b[1;36m╭{bar}╮\x1b[0m\n")

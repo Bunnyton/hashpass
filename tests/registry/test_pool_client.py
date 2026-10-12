@@ -3,6 +3,7 @@ import pytest
 
 from hashpass import cli
 from hashpass.imagestore.store import ImageStore
+from hashpass.registry.catalog import Catalog
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.remote import RemoteRegistry
 
@@ -94,6 +95,7 @@ def test_pull_new_fetches_catalog_tasks_and_is_idempotent(registry, tmp_path):
         td.mkdir()
         _make_task_dir(td, marker=str(i))
         ac.push_task(td, name, "1", publish=True, token=atok)
+        Catalog(registry.catalog_path).set_task_hidden(f"{name}:1", hidden=False)   # published hidden
 
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud")}, default_home=tmp_path)
     sc = RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds))
@@ -123,6 +125,7 @@ def test_pull_new_refreshes_a_re_pushed_task_image(registry, tmp_path):
     td.mkdir()
     _make_task_dir(td, marker="1")
     ac.push_task(td, "lab", "1", publish=True, token=atok)
+    Catalog(registry.catalog_path).set_task_hidden("lab:1", hidden=False)   # published hidden → show
 
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud")}, default_home=tmp_path)
     sc = RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds))

@@ -34,7 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_push.add_argument("ref", help="образ/задание, или `base` — базовый образ этого runtime")
     p_push.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
     p_push.add_argument("--task", action="store_true",
-                        help="добавить задание в каталог (номер назначится автоматически)")
+                        help="добавить задание в каталог (новое — скрытым, пока его не покажут)")
+    p_push.add_argument("--block", help="блок каталога, в который публиковать (создастся, если нет)")
     p_push.add_argument("--force", action="store_true",
                         help="перезаписать образ на пуле, даже если ref уже там "
                              "(нужно, чтобы залить чистый слой поверх контаминированного)")
@@ -79,7 +80,8 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911,
     if command == "push":
         if args.ref == "base":
             return cli.cmd_push_base(env, args.registry, force=args.force)
-        return cli.cmd_push(env, args.ref, args.registry, publish=args.task, force=args.force)
+        return cli.cmd_push(env, args.ref, args.registry, publish=args.task, force=args.force,
+                            block=args.block)
     if command == "serve":
         return cli.cmd_serve(env, args.host, args.port, certfile=args.tls_cert,
                              keyfile=args.tls_key, self_signed=args.tls_self_signed,

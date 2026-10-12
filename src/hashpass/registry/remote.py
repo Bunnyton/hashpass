@@ -421,10 +421,17 @@ class RemoteRegistry:
                    headers={"Authorization": f"Bearer {token}",
                             "Content-Type": "application/octet-stream"})
 
-    def push_task(self, task_dir: Path, name: str, version: str, *,
-                  publish: bool = False, token: str | None = None) -> None:
-        """Push a task's artifacts to the pool; with `publish`, also add it to the catalog."""
-        query = "?publish=1" if publish else ""
+    def push_task(self, task_dir: Path, name: str, version: str, *,  # noqa: PLR0913
+                  publish: bool = False, block: str | None = None,
+                  token: str | None = None) -> None:
+        """
+        Push a task's artifacts; with `publish`, also add it to the catalog -- hidden until shown.
+
+        `block` names the catalog block to publish into (created if missing).
+        """
+        query = ""
+        if publish:
+            query = "?publish=1" + (f"&block={urllib.parse.quote(block)}" if block else "")
         self._put_task(name, version, query, pack_task(task_dir), self._auth_token(token))
 
     def push_attachment(self, name: str, version: str, filename: str, blob: bytes, *,  # noqa: PLR0913

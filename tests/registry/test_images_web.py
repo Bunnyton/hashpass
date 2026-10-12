@@ -18,7 +18,7 @@ from hashpass.registry.server import _parse_multipart
 
 @pytest.mark.tier2
 def test_history_and_antibot_recorded_and_shown(registry):
-    Catalog(registry.catalog_path).add_task("lab:1", "d1")
+    Catalog(registry.catalog_path).add_task("lab:1", "d1", hidden=False)
     student = RemoteRegistry(registry.base_url)
     stok = student.register("stud", "pass123!", group="G")
     history = [{"command": "echo pasted solution here", "ts": "T", "typing": 0.02, "pasted": True}]
@@ -81,6 +81,12 @@ def _login_cookie(registry, user: str, password: str, *, role: str = "author") -
     _, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
                          data={"user": user, "password": password})
     return opener, headers["Set-Cookie"].split(";")[0]
+
+
+def _add_shown(opener, base: str, cookie: str, ref: str) -> None:
+    """Add a task to the catalog via the web (it lands hidden) and show it to students."""
+    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": ref})
+    _req(opener, "POST", f"{base}/web/tasks/toggle", cookie=cookie, data={"ref": ref, "hidden": "0"})
 
 
 def _seed(registry, ref: str, tmp_path: Path, *, task: bool = False) -> str:
@@ -146,7 +152,7 @@ def test_web_blocks_add_task_toggle_remove(registry, tmp_path):
     sc = RemoteRegistry(registry.base_url)
 
     # add a task to the catalog: it auto-numbers into a (default) open block
-    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "lab:1"})
+    _add_shown(opener, base, cookie, "lab:1")
     cat = sc.catalog(token=student)
     assert [(e["number"], e["available"]) for e in cat] == [(1, True)]
     block_id = cat[0]["block_id"]
@@ -154,7 +160,7 @@ def test_web_blocks_add_task_toggle_remove(registry, tmp_path):
     # closing the whole block locks its tasks (still visible), and /submit is refused
     _req(opener, "POST", f"{base}/web/blocks/toggle", cookie=cookie,
          data={"block_id": block_id, "open": "0"})
-    assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, False)]
+    assert sc.catalog(token=student) == []          # a closed block is not shown to students
     assert sc.submit("lab:1", "any", passed=True, token=student)["status"] == "unavailable"
 
     _req(opener, "POST", f"{base}/web/blocks/toggle", cookie=cookie,
@@ -173,8 +179,8 @@ def test_web_catalog_layout_reorders(registry, tmp_path):
     base = registry.base_url
     student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
     sc = RemoteRegistry(registry.base_url)
-    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "a:1"})
-    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "b:1"})
+    _add_shown(opener, base, cookie, "a:1")
+    _add_shown(opener, base, cookie, "b:1")
     block_id = sc.catalog(token=student)[0]["block_id"]
     # drag: JS posts the new order as JSON (id + task refs)
     req = urllib.request.Request(  # noqa: S310
@@ -192,8 +198,8 @@ def test_web_catalog_layout_is_admin_only(registry, tmp_path):
         _seed(registry, f"{name}:1", tmp_path, task=True)
     admin_opener, admin_cookie = _author_cookie(registry)   # "teacher", admin
     base = registry.base_url
-    _req(admin_opener, "POST", f"{base}/web/catalog/add", cookie=admin_cookie, data={"ref": "a:1"})
-    _req(admin_opener, "POST", f"{base}/web/catalog/add", cookie=admin_cookie, data={"ref": "b:1"})
+    _add_shown(admin_opener, base, admin_cookie, "a:1")
+    _add_shown(admin_opener, base, admin_cookie, "b:1")
     student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
     sc = RemoteRegistry(registry.base_url)
     block_id = sc.catalog(token=student)[0]["block_id"]
@@ -344,14 +350,14 @@ def test_web_write_routes_allowed_for_own_namespace(registry, tmp_path):
                       cookie=cookie)
     assert "Описание образа" in body
 
-    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "alice/lab:1"})
+    _add_shown(opener, base, cookie, "alice/lab:1")
     cat = sc.catalog(token=student)
     assert [(e["number"], e["available"]) for e in cat] == [(1, True)]
     block_id = cat[0]["block_id"]
 
     _req(opener, "POST", f"{base}/web/blocks/toggle", cookie=cookie,
          data={"block_id": block_id, "open": "0"})
-    assert [(e["number"], e["available"]) for e in sc.catalog(token=student)] == [(1, False)]
+    assert sc.catalog(token=student) == []          # a closed block is not shown to students
 
     _req(opener, "POST", f"{base}/web/catalog/remove", cookie=cookie, data={"ref": "alice/lab:1"})
     assert sc.catalog(token=student) == []
@@ -374,6 +380,7 @@ def test_web_write_routes_allowed_for_admin_on_others_namespace(registry, tmp_pa
     status, _, _ = _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie,
                         data={"ref": "bob/lab:1"})
     assert status in (HTTPStatus.OK, HTTPStatus.SEE_OTHER, HTTPStatus.FOUND)
+    _req(opener, "POST", f"{base}/web/tasks/toggle", cookie=cookie, data={"ref": "bob/lab:1", "hidden": "0"})
     student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
     sc = RemoteRegistry(registry.base_url)
     assert [e["ref"] for e in sc.catalog(token=student)] == ["bob/lab:1"]
@@ -407,7 +414,7 @@ def test_web_block_hide_all_tasks_then_open_one_by_one(registry, tmp_path):
     student = RemoteRegistry(base).register("stud", "pass123!", group="G")
     sc = RemoteRegistry(base)
     for ref in ("lab:1", "lab:2", "lab:3"):
-        _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": ref})
+        _add_shown(opener, base, cookie, ref)
     block_id = sc.catalog(token=student)[0]["block_id"]
 
     _, _, page = _req(opener, "GET", f"{base}/web/images", cookie=cookie)
@@ -415,13 +422,14 @@ def test_web_block_hide_all_tasks_then_open_one_by_one(registry, tmp_path):
 
     _req(opener, "POST", f"{base}/web/blocks/hide-tasks", cookie=cookie,
          data={"block_id": block_id, "hidden": "1"})
-    cat = sc.catalog(token=student)
+    assert sc.catalog(token=student) == []                      # all hidden → nothing for students
+    cat = [e.as_dict() for e in Catalog(registry.catalog_path).entries()]
     assert [(e["available"], e["hidden"]) for e in cat] == [(False, True)] * 3
     _, _, page = _req(opener, "GET", f"{base}/web/images", cookie=cookie)
     assert "Показать все задания" in page
 
     _req(opener, "POST", f"{base}/web/tasks/toggle", cookie=cookie, data={"ref": "lab:1", "hidden": "0"})
-    assert [e["available"] for e in sc.catalog(token=student)] == [True, False, False]
+    assert [e["ref"] for e in sc.catalog(token=student)] == ["lab:1"]          # only the shown one
 
     _req(opener, "POST", f"{base}/web/blocks/hide-tasks", cookie=cookie,
          data={"block_id": block_id, "hidden": "0"})
@@ -436,15 +444,14 @@ def test_web_block_hide_all_tasks_touches_only_own_namespace(registry, tmp_path)
     admin, acookie = _author_cookie(registry)
     base = registry.base_url
     for ref in ("alice/a:1", "bob/b:1"):
-        _req(admin, "POST", f"{base}/web/catalog/add", cookie=acookie, data={"ref": ref})
+        _add_shown(admin, base, acookie, ref)
     opener, cookie = _login_cookie(registry, "alice", "pass123!")
     student = RemoteRegistry(base).register("stud", "pass123!", group="G")
     sc = RemoteRegistry(base)
     block_id = sc.catalog(token=student)[0]["block_id"]
     _req(opener, "POST", f"{base}/web/blocks/hide-tasks", cookie=cookie,
          data={"block_id": block_id, "hidden": "1"})
-    assert [(e["ref"], e["available"]) for e in sc.catalog(token=student)] == [
-        ("alice/a:1", False), ("bob/b:1", True)]
+    assert [(e["ref"], e["available"]) for e in sc.catalog(token=student)] == [("bob/b:1", True)]
 
 
 @pytest.mark.tier2
@@ -453,9 +460,25 @@ def test_catalog_marks_locked_tasks_as_preview_for_staff_only(registry, tmp_path
     _seed(registry, "lab:1", tmp_path, task=True)
     opener, cookie = _author_cookie(registry)
     base = registry.base_url
-    _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": "lab:1"})
+    _add_shown(opener, base, cookie, "lab:1")
     _req(opener, "POST", f"{base}/web/tasks/toggle", cookie=cookie, data={"ref": "lab:1", "hidden": "1"})
     student = RemoteRegistry(base).register("stud", "pass123!", group="G")
     teacher = RemoteRegistry(base).login("teacher", "pass123!")
-    assert [e.get("preview", False) for e in RemoteRegistry(base).catalog(token=student)] == [False]
+    assert RemoteRegistry(base).catalog(token=student) == []          # hidden: not there at all
     assert [e.get("preview", False) for e in RemoteRegistry(base).catalog(token=teacher)] == [True]
+
+
+@pytest.mark.tier2
+def test_students_never_see_hidden_or_closed_tasks_staff_see_all(registry, tmp_path):
+    for ref in ("lab:1", "lab:2"):
+        _seed(registry, ref, tmp_path, task=True)
+    opener, cookie = _author_cookie(registry)
+    base = registry.base_url
+    for ref in ("lab:1", "lab:2"):
+        _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie, data={"ref": ref})
+    student = RemoteRegistry(base).register("stud", "pass123!", group="G")
+    teacher = RemoteRegistry(base).login("teacher", "pass123!")
+    assert RemoteRegistry(base).catalog(token=student) == []                # added = hidden
+    _req(opener, "POST", f"{base}/web/tasks/toggle", cookie=cookie, data={"ref": "lab:2", "hidden": "0"})
+    assert [e["ref"] for e in RemoteRegistry(base).catalog(token=student)] == ["lab:2"]
+    assert [e["ref"] for e in RemoteRegistry(base).catalog(token=teacher)] == ["lab:1", "lab:2"]

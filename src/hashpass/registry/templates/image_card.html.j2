@@ -5,7 +5,7 @@
 <h1 class='mono ref-title'>{{ image.ref }}</h1>
 <div class='row'>
 {% if image.kind == 'task' %}<span class='pill author'>задание</span>{% else %}<span class='pill'>образ</span>{% endif %}
-{% if image.number is not none %}<span class='pill'>№{{ image.number }}{% if image.block_name %} · «{{ image.block_name }}»{% endif %}</span>{% endif %}
+{% if image.block_name %}<span class='pill'>блок «{{ image.block_name }}»</span>{% endif %}
 {% if image.hidden %}<span class='pill closed'>скрыт</span>{% endif %}
 </div>
 </div>
