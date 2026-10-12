@@ -5,6 +5,7 @@ import json
 import tarfile
 import urllib.error
 import urllib.request
+from collections.abc import Iterable
 from http import HTTPStatus
 from pathlib import Path
 
@@ -453,3 +454,22 @@ def test_closure_404_names_the_missing_parent_not_the_requested_image(registry, 
     status, body = _http("GET", f"{registry.base_url}/closure/app/1")
     assert status == HTTPStatus.NOT_FOUND
     assert "«base:1»" in json.loads(body)["error"]
+
+
+@pytest.mark.tier1
+def test_in_flight_counts_a_request_until_its_body_is_sent():
+    # The pool restarts for an update only when idle; a blob still streaming to a student is NOT
+    # idle even though Flask already popped the request context.
+    from hashpass.registry.server import InFlight  # noqa: PLC0415
+
+    def app(_environ, start_response) -> Iterable[bytes]:
+        start_response("200 OK", [])
+        return iter([b"a", b"b"])
+
+    wrapped = InFlight(app)
+    assert wrapped.idle()
+    body = wrapped({}, lambda *_a: None)
+    assert not wrapped.idle()
+    assert b"".join(body) == b"ab"
+    body.close()
+    assert wrapped.idle()

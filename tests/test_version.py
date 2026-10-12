@@ -142,3 +142,37 @@ def test_remote_commit_retries_without_ssl_verify(monkeypatch):
     monkeypatch.setattr(version.subprocess, "run", run)
     assert version.remote_commit() == NEW
     assert len(calls) == TWO_TRIES
+
+
+@pytest.mark.tier1
+def test_a_running_pool_updates_itself_and_restarts_when_idle():
+    # User (2026-10-12): «пускай hashengine тоже автоматом обновляется до последней версии». The
+    # pool (`hashengine serve`) runs for weeks: it checks `main` every few minutes, installs a new
+    # commit, waits until no request is in flight and restarts itself -- never with --reset-admin.
+    from hashpass.version import watch_for_updates  # noqa: PLC0415
+    events: list[object] = []
+    busy = [True, True, False]
+    commits = iter([OLD, NEW])
+    watch_for_updates(
+        "hashengine", ["serve", "--port", "8080", "--reset-admin"],
+        rounds=2, sleep=lambda s: events.append(("sleep", s)),
+        installed=lambda: OLD, fetch=lambda: next(commits),
+        install=lambda c: events.append(("install", c)) or True,
+        idle=lambda: not busy.pop(0), restart=lambda argv: events.append(("restart", argv)),
+        write=lambda _s: None)
+    assert ("install", NEW) in events
+    assert events[-1] == ("restart", ["serve", "--port", "8080"])
+    rounds_and_idle_waits = 4                                    # 2 rounds + waited for idle twice
+    assert sum(1 for e in events if e[0] == "sleep") >= rounds_and_idle_waits
+
+
+@pytest.mark.tier1
+def test_the_pool_watch_leaves_a_developer_checkout_alone():
+    from hashpass.version import watch_for_updates  # noqa: PLC0415
+    events: list[object] = []
+    watch_for_updates("hashengine", ["serve"], rounds=3, sleep=lambda _s: None,
+                      installed=lambda: None, fetch=lambda: events.append("fetch") or NEW,
+                      install=lambda _c: events.append("install") or True,
+                      idle=lambda: True, restart=lambda _a: events.append("restart"),
+                      write=lambda _s: None)
+    assert events == []

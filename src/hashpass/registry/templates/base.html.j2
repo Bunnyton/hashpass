@@ -14,7 +14,9 @@
 <div class='nav'><span class='brand'><span class='logo'></span>hash<b>pass</b></span>
 <a href='/web'{% if active == '/web' %} class='on'{% endif %}>Прогресс</a>
 <a href='/web/images'{% if active == '/web/images' %} class='on'{% endif %}>Образы и каталог</a>
+{%- if viewer_is_admin() %}
 <a href='/web/users'{% if active == '/web/users' %} class='on'{% endif %}>Пользователи</a>
+{%- endif %}
 <span class='sp'></span><a href='/web/password'>Пароль</a><a href='/web/logout'>Выход</a></div>
 {%- endif %}
 <main>{% block main %}{% endblock %}</main>

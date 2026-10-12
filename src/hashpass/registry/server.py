@@ -15,15 +15,18 @@ import re
 import socket
 import ssl
 import tarfile
+import threading
 import time
 import uuid
+from collections.abc import Callable, Iterable
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import quote
 
-from flask import Flask, Response, request, send_file
+from flask import Flask, Response, g, request, send_file
 from werkzeug.serving import WSGIRequestHandler
 from werkzeug.serving import make_server as _wsgi_make_server
+from werkzeug.wsgi import ClosingIterator
 
 from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
@@ -399,6 +402,7 @@ class PoolServer:
         # is treated as no session -- every `/web/*` route redirects to /web/login.
         if user is None or not self.users.has(user):
             return None
+        g.hp_admin = self.users.role(user) == "admin"    # the nav shows admin pages to the admin only
         return user
 
     def _session_role(self, roles: tuple[str, ...]) -> str | None:
@@ -903,6 +907,11 @@ class PoolServer:
         return []
 
     def _web_login_get(self) -> Response:
+        # Already in, but an admin-only page sent us here: say so, or the form looks like a
+        # lost session and the author logs in again -- in circles.
+        user = self._session_user()
+        if user is not None:
+            return self._html(render_login(signed_in=user, role=self.users.role(user)))
         return self._html(render_login())
 
     def _web_login_post(self) -> Response:
@@ -1244,6 +1253,40 @@ class _HandshakeInWorker(WSGIRequestHandler):
         super().handle()
 
 
+class InFlight:
+    """
+    WSGI wrapper counting requests whose response is not fully sent yet.
+
+    A request stays «in flight» until the server closes its response iterable -- i.e. after the
+    last byte of a streamed blob, not when Flask pops the request context. The pool restarts for
+    an update only when `idle()`.
+    """
+
+    def __init__(self, app: Callable[..., Iterable[bytes]]) -> None:
+        """Wrap the WSGI `app`; nothing is in flight yet."""
+        self._app = app
+        self._lock = threading.Lock()
+        self._count = 0
+
+    def idle(self) -> bool:
+        with self._lock:
+            return self._count == 0
+
+    def _done(self) -> None:
+        with self._lock:
+            self._count -= 1
+
+    def __call__(self, environ: dict, start_response: Callable[..., object]) -> Iterable[bytes]:
+        with self._lock:
+            self._count += 1
+        try:
+            body = self._app(environ, start_response)
+        except BaseException:
+            self._done()
+            raise
+        return ClosingIterator(body, [self._done])
+
+
 def make_server(store: ImageStore, users: UserStore, secret: bytes, *,   # noqa: PLR0913
                 host: str = "127.0.0.1", port: int = 0,
                 config: ServerConfig | None = None,
@@ -1269,11 +1312,13 @@ def make_server(store: ImageStore, users: UserStore, secret: bytes, *,   # noqa:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind((host, port))
-    server = _wsgi_make_server(host, port, pool.app, threaded=True, ssl_context=ssl_context,
+    in_flight = InFlight(pool.app)
+    server = _wsgi_make_server(host, port, in_flight, threaded=True, ssl_context=ssl_context,
                                request_handler=_HandshakeInWorker if ssl_context else None)
     if ssl_context is not None:
         # Accepted sockets are handed to the worker thread UN-handshaken; _HandshakeInWorker
         # finishes them there (see its docstring) -- the accept loop never waits on a client.
         server.socket.do_handshake_on_connect = False
     server.pool = pool         # let callers/tests reach the state directly (matches the old attrs)
+    server.idle = in_flight.idle   # no response still being sent (self-update waits for this)
     return server

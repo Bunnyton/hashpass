@@ -2,6 +2,7 @@
 from pathlib import Path
 from urllib.parse import quote
 
+from flask import g, has_request_context
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from hashpass.registry.reference import normalise as _norm_cmd
@@ -14,6 +15,8 @@ _TEMPLATES = Path(__file__).parent / "templates"
 _env = Environment(loader=FileSystemLoader(str(_TEMPLATES)),
                    autoescape=select_autoescape(("html", "j2", "html.j2")),
                    trim_blocks=False, lstrip_blocks=False)
+# Who is looking (set by the server per request): the nav shows admin-only pages to the admin only.
+_env.globals["viewer_is_admin"] = lambda: bool(getattr(g, "hp_admin", False)) if has_request_context() else False
 
 
 _INSTALL_TEMPLATE = """\
@@ -220,10 +223,11 @@ def render_front(pool_url: str) -> str:
         title="hashpass", nav=False, active="", url=url, flags=flags, prepare=PREPARE)
 
 
-def render_login(error: str = "") -> str:
-    """Teacher/admin login form."""
+def render_login(error: str = "", *, signed_in: str = "", role: str = "") -> str:
+    """Teacher/admin login form; `signed_in` -- who is already in (sent here by an admin-only page)."""
     return _env.get_template("login.html.j2").render(
-        title="Вход — hashpass", nav=False, active="", error=error)
+        title="Вход — hashpass", nav=False, active="", error=error,
+        signed_in=signed_in, role={"author": "автор", "admin": "администратор"}.get(role, role))
 
 
 def render_password_form(error: str = "", *, done: bool = False) -> str:

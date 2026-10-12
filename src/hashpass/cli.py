@@ -61,7 +61,7 @@ from hashpass.taskbuild import build_task
 from hashpass.taskdigest import task_digest
 from hashpass.taskrun import run_task
 from hashpass.taskstore import task_dir
-from hashpass.version import check_and_update
+from hashpass.version import check_and_update, watch_for_updates
 
 _ENV_HOME = "HASHPASS_HOME"
 _HOME_DIRNAME = ".hashpass"
@@ -1288,6 +1288,10 @@ def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  #
                          progress_path=env.registry / "progress",
                          certfile=cert, keyfile=key)   # binds now; a busy port raises here
     _seed_admin(users, _default_io(), reset=reset_admin)   # only after the port bound successfully
+    # A pool runs for weeks: follow `main` while running, not only at launch (same args, never
+    # --reset-admin; restarts only when no download is in flight).
+    threading.Thread(target=watch_for_updates, args=("hashengine", sys.argv[1:]),
+                     kwargs={"idle": server.idle}, daemon=True).start()
 
     def _stop(*_a: object) -> None:
         raise KeyboardInterrupt   # SIGTERM -> clean shutdown, same path as Ctrl-C

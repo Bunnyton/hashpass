@@ -4,6 +4,8 @@
 <h1>Вход преподавателя</h1>
 <p class='sub'>Доступ к прогрессу и управлению.</p>
 {% if error %}<div class='err'>{{ error }}</div>{% endif %}
+{% if signed_in %}<div class='err'>Вы вошли как {{ signed_in }} ({{ role }}). Этот раздел — только для
+администратора: чтобы открыть его, войдите под администратором. <a href='/web'>Вернуться</a></div>{% endif %}
 <form class='card' method='post' action='/web/login'>
 <label>Логин<input name='user' type='text' autofocus></label>
 <label>Пароль<input name='password' type='password' ></label>

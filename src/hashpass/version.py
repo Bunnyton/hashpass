@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from importlib import metadata
 
@@ -116,3 +117,54 @@ def check_and_update(module: str, argv: list[str], *,  # noqa: PLR0913
         argv = [a for a in argv if a != "--no-update"]
         os.execv(sys.executable, [sys.executable, "-m", module, *argv])  # noqa: S606
     return True
+
+
+_WATCH_EVERY = 600.0          # a running pool checks `main` every 10 minutes
+_IDLE_POLL = 1.0
+_NEVER_REPEAT = ("--reset-admin",)   # a restart must not regenerate the admin password
+
+
+def _restart(module: str, argv: list[str]) -> None:
+    os.environ[_ENV_UPDATED] = "1"                # the fresh process skips its launch check
+    os.execv(sys.executable, [sys.executable, "-m", module, *argv])  # noqa: S606
+
+
+def watch_for_updates(module: str, argv: list[str], *,  # noqa: PLR0913
+                      every: float = _WATCH_EVERY, rounds: int | None = None,
+                      sleep: Callable[[float], object] = time.sleep,
+                      fetch: Callable[[], str | None] = remote_commit,
+                      installed: Callable[[], str | None] = installed_commit,
+                      install: Callable[[str], bool] = _pip_install,
+                      idle: Callable[[], bool] = lambda: True,
+                      restart: Callable[[list[str]], object] | None = None,
+                      write: Callable[[str], object] = sys.stderr.write) -> None:
+    """
+    Keep a long-running process (the pool, `hashengine serve`) on the latest `main`.
+
+    Every `every` seconds: if `main` moved past the installed commit, pip-install it, wait until
+    `idle()` (no request in flight -- a student's download is never cut) and restart in place
+    with the same arguments minus --reset-admin. A developer checkout (no installed commit) and
+    HASHPASS_NO_UPDATE are left alone; a failed install just waits for the next round.
+    """
+    argv = [a for a in argv if a not in _NEVER_REPEAT]
+    done = 0
+    while rounds is None or done < rounds:
+        done += 1
+        sleep(every)
+        if os.environ.get(_ENV_NO_UPDATE):
+            return
+        current = installed()
+        if current is None:
+            return
+        latest = fetch()
+        if not latest or latest == current:
+            continue
+        write(f"\x1b[36mобновляю {module} ({current[:7]} → {latest[:7]})…\x1b[0m\n")
+        if not install(latest):
+            write("\x1b[33mобновить не удалось — попробую позже\x1b[0m\n")
+            continue
+        while not idle():
+            sleep(_IDLE_POLL)
+        write(f"\x1b[32m{module} обновлён — перезапускаюсь\x1b[0m\n")
+        (restart or (lambda a: _restart(module, a)))(argv)
+        return

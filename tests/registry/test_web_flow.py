@@ -187,3 +187,29 @@ def test_delete_user_and_group(registry):
     assert not registry.users.has("s1")
     assert not registry.users.has("s2")
     assert registry.users.has("admin")                 # other group untouched
+
+
+def _login(opener, base: str, user: str) -> str:
+    _s, headers, _b = _req(opener, "POST", f"{base}/web/login", data={"user": user, "password": "pw"})
+    return headers["Set-Cookie"].split(";")[0]
+
+
+@pytest.mark.tier2
+def test_an_author_is_not_sent_in_circles_by_admin_pages(registry):
+    # User (2026-10-12): «много раз нужно аутентифицироваться — нажимаю на пользователи, снова
+    # требует». An author saw the admin-only «Пользователи» link; the page redirected to the login
+    # form, the author logged in again -- and landed there again.
+    registry.users.add("boss", "pw", role="admin")
+    registry.users.add("writer", "pw", role="author")
+    opener = _opener()
+    base = registry.base_url
+    author = _login(opener, base, "writer")
+    _s, _h, page = _req(opener, "GET", f"{base}/web", cookie=author)
+    assert "/web/users" not in page                          # no link to a page it cannot open
+    admin = _login(opener, base, "boss")
+    _s, _h, page = _req(opener, "GET", f"{base}/web", cookie=admin)
+    assert "/web/users" in page
+    status, headers, _ = _req(opener, "GET", f"{base}/web/users", cookie=author)
+    assert status == HTTPStatus.SEE_OTHER and headers["Location"] == "/web/login"
+    _s, _h, login = _req(opener, "GET", f"{base}/web/login", cookie=author)
+    assert "writer" in login and "администратор" in login     # says why, instead of a bare form
