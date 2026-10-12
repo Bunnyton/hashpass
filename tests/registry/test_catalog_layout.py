@@ -150,3 +150,27 @@ def test_parse_layout_specs_leaves_block_open_state_to_the_pool():
     """Deploy must not re-open a block the teacher closed: specs carry no `open`."""
     blocks = cli.parse_layout_specs(["Знакомство: a:1"], "bunnyton")
     assert "open" not in blocks[0]
+
+
+@pytest.mark.tier2
+def test_hide_and_move_over_the_api(registry, tmp_path):
+    # The hashpass TUI edits the catalog with a bearer token: an author hides/shows only its own
+    # tasks (like the web ⋯ menu), moving is admin-only (like web drag-and-drop).
+    for ref in ("b/a:1", "b/c:1", "alice/x:1"):
+        _seed(registry, ref, tmp_path)
+    registry.users.add("admin", "pw-correct", role="admin")
+    registry.users.add("alice", "pw-correct", role="author")
+    admin = RemoteRegistry(registry.base_url)
+    admin_tok = admin.login("admin", "pw-correct")
+    alice = RemoteRegistry(registry.base_url)
+    alice_tok = alice.login("alice", "pw-correct")
+    alice.set_task_hidden("alice/x:1", hidden=True, token=alice_tok)
+    assert Catalog(registry.catalog_path).find("alice/x:1").hidden is True
+    with pytest.raises(RuntimeError, match="другому автору"):
+        alice.set_task_hidden("b/a:1", hidden=True, token=alice_tok)
+    with pytest.raises(RuntimeError, match="администратор"):
+        alice.move_task("alice/x:1", -1, token=alice_tok)
+    admin.move_task("b/c:1", -1, token=admin_tok)
+    assert [e.ref for e in Catalog(registry.catalog_path).entries()] == ["b/c:1", "b/a:1", "alice/x:1"]
+    admin.set_task_hidden("b/a:1", hidden=True, token=admin_tok)
+    assert Catalog(registry.catalog_path).find("b/a:1").hidden is True

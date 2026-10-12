@@ -235,6 +235,34 @@ class Catalog:
                 return True
         return False
 
+    def move_task(self, ref: str, step: int) -> bool:
+        """
+        Move a task one place up (`step` < 0) or down; return whether it moved.
+
+        Like the web's ↑/↓: inside a block it swaps with its neighbour; at the block's edge it
+        crosses into the previous block (as its last task) or the next one (as its first) --
+        an empty block counts. The task keeps its digest and hidden flag; nothing else moves.
+        """
+        data = self._load()
+        blocks = [b for b in data.get("blocks", []) if isinstance(b, dict)]
+        for bi, b in enumerate(blocks):
+            tasks = b.setdefault("tasks", [])
+            for ti, t in enumerate(tasks):
+                if f"{t.get('name')}:{t.get('version')}" != ref:
+                    continue
+                to = ti + (1 if step > 0 else -1)
+                if 0 <= to < len(tasks):
+                    tasks[ti], tasks[to] = tasks[to], t
+                elif step < 0 and bi > 0:
+                    blocks[bi - 1].setdefault("tasks", []).append(tasks.pop(ti))
+                elif step > 0 and bi < len(blocks) - 1:
+                    blocks[bi + 1].setdefault("tasks", []).insert(0, tasks.pop(ti))
+                else:
+                    return False
+                self._save(data)
+                return True
+        return False
+
     def remove_task(self, ref: str) -> bool:
         """Remove a task from whatever block holds it; return whether one was removed."""
         data = self._load()

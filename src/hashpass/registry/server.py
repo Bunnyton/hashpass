@@ -200,7 +200,7 @@ class PoolServer:
         self._register_routes(app)
         return app
 
-    def _register_routes(self, app: Flask) -> None:
+    def _register_routes(self, app: Flask) -> None:  # noqa: PLR0915  (one line per route)
         # public / installers
         app.add_url_rule("/", "root", self._route_front, methods=["GET"])
         app.add_url_rule("/install.sh", "install_sh", self._route_install_sh, methods=["GET"])
@@ -218,6 +218,10 @@ class PoolServer:
                          self._route_user_exists, methods=["GET"])
         app.add_url_rule("/catalog", "catalog_api", self._route_catalog, methods=["GET"])
         app.add_url_rule("/catalog/layout", "catalog_layout_api", self._route_catalog_layout,
+                         methods=["PUT"])
+        app.add_url_rule("/catalog/hidden", "catalog_hidden_api", self._route_catalog_hidden,
+                         methods=["PUT"])
+        app.add_url_rule("/catalog/move", "catalog_move_api", self._route_catalog_move,
                          methods=["PUT"])
         app.add_url_rule("/progress", "progress_api", self._route_progress, methods=["GET"])
         app.add_url_rule("/images", "images_api", self._route_images, methods=["GET"])
@@ -585,6 +589,38 @@ class PoolServer:
         catalog.set_layout(layout)
         return self._json(HTTPStatus.OK, {"catalog": [e.as_dict() for e in catalog.entries()],
                                           "removed": removed})
+
+    def _route_catalog_hidden(self) -> Response:
+        """Hide or show one task (the hashpass TUI): an author its own tasks, an admin any."""
+        user, err = self._auth_role(_AUTHOR_ROLES)
+        if err is not None:
+            return self._empty(err)
+        data = request.get_json(silent=True) or {}
+        ref = str(data.get("ref", "")) if isinstance(data, dict) else ""
+        if not ref or not isinstance(data.get("hidden"), bool):
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        name = ref.partition(":")[0]
+        if not self._may_write(user, name):
+            return self._json(HTTPStatus.FORBIDDEN, {"error": _ownership_message(name)})
+        if not self.catalog().set_task_hidden(ref, hidden=data["hidden"]):
+            return self._json(HTTPStatus.NOT_FOUND, {"error": f"в каталоге нет {ref}"})
+        return self._json(HTTPStatus.OK, {"ref": ref, "hidden": data["hidden"]})
+
+    def _route_catalog_move(self) -> Response:
+        """Move one task a step up/down (the hashpass TUI); admin-only like web drag-and-drop."""
+        _user, err = self._auth_role(("admin",))
+        if err is not None:
+            if err == HTTPStatus.FORBIDDEN:
+                return self._json(HTTPStatus.FORBIDDEN,
+                                  {"error": "порядок заданий меняет только администратор"})
+            return self._empty(err)
+        data = request.get_json(silent=True) or {}
+        ref = str(data.get("ref", "")) if isinstance(data, dict) else ""
+        step = data.get("step") if isinstance(data, dict) else None
+        if not ref or step not in (-1, 1):
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        moved = self.catalog().move_task(ref, step)
+        return self._json(HTTPStatus.OK, {"ref": ref, "moved": moved})
 
     def _route_submit(self) -> Response:   # noqa: PLR0911
         user = self._token_user()

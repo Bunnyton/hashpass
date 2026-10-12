@@ -94,6 +94,7 @@ class TaskRow:
     progress: float = 0.0           # 0..1 while грузится (all layers together)
     hidden: bool = False            # locked to the student: block closed OR per-task hidden
     preview: bool = False           # locked for students, but this viewer (author/admin) may run it
+    task_hidden: bool = False       # the task's own «скрыто» flag (staff toggle it with h)
 
     def status_label(self) -> str:
         """One-line status without Rich markup (used by tests / plain-text callers)."""
@@ -161,6 +162,12 @@ class PoolTUI(App):
         Binding("q,Q,й,Й", "quit", "Выход"),
         Binding("r,R,к,К", "refresh", "Обновить"),
         Binding("s,S,ы,Ы", "resync", "Самопроверка"),
+        # Catalog editing for staff (shown only to them, see check_action): the same rights as
+        # the web catalog -- an author hides/shows its own tasks, the admin also moves them.
+        Binding("h,H,р,Р", "toggle_hidden", "Скрыть/показать"),
+        # priority: the Tree would take Shift+arrows as plain cursor moves otherwise
+        Binding("shift+up", "move(-1)", "Выше", priority=True),
+        Binding("shift+down", "move(1)", "Ниже", priority=True),
     ]
 
     def __init__(self, env: Home, url: str, user: str, token: str) -> None:
@@ -189,6 +196,7 @@ class PoolTUI(App):
         self._dirty = False
         self._notes: list[str] = []                  # toasts from the worker, shown by the timer
         self._leaf_nodes: dict[str, object] = {}          # ref -> its Tree leaf (relabelled in place)
+        self.role = "student"                        # from the pool's /me on mount
 
     # -- lifecycle --------------------------------------------------------
 
@@ -212,6 +220,9 @@ class PoolTUI(App):
     def on_mount(self) -> None:
         """Load the catalog once; welcome the student; no ticking timer, no background pulls."""
         self.title = f"hashpass · {self.user}"
+        with contextlib.suppress(Exception):               # offline / old pool -> a student's view
+            self.role = str(self.client.me(token=self.token).get("role") or "student")
+        self.refresh_bindings()
         self._reload_catalog()
         threading.Thread(target=self._download_worker, daemon=True).start()
         self.set_interval(_TICK, self._tick)
@@ -266,7 +277,7 @@ class PoolTUI(App):
                 available=bool(e.get("available", True)), digest=digest,
                 server=server_status, local=ref in solved,
                 state="готово" if ready else "ожидает", hidden=hidden,
-                preview=bool(e.get("preview", False))))
+                preview=bool(e.get("preview", False)), task_hidden=bool(e.get("hidden", False))))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
@@ -431,6 +442,59 @@ class PoolTUI(App):
                 self._leaf_nodes[row.ref] = b_node.add_leaf(row.tree_label(), data=row)
         # focus the tree so arrow keys work immediately
         tree.focus()
+
+    # -- catalog editing (staff) ------------------------------------------
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Editing keys exist only for staff: hide/show for an author, moving too for the admin."""
+        if action == "toggle_hidden":
+            return self.role in ("author", "admin")
+        if action == "move":
+            return self.role in ("author", "admin")   # an author is told why it is refused
+        return super().check_action(action, parameters)
+
+    def _cursor_row(self) -> TaskRow | None:
+        node = self.query_one("#tasks", Tree).cursor_node
+        return node.data if node is not None and isinstance(node.data, TaskRow) else None
+
+    def _after_edit(self, ref: str) -> None:
+        """Reload the catalog from the pool and put the cursor back on the edited task."""
+        self._reload_catalog()
+        node = self._leaf_nodes.get(ref)
+        if node is not None:      # the rebuilt tree has no line numbers until it is laid out
+            tree = self.query_one("#tasks", Tree)
+            self.call_after_refresh(tree.move_cursor, node)
+
+    def action_toggle_hidden(self) -> None:
+        """h: hide a task from students or show it again (an author -- only its own)."""
+        row = self._cursor_row()
+        if row is None or self.role not in ("author", "admin"):
+            return
+        hide = not row.task_hidden
+        try:
+            self.client.set_task_hidden(row.ref, hidden=hide, token=self.token)
+        except Exception as exc:                           # noqa: BLE001
+            self.notify(str(exc), severity="error", timeout=5)
+            return
+        self._after_edit(row.ref)
+        self._flash(f"{row.ref}: {'скрыто от студентов' if hide else 'показано студентам'}")
+
+    def action_move(self, step: int) -> None:
+        """Shift+↑/↓: move a task one place; at a block's edge it crosses into the next block."""
+        row = self._cursor_row()
+        if row is None or self.role not in ("author", "admin"):
+            return
+        if self.role != "admin":
+            self.notify("Порядок заданий меняет только администратор", severity="warning",
+                        timeout=4)
+            return
+        try:
+            moved = self.client.move_task(row.ref, step, token=self.token)
+        except Exception as exc:                           # noqa: BLE001
+            self.notify(str(exc), severity="error", timeout=5)
+            return
+        if moved:
+            self._after_edit(row.ref)
 
     def _flash(self, msg: str) -> None:
         """One-shot toast in the corner (no detail pane to overwrite any more)."""

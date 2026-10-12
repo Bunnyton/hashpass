@@ -4,6 +4,7 @@ HTTP client to a pool registry server (stdlib urllib). Anonymous pull; mutations
 Point base_url at your pool (loopback in tests, or the self-hosted pool). It must never be the
 legacy server (no 185.x). Tokens are cached locally and reused until they expire.
 """
+import contextlib
 import hashlib
 import json
 import os
@@ -453,6 +454,28 @@ class RemoteRegistry:
         raw = self._send("PUT", "/catalog/layout", data=json.dumps({"blocks": blocks}).encode("utf-8"),
                          headers=headers)
         return json.loads(raw.decode("utf-8")) if raw else {"catalog": [], "removed": []}
+
+    def _catalog_edit(self, path: str, payload: dict[str, object], token: str | None) -> dict[str, object]:
+        """PUT a catalog edit; a refusal comes back as RuntimeError with the pool's own reason."""
+        headers = {"Content-Type": "application/json",
+                   "Authorization": f"Bearer {self._auth_token(token)}"}
+        try:
+            raw = self._send("PUT", path, data=json.dumps(payload).encode("utf-8"), headers=headers)
+        except urllib.error.HTTPError as exc:
+            reason = ""
+            with contextlib.suppress(ValueError, OSError):
+                reason = str(json.loads(exc.read() or b"{}").get("error", ""))
+            msg = reason or f"пул ответил {exc.code}"
+            raise RuntimeError(msg) from exc
+        return json.loads(raw.decode("utf-8")) if raw else {}
+
+    def set_task_hidden(self, ref: str, *, hidden: bool, token: str | None = None) -> dict[str, object]:
+        """Hide or show one catalog task (an author -- its own; an admin -- any)."""
+        return self._catalog_edit("/catalog/hidden", {"ref": ref, "hidden": hidden}, token)
+
+    def move_task(self, ref: str, step: int, *, token: str | None = None) -> bool:
+        """Move a catalog task one place up (-1) or down (1), crossing blocks at the edge (admin)."""
+        return bool(self._catalog_edit("/catalog/move", {"ref": ref, "step": step}, token).get("moved"))
 
     def catalog(self, *, token: str | None = None) -> list[dict[str, object]]:
         """Return the ordered task catalog (requires a login token)."""

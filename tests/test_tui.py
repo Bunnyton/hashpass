@@ -236,3 +236,121 @@ def test_enter_on_a_queued_task_moves_it_first(tmp_path: Path) -> None:
             await pilot.press("q")
 
     asyncio.run(_drive())
+
+
+class _EditClient(_StubClient):
+    """A pool that remembers hide/move edits (role from `me`), like the real API."""
+
+    def __init__(self, entries: list[dict], role: str) -> None:
+        super().__init__(entries)
+        self.role = role
+        self.calls: list[tuple] = []
+
+    def me(self, *, token: str) -> dict:  # noqa: ARG002
+        return {"user": "t", "role": self.role}
+
+    def set_task_hidden(self, ref: str, *, hidden: bool, token: str) -> dict:  # noqa: ARG002
+        self.calls.append(("hidden", ref, hidden))
+        for e in self._entries:
+            if e["ref"] == ref:
+                e["hidden"] = hidden
+                e["preview"] = hidden
+        return {}
+
+    def move_task(self, ref: str, step: int, *, token: str) -> bool:  # noqa: ARG002
+        if self.role != "admin":
+            msg = "порядок заданий меняет только администратор"
+            raise RuntimeError(msg)
+        self.calls.append(("move", ref, step))
+        i = next(k for k, e in enumerate(self._entries) if e["ref"] == ref)
+        j = i + step
+        self._entries[i], self._entries[j] = self._entries[j], self._entries[i]
+        return True
+
+
+def _edit_entries() -> list[dict]:
+    return [{"number": 1, "ref": "a:1", "block_name": "Б", "available": True, "digest": ""},
+            {"number": 2, "ref": "b:1", "block_name": "Б", "available": True, "digest": ""}]
+
+
+def _cursor_to(app: PoolTUI, ref: str) -> None:
+    from textual.widgets import Tree  # noqa: PLC0415
+    tree = app.query_one("#tasks", Tree)
+    tree.move_cursor(app._leaf_nodes[ref])  # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_staff_hides_and_shows_a_task_with_h(tmp_path: Path) -> None:
+    # User (2026-10-12): «хочу править прямо внутри hashpass скрытость … и даже перемещать».
+    client = _EditClient(_edit_entries(), role="author")
+
+    async def _drive() -> None:
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "t", "tok")
+        app.client = client
+        app._autoload = False  # noqa: SLF001
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            _cursor_to(app, "b:1")
+            await pilot.pause()
+            await pilot.press("h")
+            await pilot.pause()
+            assert client.calls == [("hidden", "b:1", True)]
+            assert any("b:1" in s and "скрыто" in s for s in _leaves(app))
+            _cursor_to(app, "b:1")
+            await pilot.pause()
+            await pilot.press("р")                         # Russian layout, same key
+            await pilot.pause()
+            assert client.calls[-1] == ("hidden", "b:1", False)
+            await pilot.press("q")
+
+    asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_admin_moves_a_task_with_shift_arrows_and_the_cursor_follows(tmp_path: Path) -> None:
+    client = _EditClient(_edit_entries(), role="admin")
+
+    async def _drive() -> None:
+        from textual.widgets import Tree  # noqa: PLC0415
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "t", "tok")
+        app.client = client
+        app._autoload = False  # noqa: SLF001
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            _cursor_to(app, "b:1")
+            await pilot.pause()
+            await pilot.press("shift+up")
+            await pilot.pause()
+            assert client.calls == [("move", "b:1", -1)]
+            assert [r.ref for r in app.rows] == ["b:1", "a:1"]
+            node = app.query_one("#tasks", Tree).cursor_node
+            assert node is not None and node.data.ref == "b:1"
+            await pilot.press("q")
+
+    asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_an_author_cannot_move_and_a_student_cannot_edit(tmp_path: Path) -> None:
+    for role in ("author", "student"):
+        client = _EditClient(_edit_entries(), role=role)
+
+        async def _drive(client: _EditClient = client) -> None:
+            app = PoolTUI(_env(tmp_path), "http://pool.example", "t", "tok")
+            app.client = client
+            app._autoload = False  # noqa: SLF001
+            async with app.run_test(size=(120, 30)) as pilot:
+                await pilot.pause()
+                _cursor_to(app, "b:1")
+                await pilot.pause()
+                await pilot.press("shift+up")
+                await pilot.press("h")
+                await pilot.pause()
+                if client.role == "student":
+                    assert client.calls == []
+                else:
+                    assert client.calls == [("hidden", "b:1", True)]   # hide yes, move no
+                assert [r.ref for r in app.rows] == ["a:1", "b:1"]
+                await pilot.press("q")
+
+        asyncio.run(_drive())

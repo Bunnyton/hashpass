@@ -106,3 +106,28 @@ def test_a_new_task_lands_hidden_in_the_named_block_and_a_republish_keeps_its_st
     assert [x.ref for x in cat.blocks()[0].entries] == ["ns/a:1", "ns/b:1"]
     cat.add_task("ns/a:1", "d4", block_name="Поиск")                   # an explicit other block moves it
     assert cat.find("ns/a:1").block_name == "Поиск" and cat.find("ns/a:1").hidden is False
+
+
+@pytest.mark.tier1
+def test_move_task_steps_within_a_block_and_across_blocks(tmp_path):
+    # User (2026-10-12): move tasks right inside hashpass. One step, like the web's ↑/↓: inside
+    # a block it swaps with the neighbour; at the edge it crosses into the next block (empty
+    # ones too); nothing else in the catalog changes.
+    cat = Catalog(tmp_path / "c.json")
+    a, _b, c = cat.add_block("A"), cat.add_block("B"), cat.add_block("C")
+    for ref, blk in (("x:1", a), ("y:1", a), ("z:1", c)):
+        cat.add_task(ref, "d", block_id=blk, hidden=False)
+    cat.set_task_hidden("y:1", hidden=True)
+
+    def layout() -> list[tuple[str, list[str]]]:
+        return [(blk.name, [e.ref for e in blk.entries]) for blk in cat.blocks()]
+
+    assert cat.move_task("y:1", -1) is True
+    assert layout() == [("A", ["y:1", "x:1"]), ("B", []), ("C", ["z:1"])]
+    assert cat.move_task("y:1", -1) is False                  # already the very first
+    assert cat.move_task("x:1", 1) is True                    # last in A -> into empty B
+    assert layout() == [("A", ["y:1"]), ("B", ["x:1"]), ("C", ["z:1"])]
+    assert cat.move_task("z:1", -1) is True                   # first in C -> end of B
+    assert layout() == [("A", ["y:1"]), ("B", ["x:1", "z:1"]), ("C", [])]
+    assert cat.move_task("nope:1", 1) is False
+    assert cat.find("y:1").hidden is True                     # state travels with the task
