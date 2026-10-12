@@ -1,12 +1,16 @@
-# cp-basics — команда cp: копирование одного файла в каталог.
+# cp-basics — всё про cp (исходник docs/Задания «cp (7)» + копия под новым именем + каталог):
+# файл в каталог → файл под новым именем → каталог целиком. На каталоге cp упирается в
+# «omitting directory», и эту проблему студент решает сам (ответ в выводе cp и в man).
 # Наблюдаем и копию, и оригинал: mv вместо cp не проходит.
 
 image cp-basics:1
 
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/copy_me.txt --kind prose --lines 150 --seed 140 --plant 'Любопытно, однако)@1'
 copy data/copy_me.txt /home/student/copy_me.txt
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/project --seed 141 --depth 3 --dirs 8 --files 30 --kind notes --lines 3-25
+copy data/project /home/student/project
 run mkdir -p /home/student/wait_file
-run chown -R student:student /home/student/copy_me.txt /home/student/wait_file
+run chown -R student:student /home/student/copy_me.txt /home/student/wait_file /home/student/project
 
 hidden hp
 
@@ -28,5 +32,29 @@ stage
   hint tries 3 say "Загляни в wait_file: что там? Что cp принимает первым, что вторым?"
   hint tries 6 say "man cp — первые две строки SYNOPSIS."
   hint idle 240 say "Долгая пауза. Перечитай цель: откуда — куда."
+
+stage
+  say "Сделай рядом с оригиналом ещё одну копию copy_me.txt — под именем copy_me.bak"
+  solve cp /home/student/copy_me.txt /home/student/copy_me.bak
+  observe /home/student/copy_me.bak /home/student/copy_me.txt
+  neutral ls cat pwd
+  on pass say "Если бы copy_me.bak уже был, cp молча записал бы поверх. Ключ -i сначала спросит."
+  hint cmd mv say "Переименовал оригинал, а не скопировал. Верни copy_me.txt на место."
+  hint tries 3 say "Второй аргумент cp — не обязательно каталог. Что будет, если там новое имя?"
+  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+
+stage
+  say "Теперь каталог: скопируй /home/student/project целиком в /home/student/project_backup"
+  solve cp -r /home/student/project /home/student/project_backup
+  variant cp -R /home/student/project /home/student/project_backup
+  observe /home/student/project_backup /home/student/project
+  neutral ls cat pwd
+  on pass say "Три десятка файлов по девяти каталогам — одной командой. А cp -rv ещё и покажет каждый."
+  hint output "omitting directory" say "Вот и проблема: каталог — не файл. Её решай сам — cp уже сказал, чего ему не хватило."
+  hint cmd mv say "Каталог переехал, а не скопировался. Верни project на место."
+  hint tries 3 say "Загляни в project_backup: он вообще появился? Что внутри?"
+  hint tries 6 say "man cp — поищи слово directory (/ и слово, n — следующее)."
+  hint tries 10 say "Каталог cp обходит только с ключом рекурсии. Какая это буква — найдёшь в man."
+  hint idle 240 say "Долгая пауза. Перечитай вывод последней команды — ответ обычно там."
 
 exec finale
