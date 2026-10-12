@@ -1,10 +1,13 @@
 # mv-basics — mv (исходник docs/Задания «mv (9)»): сначала перенести всё содержимое dir в ТЕКУЩУЮ
 # директорию (понятия «текущая» и «.»), потом «переименуй file5 в file2. Думай!» — что mv
-# переименовывает, студент догадывается сам. Награда — сам file2: в нём текст про расширения.
+# переименовывает, студент догадывается сам. Награда и финал — сам file2: Скала с бровью и текст
+# про расширения (затравка — после первого шага: у файлов нет расширений).
 
 image mv-basics:1
 
-# data: data/dir/file5 — текст исходника; остальные — mkdata (ниже)
+# data: data/dir/file5 — картинка meme.py render https://i.imgflip.com/5tyc0u.png --width 60
+# («The Rock eyebrow») + текст исходника про расширения под ней; текст правь прямо в файле;
+# остальные — mkdata (ниже)
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file1 --kind prose --lines 12 --seed 230
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file3 --kind prose --lines 15 --seed 231
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py text data/dir/file4 --kind prose --lines 18 --seed 232
@@ -28,7 +31,7 @@ stage
   solve mv /home/student/dir/file1 /home/student/dir/file3 /home/student/dir/file4 /home/student/dir/file5 /home/student/dir/file6 /home/student/dir/file7 /home/student/dir/file8 /home/student/dir/file9 /home/student/
   check exec moved
   neutral ls cat pwd cd
-  on pass say "dir опустел, всё здесь."
+  on pass say "dir опустел, всё здесь. Заметил? Ни у одного файла нет расширения — ни .txt, ни .doc. Странно…"
   hint output "No such file or directory" say "Чего mv не нашёл? Сверь имя с ls."
   hint cmd cp say "Это копия: в dir всё осталось. Нужен перенос."
   hint tries 3 say "Где ты сейчас? pwd скажет. Как назвать «сюда» в пути — сказано в теории."
@@ -47,4 +50,3 @@ stage
   hint tries 6 say "man mv — первые строки DESCRIPTION."
   hint idle 240 say "Долгая пауза. Думай. Думай!"
 
-exec finale
