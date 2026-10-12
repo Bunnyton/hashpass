@@ -34,6 +34,11 @@ _SYSTEMD_INSTALL = (
     # procps: gives `ps`, referenced by several hints as a diagnostic; task pedagogy that
     # "installs procps" (proc-audit) still works with `ps` pre-installed.
     "&& apt-get install -y systemd systemd-sysv dbus bash sudo libnss-myhostname procps "
+    # A common admin toolset, as on a real server (user, 2026-10-12). NOT curl/wget/psmisc/sl/
+    # cmatrix/telnet: tasks are built on installing those (apt-add-repo starts from «curl: command
+    # not found», proc-audit installs psmisc) -- tests/image/test_base_packages.py guards this.
+    "&& apt-get install -y vim nano less tree file htop lsof net-tools iproute2 iputils-ping "
+    "dnsutils zip unzip xz-utils "
     # root:hashpass fallback; and a non-root `student` (bash shell, sudoer, password `student`
     # for people who care).  `student` gets NOPASSWD sudo -- otherwise a `solve` that uses
     # `sudo` at build (nspawn `--user=student`, no tty) would either hang on the password

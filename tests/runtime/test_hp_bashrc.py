@@ -21,3 +21,14 @@ def test_hp_bashrc_puts_the_games_dirs_on_path_for_every_user(tmp_path):
     parts = out.strip().split(":")
     assert "/usr/games" in parts and "/usr/local/games" in parts
     assert parts.count("/usr/games") == 1                                  # idempotent
+
+
+@pytest.mark.tier1
+def test_hp_bashrc_puts_the_sbin_dirs_on_path_for_every_user(tmp_path):
+    # User (2026-10-12) asked for net-tools in the base; `ifconfig` lives in /usr/sbin, which
+    # Debian keeps out of a regular user's PATH -- the student got «command not found».
+    out = subprocess.run(
+        ["bash", "-i", "-c", f'. {_RC}; printf %s "$PATH"'],
+        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "TERM": "dumb"},
+        capture_output=True, text=True, check=True).stdout
+    assert {"/usr/sbin", "/sbin"} <= set(out.split(":"))
