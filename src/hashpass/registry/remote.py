@@ -23,7 +23,7 @@ from pathlib import Path
 from time import time
 from typing import BinaryIO
 
-from hashpass.imagestore.store import ImageStore
+from hashpass.imagestore.store import ImageStore, registry_key
 from hashpass.registry.blob import (
     inspect_image_blob,
     pack_image_to_file,
@@ -386,17 +386,30 @@ class RemoteRegistry:
                 to_fetch))
         return [item for item, ok in zip(to_fetch, stored, strict=True) if ok]
 
+    def _already_there(self, store: ImageStore, item: str) -> bool:
+        """
+        Whether the pool holds exactly the generation of `item` this machine last pushed/pulled.
+
+        Not «the pool has this ref»: a rebuilt task keeps its version (`:1`), and an existence
+        probe kept the OLD layer under the NEW Taskfile (cd-abs, 2026-10-12: students got the
+        old key_here.txt). A local rebuild wipes the recorded digest, a legacy record has none
+        -- both go out; a generation pushed from another machine and not rebuilt here is kept.
+        """
+        remote = self.image_digest(item)
+        if remote is None:
+            return False
+        local = store.get(item).pool_digests.get(registry_key(self.base_url))
+        return bool(local) and local == remote
+
     def push(self, store: ImageStore, ref: str, *, token: str | None = None,
              force: bool = False) -> list[str]:
-        # `force=False` (default) skips refs the server already holds via a HEAD probe --
-        # the fast path.  `force=True` uploads every layer regardless, needed to overwrite
-        # a contaminated server-side blob (HEAD says the ref exists, so fresh bytes never
-        # reach the store otherwise).
+        # `force=True` uploads every layer regardless (e.g. to overwrite a generation pushed from
+        # another machine); otherwise only what the pool does not hold in THIS local generation.
         """Push ref + its `from` closure (bottom-up); each blob is packed to disk and streamed."""
         auth = self._push_token(token)
         copied: list[str] = []
         for item in closure_refs(ref, store):
-            if not force and self.has_image(item):
+            if not force and self._already_there(store, item):
                 continue
             name, version = split_ref(item)
             with tempfile.TemporaryDirectory() as td:

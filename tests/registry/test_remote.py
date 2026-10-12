@@ -227,3 +227,36 @@ def test_pull_unknown_ref_suggests_the_same_name_in_another_namespace(registry, 
         else (lambda: client.pull_many(["debian:1"], local))
     with pytest.raises(RuntimeError, match=r"debian:1.*быть может, вы искали bunnyton/debian:1\?"):
         fetch()
+
+
+@pytest.mark.tier2
+def test_push_skips_only_the_generation_this_pool_already_has(registry, tmp_path):
+    # User (2026-10-12): students got cd-abs with the OLD key_here.txt under the NEW Taskfile.
+    # `push` skipped the image because the pool «already had cd-abs:1» -- a rebuilt task keeps its
+    # version, so the fresh layer never went out. Skip only what this machine itself pushed and
+    # has not rebuilt since.
+    registry.users.add("alice", "pw-correct", role="admin")
+    local = ImageStore(tmp_path / "local")
+    client = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / "creds.json"))
+    client.login("alice", "pw-correct")
+    ref = _seed(local, tmp_path, "task", (), "OLD")
+    assert client.push(local, ref) == [ref]
+    assert client.push(local, ref) == []                      # unchanged -> skipped
+    _seed(local, tmp_path, "task", (), "NEW")                 # rebuilt, same version
+    assert client.push(local, ref) == [ref]                   # must go out without --force
+    dest = ImageStore(tmp_path / "dest")
+    RemoteRegistry(registry.base_url).pull_many([ref], dest)
+    assert (dest.get(ref).layer / "marker.txt").read_text(encoding="utf-8") == "NEW"
+
+
+@pytest.mark.tier2
+def test_push_replaces_a_legacy_record_without_a_digest(registry, tmp_path):
+    registry.users.add("alice", "pw-correct", role="admin")
+    local = ImageStore(tmp_path / "local")
+    client = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / "creds.json"))
+    client.login("alice", "pw-correct")
+    ref = _seed(local, tmp_path, "legacy", (), "OLD")
+    client.push(local, ref)
+    local.set_pool_digest(ref, "", registry=registry.base_url)   # as if pushed by an old client
+    client.image_digest = lambda _r: None                         # the pool lists no digest
+    assert client.push(local, ref) == [ref]

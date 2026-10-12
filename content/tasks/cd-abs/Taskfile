@@ -1,7 +1,8 @@
 # cd-abs — навигация (исходник docs/Задания «cd (6)»): сначала дойти до cd_to_me ТОЛЬКО абсолютным
 # путём и сделать ls; розыгрыш в look_here.txt велит подняться на уровень выше — и теперь ТОЛЬКО
 # через `cd ..`, после чего pwd. На неверный путь консоль отвечает репликами исходника; доза про
-# относительные пути приходит, когда студент упрётся в запрет абсолютного.
+# относительные пути приходит, когда студент упрётся в запрет абсолютного. Третий шаг — вернуться и
+# прочитать look_here.txt: там уже розыгрыш (moved), и только после него финал.
 
 image cd-abs:1
 
@@ -38,9 +39,17 @@ stage
   neutral ls cat
   on pass say "Ты же использовал Tab, да? ;)"
   on pass apply moved
-  on pass say "Ты почти у цели: вернись в cd_to_me — в look_here.txt тебя кое-что ждёт :)"
   hint output "лучше будет использовать абсолютный путь" read relative.md
   hint tries 3 say "А что написано в файле, который ты нашёл?"
   hint idle 240 say "Долгая пауза. Перечитай look_here.txt."
+
+stage
+  say "Ты почти у цели: вернись в cd_to_me — в look_here.txt тебя кое-что ждёт :)"
+  solve cat /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me/look_here.txt
+  check exec readback
+  neutral ls pwd cd
+  on pass say "Розыгрыш удался. Зато теперь cd в обе стороны — твоя стихия."
+  hint tries 3 say "Где лежит look_here.txt? Ты там уже был — дорога знакомая."
+  hint idle 240 say "Долгая пауза. Перечитай цель: вернуться и прочитать."
 
 exec finale
