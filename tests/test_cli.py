@@ -558,3 +558,33 @@ def test_the_hosts_reply_to_a_command_is_set_off_by_a_blank_line():
     w = cli._gap_before_first(out.append)  # noqa: SLF001
     w("\n┃ ЗАДАНИЕ\n")                                  # already starts with air: no double gap
     assert "".join(out) == "\n┃ ЗАДАНИЕ\n"
+
+
+@pytest.mark.tier1
+def test_console_ctrl_c_skips_typing_and_every_later_pause():
+    # The console sends «q» when the reader presses Ctrl+C while the host is still typing: from
+    # then on the reply is not typed and no page break waits (no 0x01 is even sent).
+    import socket  # noqa: PLC0415
+    host, console = socket.socketpair()
+    with host, console:
+        skipping, pause = cli._console_controls(host)  # noqa: SLF001
+        assert skipping() is False
+        console.sendall(b"q")
+        assert skipping() is True
+        assert skipping() is True                     # stays skipped
+        assert pause() is True
+        console.setblocking(False)  # noqa: FBT003
+        with pytest.raises(BlockingIOError):
+            console.recv(16)                          # no page-break byte went out
+
+
+@pytest.mark.tier1
+def test_console_pause_still_asks_when_not_skipped():
+    import socket  # noqa: PLC0415
+    host, console = socket.socketpair()
+    with host, console:
+        skipping, pause = cli._console_controls(host)  # noqa: SLF001
+        console.sendall(b"x")                         # Enter at the page break
+        assert pause() is False
+        assert console.recv(16) == b"\x01"
+        assert skipping() is False

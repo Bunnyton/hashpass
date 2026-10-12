@@ -2,11 +2,21 @@
 # hp-io <request>: talk to the host grade socket over the container's shared loopback. Send the
 # request line, then render the streamed reply as it arrives -- so the host's typewriter types out
 # live -- and on a 0x01 control byte pause for the reader: Enter for the next page, q / Ctrl+C to
-# get the rest at once (that is how `read` pages long theory). The host does all the work; this only streams the reply and handles the pause.
+# get the rest at once (that is how `read` pages long theory). Ctrl+C while the host is still
+# typing asks for the same: the rest at once, no more pauses. The host does all the work; this
+# only streams the reply and handles the pause.
 [ -n "$HP_PORT" ] || exit 0
 exec 3<>"/dev/tcp/127.0.0.1/$HP_PORT" 2>/dev/null || exit 0
 printf '%s\n' "$1" >&3
 export LC_ALL=C
+# Ctrl+C at any moment = «skip»: tell the host once (it stops typing and drops later pauses);
+# trapped, so the reply is not killed half-way.
+skipped=0
+skip_rest() { [ "$skipped" -eq 1 ] && return; skipped=1; printf 'q' >&3 2>/dev/null; }
+trap skip_rest INT
+# The tty would echo «^C» into the middle of the text being typed -- hide it for this reply.
+tty_was=$(stty -g </dev/tty 2>/dev/null) && stty -echoctl </dev/tty 2>/dev/null
+trap '[ -n "$tty_was" ] && stty "$tty_was" </dev/tty 2>/dev/null' EXIT
 # Block for one byte, then drain whatever has already arrived (<= 64 KiB, 5 ms) in one read: a
 # typed character still shows the moment it lands, while a big reply (a colour meme, ~80 KB) no
 # longer crawls through one loop iteration per byte (~2 s before, a blink now).
@@ -19,6 +29,10 @@ while IFS= read -r -N1 ch <&3; do
     fi
     while [[ $buf == *$'\x01'* ]]; do
         printf '%s' "${buf%%$'\x01'*}"
+        if [ "$skipped" -eq 1 ]; then          # the host already has «q»: no pause, no answer
+            buf=${buf#*$'\x01'}
+            continue
+        fi
         printf '\x1b[2m  — далее: Enter · пропустить: q —\x1b[0m' > /dev/tty
         # Enter -> next page; «q» (or «й» on a Russian layout) or Ctrl+C -> the host prints the
         # rest at once. Ctrl+C is trapped so it answers the pager instead of killing this reply.
@@ -30,10 +44,10 @@ while IFS= read -r -N1 ch <&3; do
             IFS= read -r -t 0.2 ans < /dev/tty && break
             [ $? -le 128 ] && skip=1            # EOF / tty gone: skip
         done
-        trap - INT
+        trap skip_rest INT
         printf '\r\x1b[K' > /dev/tty
         case "$ans" in q|Q|й|Й) skip=1 ;; esac
-        if [ "$skip" -eq 1 ]; then printf 'q' >&3; else printf 'x' >&3; fi
+        if [ "$skip" -eq 1 ]; then skip_rest; else printf 'x' >&3; fi
         buf=${buf#*$'\x01'}
     done
     printf '%s' "$buf"

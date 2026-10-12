@@ -1,5 +1,6 @@
 """Tier1: drive the real console rc in a pty with a fake hp-io -- what the host actually receives."""
 import base64
+import contextlib
 import os
 import stat
 import threading
@@ -253,3 +254,50 @@ def test_pager_enter_goes_on_page_by_page():
     child.expect(pexpect.EOF)
     t.join(5)
     assert answers == [b"x", b"q"]
+
+
+@pytest.mark.tier1
+def test_ctrl_c_while_typing_asks_the_host_to_skip():
+    # User (2026-10-12): «пропуск теории — на Ctrl+C». While the host is still typing (no page
+    # break yet), Ctrl+C sends «q» once; hp-io survives it, and a later page break the host may
+    # still send is not waited on (the host already has its answer).
+    import socket  # noqa: PLC0415
+    import time  # noqa: PLC0415
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    got: list[bytes] = []
+
+    def serve() -> None:
+        conn, _ = srv.accept()
+        with conn:
+            conn.recv(64)
+            conn.settimeout(0.05)
+            for ch in "typing-slowly-" * 40:            # ~3 s of typing unless skipped
+                conn.sendall(ch.encode())
+                try:
+                    data = conn.recv(16)
+                except TimeoutError:
+                    continue
+                got.append(data)
+                break
+            conn.sendall(b"\x01" + b"the-rest\n")
+            conn.settimeout(1)
+            with contextlib.suppress(TimeoutError):
+                got.append(conn.recv(16))                # must stay silent: nothing more to say
+        srv.close()
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    child = pexpect.spawn("bash", [str(_HP_IO), "hello"],
+                          env={**os.environ, "HP_PORT": str(srv.getsockname()[1])},
+                          encoding="utf-8", timeout=10)
+    child.expect("typing-slowly-typing")
+    time.sleep(0.2)
+    child.sendcontrol("c")
+    child.expect(pexpect.EOF)
+    t.join(5)
+    assert "the-rest" in child.before
+    assert got == [b"q"]                                  # once, and nothing at the page break
+    assert "пропустить" not in child.before
+    assert "^C" not in child.before                       # the tty's ^C echo stays out of the text

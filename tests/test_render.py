@@ -103,3 +103,19 @@ def test_colour_codes_cost_no_typing_time():
     typed = [c for c in chunks if not c.startswith("\x1b")]
     assert typed == ["│", " ", "a", "b"]
     assert len(sleeps) == len(typed)                               # only visible chars are paced
+
+
+@pytest.mark.tier1
+def test_skip_prints_the_rest_at_once():
+    # User (2026-10-12): «пропуск теории на Ctrl+C». Once the reader asks to skip, the rest of the
+    # text goes out in one write with no more typing delays -- this one and every later render.
+    chunks, sleeps = _cap()
+    r = Renderer(Settings(type_speed=50), sink=chunks.append, sleep=sleeps.append)
+    typed_before_skip = 2
+    r.skip = lambda: len(chunks) >= typed_before_skip
+    r.render("abcdef")
+    assert chunks == ["a", "b", "cdef"]
+    assert sleeps == [1 / 50, 1 / 50]
+    r.render("next")
+    assert chunks[-1] == "next"
+    assert len(sleeps) == typed_before_skip

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import select
 import signal
 import socket
 import subprocess
@@ -782,6 +783,38 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],  #
     return port, threading.Thread(target=loop, daemon=True)
 
 
+def _console_controls(conn: socket.socket) -> tuple[Callable[[], bool], Callable[[], bool]]:
+    """
+    Give the reader's controls over one reply: `skipping()` and the page-break `pause()`.
+
+    Ctrl+C in the console sends «q» at any moment: from then on nothing is typed and no page
+    break waits (`skipping()` peeks for it without blocking). At a page break the host sends the
+    0x01 byte and waits for Enter (go on) or «q» (the rest at once); a dropped console is «q».
+    """
+    skipped = [False]
+
+    def skipping() -> bool:
+        if not skipped[0]:
+            with contextlib.suppress(OSError):
+                ready, _, _ = select.select([conn], [], [], 0)
+                if ready and conn.recv(1, socket.MSG_PEEK) in (b"q", b""):
+                    conn.recv(1)
+                    skipped[0] = True
+        return skipped[0]
+
+    def pause() -> bool:
+        if skipping():
+            return True
+        try:
+            conn.sendall(b"\x01")
+            skipped[0] = conn.recv(16).strip() in (b"q", b"")
+        except OSError:
+            skipped[0] = True
+        return skipped[0]
+
+    return skipping, pause
+
+
 def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: PLR0913
                     router: _Router, readme: str | None, clock: Callable[[], str],
                     history: list[dict[str, object]] | None = None) -> None:
@@ -807,18 +840,11 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
     if req.startswith("cmd "):
         sink = _gap_before_first(sink)   # the reply to a command stands off its output
 
-    def pause() -> bool:
-        # page break: send the 0x01 control byte and block until the console answers -- Enter
-        # (go on) or «q» / Ctrl+C (show the rest at once). A dropped console counts as «q».
-        try:
-            conn.sendall(b"\x01")
-            return conn.recv(16).strip() in (b"q", b"")
-        except OSError:
-            return True
-
+    skipping, pause = _console_controls(conn)
     io = Io(read=lambda _p: None, write=router.write, clock=clock)
     router.to(sink)
     session.pause = pause
+    session.render.skip = skipping
     try:
         if req.startswith("hello"):
             _render_intro(session, readme, io)
@@ -828,6 +854,7 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
     finally:
         router.to(_sink_noop)
         session.pause = _no_pause
+        session.render.skip = lambda: False
 
 
 def _reap_stale_machines() -> None:

@@ -42,6 +42,9 @@ class Renderer:
         self._settings = settings
         self._sink = sink
         self._sleep = sleep
+        # Asked before every typed character; True = the reader wants the rest at once (Ctrl+C
+        # in the console). The host sets it per console request.
+        self.skip: Callable[[], bool] = lambda: False
 
     def render(self, text: str, *, mode: str | None = None) -> None:
         """
@@ -55,13 +58,16 @@ class Renderer:
         if mode not in _MODES:
             msg = f"unknown type-mode: {mode!r}"
             raise ValueError(msg)
-        if mode == _INSTANT:
+        if mode == _INSTANT or self.skip():
             self._sink(text)
             return
         speed = max(self._settings.type_speed, _MIN_SPEED)
         dramatic = mode == _DRAMATIC
         char_delay = (_DRAMATIC_SLOW if dramatic else 1.0) / speed
         for m in _TOKEN.finditer(text):
+            if self.skip():
+                self._sink(text[m.start():])
+                return
             ch = m.group(0)
             self._sink(ch)
             if ch.startswith("\x1b"):
