@@ -41,7 +41,7 @@ stage
   solve wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt
   observe /home/student/store/howmany.txt
   neutral ls cat pwd less
-  on pass say "wc -w считает слова, wc -c — байты. А с пайпами все три шага — одна строка: sort sold.txt | uniq | wc -l."
+  on pass say "wc -w считает слова, wc -c — байты. А конвейером все три шага — одна строка: sort sold.txt | uniq | wc -l."
   hint tries 3 say "cat howmany.txt: там только число, без имени файла?"
   hint tries 6 say "Загугли: «wc посчитать строки без имени файла» или «bash перенаправление ввода»."
   hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
