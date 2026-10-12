@@ -22,7 +22,7 @@ stage
   variant cp /home/student/copy_me.txt /home/student/wait_file/copy_me.txt
   observe /home/student/wait_file/copy_me.txt /home/student/copy_me.txt
   neutral ls cat pwd
-  on pass say "cp умеет копировать под новым именем: cp a.txt b.txt. Сделай третью копию с любым именем."
+  on pass say "Оригинал остался на месте, копия живёт своей жизнью: правь одну — другая не заметит."
   hint output "No such file or directory" say "cp сказал, чего не нашёл. Прочитай — и проверь путь через ls."
   hint cmd mv say "Файл переехал, а не скопировался. Верни оригинал."
   hint tries 3 say "Загляни в wait_file: что там? Что cp принимает первым, что вторым?"
