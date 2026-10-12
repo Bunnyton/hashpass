@@ -168,6 +168,34 @@ def test_block_rules_refuse_commands_by_their_arguments(tmp_path):
     assert not (work / "keep.txt").exists()
 
 
+_MARK = r"(?:\x01\x1b\]133;C\x07\x02)?"     # invisible «command output starts» marker
+
+
+@pytest.mark.tier1
+def test_refusal_looks_like_the_systems_talk(tmp_path):
+    # User (2026-10-12), after «no no no, mister fish!» came out as plain command output: the
+    # refusal is the system talking, so it gets the same blank line and cyan bar as hints.
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    rules = ",".join([_rule("cd", "unless", "^cd +/", "no no no, mister fish!")])
+    bindir = _policy_shim(tmp_path, f";rm;;{rules}")
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+           "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
+           "HOME": str(tmp_path), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 120), cwd=str(tmp_path))
+    child.expect("❯")
+    child.sendline("cd sub")
+    child.expect(r"cd sub\r?\n" + _MARK + r"\r?\n\x1b\[36m│\x1b\[0m no no no, mister fish!\r?\n")
+    child.expect("❯")
+    child.sendline("rm nothing")                          # plain `deny` speaks the same way
+    child.expect(r"rm nothing\r?\n" + _MARK + r"\r?\n\x1b\[36m│\x1b\[0m Команда «rm» запрещена\.\r?\n")
+    child.expect("❯")
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+
+
 _HP_IO = Path(__file__).resolve().parents[2] / "src" / "hashpass" / "runtime" / "usr" / "local" / "bin" / "hp-io"
 
 

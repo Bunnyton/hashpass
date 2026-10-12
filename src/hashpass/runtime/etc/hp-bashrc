@@ -163,9 +163,10 @@ if [ -n "${HP_PORT-}" ]; then
             if [ "$blocked" -eq 1 ]; then
                 # Shadow what actually RUNS: `sudo cat` executes sudo (which never sees shell
                 # functions), so the word to shadow is the segment's first token, not the base.
-                # `builtin printf` so shadowing `printf`/`echo` doesn't recurse.
+                # `builtin printf` so shadowing `printf`/`echo` doesn't recurse. The refusal is
+                # the system talking: a blank line and the cyan bar, like the host's replies.
                 local run="${toks[0]}"
-                eval "$run() { builtin printf '%s\\n' $(printf '%q' "$msg"); return 1; }"
+                eval "$run() { builtin printf '\\n\\033[36m│\\033[0m %s\\n' $(printf '%q' "$msg"); return 1; }"
                 __hp_shadow+=("$run")
             fi
         done <<< "$flat"
