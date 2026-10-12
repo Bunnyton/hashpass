@@ -1,28 +1,43 @@
-# inventory — кладовщик делает опись склада: ls в файл.
+# inventory — вывод команды в файл, на деле: заявка в техподдержку. Шаг 1 — `>` (список файлов
+# сайта в ticket.txt), шаг 2 — поддержка просит ещё имя пользователя: дописать `>>`.
+# Про `>>` бриф молчит: доза приходит, когда `>` затрёт заявку (hint cmd whoami has > missing >>).
 
 image inventory:1
 
-# data: data/warehouse сделан руками один раз (80 позиций) — правь файлы напрямую
-copy data/warehouse /home/student/warehouse
-run chown -R student:student /home/student/warehouse
+# data: data/site сделан руками (сорок пустых файлов-имён сайта) — правь напрямую; каталоги —
+# run mkdir ниже (git пустые не хранит)
+copy data/site /home/student/site
+run mkdir -p /home/student/site/css /home/student/site/js /home/student/site/img /home/student/site/uploads /home/student/site/vendor /home/student/site/cache
+run chown -R student:student /home/student/site
 
 hidden hp
 
 settings
   pager on
 
-say "Тебя взяли кладовщиком. Первый день, первое поручение."
+say "Сайт лежит, поддержка ждёт подробностей."
 read brief.md
 
 stage
-  say "Составь опись /home/student/warehouse в файле /home/student/inventory.txt"
-  solve ls /home/student/warehouse > /home/student/inventory.txt
-  variant ls -1 /home/student/warehouse > /home/student/inventory.txt
-  observe /home/student/inventory.txt
+  say "Сохрани список файлов /home/student/site в /home/student/ticket.txt — он уйдёт в заявку"
+  solve ls /home/student/site > /home/student/ticket.txt
+  variant ls -1 /home/student/site > /home/student/ticket.txt
+  observe /home/student/ticket.txt
   neutral cat less pwd
-  on pass say "Стрелка > перезаписывает файл, а >> дописывает. Добавь в опись ещё одну строку через >> и проверь."
+  on pass say "Сорок с лишним имён — и ни одной опечатки."
   hint tries 3 say "Список на экране есть? Отправь его не на экран, а в файл."
   hint tries 6 say "Перечитай в брифе, каким значком вывод отправляется в файл."
-  hint idle 240 say "Долгая пауза. cat inventory.txt — там список?"
+  hint idle 240 say "Долгая пауза. cat ticket.txt — там список?"
+
+stage
+  say "Поддержка спрашивает, под каким пользователем ты работаешь. Допиши ответ системы в конец ticket.txt"
+  solve whoami >> /home/student/ticket.txt
+  observe /home/student/ticket.txt
+  neutral cat less pwd
+  on pass say "> пишет с чистого листа, >> — в конец. Так, строка за строкой, растут логи любой системы."
+  hint cmd whoami has > missing >> say "А где список файлов? > каждый раз пишет файл с чистого листа. Дописывать в конец умеет его старший брат — >>. Восстанови список и допиши ответ."
+  hint tries 3 say "Загляни в ticket.txt: там и список, и имя?"
+  hint tries 6 say "Загугли: «bash дописать вывод команды в конец файла»."
+  hint idle 240 say "Долгая пауза. cat ticket.txt — что там сейчас?"
 
 exec finale
