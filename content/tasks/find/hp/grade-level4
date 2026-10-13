@@ -5,8 +5,18 @@
 # Исходник «find 3 (15)»: именно при помощи -name.
 case "$1" in *-name*|*-iname*) ;; *) exit 1 ;; esac
 norm() {
-  sed -e 's#^/home/student/##' -e 's#^\./search#search#' -e 's#^\.$#search#' -e 's#^\./#search/#' \
-      -e 's#/$##' | grep -v '^$' | sort -u
+  # Paths of the files themselves, however they are written and wherever find was run from:
+  # absolute or relative, with or without ./, from ~ or from ~/search. A `search/…` line means the
+  # run started in ~ -- then `.` and ./.bashrc are outside search and dropped; otherwise ./x is
+  # search/x. Only paths inside search count.
+  awk -v home=/home/student '
+    { l = $0; sub(/\/$/, "", l); if (index(l, home "/") == 1) l = substr(l, length(home) + 2)
+      n++; line[n] = l; if (l ~ /^(\.\/)?search(\/|$)/) fromhome = 1 }
+    END { for (i = 1; i <= n; i++) { l = line[i]
+            if (fromhome) sub(/^\.\//, "", l)
+            else if (l == ".") l = "search"
+            else if (l ~ /^\.\//) { sub(/^\.\//, "", l); l = "search/" l }
+            if (l ~ /^search(\/|$)/) print l } }' | sort -u
 }
 want=$(cd /home/student && find search -type d -name "level4*" | norm)
 got=$(printf '%s\n' "${HP_LAST_OUT:-}" | norm)
