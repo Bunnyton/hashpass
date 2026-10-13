@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -77,6 +78,30 @@ def _split_ref(ref: str) -> tuple[str, str]:
 
 
 _MAX_SUGGESTIONS = 3
+
+
+def _remove_tree(tree: Path) -> None:
+    """
+    Delete `tree`; when the user may not (files of another uid), empty it with `sudo rsync`.
+
+    Best effort: a tree that still cannot go stays as a `layer.old-*` leftover -- the live layer
+    is already in place, and the next root-owned unpack sweeps leftovers.
+    """
+    with contextlib.suppress(OSError):
+        shutil.rmtree(tree)
+    if not tree.exists():
+        return
+    empty = tree.parent / f".empty-{tree.name}"
+    try:
+        empty.mkdir(exist_ok=True)
+        subprocess.run(["sudo", "rsync", "-a", "--delete", str(empty) + "/", str(tree) + "/"],
+                       check=True, capture_output=True)
+        tree.rmdir()
+    except (subprocess.CalledProcessError, OSError):
+        pass
+    finally:
+        with contextlib.suppress(OSError):
+            empty.rmdir()
 
 
 def registry_key(url: str) -> str:
@@ -171,12 +196,20 @@ class ImageStore:
                 check=True,
             )
         else:
+            # The old layer may hold files of ANOTHER uid (the container's student is 1000, the
+            # host user may not be): a plain rmtree of it failed with «Permission denied …/layer/
+            # home» and the new layer never landed (find-2, 2026-10-13). Move it aside (a rename
+            # in our own directory always works), put the new one live, then remove the old one.
+            old = None
             if layer.exists():
-                shutil.rmtree(layer)
+                old = dest / f"layer.old-{uuid.uuid4().hex}"
+                layer.rename(old)
             # symlinks=True: an image layer routinely holds symlinks whose targets live in the
             # BASE image (a dpkg drop), so following them (the shutil default) trips on the
             # dangling absolute path and blows up unpack.  Keep them as-is.
             shutil.copytree(layer_dir, layer, symlinks=True)
+            if old is not None:
+                _remove_tree(old)
         meta = {"name": name, "version": version, "parents": list(parents),
                 "build_key": build_key}
         _write_json_atomic(dest / "meta.json", meta)
