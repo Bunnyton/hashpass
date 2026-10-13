@@ -1,0 +1,5 @@
+#!/bin/sh
+# Шаг 2: vim2.txt совпал с эталоном (обёрнуто всё) и в ~/.vimrc есть своя клавиша обычного режима
+# (nnoremap, nmap, noremap, map).
+cmp -s /home/student/vim2.txt "$(dirname "$0")/vim2.want" || exit 1
+grep -Eq '^[[:space:]]*:?n?(nore)?map[[:space:]]' /home/student/.vimrc 2>/dev/null

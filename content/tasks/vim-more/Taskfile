@@ -1,0 +1,49 @@
+# vim-more — замена и свои клавиши в vim (исходники it_bastion: vim/20_s «:%s, остановитесь на
+# wonderful» и vim/21_nnoremap «теперь все, и используйте nnoremap»). Шаг 1: в vim.txt обернуть
+# слова в print(data["…"]) с Adorable до Wonderful — :s с диапазоном. Шаг 2: в vim2.txt — все,
+# своей клавишей из ~/.vimrc (nnoremap). Приёмка — файл совпал с эталоном в hp/ (+ nnoremap в
+# ~/.vimrc на шаге 2). Редактировать можно только vim-ом: sed/awk/perl и т.п. закрыты (allow).
+# Чистые копии файлов — в /opt/vim-more (испортил и сохранил — cp оттуда, сказано в брифе).
+
+image vim-more:1
+
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y vim >/dev/null 2>&1
+# data: vim.txt/vim2.txt и эталоны hp/*.want — из списка слов исходника (vim/20_s/vim.txt),
+# сделаны однократным python-скриптом: шапка-задание, пустая строка, 100 слов
+copy data/home /home/student
+copy data/home /opt/vim-more
+run chown student:student /home/student/vim.txt /home/student/vim2.txt
+
+hidden hp
+
+settings
+  pager on
+
+say "vim умеет не только печатать. Он умеет работать за тебя."
+read brief.md
+
+stage
+  say "Открой vim.txt и сделай, что написано в первой строке. Одной командой"
+  solve cp /hp/vim.want /home/student/vim.txt
+  check exec subst
+  allow vim vi
+  neutral ls cat less cd pwd cp
+  on pass say "Диапазон, шаблон, замена — и сотня строк правится одной командой."
+  hint tries 5 say "Номера строк покажет :set nu. Диапазон пишут перед s: :3,10s/…/…/"
+  hint tries 10 say "В замене & — это всё найденное. А .* находит всю строку."
+
+stage
+  say "А теперь vim2.txt — все слова, но без :s. Заведи в ~/.vimrc свою клавишу и пройди ей по файлу"
+  solve:
+    cp /hp/vim2.want /home/student/vim2.txt
+    echo 'nnoremap <F2> Iprint(data["<Esc>A"])<Esc>j' > /home/student/.vimrc
+  check exec mapped
+  on enter read mapping.md
+  allow vim vi
+  neutral ls cat less cd pwd cp
+  on pass say "Своя клавиша в ~/.vimrc — навсегда. Так vim и подгоняют под себя."
+  hint tries 5 say "Клавиша должна обернуть строку и спуститься на следующую. Тогда её можно просто держать."
+  hint tries 10 say "I — вставить в начало строки, A — в конец, <Esc> — выйти из вставки, j — вниз."
+
+exec finale

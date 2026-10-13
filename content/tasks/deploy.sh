@@ -36,7 +36,7 @@ BLOCKS=(
     'Поиск: pipes streams grep-hunt find xargs'
     'Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
     'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit top'
-    'Редактор и текст: vim-intro fruit-store'
+    'Редактор и текст: vim-intro vim-more fruit-store'
     'Призы: star-wars'
     'Архив: first-steps showcase'
 )

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Шаг 1: vim.txt совпал с эталоном (обёрнуты строки с Adorable до Wonderful, остальное не тронуто).
+cmp -s /home/student/vim.txt "$(dirname "$0")/vim.want"
