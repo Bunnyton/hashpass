@@ -13,7 +13,6 @@ hidden hp
 settings
   pager on
 
-say "Ночью сервер ругался. Утром — разбор полётов."
 read brief.md
 
 stage

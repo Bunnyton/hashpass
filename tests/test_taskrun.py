@@ -518,3 +518,26 @@ def test_system_talk_carries_a_gutter_but_program_output_does_not(tmp_path):
     chunks.clear()
     perform_action(ExecAction("draw"), _CTX, render=r, runner=_FakeRunner("ART\n"), hp_dir=tmp_path)
     assert "".join(chunks) == "ART\n"
+
+
+@pytest.mark.tier1
+def test_readme_replays_the_theory_the_student_already_got():
+    # User (2026-10-13): «добавь команду readme, чтобы можно было вызвать теорию ещё раз». The
+    # brief, the doses of the steps reached so far and the dose a hint already gave -- but not a
+    # later step's dose, nor a hint that has not fired.
+    from hashpass.recipe.model import HintRule, OutputCond, ReadAction  # noqa: PLC0415
+    from hashpass.taskrun import theory_actions  # noqa: PLC0415
+    from hashpass.taskstore import StageMeta, TaskMeta  # noqa: PLC0415
+
+    def stage(on_enter: tuple = (), hints: tuple = ()) -> StageMeta:
+        return StageMeta(message="", neutral=(), check=None, on_enter=on_enter, on_pass=(),
+                         acceptance="command", hints=hints)
+
+    meta = TaskMeta(image_ref="t:1", intro=(SayAction("hi"), ReadAction("brief.md")),
+                    stages=(stage(hints=(HintRule(OutputCond("x"), SayAction("no")),
+                                         HintRule(OutputCond("y"), ReadAction("dose1.md")))),
+                            stage(on_enter=(ReadAction("step2.md"),)),
+                            stage(on_enter=(ReadAction("step3.md"),))))
+    got = theory_actions(meta, stage=1, fired=[{1}, set(), set()])
+    assert got == [ReadAction("brief.md"), ReadAction("dose1.md"), ReadAction("step2.md")]
+    assert theory_actions(meta, stage=None, fired=[set(), set(), set()])[-1] == ReadAction("step3.md")

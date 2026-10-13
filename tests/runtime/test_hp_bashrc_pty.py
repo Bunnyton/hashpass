@@ -397,3 +397,28 @@ def test_keys_typed_during_a_reply_do_not_land_inside_it():
     child.expect("END")
     t.join(5)
     assert "zzz" not in child.before
+
+
+@pytest.mark.tier1
+def test_readme_asks_for_the_theory_and_is_not_a_try(tmp_path):
+    # User (2026-10-13): «добавь команду readme, чтобы можно было вызвать теорию ещё раз». It asks
+    # the host for the theory, is never shipped as a student command (no try, no hint) and works
+    # even where only a few commands are allowed (ls-mv-cp).
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    bindir = _policy_shim(tmp_path, "cat;;;")                # allow: cat only
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+           "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
+           "HOME": str(tmp_path), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 100), cwd=str(tmp_path))
+    child.expect("❯")
+    child.sendline("readme")
+    child.expect("❯")
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+    reqs = _requests(log)
+    assert "readme" in reqs
+    assert not [r for r in reqs if r.startswith("cmd ")], reqs
+    assert "запрещена" not in child.before

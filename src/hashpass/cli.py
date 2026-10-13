@@ -848,6 +848,8 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
     try:
         if req.startswith("hello"):
             _render_intro(session, readme, io)
+        elif req.startswith("readme"):
+            session.replay_theory()
         elif req.startswith("cmd "):
             with contextlib.suppress(Exception):
                 _render_observe(session, *_parse_cmd_request(req), io, history=history)

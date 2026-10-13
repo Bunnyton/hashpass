@@ -32,7 +32,7 @@ from hashpass.recipe.model import (
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import load_bundle
-from hashpass.taskstore import StageMeta, StoredTask, load_task
+from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, load_task
 
 _ACCEPT_EXIT = 0
 
@@ -360,6 +360,23 @@ def _accepted_by_cmd(sm: StageMeta, command: str, rc: int | None) -> bool:
     return not (sm.accept_ok and rc is not None and rc != 0)
 
 
+def theory_actions(meta: TaskMeta, *, stage: int | None,
+                   fired: list[set[int]]) -> list[ReadAction]:
+    """
+    Collect the theory a student has been given so far, in order -- what `readme` replays.
+
+    The brief (`read` before the first step), each reached step's `on enter read` and every
+    `hint … read` that already fired; never a later step's dose. `stage` None = all done.
+    """
+    last = len(meta.stages) - 1 if stage is None else stage
+    out = [a for a in meta.intro if isinstance(a, ReadAction)]
+    for i, sm in enumerate(meta.stages[:last + 1]):
+        out += [a for a in sm.on_enter if isinstance(a, ReadAction)]
+        out += [h.action for j, h in enumerate(sm.hints)
+                if j in fired[i] and isinstance(h.action, ReadAction)]
+    return out
+
+
 class TaskSession:
     """One student's live task run: a /hp-free student container + per-session hidden /hp."""
 
@@ -442,6 +459,15 @@ class TaskSession:
     def fire_outro(self) -> list[str]:
         """Render the top-level `outro` actions (author closer, after the last stage passes)."""
         return self._perform_all(self.meta.outro, self._ctx("", 0, 0))
+
+    def replay_theory(self) -> None:
+        """`readme` in the console: show the theory given so far once more (paged, no typing)."""
+        acts = theory_actions(self.meta, stage=current_stage(self.progress), fired=self._fired)
+        if not acts:
+            self.render.render(_narrate("Теории у этого задания нет — всё сказано в цели."),
+                               mode="instant")
+            return
+        self._perform_all(acts, self._ctx("", 0, current_stage(self.progress) or 0))
 
     def read_text(self, text: str) -> None:
         """Render a Markdown STRING as paged, streamed narrative (the readme briefing)."""

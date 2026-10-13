@@ -162,7 +162,7 @@ if [ -n "${HP_PORT-}" ]; then
             fi
             if [ "$blocked" -ne 1 ] && [ ${#allow[@]} -gt 0 ]; then
                 local ok=0 a
-                for a in "${allow[@]}" "${neutral[@]}" cd exit; do
+                for a in "${allow[@]}" "${neutral[@]}" cd exit readme; do
                     [ "$a" = "$base" ] && ok=1 && break
                 done
                 [ "$ok" -eq 0 ] && blocked=1
@@ -183,6 +183,9 @@ if [ -n "${HP_PORT-}" ]; then
     # script(1) has written since the previous command, base64-encodes it, and ships
     # `cmd <cmd_b64> <output_b64> <typing_seconds>` to the host.  Cap the output at
     # 64 KiB to keep the socket message bounded.
+    # `readme`: show the task's theory once more (the brief and the doses given so far).
+    readme() { hp-io readme 2>/dev/null; }
+
     __hp_postexec() {
         # FIRST statement: $? is still the student's command status here (PROMPT_COMMAND runs
         # us before anything else). Shipped as `rc=<n>` so `accept cmd "…" ok` can insist on 0.
@@ -201,6 +204,9 @@ if [ -n "${HP_PORT-}" ]; then
             out=$(tail -c +$((__hp_off + 1)) "$log" 2>/dev/null | tail -c 65536 | base64 -w0)
         fi
         __hp_off=$size
+        # `readme` is the console's own command (the theory once more), not the student's work:
+        # never shipped, so it is no try and fires no hint.
+        case "${cmd#"${cmd%%[![:space:]]*}"}" in readme|"readme "*) return ;; esac
 
         local typing=""
         if [ -n "$__hp_prompt_t" ] && [ -n "$__hp_submit_t" ]; then
