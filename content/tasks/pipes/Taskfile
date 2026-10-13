@@ -1,6 +1,7 @@
 # pipes — конвейер: | отдаёт вывод одной команды другой, > кладёт вывод в файл.
 # Шаг 1 — два фильтра подряд (ERROR и postgres), одним словом их не поймать;
-# шаг 2 — тот же результат в файл. Приёмка — по результату (вывод, затем файл).
+# шаг 2 — отчёт только по web-серверам: третье звено (| grep web) и всё — в файл.
+# Приёмка — по результату (вывод, затем файл).
 
 image pipes:1
 
@@ -20,17 +21,18 @@ stage
   solve grep ERROR /home/student/server/app.log | grep postgres
   observe output
   neutral ls cat pwd cd
-  on pass say "Звеньев может быть больше двух: добавь третье — | grep web, и останутся ошибки postgres только на web-серверах."
+  on pass say "Звеньев в конвейере может быть сколько угодно: каждое следующее фильтрует то, что оставило предыдущее."
   hint tries 5 say "grep ERROR даёт шестьдесят строк, а нужны только про postgres. Что если отфильтровать уже отфильтрованное?"
   hint tries 10 say "Перечитай в брифе, что делает вертикальная черта."
 
 stage
-  say "Сохрани эти строки в /home/student/postgres-errors.txt — для отчёта"
-  solve grep ERROR /home/student/server/app.log | grep postgres > /home/student/postgres-errors.txt
+  say "Отчёт нужен только по web-серверам: сохрани их ошибки postgres в /home/student/postgres-errors.txt"
+  solve grep ERROR /home/student/server/app.log | grep postgres | grep web > /home/student/postgres-errors.txt
+  variant grep ERROR /home/student/server/app.log | grep postgres | grep web- > /home/student/postgres-errors.txt
   observe /home/student/postgres-errors.txt
   neutral ls cat pwd cd
-  on pass say "Восемьсот строк, два фильтра — и в отчёте только нужное. Так и работают с логами каждый день."
-  hint tries 5 say "Строки уже есть на экране. Как отправить их в файл, а не на экран?"
+  on pass say "Восемьсот строк, три фильтра — и в отчёте только нужное. Так и работают с логами каждый день."
+  hint tries 5 say "Сначала добейся нужных строк на экране — какое звено оставит только web-серверы? Потом — в файл."
   hint tries 10 say "В брифе есть значок, который кладёт вывод в файл."
 
 exec finale
