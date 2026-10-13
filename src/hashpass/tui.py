@@ -95,6 +95,7 @@ class TaskRow:
     hidden: bool = False            # locked to the student: block closed OR per-task hidden
     preview: bool = False           # locked for students, but this viewer (author/admin) may run it
     task_hidden: bool = False       # the task's own «скрыто» flag (staff toggle it with h)
+    error: str = ""                 # why the last download failed (shown next to «ошибка загрузки»)
 
     def status_label(self) -> str:
         """One-line status without Rich markup (used by tests / plain-text callers)."""
@@ -135,7 +136,8 @@ class TaskRow:
         elif self.state == "в очереди":
             down = "[cyan]◌ в очереди[/]"
         elif self.state == "ошибка":
-            down = "[red]✗ ошибка загрузки[/]"
+            why = f" — {escape(self.error)}" if self.error else ""
+            down = f"[red]✗ ошибка загрузки{why}[/]"
         else:
             down = "[dim]○ не загружено[/]"
         tail = f"   {local_dot}   {server_dot}   {down}"
@@ -321,16 +323,20 @@ class PoolTUI(App):
                 self._active, self._layers = row, {}
                 row.state = "грузится"
                 self._dirty = True
+            failed: BaseException | None = None
             try:
                 self._download_row(row)
-            except Exception:                              # noqa: BLE001
-                row.state = "ошибка"
+            except Exception as exc:                       # noqa: BLE001
+                row.state, failed = "ошибка", exc
             with self._dl_lock:
                 self._jobs.pop(row.ref, None)
                 self._active = None
-                self._notes.append(f"{row.ref}: загружено — Enter, чтобы запустить"
-                                   if row.state == "готово" else
-                                   f"{row.ref}: не удалось загрузить")
+                if row.state == "готово":
+                    self._notes.append(f"{row.ref}: загружено — Enter, чтобы запустить")
+                else:
+                    note = failure_note(row.ref, failed or RuntimeError(""))
+                    row.error = note.partition(" — ")[2]
+                    self._notes.append(note)
                 self._dirty = True
 
     def _on_layer(self, ref: str, done: int, total: int | None) -> None:
@@ -566,6 +572,18 @@ class PoolTUI(App):
                 Io(read=lambda _p: None, write=buf.append, clock=_now_iso))
         self._flash("\n".join(buf).strip() or "готово")
         self._reload_catalog()
+
+
+def failure_note(ref: str, exc: BaseException) -> str:
+    """Word the toast for a failed download: what failed and what to do, not a bare «не удалось»."""
+    text = str(exc)
+    if "password is required" in text or ("sudo" in text and "terminal is required" in text):
+        why = "нужен пароль sudo — перезапусти hashpass и введи его"
+    elif "подключиться к пулу" in text or "timed out" in text:
+        why = "пул недоступен — проверь сеть и нажми r"
+    else:
+        why = text.splitlines()[0][:120] if text else type(exc).__name__
+    return f"{ref}: не удалось загрузить — {why}"
 
 
 def run_tui(env: Home, url: str, user: str, token: str) -> int:

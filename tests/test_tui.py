@@ -354,3 +354,15 @@ def test_an_author_cannot_move_and_a_student_cannot_edit(tmp_path: Path) -> None
                 await pilot.press("q")
 
         asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_a_failed_download_says_why() -> None:
+    from hashpass.tui import failure_note  # noqa: PLC0415
+    note = failure_note("bunnyton/find-2:1",
+                        RuntimeError("sudo tar failed to extract x (exit 1): sudo: a password is required"))
+    assert "find-2" in note and "sudo" in note and "перезапусти" in note
+    assert "сеть" in failure_note("x:1", RuntimeError("не удалось подключиться к пулу …"))
+    row = TaskRow(ref="x:1", number=1, block="", available=True, digest="", state="ошибка",
+                  error="нужен пароль sudo")
+    assert "ошибка загрузки — нужен пароль sudo" in row.tree_label()
