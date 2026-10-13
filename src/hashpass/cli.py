@@ -245,6 +245,26 @@ def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | No
     return store.get(ref).layer
 
 
+def _base_intact(layer: Path) -> bool:
+    """
+    Tell whether the base's init is a real program.
+
+    An empty or cut-short `systemd` boots with «execv(/usr/lib/systemd/systemd…) failed: Exec
+    format error», like a wrong architecture. Only a definite break counts: no systemd directory
+    at all (not a systemd base) or a file the user may not read is taken as fine.
+    """
+    init_dir = layer / "usr" / "lib" / "systemd"
+    if not init_dir.is_dir():
+        return True
+    try:
+        with (init_dir / "systemd").open("rb") as f:
+            return f.read(4) == b"\x7fELF"
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+
+
 def _base_from_pool(store: ImageStore, pool: RemoteRegistry, ref: str, io: Io) -> Path | None:
     """
     Return the base layer via the pool; None means "fall back to a local build".
@@ -256,6 +276,11 @@ def _base_from_pool(store: ImageStore, pool: RemoteRegistry, ref: str, io: Io) -
     try:
         remote = pool.image_digest(ref)
         if remote is not None:
+            if store.exists(ref) and not _base_intact(store.get(ref).layer):
+                # The digest still matches, but the files are broken (a full disk during unpack):
+                # forget the digest so the refresh downloads the base again.
+                io.write("\x1b[33mбаза повреждена — скачиваю заново\x1b[0m\n")
+                store.set_pool_digest(ref, "", registry=getattr(pool, "base_url", None))
             if not store.exists(ref) or store.get(ref).pool_digest != remote:
                 pool.pull_many([ref], store, refresh=True)
             return store.get(ref).layer

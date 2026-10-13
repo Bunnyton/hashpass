@@ -4,6 +4,7 @@ import sys
 from collections.abc import Sequence
 
 from hashpass import cli, version
+from hashpass.emulation import ensure_x86_emulation
 from hashpass.sudo import ensure_sudo
 
 _NEEDS_SUDO = (None, "run", "pull")   # these unpack/run containers via `sudo …`
@@ -38,7 +39,9 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911
     """Route a parsed student sub-command (no sub-command → pool home: pull + list)."""
     command = args.command
     if command in _NEEDS_SUDO:   # ask for the password HERE, in the plain terminal, not under the TUI
-        ensure_sudo(lambda s: (sys.stdout.write(s), sys.stdout.flush()))
+        say = lambda s: (sys.stdout.write(s), sys.stdout.flush())  # noqa: E731
+        ensure_sudo(say)
+        ensure_x86_emulation(say)    # an ARM machine runs the x86_64 images through qemu
     if command is None:
         return cli.cmd_pool_home(env)
     if command == "register":

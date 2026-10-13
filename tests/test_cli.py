@@ -596,3 +596,36 @@ def test_parse_cmd_request_reads_the_working_directory():
     cwd = base64.b64encode(b"/home/student/search").decode()
     assert cli._parse_cmd_cwd(f"cmd {cmd} x 1.5 rc=0 cwd={cwd}") == "/home/student/search"  # noqa: SLF001
     assert cli._parse_cmd_cwd(f"cmd {cmd} x 1.5 rc=0") is None                              # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_a_broken_base_is_downloaded_again(tmp_path):
+    # «Exec format error» on boot also comes from a base whose systemd is empty or cut short (a full
+    # disk during unpack): the digest still matches, so nothing re-pulled it. Now it is checked.
+    store = ImageStore(tmp_path / "store")
+    src = tmp_path / "src" / "usr" / "lib" / "systemd"
+    src.mkdir(parents=True)
+    (src / "systemd").write_bytes(b"")                     # broken: not an ELF
+    store.save("bunnyton/debian", "trixie", tmp_path / "src", ())
+    store.set_pool_digest("bunnyton/debian:trixie", "d1", registry="http://pool")
+    pulls: list[list[str]] = []
+
+    class _Pool:
+        base_url = "http://pool"
+
+        def image_digest(self, _ref: str) -> str:
+            return "d1"
+
+        def pull_many(self, refs: list[str], st: ImageStore, **_k: object) -> None:
+            pulls.append(refs)
+            fixed = tmp_path / "fixed" / "usr" / "lib" / "systemd"
+            fixed.mkdir(parents=True, exist_ok=True)
+            (fixed / "systemd").write_bytes(b"\x7fELF....")
+            st.save("bunnyton/debian", "trixie", tmp_path / "fixed", ())
+            st.set_pool_digest("bunnyton/debian:trixie", "d1", registry="http://pool")
+
+    io = SimpleNamespace(write=lambda _s: None)
+    layer = cli._base_from_pool(store, _Pool(), "bunnyton/debian:trixie", io)  # noqa: SLF001
+    assert pulls == [["bunnyton/debian:trixie"]]
+    assert (layer / "usr/lib/systemd/systemd").read_bytes().startswith(b"\x7fELF")
+    assert cli._base_intact(layer) is True  # noqa: SLF001
