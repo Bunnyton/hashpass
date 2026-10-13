@@ -382,7 +382,7 @@ def test_render_observe_no_forced_phrase_completion_fires_outro(monkeypatch):
         session = SimpleNamespace(
             progress=object(),
             meta=SimpleNamespace(stages=[SimpleNamespace(message=f"goal {i}") for i in range(4)]),
-            observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
+            observe=lambda command, *, ts, output, rc=None, cwd=None: FeedResult(  # noqa: ARG005
                 advanced=True, stage=3, local_key=key),
             fire_outro=lambda: writes.append("<outro>"),
             enter=lambda: writes.append("<enter>"),
@@ -409,7 +409,7 @@ def test_completion_prints_a_small_solved_banner_right_after_the_finale(monkeypa
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
     session = SimpleNamespace(
         progress=object(), meta=SimpleNamespace(stages=[SimpleNamespace(message="goal")]),
-        observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
+        observe=lambda command, *, ts, output, rc=None, cwd=None: FeedResult(  # noqa: ARG005
             advanced=True, stage=0, local_key=""),
         fire_outro=lambda: writes.append("<outro>"), enter=lambda: writes.append("<enter>"))
     monkeypatch.setattr(cli, "current_stage", lambda _p: None)
@@ -427,7 +427,7 @@ def test_mid_task_pass_prints_no_solved_banner(monkeypatch):
     io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
     session = SimpleNamespace(
         progress=object(), meta=SimpleNamespace(stages=[SimpleNamespace(message=f"g{i}") for i in range(2)]),
-        observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
+        observe=lambda command, *, ts, output, rc=None, cwd=None: FeedResult(  # noqa: ARG005
             advanced=True, stage=0, local_key=""),
         fire_outro=lambda: writes.append("<outro>"), enter=lambda: writes.append("<enter>"),
         enter_stage=lambda: writes.append("<enter>"))
@@ -507,7 +507,7 @@ def test_render_observe_gives_the_theory_before_the_next_goal(monkeypatch):
     session = SimpleNamespace(
         progress=object(),
         meta=SimpleNamespace(stages=[SimpleNamespace(message=f"goal {i}") for i in range(3)]),
-        observe=lambda command, *, ts, output, rc=None: FeedResult(  # noqa: ARG005
+        observe=lambda command, *, ts, output, rc=None, cwd=None: FeedResult(  # noqa: ARG005
             advanced=True, stage=1, local_key=""),
         enter=lambda: writes.append("<enter>"),
         enter_stage=lambda: writes.append("<enter>"),
@@ -588,3 +588,11 @@ def test_console_pause_still_asks_when_not_skipped():
         assert pause() is False
         assert console.recv(16) == b"\x01"
         assert skipping() is False
+
+
+@pytest.mark.tier1
+def test_parse_cmd_request_reads_the_working_directory():
+    cmd = base64.b64encode(b"find .").decode()
+    cwd = base64.b64encode(b"/home/student/search").decode()
+    assert cli._parse_cmd_cwd(f"cmd {cmd} x 1.5 rc=0 cwd={cwd}") == "/home/student/search"  # noqa: SLF001
+    assert cli._parse_cmd_cwd(f"cmd {cmd} x 1.5 rc=0") is None                              # noqa: SLF001

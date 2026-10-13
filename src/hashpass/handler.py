@@ -21,6 +21,8 @@ class HandlerContext:
     tries: int
     last_out: str
     stage: int
+    cwd: str = ""            # where the student's command ran (the console sends it)
+    last_out_abs: str = ""   # last_out with its file paths made absolute (hashpass/paths.py)
 
 
 @dataclass(frozen=True)
@@ -88,6 +90,10 @@ def build_invocation(action: ExecAction, ctx: HandlerContext, *,
         "HP_STATE": _HP_STATE,
         "HP_ROOTFS": _HP_ROOTFS,
         "HP_STAGE": str(ctx.stage),
+        # The same output, every file path in it absolute: a check compares the files, not how
+        # the student wrote the path or where they stood (`find .` from ~/search == `find search`).
+        "HP_CWD": ctx.cwd,
+        "HP_LAST_OUT_ABS": (ctx.last_out_abs or ctx.last_out).replace("\x00", "")[:_MAX_ENV_OUT],
     }
     for key, val in hp_args.items():
         env[f"HP_ARG_{key}"] = val

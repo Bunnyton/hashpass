@@ -10,7 +10,7 @@ _GOAL = "Выставь файлу test1 права --x--x--x"
 
 
 def _session(state: dict, messages: list[str]) -> SimpleNamespace:
-    def observe(command, *, ts, output, rc=None) -> FeedResult:  # noqa: ARG001
+    def observe(command, *, ts, output, rc=None, cwd=None) -> FeedResult:  # noqa: ARG001
         state["stage"] += 1                       # the command passes the path stage
         return FeedResult(advanced=True, stage=state["stage"] - 1, local_key="")
 

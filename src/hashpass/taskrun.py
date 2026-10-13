@@ -6,7 +6,7 @@ import sys
 import textwrap
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +19,7 @@ from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore
 from hashpass.key import local_key
 from hashpass.markdown import render_markdown
+from hashpass.paths import absolutize
 from hashpass.play import capture_candidate
 from hashpass.progress import current_stage, mark_passed_local, new_progress
 from hashpass.recipe.model import (
@@ -32,6 +33,8 @@ from hashpass.recipe.model import (
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import NspawnRunner
 from hashpass.taskcode.bundle import load_bundle
+from hashpass.taskcode.derive import StageChecks
+from hashpass.taskcode.execute import OUTPUT_KEY
 from hashpass.taskstore import StageMeta, StoredTask, TaskMeta, load_task
 
 _ACCEPT_EXIT = 0
@@ -360,6 +363,23 @@ def _accepted_by_cmd(sm: StageMeta, command: str, rc: int | None) -> bool:
     return not (sm.accept_ok and rc is not None and rc != 0)
 
 
+def normalize_output_checks(checks: StageChecks, out: str, *, cwd: str, workdir: str,
+                            exists: Callable[[str], bool]) -> tuple[StageChecks, str]:
+    """
+    Make file paths absolute on BOTH sides of an `observe output` comparison.
+
+    The reference was derived from `workdir`; the student's command ran in `cwd` -- `find .` from
+    ~/search and `find search` from ~ print the same files differently. A stage without an output
+    check is returned as is.
+    """
+    want = checks.canonical.get(OUTPUT_KEY)
+    if want is None or want.text is None:
+        return checks, out
+    canonical = dict(checks.canonical)
+    canonical[OUTPUT_KEY] = replace(want, text=absolutize(want.text, cwd=workdir, exists=exists))
+    return replace(checks, canonical=canonical), absolutize(out, cwd=cwd, exists=exists)
+
+
 def theory_actions(meta: TaskMeta, *, stage: int | None,
                    fired: list[set[int]]) -> list[ReadAction]:
     """
@@ -400,6 +420,7 @@ class TaskSession:
         self._greeted = False
         self._said_bye = False
         self._last_progress_ts: str | None = None
+        self._cwd: str | None = None    # where the student's last command ran (console runtime >= 43)
         self.pause: Callable[[], bool | None] = _no_pause   # pager pause (True = skip the rest)
 
     def _record(self, command: str) -> None:
@@ -412,10 +433,19 @@ class TaskSession:
         with contextlib.suppress(OSError), (self.hp_dir / "history").open("a", encoding="utf-8") as f:
             f.write(line + "\n")
 
-    @staticmethod
-    def _ctx(command: str, tries: int, stage: int, last_out: str = "") -> HandlerContext:
-        """Build the HP_* handler context for one delegated action."""
-        return HandlerContext(student_cmd=command, tries=tries, last_out=last_out, stage=stage)
+    def _exists(self, path: str) -> bool:
+        """Whether `path` exists in the student's system (for reading paths in an output)."""
+        try:
+            return (Path(self.student.rootfs) / path.lstrip("/")).exists()
+        except (OSError, AttributeError, TypeError):
+            return False
+
+    def _ctx(self, command: str, tries: int, stage: int, last_out: str = "") -> HandlerContext:
+        """Build the HP_* handler context for one delegated action (with the output's paths made absolute)."""
+        cwd = self._cwd or self.meta.settings.workdir
+        absolute = absolutize(last_out, cwd=cwd, exists=self._exists) if last_out else ""
+        return HandlerContext(student_cmd=command, tries=tries, last_out=last_out, stage=stage,
+                              cwd=cwd, last_out_abs=absolute)
 
     def _perform_all(self, actions: tuple[Action, ...], ctx: HandlerContext) -> list[str]:
         """Render a list of delegated actions; collect the text each produced."""
@@ -489,8 +519,11 @@ class TaskSession:
         # Derived: FS observation and/or `observe output`. `out` is the student's CLEAN stdout
         # (extracted from the console's OSC-133 marks), so grade_stage compares it to the reference
         # by the derived `settings similarity` threshold -- strict at 100, fuzzy below.
-        cand = capture_candidate(self.student.rootfs, self.checks.stages[stage], out)
-        grade = grade_stage(self.checks.stages[stage], cand, task_id=self.task_id,
+        checks, out = normalize_output_checks(
+            self.checks.stages[stage], out, cwd=self._cwd or self.meta.settings.workdir,
+            workdir=self.meta.settings.workdir, exists=self._exists)
+        cand = capture_candidate(self.student.rootfs, checks, out)
+        grade = grade_stage(checks, cand, task_id=self.task_id,
                             stage=stage, student_id=self.student_id, nonce=self.nonce, ts=ts)
         return grade.accepted, grade.local_key
 
@@ -548,7 +581,7 @@ class TaskSession:
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
 
     def observe(self, command: str, *, ts: str, output: str = "",
-                rc: int | None = None) -> FeedResult:
+                rc: int | None = None, cwd: str | None = None) -> FeedResult:
         """
         React/grade/hint on a command the student ALREADY ran in the interactive console.
 
@@ -556,7 +589,9 @@ class TaskSession:
         command's captured stdout, streamed from the live console over the grade socket (empty when
         unavailable), so `output`-conditioned hints and output-based acceptance fire live too.
         `rc` is the command's exit status as the console reported it (None on an older runtime).
+        `cwd` is the directory it ran in: paths in its output are read against it.
         """
+        self._cwd = cwd
         self._record(command)
         stage = current_stage(self.progress)
         if stage is None:

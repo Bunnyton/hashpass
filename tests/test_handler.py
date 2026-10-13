@@ -123,3 +123,14 @@ def test_hp_last_out_bounded(work):
 def test_handler_result_stderr_defaults_empty():
     assert HandlerResult(stdout="x", exit_code=0).stderr == ""
     assert HandlerResult(stdout="x", exit_code=1, stderr="boom").stderr == "boom"
+
+
+@pytest.mark.tier1
+def test_handler_env_carries_the_cwd_and_absolute_output(tmp_path):
+    from hashpass.handler import HandlerContext, build_invocation  # noqa: PLC0415
+    from hashpass.recipe.model import ExecAction  # noqa: PLC0415
+    ctx = HandlerContext(student_cmd="find .", tries=1, last_out="./a", stage=0,
+                         cwd="/home/student/search", last_out_abs="/home/student/search/a")
+    _argv, env = build_invocation(ExecAction("true"), ctx, hp_work_host=tmp_path)
+    assert env["HP_CWD"] == "/home/student/search"
+    assert env["HP_LAST_OUT_ABS"] == "/home/student/search/a"

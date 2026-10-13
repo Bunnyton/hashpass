@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from hashpass.paths import absolutize
+
 TASK = Path(__file__).resolve().parents[2] / "content" / "tasks" / "find"
 
 # (expected, grade, run from: h = ~ / s = ~/search, find arguments). User, 2026-10-13: «это должно
@@ -29,6 +31,10 @@ CASES = [
     (False, "grade-or", "s", [".", "-type", "f", "-name", "level2*", "-o", "-name", "*3*"]),
     (True, "grade-nonempty", "h", [".", "-type", "f", "-not", "-empty"]),
     (False, "grade-nonempty", "s", [".", "-type", "f"]),
+    # deeper than search, paths going up (`..`): only readable with the command's directory
+    (True, "grade-level4", "d", ["..", "-type", "d", "-name", "level4*"]),
+    (True, "grade-nonempty", "d", ["..", "-type", "f", "-not", "-empty"]),
+    (False, "grade-nonempty", "d", [".", "-type", "f", "-not", "-empty"]),
 ]
 
 
@@ -48,9 +54,12 @@ def home(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.mark.tier1
 @pytest.mark.parametrize(("ok", "grade", "where", "args"), CASES)
 def test_find_grade(home: Path, ok: bool, grade: str, where: str, args: list[str]) -> None:  # noqa: FBT001
-    cwd = home if where == "h" else home / "search"
+    cwd = {"h": home, "s": home / "search", "d": next((home / "search").glob("level1_*"))}[where]
     argv = [a.replace("{H}", str(home)) for a in args]
     out = subprocess.run(["find", *argv], cwd=cwd, capture_output=True, text=True, check=False).stdout
+    # what the host hands a check: the output with its paths made absolute against the command's cwd
+    absolute = absolutize(out, cwd=str(cwd), exists=lambda p: Path(p).exists(), home=str(home))
     rc = subprocess.run(["sh", str(home.parent.parent / grade), "find -name " + " ".join(argv)],
-                        env={"PATH": "/usr/bin:/bin", "HP_LAST_OUT": out}, check=False).returncode
+                        env={"PATH": "/usr/bin:/bin", "HP_LAST_OUT": out, "HP_LAST_OUT_ABS": absolute},
+                        check=False).returncode
     assert (rc == 0) is ok, f"{grade} from {where}: find {' '.join(argv)}"

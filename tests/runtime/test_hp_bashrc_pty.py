@@ -455,3 +455,27 @@ def test_a_conveyor_can_be_refused_and_refusals_reach_the_screen(tmp_path):
     assert "hello" not in (tmp_path / "piped.txt").read_text(encoding="utf-8")
     assert "отпуске" not in (tmp_path / "counted.txt").read_text(encoding="utf-8")
     assert (tmp_path / "plain.txt").read_text(encoding="utf-8") == "hello\n"
+
+
+@pytest.mark.tier1
+def test_a_command_is_shipped_with_the_directory_it_ran_in(tmp_path):
+    # «и cd какие-нибудь тоже»: `cd sub && pwd` ran pwd in sub -- the host needs that directory to
+    # read relative paths in the output. The directory of the line's LAST simple command is sent.
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    (tmp_path / "sub").mkdir()
+    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+           "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 100), cwd=str(tmp_path))
+    child.expect("❯")
+    child.sendline("cd sub && pwd")
+    child.expect("❯")
+    child.sendline("pwd; cd ..")
+    child.expect("❯")
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+    cwds = [base64.b64decode(tok[4:]).decode() for line in log.read_text(encoding="utf-8").splitlines()
+            if line.startswith("cmd ") for tok in line.split() if tok.startswith("cwd=")]
+    assert cwds == [str(tmp_path / "sub"), str(tmp_path / "sub")]

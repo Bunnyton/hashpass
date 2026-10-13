@@ -541,3 +541,22 @@ def test_readme_replays_the_theory_the_student_already_got():
     got = theory_actions(meta, stage=1, fired=[{1}, set(), set()])
     assert got == [ReadAction("brief.md"), ReadAction("dose1.md"), ReadAction("step2.md")]
     assert theory_actions(meta, stage=None, fired=[set(), set(), set()])[-1] == ReadAction("step3.md")
+
+
+@pytest.mark.tier1
+def test_output_checks_compare_files_not_spellings():
+    # User (2026-10-13): «нормализация по выводу команды: файловый путь — в абсолютный, для анализа».
+    # `observe output` derived `find search` from ~ at build; a student's `find .` from ~/search
+    # prints the same files differently -- both sides become absolute before the comparison.
+    from hashpass.canon.capture import FileState  # noqa: PLC0415
+    from hashpass.taskcode.derive import StageChecks  # noqa: PLC0415
+    from hashpass.taskcode.execute import OUTPUT_KEY  # noqa: PLC0415
+    from hashpass.taskrun import normalize_output_checks  # noqa: PLC0415
+    fs = {"/home/student/search", "/home/student/search/a.txt"}
+    checks = StageChecks(canonical={OUTPUT_KEY: FileState("file", "search\nsearch/a.txt\n")})
+    got_checks, got_out = normalize_output_checks(checks, ".\n./a.txt\n", cwd="/home/student/search",
+                                                  workdir="/home/student", exists=fs.__contains__)
+    assert got_out == "/home/student/search\n/home/student/search/a.txt\n"
+    assert got_checks.canonical[OUTPUT_KEY].text == got_out
+    plain = StageChecks(canonical={"/home/student/f": FileState("file", "x")})
+    assert normalize_output_checks(plain, "out", cwd="/", workdir="/", exists=fs.__contains__) == (plain, "out")

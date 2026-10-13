@@ -678,6 +678,15 @@ def _parse_cmd_request(req: str) -> tuple[str, str, float | None, int | None]:
     return command, output, typing, rc
 
 
+def _parse_cmd_cwd(req: str) -> str | None:
+    """Read the `cwd=<b64>` token of a `cmd` request: where the command ran (runtime >= 43), or None."""
+    for tok in req.split(" ")[4:]:
+        if tok.startswith("cwd="):
+            with contextlib.suppress(ValueError):
+                return base64.b64decode(tok[4:]).decode("utf-8", "replace") or None
+    return None
+
+
 _PASTE_MIN_LEN = 12     # short commands are too noisy to judge as typed vs pasted
 _PASTE_MAX_CPS = 20.0   # >20 chars/sec of sustained typing is (almost) certainly a paste
 _HISTORY_CAP = 500      # keep a session's command history bounded
@@ -722,13 +731,14 @@ def _policy_reply(session: object) -> str:
 
 def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913, PLR0917
                     typing: float | None, rc: int | None, io: Io,
-                    *, history: list[dict[str, object]] | None = None) -> None:
+                    *, history: list[dict[str, object]] | None = None,
+                    cwd: str | None = None) -> None:
     """React/grade/hint on one console command (+ its captured output), then announce a pass."""
     ts = io.clock()
     if history is not None and len(history) < _HISTORY_CAP:
         history.append({"command": command[:1000], "ts": ts, "typing": typing,
                         "pasted": _looks_pasted(command, typing)})
-    res = session.observe(command, ts=ts, output=output, rc=rc)  # react + grade + hints + on_pass
+    res = session.observe(command, ts=ts, output=output, rc=rc, cwd=cwd)  # grade + hints + on_pass
     if not res.advanced:
         return
     if current_stage(session.progress) is None:
@@ -852,7 +862,8 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
             session.replay_theory()
         elif req.startswith("cmd "):
             with contextlib.suppress(Exception):
-                _render_observe(session, *_parse_cmd_request(req), io, history=history)
+                _render_observe(session, *_parse_cmd_request(req), io, history=history,
+                                cwd=_parse_cmd_cwd(req))
     finally:
         router.to(_sink_noop)
         session.pause = _no_pause

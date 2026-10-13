@@ -18,5 +18,5 @@ norm() {
             if (l ~ /^search(\/|$)/) print l } }' | sort -u
 }
 want=$(cd /home/student && find search -maxdepth 3 | norm)
-got=$(printf '%s\n' "${HP_LAST_OUT:-}" | norm)
+got=$(printf '%s\n' "${HP_LAST_OUT_ABS:-${HP_LAST_OUT:-}}" | norm)
 [ -n "$got" ] && [ "$got" = "$want" ]

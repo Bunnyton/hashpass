@@ -245,7 +245,11 @@ if [ -n "${HP_PORT-}" ]; then
 
         local cmd_b64
         cmd_b64=$(printf '%s' "$cmd" | base64 -w0)
-        hp-io "cmd $cmd_b64 $out $typing rc=$rc" 2>/dev/null
+        # cwd = the directory the line's LAST simple command ran in (`cd x && find .` -> x): the
+        # host reads relative paths in the output against it (hashpass/paths.py).
+        local cwd_b64
+        cwd_b64=$(printf '%s' "${__hp_cwd:-$PWD}" | base64 -w0)
+        hp-io "cmd $cmd_b64 $out $typing rc=$rc cwd=$cwd_b64" 2>/dev/null
 
         # After hp-io's reply streamed back through the terminal (and was captured by
         # script(1)), advance the offset past it so the NEXT command doesn't see the reply
@@ -270,7 +274,7 @@ if [ -n "${HP_PORT-}" ]; then
     # (every `hint tries N` fired a rung early) and a bogus first entry in the history.
     trap '[[ "$BASH_COMMAND" == __hp_* || "$BASH_COMMAND" == _hp_* ]] || \
           [[ "$BASH_COMMAND" == PROMPT_COMMAND* || "$BASH_COMMAND" == hp-io* ]] || \
-          __hp_cmd="$BASH_COMMAND"; __hp_preexec "$__hp_cmd"' DEBUG
+          { __hp_cmd="$BASH_COMMAND"; __hp_cwd="$PWD"; }; __hp_preexec "$__hp_cmd"' DEBUG
 
     # PROMPT_COMMAND runs BETWEEN commands: ship the last one to the host, blank the
     # buffer, arm the next timing sample, then render the prompt.
