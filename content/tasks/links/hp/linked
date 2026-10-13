@@ -1,0 +1,6 @@
+#!/bin/sh
+# Принято: file_link.txt и dir_link — символьные ссылки, ведущие на файл и на каталог.
+cd /home/student || exit 1
+[ -L file_link.txt ] && [ -L dir_link ] || exit 1
+[ "$(readlink -f file_link.txt)" = /home/student/dir/dir/dir/file.txt ] || exit 1
+[ "$(readlink -f dir_link)" = /home/student/dir/dir/dir ]

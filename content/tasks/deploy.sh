@@ -32,7 +32,7 @@ cd "$(dirname "$0")"
 # Формат строки: 'Название блока: каталог каталог …' (имена каталогов заданий здесь).
 BLOCKS=(
     'Знакомство: intro-hello first-commands cd-abs'
-    'Файлы и каталоги: cp-basics cp-more mv-basics rm-basics inventory ls-mv-cp'
+    'Файлы и каталоги: cp-basics cp-more mv-basics rm-basics inventory ls-mv-cp links'
     'Поиск: pipes grep-hunt find'
     'Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
     'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit'

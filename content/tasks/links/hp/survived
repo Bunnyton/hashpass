@@ -1,0 +1,6 @@
+#!/bin/sh
+# Принято: notes.txt удалён, а backup.txt на месте с теми же записями и прочитан последней командой.
+cd /home/student || exit 1
+[ ! -e notes.txt ] && [ -f backup.txt ] || exit 1
+case "${HP_LAST_OUT:-}" in *"напомнить"*|*"обсудить"*) exit 0 ;; esac
+exit 1
