@@ -1,0 +1,4 @@
+#!/bin/sh
+# Принято: все 140 файлов распакованы в archives (fileN_1.txt из zip и fileN_2.txt из tar).
+cd /home/student/archives || exit 1
+[ "$(ls file*_1.txt 2>/dev/null | wc -l)" -eq 70 ] && [ "$(ls file*_2.txt 2>/dev/null | wc -l)" -eq 70 ]

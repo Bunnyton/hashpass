@@ -1,0 +1,46 @@
+# xargs — конвейер, который выбирает столбцы и действует над каждой строкой (исходники
+# it_bastion: pipe/36_services, pipe/38_archives — одним заданием). Шаг 1: порты из
+# /etc/services — только номера (cut/awk, «загляни в царство конфигов»). Шаг 2: распаковать
+# 70 zip и 70 tar-архивов (с хитрым расширением .unknown_archive) как можно меньшим числом
+# команд — unzip и tar берут по одному архиву, поэтому нужен xargs (доза xargs.md при входе).
+
+image xargs:1
+
+run apt-get update >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y netbase >/dev/null
+# data: data/home/archives — 70 N.zip (fileN_1.txt) + 70 N.unknown_archive (tar.gz, fileN_2.txt),
+# сделаны скриптом исходника make_archives.sh (текст внутри — из исходника)
+copy data/home /home/student
+run chown -R student:student /home/student/archives
+
+hidden hp
+
+settings
+  pager on
+
+say "В Linux почти всё — текст. А текст режут на столбцы и строки."
+read brief.md
+
+stage
+  say "Выведи из /etc/services только порты — без названий служб и комментариев"
+  solve grep -v '^#' /etc/services | awk '{print $2}'
+  check exec ports
+  neutral ls cat pwd cd less head
+  on pass say "cut режет по символу-разделителю, awk — по пробелам любой длины. Для конфигов чаще берут awk."
+  hint tries 5 say "Строки с # — комментарии, их убери. А из остальных нужен только второй столбец."
+  hint tries 10 say "Загугли: «awk вывести второй столбец»."
+
+stage
+  say "В archives лежат 140 архивов. Распакуй их все — за как можно меньшее число команд"
+  solve:
+    cd /home/student/archives && ls | grep .zip | xargs -I {} unzip -o {} >/dev/null
+    cd /home/student/archives && ls | grep .unknown_archive | xargs -I {} tar -xzf {}
+  check exec unpacked
+  on enter read xargs.md
+  neutral ls cat pwd cd
+  on pass say "xargs превращает список строк в команды. Сотня архивов — две команды, а не сотня."
+  hint output "filename not matched" say "unzip берёт один архив, а остальные имена считает файлами внутри него. Каждому архиву — своя команда."
+  hint output "not in gzip format" say "Расширение .unknown_archive врёт. Спроси у системы, что это за файлы на самом деле: file."
+  hint tries 5 say "Что выдаст ls | grep .zip? А теперь — сделать с каждой строкой unzip."
+  hint tries 10 say "man xargs — ищи ключ -I."
+
+exec finale
