@@ -27,8 +27,7 @@ stage
   neutral pwd
   on pass say "Что-то нашлось. Загляни внутрь."
   hint output "No such file or directory" say "Такого каталога нет. Путь от корня точно набран без опечаток? Tab их не делает."
-  hint tries 4 say "Абсолютный путь начинается от самого корня — с той же косой черты, что в теории."
-  hint idle 240 say "Долгая пауза. Перечитай цель: дойти и сделать ls."
+  hint tries 5 say "Абсолютный путь начинается от самого корня — с той же косой черты, что в теории."
 
 stage
   solve:
@@ -40,8 +39,7 @@ stage
   on pass say "Ты же использовал Tab, да? ;)"
   on pass apply moved
   hint output "лучше будет использовать абсолютный путь" read relative.md
-  hint tries 3 say "А что написано в файле, который ты нашёл?"
-  hint idle 240 say "Долгая пауза. Перечитай look_here.txt."
+  hint tries 5 say "А что написано в файле, который ты нашёл?"
 
 stage
   say "Ты почти у цели: вернись в cd_to_me — в look_here.txt тебя кое-что ждёт :)"
@@ -49,7 +47,6 @@ stage
   check exec readback
   neutral ls pwd cd
   on pass say "Розыгрыш удался. Зато теперь cd в обе стороны — твоя стихия."
-  hint tries 3 say "Где лежит look_here.txt? Ты там уже был — дорога знакомая."
-  hint idle 240 say "Долгая пауза. Перечитай цель: вернуться и прочитать."
+  hint tries 5 say "Где лежит look_here.txt? Ты там уже был — дорога знакомая."
 
 exec finale

@@ -22,9 +22,8 @@ stage
   observe /home/student/store/sorted.txt
   neutral ls cat pwd less
   on pass say "sort -r перевернёт порядок, а sort -R перемешает строки — попробуй на экране."
-  hint tries 3 say "Отсортированное на экране? Отправь в файл."
-  hint tries 6 say "Загугли: «linux отсортировать строки файла» и «bash вывод команды в файл»."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+  hint tries 5 say "Отсортированное на экране? Отправь в файл."
+  hint tries 10 say "Загугли: «linux отсортировать строки файла» и «bash вывод команды в файл»."
 
 stage
   say "Убери повторы из sorted.txt — результат в /home/student/store/unique.txt"
@@ -32,9 +31,8 @@ stage
   observe /home/student/store/unique.txt
   neutral ls cat pwd less
   on pass say "uniq убирает повторы только у соседей — поэтому sort нужен раньше. А uniq -c ещё и посчитает каждый фрукт."
-  hint tries 3 say "Открой unique.txt: повторы ещё есть?"
-  hint tries 6 say "Загугли: «linux удалить повторяющиеся строки из файла». Название команды очень короткое."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+  hint tries 5 say "Открой unique.txt: повторы ещё есть?"
+  hint tries 10 say "Загугли: «linux удалить повторяющиеся строки из файла». Название команды очень короткое."
 
 stage
   say "Сколько строк в unique.txt? Только число — в /home/student/store/howmany.txt"
@@ -42,8 +40,7 @@ stage
   observe /home/student/store/howmany.txt
   neutral ls cat pwd less
   on pass say "wc -w считает слова, wc -c — байты. А конвейером все три шага — одна строка: sort sold.txt | uniq | wc -l."
-  hint tries 3 say "cat howmany.txt: там только число, без имени файла?"
-  hint tries 6 say "Загугли: «wc посчитать строки без имени файла» или «bash перенаправление ввода»."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+  hint tries 5 say "cat howmany.txt: там только число, без имени файла?"
+  hint tries 10 say "Загугли: «wc посчитать строки без имени файла» или «bash перенаправление ввода»."
 
 exec finale

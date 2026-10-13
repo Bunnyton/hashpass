@@ -25,7 +25,7 @@ stage
   check exec listed
   neutral pwd
   on pass say "Видишь всё это? Сейчас его не станет."
-  hint tries 3 say "Сначала переход, потом ls."
+  hint tries 5 say "Сначала переход, потом ls."
 
 stage
   say "Удали всё в текущей директории"
@@ -34,14 +34,13 @@ stage
   neutral ls pwd cd cat
   on pass say "Готово? Проверь."
   hint output "Is a directory" say "rm не трогает каталоги без спроса. Чтобы снести каталог со всем содержимым, нужен ключ -r (recursive); -f (force) не задаёт лишних вопросов."
-  hint tries 3 say "Каталогов много, а rm — одной командой. Вспомни звёздочку."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+  hint tries 5 say "Каталогов много, а rm — одной командой. Вспомни звёздочку."
 
 stage
   say "Сделай ls -a"
   accept cmd "ls -a" ok
   neutral pwd cd cat
-  hint tries 3 say "Тот же ls, только с ключом -a."
+  hint tries 5 say "Тот же ls, только с ключом -a."
 
 stage
   say "Крушить, ломать!"
@@ -50,7 +49,6 @@ stage
   block rm unless "\*" say "А где же звёздочка?"
   neutral ls pwd cd cat
   on pass say "Теперь пусто по-настоящему. rm не спрашивает и корзины у него нет — вот почему ls -a идёт первым."
-  hint tries 3 say "Что осталось после ls -a? Загляни в то, что похоже на записку."
-  hint idle 240 say "Долгая пауза. Перечитай вывод ls -a."
+  hint tries 5 say "Что осталось после ls -a? Загляни в то, что похоже на записку."
 
 exec finale

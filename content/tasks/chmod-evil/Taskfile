@@ -26,7 +26,7 @@ stage
   check exec perms test 111 student
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
-  hint tries 3 say "ls -l test — сравни свои тройки с целью."
+  hint tries 5 say "ls -l test — сравни свои тройки с целью."
 
 stage
   say "ls -l должен показать: ---x-w--wx student student ./test — буквами"
@@ -34,7 +34,7 @@ stage
   check exec perms test 123 student
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
-  hint tries 3 say "Буквами: какие биты добавить, какие забрать — у кого?"
+  hint tries 5 say "Буквами: какие биты добавить, какие забрать — у кого?"
 
 stage
   say "ls -l должен показать: -rw--w-r-x student student ./test — цифрами"
@@ -79,7 +79,7 @@ stage
   check exec perms test1 000 minimal
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
-  hint tries 3 say "Группа тоже должна совпасть. Какая команда меняет группу?"
+  hint tries 5 say "Группа тоже должна совпасть. Какая команда меняет группу?"
 
 stage
   say "ls -l должен показать: -rwx-w-r-x student student ./test2 — цифрами"

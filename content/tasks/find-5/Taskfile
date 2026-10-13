@@ -17,8 +17,7 @@ stage
   neutral ls cat pwd cd
   on pass say "Всё становится чуточку интереснее!))"
   hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
-  hint tries 3 say "Пустой ли файл — find проверять умеет. А как перевернуть условие?"
-  hint tries 6 say "man find — слова «empty» и «not»."
-  hint idle 240 say "Перечитай цель: файлы (не каталоги), и только непустые."
+  hint tries 5 say "Пустой ли файл — find проверять умеет. А как перевернуть условие?"
+  hint tries 10 say "man find — слова «empty» и «not»."
 
 exec finale

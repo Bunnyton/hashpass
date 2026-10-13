@@ -20,8 +20,7 @@ stage
   on pass say "А сколько файлов начинаются с level2 И содержат тройку одновременно?"
   hint output "syntax error near unexpected token" say "Это ругается bash: скобки он забрал себе. Экранируй их — \( и \)."
   hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
-  hint tries 3 say "В выводе есть каталоги? Или не хватает части файлов? Проверь, к чему относится -type."
-  hint tries 6 say "man find, раздел OPERATORS: -o и скобки."
-  hint idle 240 say "Перечитай цель: «или», а не «и». И только файлы."
+  hint tries 5 say "В выводе есть каталоги? Или не хватает части файлов? Проверь, к чему относится -type."
+  hint tries 10 say "man find, раздел OPERATORS: -o и скобки."
 
 exec finale

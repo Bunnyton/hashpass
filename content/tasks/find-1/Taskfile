@@ -26,8 +26,7 @@ stage
   on pass say "Это только начало..."
   hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
   hint output "unknown predicate" say "find не знает такого ключа — присмотрись к дефисам."
-  hint tries 3 say "Сравни свой вывод с тем, что нужно: лишние этажи или недостающие?"
-  hint tries 6 say "man find — ищи слово «depth»."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+  hint tries 5 say "Сравни свой вывод с тем, что нужно: лишние этажи или недостающие?"
+  hint tries 10 say "man find — ищи слово «depth»."
 
 exec finale

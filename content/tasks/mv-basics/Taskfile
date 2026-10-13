@@ -34,9 +34,8 @@ stage
   on pass say "dir опустел, всё здесь. Заметил? Ни у одного файла нет расширения — ни .txt, ни .doc. Странно…"
   hint output "No such file or directory" say "Чего mv не нашёл? Сверь имя с ls."
   hint cmd cp say "Это копия: в dir всё осталось. Нужен перенос."
-  hint tries 3 say "Где ты сейчас? pwd скажет. Как назвать «сюда» в пути — сказано в теории."
-  hint tries 6 say "Файлов много — вспомни звёздочку из уроков про cp."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+  hint tries 5 say "Где ты сейчас? pwd скажет. Как назвать «сюда» в пути — сказано в теории."
+  hint tries 10 say "Файлов много — вспомни звёздочку из уроков про cp."
 
 stage
   say "Теперь переименуй file5 в file2. Думай. Думай!"
@@ -46,7 +45,6 @@ stage
   neutral ls cat pwd cd
   on pass exec cat /home/student/file2
   hint cmd cp say "Теперь файлов два, а нужен один — с новым именем."
-  hint tries 3 say "Какая команда меняет у файла место? А имя — не часть ли его места?"
-  hint tries 6 say "man mv — первые строки DESCRIPTION."
-  hint idle 240 say "Долгая пауза. Думай. Думай!"
+  hint tries 5 say "Какая команда меняет у файла место? А имя — не часть ли его места?"
+  hint tries 10 say "man mv — первые строки DESCRIPTION."
 

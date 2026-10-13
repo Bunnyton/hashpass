@@ -28,16 +28,14 @@ stage
   hint output "dependency problems" say "dpkg ставит ровно этот файл и не достаёт зависимости из репозитория. Доделать умеет apt: sudo apt -f install (fix-broken) — или ставь сразу через apt: sudo apt install ./файл.deb."
   hint output "Unmet dependencies" say "apt отказался — и в последней строке сам написал, что попробовать. Прочитай её."
   hint output "Permission denied" say "Установщику не хватило прав. Как обычный пользователь одалживает права администратора на одну команду?"
-  hint tries 3 say "Файл скачался (ls)? Теперь установка из файла — тут поможет поиск."
-  hint tries 6 say "Загугли: «debian установить пакет из deb файла». Низкоуровневый установщик называется dpkg."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды — ответ обычно там."
+  hint tries 5 say "Файл скачался (ls)? Теперь установка из файла — тут поможет поиск."
+  hint tries 10 say "Загугли: «debian установить пакет из deb файла». Низкоуровневый установщик называется dpkg."
 
 stage
   say "А теперь запусти cmatrix — и выйди из него клавишей q"
   accept cmd "cmatrix" ok
   neutral ls cat pwd
   on pass say "cmatrix -r — цветной дождь. А cmatrix -h расскажет остальное. Выход всё так же q."
-  hint tries 4 say "Команда называется так же, как пакет."
-  hint idle 240 say "Матрица ждёт. Перечитай цель."
+  hint tries 5 say "Команда называется так же, как пакет."
 
 exec finale

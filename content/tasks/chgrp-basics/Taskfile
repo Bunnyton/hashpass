@@ -35,8 +35,7 @@ stage
   on pass say "id покажет все твои группы вместе с их номерами."
   hint output "Permission denied" say "Файл не твой и группа не твоя. Чью из двух поменять проще?"
   hint output "Operation not permitted" say "Сменить группу чужого файла может только root. А одолжить его права chgrp — можно."
-  hint tries 3 say "ls -l .secret/rock.txt — кто владелец, какая группа, что разрешено группе?"
-  hint tries 6 say "man chgrp — SYNOPSIS."
-  hint idle 240 say "Долгая пауза. Перечитай вывод ls -l."
+  hint tries 5 say "ls -l .secret/rock.txt — кто владелец, какая группа, что разрешено группе?"
+  hint tries 10 say "man chgrp — SYNOPSIS."
 
 exec finale

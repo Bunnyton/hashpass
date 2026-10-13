@@ -19,8 +19,7 @@ stage
   neutral ls cat pwd cd
   on pass say "Это только начало..."
   hint cmd find has -mindepth missing -type exec statham
-  hint tries 3 say "-maxdepth отрезает то, что глубже. А что отрежет то, что выше?"
-  hint tries 6 say "man find — рядом с maxdepth живёт его брат."
-  hint idle 240 say "Перечитай цель: ровно третий уровень и только файлы."
+  hint tries 5 say "-maxdepth отрезает то, что глубже. А что отрежет то, что выше?"
+  hint tries 10 say "man find — рядом с maxdepth живёт его брат."
 
 exec finale

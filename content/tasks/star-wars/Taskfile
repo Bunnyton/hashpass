@@ -19,6 +19,5 @@ stage
   accept cmd "telnet"
   neutral ls cat pwd
   on pass say "На telehack.com есть и другие игры — их список выдаёт help после входа."
-  hint idle 300 say "Застрял внутри? Выход описан в брифе."
 
 exec finale

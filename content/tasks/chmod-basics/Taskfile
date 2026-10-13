@@ -36,9 +36,8 @@ stage
   neutral ls cat pwd cd
   on pass say "Каталог открыт. Загляни внутрь — там кое-кто просит помощи."
   hint output "Permission denied" say "Каталог закрыт даже для тебя. Но владелец — ты, а права меняет владелец."
-  hint tries 3 say "ls -ld perm_dir — сравни с тем, что нужно: какая тройка не сошлась?"
-  hint tries 6 say "Каждая тройка — одна цифра: сумма r=4, w=2, x=1."
-  hint idle 240 say "Перечитай цель: rwx | r-- | --x."
+  hint tries 5 say "ls -ld perm_dir — сравни с тем, что нужно: какая тройка не сошлась?"
+  hint tries 10 say "Каждая тройка — одна цифра: сумма r=4, w=2, x=1."
 
 stage
   say "Сделай так, чтобы exec_me.sh запускался, но не мог запустить file.txt"
@@ -51,8 +50,7 @@ stage
   on pass read symbolic.md
   hint output "Permission denied" say "Запустить не дали. Чьи права у exec_me.sh — и какая тройка твоя?"
   hint output "Что-то не так" say "file.txt запустился — и права ему вернули на 777. Кто должен лишиться права на запуск?"
-  hint tries 4 say "Сначала прочитай exec_me.sh — он сам говорит, чего хочет."
-  hint tries 8 say "ls -l: у файлов три тройки. Ты — владелец; какая цифра отвечает за x владельца?"
-  hint idle 240 say "Долгая пауза. Запусти exec_me.sh и прочитай, что он ответит."
+  hint tries 5 say "Сначала прочитай exec_me.sh — он сам говорит, чего хочет."
+  hint tries 10 say "ls -l: у файлов три тройки. Ты — владелец; какая цифра отвечает за x владельца?"
 
 exec finale

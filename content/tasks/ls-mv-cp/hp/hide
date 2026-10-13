@@ -1,0 +1,11 @@
+#!/bin/sh
+# Каждый раз — новое место: фраза уходит в случайный файл subdir_1 … subdir_4 при входе в задание.
+# Выполняется в живой системе студента (apply).
+cd /home/student || exit 0
+q='«Терпение должны иметь мы, пока осядет муть и вода чистой станет»'
+for f in $(grep -rl 'Терпение должны' subdir_* 2>/dev/null); do sed -i '/Терпение должны/d' "$f"; done
+r=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')
+f=$(find subdir_1 subdir_2 subdir_3 subdir_4 -type f | awk -v r="$r" '{a[NR]=$0} END{print a[r % NR + 1]}')
+echo "$q" >> "$f"
+chown student:student "$f"
+exit 0

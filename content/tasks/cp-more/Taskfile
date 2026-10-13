@@ -25,8 +25,7 @@ stage
   hint output "omitting directory" say "cp пропустил каталоги: «omitting directory». Каталог с содержимым он копирует только с ключом рекурсии — -r (recursive)."
   hint cmd cp has -r say "Скопировалось — но куда именно? Загляни в dir2."
   hint cmd mv say "Переехало, а не скопировалось — dir1 должен остаться целым."
-  hint tries 3 say "Загляни в dir2: что там оказалось? Всё, что было в dir1, или только часть?"
-  hint tries 6 say "man cp — найди слово recursive. Или загугли: «cp скопировать каталог со всем содержимым»."
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+  hint tries 5 say "Загляни в dir2: что там оказалось? Всё, что было в dir1, или только часть?"
+  hint tries 10 say "man cp — найди слово recursive. Или загугли: «cp скопировать каталог со всем содержимым»."
 
 exec finale

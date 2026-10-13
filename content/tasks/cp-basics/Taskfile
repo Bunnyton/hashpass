@@ -29,9 +29,8 @@ stage
   on pass say "Оригинал остался на месте, копия живёт своей жизнью: правь одну — другая не заметит."
   hint output "No such file or directory" say "cp сказал, чего не нашёл. Прочитай — и проверь путь через ls."
   hint cmd mv say "Файл переехал, а не скопировался. Верни оригинал."
-  hint tries 3 say "Загляни в wait_file: что там? Что cp принимает первым, что вторым?"
-  hint tries 6 say "man cp — первые две строки SYNOPSIS."
-  hint idle 240 say "Долгая пауза. Перечитай цель: откуда — куда."
+  hint tries 5 say "Загляни в wait_file: что там? Что cp принимает первым, что вторым?"
+  hint tries 10 say "man cp — первые две строки SYNOPSIS."
 
 stage
   say "Сделай рядом с оригиналом ещё одну копию copy_me.txt — под именем copy_me.bak"
@@ -40,8 +39,7 @@ stage
   neutral ls cat pwd
   on pass say "Если бы copy_me.bak уже был, cp молча записал бы поверх. Ключ -i сначала спросит."
   hint cmd mv say "Переименовал оригинал, а не скопировал. Верни copy_me.txt на место."
-  hint tries 3 say "Второй аргумент cp — не обязательно каталог. Что будет, если там новое имя?"
-  hint idle 240 say "Долгая пауза. Перечитай цель и вывод последней команды."
+  hint tries 5 say "Второй аргумент cp — не обязательно каталог. Что будет, если там новое имя?"
 
 stage
   say "Теперь каталог: скопируй /home/student/project целиком в /home/student/project_backup"
@@ -52,9 +50,8 @@ stage
   on pass say "Три десятка файлов по девяти каталогам — одной командой. А cp -rv ещё и покажет каждый."
   hint output "omitting directory" say "Вот и проблема: каталог — не файл. Её решай сам — cp уже сказал, чего ему не хватило."
   hint cmd mv say "Каталог переехал, а не скопировался. Верни project на место."
-  hint tries 3 say "Загляни в project_backup: он вообще появился? Что внутри?"
-  hint tries 6 say "man cp — поищи слово directory (/ и слово, n — следующее)."
-  hint tries 10 say "Каталог cp обходит только с ключом рекурсии. Какая это буква — найдёшь в man."
-  hint idle 240 say "Долгая пауза. Перечитай вывод последней команды — ответ обычно там."
+  hint tries 5 say "Загляни в project_backup: он вообще появился? Что внутри?"
+  hint tries 10 say "man cp — поищи слово directory (/ и слово, n — следующее)."
+  hint tries 15 say "Каталог cp обходит только с ключом рекурсии. Какая это буква — найдёшь в man."
 
 exec finale
