@@ -1,0 +1,8 @@
+#!/bin/sh
+# Принято: число в todo-count.txt верное, и посчитал его сам grep -- последней командой был grep
+# без конвейера (awk/wc/sed отклонены ещё до запуска).
+case "$1" in *"|"*) exit 1 ;; esac
+case "$1" in grep\ *|sudo\ grep\ *) ;; *) exit 1 ;; esac
+want=$(grep -c TODO /home/student/legacy/notes.txt)
+got=$(tr -d ' \n' < /home/student/todo-count.txt 2>/dev/null)
+[ "$got" = "$want" ]

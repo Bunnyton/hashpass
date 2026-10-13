@@ -1,4 +1,6 @@
-# grep-hunt — junior разбирает legacy: собрать TODO в файл.
+# grep-hunt — junior разбирает legacy: шаг 1 — собрать строки с TODO в файл; шаг 2 — посчитать
+# их, и сделать это должен сам grep (-c): awk/wc/sed отклоняются, решение с конвейером не принимается.
+# Про -c бриф молчит: доза — подсказка «grep умеет считать сам», ключ студент находит в --help.
 
 image grep-hunt:1
 
@@ -22,9 +24,22 @@ stage
   variant grep -F TODO /home/student/legacy/notes.txt > /home/student/todos.txt
   observe /home/student/todos.txt
   neutral ls cat less pwd
-  on pass say "Бонус: grep -c TODO notes.txt — сколько их всего? А grep -v TODO — всё, кроме них."
+  on pass say "План работ готов. Осталось понять, насколько он большой."
   hint cmd grep missing TODO say "Ищем именно строки с TODO — проверь, что ты просишь у grep."
   hint tries 5 say "Строки видишь? Отправь их в файл, а не на экран."
   hint tries 10 say "Загугли: «grep вывод в файл» или «bash перенаправление вывода»."
+
+stage
+  say "Тимлид спрашивает, сколько всего TODO в notes.txt. Запиши число в /home/student/todo-count.txt"
+  solve grep -c TODO /home/student/legacy/notes.txt > /home/student/todo-count.txt
+  check exec count
+  neutral ls cat less pwd
+  block awk match "." say "Сегодня считает grep — awk отдыхает."
+  block wc match "." say "wc сегодня в отпуске вместе с тимлидом. Считать умеет и сам grep."
+  block sed match "." say "sed тут не поможет: считает grep."
+  block | match "." say "Без конвейера: grep умеет считать строки сам."
+  on pass say "grep -c считает совпавшие строки, а grep -v, наоборот, выводит всё, кроме них."
+  hint tries 5 say "Какой ключ grep выводит не сами строки, а их количество? Ответ — в grep --help."
+  hint tries 10 say "Загугли: «grep посчитать количество совпадений»."
 
 exec finale

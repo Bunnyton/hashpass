@@ -422,3 +422,36 @@ def test_readme_asks_for_the_theory_and_is_not_a_try(tmp_path):
     assert "readme" in reqs
     assert not [r for r in reqs if r.startswith("cmd ")], reqs
     assert "запрещена" not in child.before
+
+
+@pytest.mark.tier1
+def test_a_conveyor_can_be_refused_and_refusals_reach_the_screen(tmp_path):
+    # User (2026-10-13): «запрети использовать awk, pipe, чтобы решили при помощи grep». The console
+    # judges one simple command at a time, so `block | …` checks the whole typed line. And a
+    # refusal goes to stderr: inside `… | wc -l > f` it used to vanish into the file.
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    rules = ",".join([_rule("|", "match", ".", "Без конвейера: grep умеет сам"),
+                      _rule("wc", "match", ".", "wc в отпуске")])
+    bindir = _policy_shim(tmp_path, f";;;{rules}")
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+           "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
+           "HOME": str(tmp_path), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 120), cwd=str(tmp_path))
+    child.expect("❯")
+    child.sendline("echo hello | cat > piped.txt")
+    child.expect("Без конвейера: grep умеет сам")
+    child.expect("❯")
+    assert "Без конвейера" not in child.before              # said once per line, not per command
+    child.sendline("wc -l /etc/hostname > counted.txt")
+    child.expect("wc в отпуске")                          # on the screen, not in counted.txt
+    child.expect("❯")
+    child.sendline("echo hello > plain.txt")               # no conveyor -- runs
+    child.expect("❯")
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+    assert "hello" not in (tmp_path / "piped.txt").read_text(encoding="utf-8")
+    assert "отпуске" not in (tmp_path / "counted.txt").read_text(encoding="utf-8")
+    assert (tmp_path / "plain.txt").read_text(encoding="utf-8") == "hello\n"

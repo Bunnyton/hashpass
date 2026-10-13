@@ -129,6 +129,25 @@ if [ -n "${HP_PORT-}" ]; then
         # (skipping a leading `sudo`).
         local flat
         flat=$(printf '%s' "$cmd" | sed -E 's/(\|\||&&|;|\|)/\n/g')
+        # `block | …` judges the WHOLE typed line: the console sees one simple command at a time
+        # (BASH_COMMAND), so a conveyor shows only in the history line. A match refuses every
+        # command of that line («реши без конвейера» -- grep-hunt).
+        local conveyor_msg="" line rb0 rm0 rp0 rmsg0 b0
+        local hist
+        hist=$(HISTTIMEFORMAT='' builtin history 1 2>/dev/null)
+        line=$(printf '%s' "$hist" | sed -E 's/^ *[0-9]+\*? *//')
+        if [[ "${line//||/}" == *"|"* ]]; then
+            for b0 in "${blocks[@]}"; do
+                IFS=$'\x1f' read -r rb0 rm0 rp0 rmsg0 <<< "$(printf '%s' "$b0" | base64 -d 2>/dev/null)"
+                [ "$rb0" = "|" ] || continue
+                if [[ "$line" =~ $rp0 ]]; then
+                    [ "$rm0" = match ] && conveyor_msg="$rmsg0"
+                else
+                    [ "$rm0" = unless ] && conveyor_msg="$rmsg0"
+                fi
+                [ -n "$conveyor_msg" ] && break
+            done
+        fi
         local seg base
         local -a toks
         while IFS= read -r seg; do
@@ -141,6 +160,12 @@ if [ -n "${HP_PORT-}" ]; then
             fi
             [ -z "$base" ] && continue
             local blocked=0 msg="Команда «$base» запрещена."
+            if [ -n "$conveyor_msg" ]; then
+                blocked=1; msg="$conveyor_msg"
+                # every command of the line is refused, but the reply is said once per line
+                [ "${__hp_conveyor_said-}" = "$hist" ] && msg=""
+                __hp_conveyor_said=$hist
+            fi
             local d
             for d in "${deny[@]}"; do [ "$d" = "$base" ] && blocked=1 && break; done
             # `block` rules judge the RAW segment (as typed: `*` unexpanded, `sudo` kept): each is
@@ -173,7 +198,11 @@ if [ -n "${HP_PORT-}" ]; then
                 # `builtin printf` so shadowing `printf`/`echo` doesn't recurse. The refusal is
                 # the system talking: a blank line and the cyan bar, like the host's replies.
                 local run="${toks[0]}"
-                eval "$run() { builtin printf '\\n\\033[36m│\\033[0m %s\\n' $(printf '%q' "$msg"); return 1; }"
+                if [ -n "$msg" ]; then
+                    eval "$run() { builtin printf '\\n\\033[36m│\\033[0m %s\\n' $(printf '%q' "$msg") >&2; return 1; }"
+                else
+                    eval "$run() { return 1; }"
+                fi
                 __hp_shadow+=("$run")
             fi
         done <<< "$flat"
