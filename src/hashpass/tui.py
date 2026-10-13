@@ -16,6 +16,7 @@ happens on this module's own import, before any function is called.
 from __future__ import annotations
 
 import contextlib
+import json
 import sys
 import threading
 from dataclasses import dataclass
@@ -222,9 +223,30 @@ class PoolTUI(App):
         yield Static("", id="downloads")
         yield Footer()
 
+    # -- theme (Ctrl+P → Theme) is remembered across launches ---------------
+
+    def _theme_file(self):  # noqa: ANN202
+        return self.env.root / "tui.json"
+
+    def _load_theme(self) -> None:
+        with contextlib.suppress(OSError, ValueError, KeyError, TypeError):
+            name = json.loads(self._theme_file().read_text(encoding="utf-8"))["theme"]
+            if name in self.available_themes:
+                self.theme = name
+
+    def watch_theme(self, theme: str) -> None:
+        """Remember the theme the user picked (user, 2026-10-13: «сохрани выбор темы»)."""
+        if not getattr(self, "_theme_loaded", False):
+            return                                       # the startup default is not a choice
+        with contextlib.suppress(OSError):
+            self._theme_file().parent.mkdir(parents=True, exist_ok=True)
+            self._theme_file().write_text(json.dumps({"theme": theme}), encoding="utf-8")
+
     def on_mount(self) -> None:
         """Load the catalog once; welcome the student; no ticking timer, no background pulls."""
         self.title = f"hashpass · {self.user}"
+        self._load_theme()
+        self._theme_loaded = True
         with contextlib.suppress(Exception):               # offline / old pool -> a student's view
             self.role = str(self.client.me(token=self.token).get("role") or "student")
         self.refresh_bindings()

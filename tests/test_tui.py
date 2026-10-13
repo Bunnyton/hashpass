@@ -408,3 +408,30 @@ def test_staff_open_and_close_a_block_with_o(tmp_path: Path) -> None:
             await pilot.press("q")
 
     asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_the_chosen_theme_survives_a_restart(tmp_path: Path) -> None:
+    # User (2026-10-13): «сохрани выбор темы». Ctrl+P → Theme changes it; the next launch keeps it.
+    env = _env(tmp_path)
+
+    async def _choose() -> None:
+        app = PoolTUI(env, "http://pool.example", "t", "tok")
+        app.client = _StubClient([])
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            app.theme = "nord"
+            await pilot.pause()
+            await pilot.press("q")
+
+    async def _reopen() -> str:
+        app = PoolTUI(env, "http://pool.example", "t", "tok")
+        app.client = _StubClient([])
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            theme = app.theme
+            await pilot.press("q")
+        return theme
+
+    asyncio.run(_choose())
+    assert asyncio.run(_reopen()) == "nord"

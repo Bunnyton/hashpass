@@ -12,8 +12,8 @@ read intro.md
 
 stage
   say "Создай в домашнем каталоге файл hello.txt, внутри — слово hello"
-  solve echo hello > hello.txt
-  observe hello.txt
+  solve echo hello > /home/student/hello.txt
+  observe /home/student/hello.txt
   neutral ls cat pwd
   on pass say "echo умеет и дописывать: > пишет файл заново, а >> добавляет строку в конец."
   hint tries 5 say "Как отправить вывод команды в файл вместо экрана?"

@@ -40,6 +40,15 @@ def test_words_that_are_not_paths_stay_as_they_are() -> None:
 @pytest.mark.tier1
 def test_grep_r_prefix_and_several_paths_on_a_line() -> None:
     assert _abs("legacy/notes.txt:TODO: retry", HOME) == "/home/student/legacy/notes.txt:TODO: retry"
-    assert _abs("search  ./legacy\t.bashrc", HOME) == \
-        "/home/student/search  /home/student/legacy\t/home/student/.bashrc"
+    assert _abs("search  ./legacy\t.bashrc ~/.bashrc", HOME) == \
+        "search  /home/student/legacy\t.bashrc /home/student/.bashrc"
     assert _abs(".", "/home/student/search") == "/home/student/search"
+
+
+@pytest.mark.tier1
+def test_a_bare_word_is_never_taken_for_a_path() -> None:
+    # A log line saying «legacy» or «search» must read the same from any directory: only what
+    # looks like a path (a /, ., .., ~) is rewritten -- otherwise ~ and ~/search disagree on words.
+    line = "2026-09-13 web-02 search legacy ERROR"
+    assert _abs(line, HOME) == line
+    assert _abs(line, "/home/student/search") == line
