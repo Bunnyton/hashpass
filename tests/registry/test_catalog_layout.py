@@ -174,3 +174,23 @@ def test_hide_and_move_over_the_api(registry, tmp_path):
     assert [e.ref for e in Catalog(registry.catalog_path).entries()] == ["b/c:1", "b/a:1", "alice/x:1"]
     admin.set_task_hidden("b/a:1", hidden=True, token=admin_tok)
     assert Catalog(registry.catalog_path).find("b/a:1").hidden is True
+
+
+@pytest.mark.tier2
+def test_open_and_close_a_block_over_the_api(registry, tmp_path):
+    # User (2026-10-13): «блоки открывать для студентов тоже через hashpass». Same right as the
+    # web's block toggle: an author or the admin; a student may not.
+    _seed(registry, "b/a:1", tmp_path)
+    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("stud", "pw-correct", role="student")
+    alice = RemoteRegistry(registry.base_url)
+    tok = alice.login("alice", "pw-correct")
+    block = alice.catalog(token=tok)[0]
+    assert block["block_open"] is True
+    alice.set_block_open(str(block["block_id"]), open_=False, token=tok)
+    row = alice.catalog(token=tok)[0]
+    assert row["block_open"] is False and row["available"] is False
+    stud = RemoteRegistry(registry.base_url)
+    stok = stud.login("stud", "pw-correct")
+    with pytest.raises(RuntimeError):
+        stud.set_block_open(str(block["block_id"]), open_=True, token=stok)

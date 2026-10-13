@@ -366,3 +366,45 @@ def test_a_failed_download_says_why() -> None:
     row = TaskRow(ref="x:1", number=1, block="", available=True, digest="", state="ошибка",
                   error="нужен пароль sudo")
     assert "ошибка загрузки — нужен пароль sudo" in row.tree_label()
+
+
+@pytest.mark.tier1
+def test_staff_open_and_close_a_block_with_o(tmp_path: Path) -> None:
+    # «блоки открывать для студентов тоже через hashpass»: o (щ) on a block or any of its tasks.
+    entries = [{"number": 1, "ref": "a:1", "block_name": "Б", "block_id": "b1", "block_open": True,
+                "available": True, "digest": ""}]
+
+    class _BlockClient(_EditClient):
+        def set_block_open(self, block_id: str, *, open_: bool, token: str) -> dict:  # noqa: ARG002
+            self.calls.append(("block", block_id, open_))
+            for e in self._entries:
+                if e["block_id"] == block_id:
+                    e["block_open"] = open_
+                    e["available"] = open_
+                    e["preview"] = not open_
+            return {}
+
+    client = _BlockClient(entries, role="author")
+
+    async def _drive() -> None:
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "t", "tok")
+        app.client = client
+        app._autoload = False  # noqa: SLF001
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            _cursor_to(app, "a:1")
+            await pilot.pause()
+            await pilot.press("o")
+            await pilot.pause()
+            assert client.calls == [("block", "b1", False)]
+            from textual.widgets import Tree  # noqa: PLC0415
+            heads = [str(b.label) for b in app.query_one("#tasks", Tree).root.children]
+            assert any("закрыт" in h for h in heads), heads
+            _cursor_to(app, "a:1")
+            await pilot.pause()
+            await pilot.press("щ")
+            await pilot.pause()
+            assert client.calls[-1] == ("block", "b1", True)
+            await pilot.press("q")
+
+    asyncio.run(_drive())

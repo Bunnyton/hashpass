@@ -486,6 +486,10 @@ class RemoteRegistry:
         """Hide or show one catalog task (an author -- its own; an admin -- any)."""
         return self._catalog_edit("/catalog/hidden", {"ref": ref, "hidden": hidden}, token)
 
+    def set_block_open(self, block_id: str, *, open_: bool, token: str | None = None) -> dict[str, object]:
+        """Open or close a catalog block for students (an author or the admin)."""
+        return self._catalog_edit("/catalog/block", {"block_id": block_id, "open": open_}, token)
+
     def move_task(self, ref: str, step: int, *, token: str | None = None) -> bool:
         """Move a catalog task one place up (-1) or down (1), crossing blocks at the edge (admin)."""
         return bool(self._catalog_edit("/catalog/move", {"ref": ref, "step": step}, token).get("moved"))

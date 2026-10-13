@@ -96,6 +96,8 @@ class TaskRow:
     preview: bool = False           # locked for students, but this viewer (author/admin) may run it
     task_hidden: bool = False       # the task's own «скрыто» flag (staff toggle it with h)
     error: str = ""                 # why the last download failed (shown next to «ошибка загрузки»)
+    block_id: str = ""
+    block_open: bool = True         # the block is open to students (staff toggle it with o)
 
     def status_label(self) -> str:
         """One-line status without Rich markup (used by tests / plain-text callers)."""
@@ -167,6 +169,7 @@ class PoolTUI(App):
         # Catalog editing for staff (shown only to them, see check_action): the same rights as
         # the web catalog -- an author hides/shows its own tasks, the admin also moves them.
         Binding("h,H,р,Р", "toggle_hidden", "Скрыть/показать"),
+        Binding("o,O,щ,Щ", "toggle_block", "Открыть/закрыть блок"),
         # priority: the Tree would take Shift+arrows as plain cursor moves otherwise
         Binding("shift+up", "move(-1)", "Выше", priority=True),
         Binding("shift+down", "move(1)", "Ниже", priority=True),
@@ -279,7 +282,8 @@ class PoolTUI(App):
                 available=bool(e.get("available", True)), digest=digest,
                 server=server_status, local=ref in solved,
                 state="готово" if ready else "ожидает", hidden=hidden,
-                preview=bool(e.get("preview", False)), task_hidden=bool(e.get("hidden", False))))
+                preview=bool(e.get("preview", False)), task_hidden=bool(e.get("hidden", False)),
+                block_id=str(e.get("block_id", "")), block_open=bool(e.get("block_open", True))))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
@@ -443,7 +447,9 @@ class PoolTUI(App):
             visible_open = sum(1 for r in block_rows if r.state == "готово" and not r.hidden)
             head = (f"[b cyan]{block}[/]  "
                     f"[dim]{visible_open}/{len(block_rows)} готово[/]")
-            b_node = tree.root.add(head, expand=True)
+            if not block_rows[0].block_open:
+                head += "   [yellow]· закрыт для студентов[/]"
+            b_node = tree.root.add(head, expand=True, data=block_rows[0].block_id or None)
             for row in block_rows:
                 self._leaf_nodes[row.ref] = b_node.add_leaf(row.tree_label(), data=row)
         # focus the tree so arrow keys work immediately
@@ -453,7 +459,7 @@ class PoolTUI(App):
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Editing keys exist only for staff: hide/show for an author, moving too for the admin."""
-        if action == "toggle_hidden":
+        if action in ("toggle_hidden", "toggle_block"):
             return self.role in ("author", "admin")
         if action == "move":
             return self.role in ("author", "admin")   # an author is told why it is refused
@@ -484,6 +490,27 @@ class PoolTUI(App):
             return
         self._after_edit(row.ref)
         self._flash(f"{row.ref}: {'скрыто от студентов' if hide else 'показано студентам'}")
+
+    def action_toggle_block(self) -> None:
+        """o: open or close for students the block under the cursor (or the cursor task's block)."""
+        if self.role not in ("author", "admin"):
+            return
+        node = self.query_one("#tasks", Tree).cursor_node
+        row = node.data if node is not None and isinstance(node.data, TaskRow) else None
+        block_id = row.block_id if row is not None else (node.data if node is not None else None)
+        if not block_id:
+            return
+        current = next((r for r in self.rows if r.block_id == block_id), None)
+        if current is None:
+            return
+        open_ = not current.block_open
+        try:
+            self.client.set_block_open(str(block_id), open_=open_, token=self.token)
+        except Exception as exc:                           # noqa: BLE001
+            self.notify(str(exc), severity="error", timeout=5)
+            return
+        self._after_edit(current.ref)
+        self._flash(f"блок «{current.block}»: {'открыт' if open_ else 'закрыт'} для студентов")
 
     def action_move(self, step: int) -> None:
         """Shift+↑/↓: move a task one place; at a block's edge it crosses into the next block."""

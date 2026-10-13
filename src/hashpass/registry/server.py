@@ -226,6 +226,8 @@ class PoolServer:
                          methods=["PUT"])
         app.add_url_rule("/catalog/move", "catalog_move_api", self._route_catalog_move,
                          methods=["PUT"])
+        app.add_url_rule("/catalog/block", "catalog_block_api", self._route_catalog_block,
+                         methods=["PUT"])
         app.add_url_rule("/progress", "progress_api", self._route_progress, methods=["GET"])
         app.add_url_rule("/images", "images_api", self._route_images, methods=["GET"])
         # blobs (name may be multi-segment; last segment is the version)
@@ -609,6 +611,19 @@ class PoolServer:
         if not self.catalog().set_task_hidden(ref, hidden=data["hidden"]):
             return self._json(HTTPStatus.NOT_FOUND, {"error": f"в каталоге нет {ref}"})
         return self._json(HTTPStatus.OK, {"ref": ref, "hidden": data["hidden"]})
+
+    def _route_catalog_block(self) -> Response:
+        """Open or close a block for students (the hashpass TUI); an author or the admin, as on the web."""
+        _user, err = self._auth_role(_AUTHOR_ROLES)
+        if err is not None:
+            return self._empty(err)
+        data = request.get_json(silent=True) or {}
+        block_id = str(data.get("block_id", "")) if isinstance(data, dict) else ""
+        if not block_id or not isinstance(data.get("open"), bool):
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        if not self.catalog().set_block_open(block_id, open_=data["open"]):
+            return self._json(HTTPStatus.NOT_FOUND, {"error": "такого блока нет в каталоге"})
+        return self._json(HTTPStatus.OK, {"block_id": block_id, "open": data["open"]})
 
     def _route_catalog_move(self) -> Response:
         """Move one task a step up/down (the hashpass TUI); admin-only like web drag-and-drop."""

@@ -24,6 +24,7 @@ class CatalogEntry:
     block_name: str
     available: bool      # visible to students: block.open AND NOT task.hidden
     hidden: bool = False  # per-task teacher override (default: visible when the block is open)
+    block_open: bool = True  # the block's own state (staff toggle it: web ⋯ menu, hashpass `o`)
 
     @property
     def ref(self) -> str:
@@ -35,7 +36,7 @@ class CatalogEntry:
         return {"number": self.number, "name": self.name, "version": self.version,
                 "digest": self.digest, "ref": self.ref, "block_id": self.block_id,
                 "block_name": self.block_name, "available": self.available,
-                "hidden": self.hidden}
+                "hidden": self.hidden, "block_open": self.block_open}
 
 
 @dataclass(frozen=True)
@@ -118,7 +119,7 @@ class Catalog:
                 entries.append(CatalogEntry(
                     number, str(t.get("name", "")), str(t.get("version", "")),
                     str(t.get("digest", "")), str(b.get("id", "")), str(b.get("name", "")),
-                    available=is_open and not hidden, hidden=hidden))
+                    available=is_open and not hidden, hidden=hidden, block_open=is_open))
             result.append(Block(str(b.get("id", "")), str(b.get("name", "")), is_open, entries))
         return result
 
