@@ -41,6 +41,11 @@ def render_markdown(text: str) -> str:
         if in_code:
             out.append(_DIM + "    " + line + _RESET)
             continue
+        # A 4-space (or tab) indented line after a blank line is a code block, as in every brief:
+        # it is shown as typed -- `-iname "abc*"` lost its stars to italics (find, 2026-10-13).
+        if re.match(r"^(?: {4}|\t)", line) and (not out or out[-1] == "" or out[-1].startswith(_DIM)):
+            out.append(_DIM + line + _RESET)
+            continue
         heading = re.match(r"^(#{1,6})\s+(.*)$", line)
         if heading:
             level = len(heading.group(1))

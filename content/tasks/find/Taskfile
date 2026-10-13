@@ -1,0 +1,77 @@
+# find — всё про find одним заданием (исходники docs/Задания «find (13)» … «find 5 (17)»; были
+# find-1 … find-5). Одно дерево search (порт исходного gentree: имена levelN_* хранят глубину),
+# пять шагов по нарастающей: глубина не больше 3 (cd запрещён) → ровно 3-й уровень, только файлы
+# (-name запрещён; без -type f — Стэйтем) → каталоги 4-го уровня именно через -name → «или» (-o,
+# доза or.md при входе) → непустые файлы. Приёмка каждого шага — множество путей из вывода
+# совпадает с эталонным find (порядок любой).
+
+image find:1
+
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py gentree data/search --levels 6 --dirs 2 --files 5 --ratio 0.5 --prefix level --seed 13
+copy data/search /home/student/search
+run chown -R student:student /home/student/search
+
+hidden hp
+
+settings
+  pager on
+
+say "find — швейцарский нож поиска. Ключей — вагон."
+read brief.md
+
+stage
+  say "Найди в директории search все файлы и директории, которые находятся не глубже 3-го уровня вложенности"
+  solve find /home/student/search -maxdepth 3
+  check exec grade-depth
+  block cd match "^cd" say "Куда собрался??? Придётся тебе остаться здесь!"
+  neutral ls cat pwd
+  on pass say "Это только начало..."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
+  hint output "unknown predicate" say "find не знает такого ключа — присмотрись к дефисам."
+  hint tries 5 say "Сравни свой вывод с тем, что нужно: лишние этажи или недостающие?"
+  hint tries 10 say "man find — ищи слово «depth»."
+
+stage
+  say "Найди все файлы, которые находятся на 3-м уровне вложенности в search"
+  solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
+  check exec grade-level3
+  block find match "-i?name" say "Нельзя использовать -name — уровень нужно найти, а не угадать по имени."
+  neutral ls cat pwd cd
+  on pass say "Глубину можно зажать с двух сторон: -mindepth снизу, -maxdepth сверху."
+  hint cmd find has -mindepth missing -type exec statham
+  hint tries 5 say "-maxdepth отрезает то, что глубже. А что отрежет то, что выше?"
+  hint tries 10 say "man find — рядом с maxdepth живёт его брат."
+
+stage
+  say "Найди все директории 4-го уровня — при помощи -name"
+  solve find /home/student/search -type d -name "level4*"
+  check exec grade-level4
+  neutral ls cat pwd cd
+  on pass say "Имя может хранить больше, чем название. Здесь оно хранило глубину."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
+  hint tries 5 say "Посмотри внимательно на имена каталогов: что в них меняется от этажа к этажу?"
+  hint tries 10 say "Каталоги, а не файлы: у find есть ключ, который отсеивает по типу."
+
+stage
+  say "Найди все файлы, которые начинаются с level2 или содержат в названии «3»"
+  solve find /home/student/search -type f \( -name "level2*" -o -name "*3*" \)
+  check exec grade-or
+  on enter read or.md
+  neutral ls cat pwd cd
+  on pass say "А сколько файлов начинаются с level2 И содержат тройку одновременно?"
+  hint output "syntax error near unexpected token" say "Это ругается bash: скобки он забрал себе. Экранируй их — \( и \)."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
+  hint tries 5 say "В выводе есть каталоги? Или не хватает части файлов? Проверь, к чему относится -type."
+  hint tries 10 say "man find, раздел OPERATORS: -o и скобки."
+
+stage
+  say "Найди все непустые файлы в search"
+  solve find /home/student/search -type f -not -empty
+  check exec grade-nonempty
+  neutral ls cat pwd cd
+  on pass say "Глубина, тип, имя, «или», пустота — и это лишь малая часть критериев find."
+  hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
+  hint tries 5 say "Пустой ли файл — find проверять умеет. А как перевернуть условие?"
+  hint tries 10 say "man find — слова «empty» и «not»."
+
+exec finale

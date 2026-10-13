@@ -33,7 +33,7 @@ cd "$(dirname "$0")"
 BLOCKS=(
     'Знакомство: intro-hello first-commands cd-abs'
     'Файлы и каталоги: cp-basics cp-more mv-basics rm-basics inventory ls-mv-cp'
-    'Поиск: pipes grep-hunt find-1 find-2 find-3 find-4 find-5'
+    'Поиск: pipes grep-hunt find'
     'Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
     'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit'
     'Редактор и текст: vim-intro fruit-store'
