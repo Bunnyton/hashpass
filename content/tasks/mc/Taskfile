@@ -1,0 +1,35 @@
+# mc — Midnight Commander (исходник it_bastion: base_commands/50_mc «найдите в случайных текстовых
+# файлах пароль; вам теперь доступен midnight commander»). Пароль от Wi-Fi каждый раз новый и в
+# новом случайном файле notes/ (on enter apply hide; ожидаемое — в /var/lib/hp-mc/pass, только
+# root). Из команд доступен только mc: найти (поиск по содержимому) и записать ответ в
+# ~/answer.txt его редактором. После находки where называет файл.
+
+image mc:1
+
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y mc >/dev/null 2>&1
+# data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/notes --seed 50 --depth 4 --dirs 14 --files 45 --kind notes --lines 15-40
+# data: пароля в данных нет — его прячет hp/hide при входе
+copy data /home/student
+run chown -R student:student /home/student/notes
+
+hidden hp
+
+settings
+  pager on
+
+say "Сорок пять файлов заметок, и где-то среди них — пароль от Wi-Fi."
+read brief.md
+
+stage
+  say "Найди в notes пароль от Wi-Fi и запиши его в ~/answer.txt. Из команд у тебя только mc"
+  solve cat /var/lib/hp-mc/pass > /home/student/answer.txt
+  on enter apply hide
+  check exec answered
+  allow mc
+  neutral ls cd pwd
+  on pass exec where
+  hint tries 5 say "Открывать файлы по одному долго. mc умеет искать по содержимому: Alt+? — поле Content."
+  hint tries 10 say "Новый файл — Shift+F4 или mcedit answer.txt в строке внизу mc; сохранить — F2."
+
+exec finale
