@@ -37,6 +37,7 @@ BLOCKS=(
     'Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
     'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit top'
     'Редактор и текст: vim-intro vim-more fruit-store'
+    'Скрипты: my-command'
     'Призы: star-wars'
     'Архив: first-steps showcase'
 )

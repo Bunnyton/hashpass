@@ -1,0 +1,42 @@
+# my-command — своя команда (исходник it_bastion: scripts/48_run_counter «напишите и установите
+# собственную команду, которая выводит количество запусков всего и после перезагрузки; для
+# перезагрузки — restart.sh»). Лесенка: шаг 1 — команда counter печатает, сколько раз её
+# запускали; шаг 2 — два числа: после перезагрузки и всего. «Перезагрузка» — команда restart
+# (очищает /tmp и /dev/shm, как настоящий reboot). Проверка сама запускает counter от student на
+# копии системы (hp/run-counter): шаг 2 — двенадцать запусков со случайными перезагрузками.
+
+image my-command:1
+
+# data: data/bin/restart — руками
+copy data/bin /usr/local/bin
+
+hidden hp
+
+settings
+  pager on
+
+say "Команды в Linux — это просто файлы. Значит, можно написать свою."
+read brief.md
+
+stage
+  say "Сделай команду counter: из любого каталога она печатает, в который раз её запустили — 1, 2, 3…"
+  solve:
+    printf '#!/bin/sh\nn=$(cat ~/.counter 2>/dev/null || echo 0)\nn=$((n + 1))\necho $n > ~/.counter\necho $n\n' | sudo tee /usr/local/bin/counter >/dev/null
+    sudo chmod +x /usr/local/bin/counter
+  check exec count
+  on pass say "Теперь counter — такая же команда, как ls. Только твоя."
+  hint tries 5 say "Число надо где-то хранить между запусками. Где хранятся данные, которые не должны пропадать?"
+  hint tries 10 say "Прочитай число из файла, прибавь 1, запиши обратно, напечатай. И проверь: echo $PATH — лежит ли скрипт в одном из этих каталогов?"
+  hint tries 15 say "Загугли: «bash прочитать число из файла и увеличить»."
+
+stage
+  say "Пусть counter печатает два числа через пробел: сколько раз её запускали после перезагрузки и сколько всего. Перезагрузка — команда restart"
+  solve:
+    printf '#!/bin/sh\nn=$(cat ~/.counter 2>/dev/null || echo 0)\nn=$((n + 1))\necho $n > ~/.counter\nb=$(cat /tmp/counter 2>/dev/null || echo 0)\nb=$((b + 1))\necho $b > /tmp/counter\necho $b $n\n' | sudo tee /usr/local/bin/counter >/dev/null
+  check exec reboot
+  on enter read reboot.md
+  on pass say "Что хранить в /tmp, а что в домашнем каталоге — первый вопрос любой программы, которая что-то запоминает."
+  hint tries 5 say "Запусти counter, потом restart, потом снова counter. Какое число должно было сброситься?"
+  hint tries 10 say "Одному числу нужно место, которое перезагрузка очищает, другому — которое она не трогает."
+
+exec finale

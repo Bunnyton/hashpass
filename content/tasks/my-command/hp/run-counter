@@ -1,0 +1,6 @@
+#!/bin/sh
+# Запустить counter студента так, как его запустил бы он сам: от student, из чужого каталога,
+# PATH — системный плюс ~/bin и ~/.local/bin. Зависший скрипт не вешает проверку (timeout).
+runuser -u student -- env -i HOME=/home/student LANG=C.UTF-8 \
+  PATH=/usr/local/bin:/usr/bin:/bin:/home/student/bin:/home/student/.local/bin \
+  sh -c 'cd /tmp && timeout 5 counter' 2>/dev/null | tr -s ' \t' ' ' | sed 's/^ //; s/ $//'
