@@ -31,7 +31,7 @@ cd "$(dirname "$0")"
 # push-ей раскладка целиком отправляется `hashengine catalog layout` (только администратор).
 # Формат строки: 'Название блока: каталог каталог …' (имена каталогов заданий здесь).
 BLOCKS=(
-    'Знакомство: intro-hello first-commands cd-abs'
+    'Знакомство: intro-hello first-commands cd-abs root-tour'
     'Файлы и каталоги: cp-basics cp-more mv-basics rm-basics inventory ls-mv-cp'
     'Поиск: pipes grep-hunt find'
     'Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
