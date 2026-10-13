@@ -1,0 +1,3 @@
+#!/bin/sh
+# Шаг 2: cache-warmer (держит память) остановлен — отметку пишет его ExecStopPost.
+[ -e /var/lib/hp-top/cache-warmer.dead ]
