@@ -34,7 +34,7 @@ from hashpass.key import global_key
 from hashpass.registry.approved import ApprovedStore
 from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
-from hashpass.registry.catalog import Catalog
+from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.passwords import (
     LOGIN_RE,
@@ -74,6 +74,8 @@ _AUTHOR_ROLES = ("author", "admin")
 _MAX_COMMENT = 500
 _MAX_REASON = 500                # a rejection reason, shown to the author
 _REJECTED_BLOCK = "rejected"     # the virtual block of rejected tasks (author + admin)
+_STUDENT_FIELDS = frozenset(("number", "name", "version", "digest", "ref", "block_id",
+                             "block_name", "available", "hidden", "block_open"))
 _MAX_ATTACH = 8 * 1024 * 1024   # per-file attachment cap (8 MiB)
 _MAX_HISTORY = 500              # command-history entries kept per submission
 _MAX_CMD = 1000                 # per-command length kept
@@ -215,20 +217,37 @@ class PoolServer:
             return "current"
         if not entry.approved_digest:
             return None
-        if entry.approved_digest == entry.digest:
+        if self._current_is_approved(entry):
             return "current"
-        return "copy" if self.approved().task_digest(ref) == entry.approved_digest else None
+        return "copy" if self._copy_is_approved(entry) else None
+
+    def _image_digest(self, ref: str) -> str:
+        try:
+            return self.store.get(ref).digest or ""
+        except KeyError:
+            return ""
+
+    def _current_is_approved(self, entry: CatalogEntry) -> bool:
+        """Tell whether the version on the pool is the approved one: task AND image (review 2026-10-14)."""
+        return (bool(entry.approved_digest) and entry.approved_digest == entry.digest
+                and (not entry.approved_image or entry.approved_image == self._image_digest(entry.ref)))
+
+    def _copy_is_approved(self, entry: CatalogEntry) -> bool:
+        approved = self.approved()
+        return (approved.task_digest(entry.ref) == entry.approved_digest
+                and (not entry.approved_image or approved.digest(entry.ref) == entry.approved_image))
 
     def _keep_approved(self, ref: str) -> None:
         """Copy the approved version aside before a push overwrites it (students keep it)."""
         entry = self.catalog().find(ref)
-        if (entry is None or not entry.approved_digest or entry.approved_digest != entry.digest
-                or not self.store.exists(ref)
-                or self.approved().task_digest(ref) == entry.approved_digest):
+        if (entry is None or not self.store.exists(ref) or not self._current_is_approved(entry)
+                or self._copy_is_approved(entry)):
             return
         img = self.store.get(ref)
-        self.approved().take(ref, img, img.layer.parent / "task", self.store,
-                             task_digest=entry.approved_digest)
+        image = self.approved().take(ref, img, img.layer.parent / "task", self.store,
+                                     task_digest=entry.approved_digest)
+        if not entry.approved_image:                     # a legacy entry learns its approved image
+            self.catalog().set_approved_image(ref, image)
 
     def _delete_task(self, ref: str) -> None:
         """Remove a task from the pool entirely: image, task/, approved copy, sources, files, entry."""
@@ -242,9 +261,42 @@ class PoolServer:
             shutil.rmtree(self.store.dir(name, version), ignore_errors=True)
 
     def _purge_rejected(self) -> None:
-        """Delete tasks rejected a week ago (spec: «хранятся неделю, потом удаляются»)."""
-        for ref in self.catalog().purge_rejected(time.time()):
+        """
+        Settle rejections a week old: a never-approved task is deleted, an approved one goes back.
+
+        Spec: «хранятся неделю, потом удаляются»; review 2026-10-14: a rejected UPDATE of a course
+        task must not take the task away from students -- the task returns to its approved version.
+        """
+        now = time.time()
+        for ref in self.catalog().expired_rejected(now):
+            self._restore_approved(ref)
+        for ref in self.catalog().purge_rejected(now):
             self._delete_task(ref)
+
+    def _restore_approved(self, ref: str) -> None:
+        """Put the approved copy back as the task's current version (image + task/)."""
+        entry = self.catalog().find(ref)
+        if entry is None:
+            return
+        approved = self.approved()
+        image = entry.approved_image or self._image_digest(ref)
+        if not self._current_is_approved(entry) and self._copy_is_approved(entry):
+            name, _, version = ref.partition(":")
+            blob, copy_task = approved.blob(ref), approved.task_dir(ref)
+            if blob is not None:
+                incoming = Path(self.store.root) / ".incoming"
+                incoming.mkdir(parents=True, exist_ok=True)
+                tmp = incoming / f"{uuid.uuid4().hex}.tmp"
+                shutil.copyfile(blob, tmp)
+                image = approved.digest(ref) or image
+                self.store.publish_blob(name, version, tmp, parents=approved.parents(ref), digest=image)
+                tmp.unlink(missing_ok=True)
+            if copy_task is not None:
+                task_dir = self.store.get(ref).layer.parent / "task"
+                shutil.rmtree(task_dir, ignore_errors=True)
+                shutil.copytree(copy_task, task_dir, symlinks=True)
+            approved.remove(ref)
+        self.catalog().restore_approved(ref, image)
 
     def _auto_approved(self, name: str) -> bool:
         """Whether a push of `name` approves itself: the pool's switch or its author's flag."""
@@ -256,6 +308,22 @@ class PoolServer:
 
     def attachments(self) -> AttachmentStore:
         return AttachmentStore(self.attachments_path or (Path(self.store.root) / "attachments"))
+
+    def _sources_ready(self, ref: str) -> bool:
+        """
+        Whether `ref` has a source tree -- unpacking an attached source.tar.gz if needed.
+
+        Tasks pushed before sources were kept as files (the whole course on prod, 2026-10-14) have
+        only the archive attachment; the first look turns it into files.
+        """
+        src = self.sources()
+        if src.listing(ref):
+            return True
+        try:
+            src.put_archive(ref, self.attachments().read_file(ref, "source.tar.gz"))
+        except (ValueError, OSError, tarfile.TarError):
+            return False
+        return bool(src.listing(ref))
 
     def sources(self) -> SourceStore:
         """Open the store of task sources as files (authors/admins read, the namespace owner writes)."""
@@ -642,8 +710,9 @@ class PoolServer:
         for e in self.catalog().entries():
             mine = admin or e.owner == user
             if not staff:
-                if e.available:
-                    rows.append(e.as_dict() | {"digest": e.approved_digest})
+                if e.available:                           # moderation details are not theirs
+                    row = {k: v for k, v in e.as_dict().items() if k in _STUDENT_FIELDS}
+                    rows.append(row | {"digest": e.approved_digest})
                 continue
             if e.state == "rejected" and mine:
                 rejected.append(e.as_dict() | {"preview": True, "rejected": True,
@@ -663,7 +732,7 @@ class PoolServer:
         if err is not None:
             return self._empty(err)
         ref = str((request.get_json(silent=True) or {}).get("ref", ""))
-        if self.catalog().approve(ref) is None:
+        if self.catalog().approve(ref, image=self._image_digest(ref)) is None:
             return self._not_found(ref)
         self.approved().remove(ref)                       # the current version IS the approved one
         return self._json(HTTPStatus.OK, {"ref": ref, "state": "approved"})
@@ -875,7 +944,13 @@ class PoolServer:
             if err is not None:
                 return err
             self._keep_approved(ref)                 # students keep the approved version
-            return self._receive_image(name, version)
+            resp = self._receive_image(name, version)
+            if resp.status_code == HTTPStatus.CREATED and self.catalog().find(ref) is not None:
+                if self._auto_approved(name):
+                    self.catalog().approve(ref, image=self._image_digest(ref))
+                else:
+                    self.catalog().mark_pending(ref)  # a new image is a new version too
+            return resp
         return self._serve_image_for(name, ref)
 
     def _serve_image_for(self, name: str, ref: str) -> Response:
@@ -1022,6 +1097,7 @@ class PoolServer:
             return self._empty(HTTPStatus.BAD_REQUEST)
         if request.args.get("publish", "") == "1":
             self.catalog().add_task(ref, task_digest(task_dir), auto=self._auto_approved(name),
+                                    image=self._image_digest(ref),
                                     block_name=request.args.get("block") or None)
         return self._empty(HTTPStatus.CREATED)
 
@@ -1096,7 +1172,7 @@ class PoolServer:
             return self._empty(HTTPStatus.NOT_FOUND)
         return Response(blob, status=HTTPStatus.OK, mimetype="application/octet-stream")
 
-    def _route_source(self, tail: str) -> Response:  # noqa: PLR0911
+    def _route_source(self, tail: str) -> Response:
         """
         Serve a task's sources as files.
 
@@ -1120,9 +1196,15 @@ class PoolServer:
             except (ValueError, OSError, tarfile.TarError):
                 return self._empty(HTTPStatus.BAD_REQUEST)
             return self._empty(HTTPStatus.CREATED)
+        return self._source_get(ref)
+
+    def _source_get(self, ref: str) -> Response:
+        """GET a task's sources: listing, one file (`?path=`) or the archive (`?archive=1`)."""
         _user, err = self._auth_role(_AUTHOR_ROLES)
         if err is not None:
             return self._empty(err)
+        if not self._sources_ready(ref):
+            return self._not_found(ref)               # an old pool push: the viewer shows the Taskfile
         src = self.sources()
         try:
             if "path" in request.args:
@@ -1186,7 +1268,7 @@ class PoolServer:
             return self._empty(HTTPStatus.NOT_FOUND)
         entry = self.catalog().find(ref)
         row = {**row, "hidden": entry.hidden if entry else False,
-               "sources": self.sources().listing(ref),
+               "sources": self.sources().listing(ref) if self._sources_ready(ref) else [],
                **({"state": entry.state, "reason": entry.reason,
                    "pending_update": entry.as_dict()["pending_update"]} if entry else {})}
         return self._html(render_image_card(row))

@@ -75,10 +75,10 @@ class SourceViewer(Screen):
             path = str(f["path"])
             parent = nodes.get(path.rsplit("/", 1)[0] if "/" in path else "", tree.root)
             label = path.rsplit("/", 1)[-1]
-            if f.get("dir"):
-                nodes[path] = parent.add(f"{label}/", data=path, expand=True)
+            if f.get("dir"):                          # Text: a `[` in a name is not markup
+                nodes[path] = parent.add(Text(f"{label}/"), data=path, expand=True)
             else:
-                parent.add_leaf(label, data=path)
+                parent.add_leaf(Text(label), data=path)
         tree.root.expand()
         with Horizontal():
             yield tree

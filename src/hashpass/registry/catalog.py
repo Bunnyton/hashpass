@@ -37,6 +37,7 @@ class CatalogEntry:
     approved_digest: str = ""     # the version students get ("" = never approved)
     reason: str = ""              # why it was rejected (optional)
     rejected_at: float = 0.0      # when (unix), for the weekly purge
+    approved_image: str = ""      # blob digest of the approved image ("" = legacy: the current one)
 
     @property
     def owner(self) -> str:
@@ -153,7 +154,7 @@ class Catalog:
                     str(t.get("digest", "")), str(b.get("id", "")), str(b.get("name", "")),
                     available=bool(approved) and is_open and not hidden, hidden=hidden,
                     block_open=is_open, state=state, approved_digest=approved, reason=reason,
-                    rejected_at=rejected_at))
+                    rejected_at=rejected_at, approved_image=str(t.get("approved_image") or "")))
             result.append(Block(str(b.get("id", "")), str(b.get("name", "")), is_open, entries))
         return result
 
@@ -207,7 +208,8 @@ class Catalog:
         return False
 
     def add_task(self, ref: str, digest: str, *, block_id: str | None = None,  # noqa: PLR0913
-                 block_name: str | None = None, hidden: bool = True, auto: bool = False) -> None:
+                 block_name: str | None = None, hidden: bool = True, auto: bool = False,
+                 image: str = "") -> None:
         """
         Publish a task into a block -- HIDDEN by default, so its author can test it first.
 
@@ -237,6 +239,7 @@ class Catalog:
         record.update({"state": "approved" if auto else "pending", "reason": "", "rejected_at": 0.0})
         if auto:
             record["approved_digest"] = digest
+            record["approved_image"] = image
         if home is not None:
             same = block_id is None and block_name in (None, home.get("name"))
             if same or block_id == home.get("id"):
@@ -263,11 +266,32 @@ class Catalog:
                     return t
         return None
 
-    def approve(self, ref: str) -> str | None:
-        """Approve the current version (students get it now); return its digest, None if no such task."""
+    def approve(self, ref: str, image: str = "") -> str | None:
+        """Approve the current version -- its task and its `image` blob; return the task digest."""
         t = self._update(ref, lambda t: t.update({"state": "approved", "reason": "", "rejected_at": 0.0,
-                                                  "approved_digest": str(t.get("digest", ""))}))
+                                                  "approved_digest": str(t.get("digest", "")),
+                                                  "approved_image": image}))
         return None if t is None else str(t["approved_digest"])
+
+    def mark_pending(self, ref: str) -> bool:
+        """Send a task back to approval: a new image alone is a new version too (students keep theirs)."""
+        return self._update(ref, lambda t: t.update({"state": "pending", "reason": "",
+                                                     "rejected_at": 0.0})) is not None
+
+    def set_approved_image(self, ref: str, image: str) -> None:
+        """Pin which image blob is the approved one (a legacy entry learns it on its first copy)."""
+        self._update(ref, lambda t: t.update({"approved_image": image}))
+
+    def restore_approved(self, ref: str, image: str) -> None:
+        """Back to the approved version after a rejected update expired: approved, its digests."""
+        self._update(ref, lambda t: t.update({"state": "approved", "reason": "", "rejected_at": 0.0,
+                                              "digest": str(t.get("approved_digest", "")),
+                                              "approved_image": image}))
+
+    def expired_rejected(self, now: float, ttl: float = REJECT_TTL) -> list[str]:
+        """Rejected at least `ttl` ago but with an approved version: to roll back, not to delete."""
+        return [e.ref for e in self.entries()
+                if e.state == "rejected" and now - e.rejected_at >= ttl and e.approved_digest]
 
     def reject(self, ref: str, reason: str, *, now: float) -> bool:
         """Reject the current version (students keep an approved one, if any); False if no such task."""
@@ -275,8 +299,14 @@ class Catalog:
                                                      "rejected_at": now})) is not None
 
     def purge_rejected(self, now: float, ttl: float = REJECT_TTL) -> list[str]:
-        """Drop tasks rejected at least `ttl` ago (re-pushed ones are pending again); return their refs."""
-        gone = [e.ref for e in self.entries() if e.state == "rejected" and now - e.rejected_at >= ttl]
+        """
+        Drop never-approved tasks rejected at least `ttl` ago; return their refs.
+
+        A task with an approved version is not dropped -- its rejected UPDATE is (see
+        `expired_rejected` / `restore_approved`): students keep the course task.
+        """
+        gone = [e.ref for e in self.entries()
+                if e.state == "rejected" and now - e.rejected_at >= ttl and not e.approved_digest]
         for ref in gone:
             self.remove_task(ref)
         return gone

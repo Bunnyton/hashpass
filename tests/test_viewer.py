@@ -94,3 +94,22 @@ def test_a_student_cannot_open_the_viewer(tmp_path: Path):
             await pilot.press("q")
 
     asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_file_names_are_not_markup():
+    from textual.app import App  # noqa: PLC0415
+    from textual.widgets import Tree  # noqa: PLC0415
+    files = [{"path": "[red]x", "size": 1, "dir": False}]
+
+    class _Host(App):
+        def on_mount(self) -> None:
+            self.push_screen(SourceViewer("bob/lab:1", files, lambda _p: b"x"))
+
+    async def _drive() -> None:
+        async with _Host().run_test() as pilot:
+            await pilot.pause()
+            tree = pilot.app.screen.query_one("#src-tree", Tree)
+            assert [str(n.label) for n in tree.root.children] == ["[red]x"]
+
+    asyncio.run(_drive())

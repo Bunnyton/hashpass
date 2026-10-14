@@ -119,3 +119,24 @@ def test_source_routes_store_files_and_serve_the_archive(registry, tmp_path):
     with pytest.raises(urllib.error.HTTPError) as exc:
         alice.source_file("bob/lab:1", "../../../etc/passwd")
     assert exc.value.code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.tier2
+def test_a_task_pushed_before_source_files_lists_its_attached_archive(registry, tmp_path):
+    """Review 2026-10-14: the whole course on prod has only source.tar.gz attached -- show it."""
+    from hashpass.imagestore.store import ImageStore  # noqa: PLC0415
+    from hashpass.registry.creds import CredentialCache  # noqa: PLC0415
+    from hashpass.registry.remote import RemoteRegistry  # noqa: PLC0415
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    (seed / "f").write_text("x", encoding="utf-8")
+    ImageStore(registry.store.root).save("bob/old", "1", seed, ())
+    ImageStore(registry.store.root).save("bob/none", "1", seed, ())
+    registry.users.add("bob", "pw-correct", role="author")
+    bob = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / "bob.json"))
+    bob.login("bob", "pw-correct")
+    bob.push_attachment("bob/old", "1", "source.tar.gz", cli.pack_task_source(_task(tmp_path)))
+    assert [f["path"] for f in bob.source_listing("bob/old:1")] == ["Taskfile", "data", "hp", "hp/check"]
+    with pytest.raises(urllib.error.HTTPError) as exc:                       # nothing at all: 404
+        bob.source_listing("bob/none:1")
+    assert exc.value.code == HTTPStatus.NOT_FOUND

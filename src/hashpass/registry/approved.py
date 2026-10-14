@@ -74,6 +74,13 @@ class ApprovedStore:
         except (OSError, ValueError, KeyError):
             return None
 
+    def parents(self, ref: str) -> tuple[str, ...]:
+        """Return the copy's image parents (its `from` chain), () if unknown."""
+        try:
+            return tuple(json.loads((self._dir(ref) / _META).read_text(encoding="utf-8"))["parents"])
+        except (OSError, ValueError, KeyError):
+            return ()
+
     def blob(self, ref: str) -> Path | None:
         """Return the approved copy's image blob, or None."""
         p = self._dir(ref) / _BLOB

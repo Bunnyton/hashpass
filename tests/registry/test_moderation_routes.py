@@ -142,3 +142,57 @@ def test_rejected_tasks_are_purged_after_a_week(registry, tmp_path):
     assert pool.catalog("root") == []                                 # the next look purges it
     assert not registry.store.exists("bob/old:1")
     assert REJECT_TTL == 7 * 24 * 3600
+
+
+def _push_image_only(pool: _Pool, name: str, marker: str) -> None:
+    """`hashengine push ref` without --task: a new image, the same task/."""
+    local = ImageStore(pool.tmp / f"loc-img-{marker}")
+    src = pool.tmp / f"src-img-{marker}"
+    src.mkdir(exist_ok=True)
+    (src / "f").write_text(marker, encoding="utf-8")
+    local.save(name, "1", src, ())
+    RemoteRegistry(pool.r.base_url).push(local, f"{name}:1", token=pool.tok["bob"], force=True)
+
+
+@pytest.mark.tier2
+def test_a_new_image_alone_waits_for_approval_too(registry, tmp_path):
+    """Review 2026-10-14: an image-only update reached students without approval."""
+    pool = _Pool(registry, tmp_path)
+    ref = "bob/lab:1"
+    pool.push("bob/lab", "v1")
+    pool.post("/catalog/approve", "root", {"ref": ref})
+    v1 = pool.digest(ref, "kid")
+    _push_image_only(pool, "bob/lab", "img2")                  # data changed, task/ the same
+    assert pool.digest(ref, "kid") == v1                       # students keep the approved image
+    assert pool.digest(ref, "bob") != v1
+    row = next(r for r in pool.catalog("bob") if r["ref"] == ref)
+    assert (row["state"], row["pending_update"]) == ("pending", True)
+    assert pool.post("/catalog/approve", "root", {"ref": ref}) == HTTPStatus.OK
+    assert pool.digest(ref, "kid") == pool.digest(ref, "bob")  # approved: everyone gets it
+
+
+@pytest.mark.tier2
+def test_a_rejected_update_falls_back_to_the_approved_version_after_a_week(registry, tmp_path):
+    """Review 2026-10-14: the purge deleted an approved course task whose UPDATE was rejected."""
+    pool = _Pool(registry, tmp_path)
+    ref = "bob/lab:1"
+    pool.push("bob/lab", "v1")
+    pool.post("/catalog/approve", "root", {"ref": ref})
+    pool.push("bob/lab", "v2")
+    Catalog(registry.catalog_path).reject(ref, "не то", now=0.0)          # a week ago
+    assert [r["ref"] for r in pool.catalog("kid")] == [ref]               # the purge keeps it
+    row = next(r for r in pool.catalog("bob") if r["ref"] == ref)
+    assert (row["state"], row.get("rejected", False)) == ("approved", False)
+    assert pool.task_marker(ref, "kid") == "v1"
+    assert pool.task_marker(ref, "bob") == "v1"                           # back to the approved
+
+
+@pytest.mark.tier2
+def test_students_do_not_get_moderation_details(registry, tmp_path):
+    pool = _Pool(registry, tmp_path)
+    pool.push("bob/lab", "v1")
+    pool.post("/catalog/approve", "root", {"ref": "bob/lab:1"})
+    pool.push("bob/lab", "v2")
+    pool.post("/catalog/reject", "root", {"ref": "bob/lab:1", "reason": "грейдер принимает ls"})
+    row = pool.catalog("kid")[0]
+    assert not {"reason", "state", "owner", "pending_update", "rejected_at", "approved_digest"} & set(row)

@@ -1758,7 +1758,8 @@ def cmd_pull(env: Home, ref: str, registry: str | None = None, io: Io | None = N
     io = io or _default_io()
     url = _prompt_registry(env, registry, io)
     store = ImageStore(env.images)
-    copied = RemoteRegistry(url).pull(ref, store)
+    # with the cached token: an author pulls own latest push, not the approved copy (review 2026-10-14)
+    copied = RemoteRegistry(url, cache=CredentialCache(env.creds)).pull(ref, store)
     sys.stdout.write(f"подтянуто {ref} (слоёв: {len(copied)})\n")
     return 0
 

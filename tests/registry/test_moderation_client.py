@@ -28,3 +28,17 @@ def test_client_moderates_and_the_author_reads_the_latest_image(registry, tmp_pa
     assert exc.value.code == HTTPStatus.FORBIDDEN
     author.delete_task(ref, token=pool.tok["bob"])
     assert author.catalog(token=pool.tok["bob"]) == []
+
+
+@pytest.mark.tier2
+def test_hashengine_pull_gives_the_author_their_own_pending_task(registry, tmp_path):
+    """Review 2026-10-14: `hashengine pull` read images anonymously -- 404 on the author's own push."""
+    from hashpass import cli  # noqa: PLC0415
+    from hashpass.imagestore.store import ImageStore  # noqa: PLC0415
+    from hashpass.registry.creds import CredentialCache  # noqa: PLC0415
+    pool = _Pool(registry, tmp_path)
+    pool.push("bob/lab", "v1")                                        # pending: never approved
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "bob-home")}, default_home=tmp_path)
+    RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds)).login("bob", "pw-correct1")
+    assert cli.cmd_pull(env, "bob/lab:1", registry.base_url) == 0
+    assert ImageStore(env.images).exists("bob/lab:1")
