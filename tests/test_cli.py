@@ -629,3 +629,21 @@ def test_a_broken_base_is_downloaded_again(tmp_path):
     assert pulls == [["bunnyton/debian:trixie"]]
     assert (layer / "usr/lib/systemd/systemd").read_bytes().startswith(b"\x7fELF")
     assert cli._base_intact(layer) is True  # noqa: SLF001
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize(("dose", "expected"), [(True, ["<announce>"]), (False, [])])
+def test_the_goal_comes_back_after_a_theory_dose(monkeypatch, dose, expected):
+    """User, 2026-10-14 (links): after «Ссылка побилась» the screen ended without the task."""
+    writes: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
+    session = SimpleNamespace(
+        progress=object(),
+        meta=SimpleNamespace(stages=[SimpleNamespace(message="goal")]),
+        observe=lambda command, *, ts, output, rc=None, cwd=None: FeedResult(  # noqa: ARG005
+            advanced=False, stage=0, local_key=None, hint="доза", dose=dose),
+    )
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 0)
+    monkeypatch.setattr(cli, "_announce_stage", lambda _s, _io: writes.append("<announce>"))
+    cli._render_observe(session, "cat x", "", None, None, io)  # noqa: SLF001
+    assert writes == expected

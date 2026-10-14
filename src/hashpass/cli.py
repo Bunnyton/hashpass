@@ -767,6 +767,10 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
                         "pasted": _looks_pasted(command, typing)})
     res = session.observe(command, ts=ts, output=output, rc=rc, cwd=cwd)  # grade + hints + on_pass
     if not res.advanced:
+        if getattr(res, "dose", False):
+            # A theory dose fills the screen: the student needs the goal again under it (user,
+            # 2026-10-14: after «Ссылка побилась» the screen ended without the task).
+            _announce_stage(session, io)
         return
     if current_stage(session.progress) is None:
         # The author's `on pass` / outro (finale meme), then the engine's small «РЕШЕНО».

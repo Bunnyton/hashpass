@@ -23,13 +23,15 @@ say "Иногда один файл нужен сразу в нескольки�
 read brief.md
 
 stage
-  say "Сделай символьную ссылку file_link.txt на dir/dir/dir/file.txt, а dir_link — на каталог dir/dir/dir"
+  say "Сделай символьную ссылку file_link.txt на dir/dir/dir/file.txt, а dir_link — на каталог dir/dir/dir. И посмотри на них через ls -l"
   solve:
     ln -s dir/dir/dir/file.txt /home/student/file_link.txt
     ln -s dir/dir/dir /home/student/dir_link
+    ls -l /home/student
   observe /home/student/file_link.txt /home/student/dir_link
+  accept cmd "ls -l"
   neutral ls cat pwd cd
-  on pass say "Ссылка — указатель: открываешь её, а попадаешь в файл. Куда она смотрит, покажет ls -l."
+  on pass say "Буква l в начале строки и стрелка — это ссылка. Её размер в ls -l — длина записанного пути, а не размер файла."
   hint output "File exists" say "Такое имя уже занято. Посмотри ls -l: может, ссылка уже есть и смотрит не туда?"
   hint tries 5 say "Сначала — на что ссылаемся, потом — как назвать ссылку. Порядок как у cp."
   hint tries 10 say "man ln — ищи слово symbolic."

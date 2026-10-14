@@ -45,3 +45,23 @@ def test_multiline_command_stays_one_history_line(tmp_path):
     s.observe("for f in a b\ndo chmod +x $f\ndone", ts="2026-10-05T10:00:00")
     assert (tmp_path / "hp" / "history").read_text(encoding="utf-8").splitlines() == [
         "for f in a b; do chmod +x $f; done"]
+
+
+@pytest.mark.tier1
+def test_a_read_hint_is_marked_as_a_dose(tmp_path):
+    """A `hint … read` is a theory dose: the console shows the goal again after it."""
+    from hashpass.recipe.model import (  # noqa: PLC0415
+        HintRule,
+        OutputCond,
+        ReadAction,
+        SayAction,
+    )
+    s = _session(tmp_path)
+    (tmp_path / "hp" / "work").mkdir()
+    (tmp_path / "hp" / "work" / "dose.md").write_text("# Доза\n\nтекст\n", encoding="utf-8")
+    stage = s.meta.stages[0]
+    s.meta = SimpleNamespace(**{**s.meta.__dict__, "stages": (StageMeta(
+        **{**stage.__dict__, "hints": (HintRule(OutputCond("broken"), ReadAction("dose.md")),
+                                       HintRule(OutputCond("short"), SayAction("коротко")))}),)})
+    assert s.observe("cat x", ts="2026-10-14T10:00:00", output="broken").dose is True
+    assert s.observe("cat y", ts="2026-10-14T10:00:01", output="short").dose is False

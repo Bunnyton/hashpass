@@ -48,6 +48,7 @@ class FeedResult:
     stage: int | None
     local_key: str | None
     hint: str | None = None
+    dose: bool = False      # the hint was a theory dose (`hint … read`): show the goal again after it
 
 
 def _stdout(text: str) -> None:
@@ -628,6 +629,7 @@ class TaskSession:
         self._perform_all(self.meta.react, ctx)          # per-command catch-all handlers
         accepted, key = self._accept(stage, sm, command, out, ts)
         accepted, key, hint = self._apply_policy(sm, command, accepted, key)
+        dose = False
         if accepted:
             self._on_pass(stage, ctx, ts)
         elif hint is None:
@@ -637,7 +639,8 @@ class TaskSession:
             if action is not None:
                 hint = perform_action(action, ctx, render=self.render, runner=self.student,
                                       hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
-        return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
+                dose = isinstance(action, ReadAction)
+        return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint, dose=dose)
 
     def observe(self, command: str, *, ts: str, output: str = "",
                 rc: int | None = None, cwd: str | None = None) -> FeedResult:
@@ -665,6 +668,7 @@ class TaskSession:
         self._perform_all(self.meta.react, ctx)          # per-command catch-all handlers
         accepted, key = self._accept(stage, sm, command, out, ts, rc=rc)
         accepted, key, hint = self._apply_policy(sm, command, accepted, key)
+        dose = False
         if accepted:
             self._on_pass(stage, ctx, ts)
         elif hint is None:
@@ -674,7 +678,8 @@ class TaskSession:
             if action is not None:
                 hint = perform_action(action, ctx, render=self.render, runner=self.student,
                                       hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
-        return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint)
+                dose = isinstance(action, ReadAction)
+        return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint, dose=dose)
 
     def check_current(self, *, ts: str) -> FeedResult:
         """
