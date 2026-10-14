@@ -7,6 +7,10 @@
 {% if image.kind == 'task' %}<span class='pill author'>задание</span>{% else %}<span class='pill'>образ</span>{% endif %}
 {% if image.block_name %}<span class='pill'>блок «{{ image.block_name }}»</span>{% endif %}
 {% if image.hidden %}<span class='pill closed'>скрыт</span>{% endif %}
+{% if image.moderation == 'rejected' %}<span class='pill no'>отклонено{% if image.reason %}: {{ image.reason }}{% endif %}</span>
+{% elif image.pending_update %}<span class='pill warn'>обновление на проверке</span>
+{% elif image.moderation == 'pending' %}<span class='pill warn'>на проверке</span>
+{% elif image.moderation == 'approved' %}<span class='pill'>одобрено</span>{% endif %}
 </div>
 </div>
 <div class='card'>

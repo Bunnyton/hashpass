@@ -507,3 +507,27 @@ def test_web_card_lists_sources_shows_a_file_and_gives_the_archive(registry, tmp
     assert status == HTTPStatus.NOT_FOUND
     status, headers, _ = _req(opener, "GET", f"{base}/web/images/source-archive?ref=lab%3A1", cookie=cookie)
     assert status == HTTPStatus.OK and "lab-1.tar.gz" in headers.get("Content-Disposition", "")
+
+
+@pytest.mark.tier2
+def test_web_admin_switches_auto_approval_and_the_card_shows_moderation(registry, tmp_path):
+    from hashpass.registry.pool_settings import PoolSettings  # noqa: PLC0415
+    registry.users.add("bob", "pass123!", role="author")
+    opener, cookie = _author_cookie(registry)                    # teacher = admin
+    base = registry.base_url
+    _, _, page = _req(opener, "GET", f"{base}/web/users", cookie=cookie)
+    assert "Авто-одобрение" in page
+    _req(opener, "POST", f"{base}/web/users/auto-approve", cookie=cookie, data={"user": "bob", "on": "1"})
+    assert registry.users.auto_approve("bob") is True
+    _req(opener, "POST", f"{base}/web/pool/auto-approve", cookie=cookie, data={"on": "0"})
+    assert PoolSettings(registry.catalog_path.parent / "pool-settings.json").auto_approve is False
+    a_op, a_cookie = _login_cookie(registry, "alice", "pass123!")
+    _req(a_op, "POST", f"{base}/web/users/auto-approve", cookie=a_cookie, data={"user": "alice", "on": "1"})
+    assert registry.users.auto_approve("alice") is False              # only the admin switches it
+
+    _seed(registry, "bob/lab:1", tmp_path, task=True)
+    cat = Catalog(registry.catalog_path)
+    cat.add_task("bob/lab:1", "d1")
+    cat.reject("bob/lab:1", "нет финала", now=0.0)
+    _, _, card = _req(opener, "GET", f"{base}/web/image/{urllib.parse.quote('bob/lab:1')}", cookie=cookie)
+    assert "отклонено" in card and "нет финала" in card

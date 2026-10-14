@@ -363,6 +363,8 @@ def _prepare_image(row: dict) -> dict:
             "description": str(row.get("description", "")),
             "about": _about_parts(str(row.get("description", ""))),
             "hidden": hidden, "files": _prepare_files(files),
+            "moderation": str(row.get("state") or ""), "reason": str(row.get("reason") or ""),
+            "pending_update": bool(row.get("pending_update", False)),
             "sources": [{**f, "path_q": quote(str(f["path"]), safe=""),
                          "depth": str(f["path"]).count("/"),
                          "name": str(f["path"]).rsplit("/", 1)[-1]}
@@ -413,16 +415,18 @@ def render_source_file(ref: str, path: str, text: str | None, size: int) -> str:
 _ROLES = ("student", "author", "admin")
 
 
-def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "") -> str:
+def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "",
+                 pool_auto: bool = False) -> str:
     """User management: per-user role change / reset link / delete, delete-group, registration toggle."""
     rows = [{"user": str(p["user"]),
              "group": str(p.get("group", "")),
              "role": str(p.get("role", "student")),
              "comment": str(p.get("comment", "")),
+             "auto_approve": bool(p.get("auto_approve", False)),
              "is_self": str(p["user"]) == current_user} for p in profiles]
     return _env.get_template("users.html.j2").render(
         title="Пользователи — hashpass", nav=True, active="/web/users",
-        rows=rows, roles=_ROLES,
+        rows=rows, roles=_ROLES, pool_auto=pool_auto,
         reg_label="открыта" if registration_open else "закрыта",
         toggle_to="false" if registration_open else "true",
         toggle_label="Закрыть регистрацию" if registration_open else "Открыть регистрацию")

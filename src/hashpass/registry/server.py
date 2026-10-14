@@ -326,6 +326,10 @@ class PoolServer:
         app.add_url_rule("/web/login", "web_login_post", self._web_login_post, methods=["POST"])
         app.add_url_rule("/web/logout", "web_logout", self._web_logout, methods=["GET"])
         app.add_url_rule("/web/users", "web_users", self._web_users, methods=["GET"])
+        app.add_url_rule("/web/users/auto-approve", "web_users_auto_approve",
+                         self._web_users_auto_approve, methods=["POST"])
+        app.add_url_rule("/web/pool/auto-approve", "web_pool_auto_approve",
+                         self._web_pool_auto_approve, methods=["POST"])
         app.add_url_rule("/web/users/role", "web_users_role",
                          self._web_users_role, methods=["POST"])
         app.add_url_rule("/web/users/group", "web_users_group",
@@ -1147,7 +1151,24 @@ class PoolServer:
             return self._redirect("/web/login")
         return self._html(render_users(
             self.users.all_users(),
-            registration_open=self.config.registration_open, current_user=actor))
+            registration_open=self.config.registration_open, current_user=actor,
+            pool_auto=self.pool_settings().auto_approve))
+
+    def _web_users_auto_approve(self) -> Response:
+        """Admin: switch one author's auto-approval (own included)."""
+        if self._session_role(("admin",)) is None:
+            return self._redirect("/web/login")
+        target = request.form.get("user", "").strip()
+        if self.users.has(target):
+            self.users.set_auto_approve(target, on=request.form.get("on") == "1")
+        return self._redirect("/web/users")
+
+    def _web_pool_auto_approve(self) -> Response:
+        """Admin: switch auto-approval for the whole pool."""
+        if self._session_role(("admin",)) is None:
+            return self._redirect("/web/login")
+        self.pool_settings().set_auto_approve(on=request.form.get("on") == "1")
+        return self._redirect("/web/users")
 
     def _web_images(self) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:
@@ -1165,7 +1186,9 @@ class PoolServer:
             return self._empty(HTTPStatus.NOT_FOUND)
         entry = self.catalog().find(ref)
         row = {**row, "hidden": entry.hidden if entry else False,
-               "sources": self.sources().listing(ref)}
+               "sources": self.sources().listing(ref),
+               **({"state": entry.state, "reason": entry.reason,
+                   "pending_update": entry.as_dict()["pending_update"]} if entry else {})}
         return self._html(render_image_card(row))
 
     def _web_source_file(self) -> Response:

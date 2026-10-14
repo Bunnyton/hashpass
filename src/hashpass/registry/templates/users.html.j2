@@ -8,6 +8,14 @@
 <button class='sm' type='submit'>{{ toggle_label }}</button>
 </form>
 </div></div>
+<div class='card'><div class='row' style='justify-content:space-between'>
+<span>Авто-одобрение заданий для всего пула: <b>{{ 'включено' if pool_auto else 'выключено' }}</b>
+<span class='sub small'>(иначе — у отмеченных авторов ниже; по умолчанию всё одобряет админ)</span></span>
+<form class='inline' method='post' action='/web/pool/auto-approve'>
+<input type='hidden' name='on' value='{{ '0' if pool_auto else '1' }}'>
+<button class='sm' type='submit'>{{ 'Выключить' if pool_auto else 'Включить' }}</button>
+</form>
+</div></div>
 <div class='card'><form class='inline row' method='post' action='/web/users/delete-group'>
 <span>Удалить группу целиком:</span>
 <input name='group' placeholder='ИУ7-31' style='width:auto'>
@@ -16,7 +24,7 @@
 <h2>Все пользователи</h2>
 <p class='sub small'>Группа и комментарий редактируются кликом по ячейке (Enter/уход из поля — сохраняет). Не отображаются студентам.</p>
 <table class='wide'>
-<tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th><th>Изменить роль</th><th>Пароль</th><th>Удалить</th></tr>
+<tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th><th>Изменить роль</th><th>Авто-одобрение</th><th>Пароль</th><th>Удалить</th></tr>
 {% if rows %}{% for r in rows %}
 <tr><td class='mono'>{{ r.user }}</td>
 <td>
@@ -39,6 +47,12 @@
 <button class='sm' type='submit'>OK</button>
 </form>
 {% endif %}</td>
+<td>{% if r.role in ('author', 'admin') %}
+<form class='inline' method='post' action='/web/users/auto-approve'>
+<input type='hidden' name='user' value='{{ r.user }}'>
+<input type='hidden' name='on' value='{{ '0' if r.auto_approve else '1' }}'>
+<button class='sm{% if not r.auto_approve %} ghost{% endif %}' type='submit'>{{ 'да' if r.auto_approve else 'нет' }}</button>
+</form>{% else %}<span class='dim'>—</span>{% endif %}</td>
 <td><form class='inline' method='post' action='/web/users/reset'>
 <input type='hidden' name='user' value='{{ r.user }}'>
 <button class='sm ghost' type='submit'>ссылка сброса</button>
