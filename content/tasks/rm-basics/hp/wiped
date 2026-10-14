@@ -1,6 +1,0 @@
-#!/bin/sh
-# Принято (исходник: rm -r со звёздочкой, одной командой): видимого в workdir не осталось.
-printf '%s\n' "$1" | grep -Eq '^(sudo +)?rm .*(-[A-Za-z]*[rR]|--recursive)' || exit 1
-case "$1" in *\**) ;; *) exit 1 ;; esac
-cd /home/student/workdir || exit 1
-[ -z "$(ls 2>/dev/null)" ]

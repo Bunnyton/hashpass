@@ -1,0 +1,81 @@
+# links — символьные и жёсткие ссылки (исходники it_bastion: links/25_make_sym, 26_mv_sym,
+# 27_another_sym_file, 28_hard — одним заданием). Шаги: ln -s на файл и каталог → перенос
+# ссылки (относительная ломается; доза — когда cat споткнётся) → ссылка хранит путь, а не файл:
+# починить latest.log, вернув файл с нужным именем → жёсткая ссылка (доза hard.md) → удалить
+# оригинал, данные живы.
+
+image links:1
+
+# data: data/home сделан руками: dir/dir/dir/file.txt (текст исходника), notes.txt и логи —
+# mkdata.py text --kind notes --seed 303 / --kind log --seed 301, 302
+copy data/home /home/student
+run ln -s logs/app.log /home/student/latest.log
+run chown -R student:student /home/student/dir /home/student/logs /home/student/notes.txt
+run chown -h student:student /home/student/latest.log
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "Иногда один файл нужен сразу в нескольких местах."
+read brief.md
+
+stage
+  say "Сделай символьную ссылку file_link.txt на dir/dir/dir/file.txt, а dir_link — на каталог dir/dir/dir"
+  solve:
+    ln -s dir/dir/dir/file.txt /home/student/file_link.txt
+    ln -s dir/dir/dir /home/student/dir_link
+  observe /home/student/file_link.txt /home/student/dir_link
+  neutral ls cat pwd cd
+  on pass say "Ссылка — указатель: открываешь её, а попадаешь в файл. Куда она смотрит, покажет ls -l."
+  hint output "File exists" say "Такое имя уже занято. Посмотри ls -l: может, ссылка уже есть и смотрит не туда?"
+  hint tries 5 say "Сначала — на что ссылаемся, потом — как назвать ссылку. Порядок как у cp."
+  hint tries 10 say "man ln — ищи слово symbolic."
+
+stage
+  say "Перенеси file_link.txt в каталог dir и прочитай файл через неё оттуда"
+  solve:
+    rm -f /home/student/file_link.txt
+    ln -s /home/student/dir/dir/dir/file.txt /home/student/dir/file_link.txt
+    cat /home/student/dir/file_link.txt
+  observe /home/student/dir/file_link.txt
+  observe bool /home/student/file_link.txt
+  observe output
+  neutral ls pwd cd
+  on pass say "Ссылка с путём от корня переносится куда угодно. Относительная — только вместе со своей целью."
+  hint output "No such file or directory" read relative.md
+  hint tries 5 say "ls -l dir — на что теперь указывает ссылка? Существует ли такой путь оттуда, где она лежит?"
+  hint tries 10 say "Пересоздай ссылку так, чтобы её путь не зависел от того, где она лежит."
+
+stage
+  say "Ссылка latest.log должна показывать последний лог из logs. Почини её, не трогая саму ссылку"
+  solve cp /home/student/logs/app-2026-10-12.log /home/student/logs/app.log
+  observe /home/student/latest.log /home/student/logs/app.log
+  neutral ls cat pwd cd
+  on pass say "Символьная ссылка хранит только путь. Появился файл по этому пути — ссылка ожила, хотя её никто не трогал."
+  hint tries 5 say "ls -l latest.log — какой путь записан в ссылке? Есть ли по нему файл?"
+  hint tries 10 say "Ссылку не трогаем — значит, нужно, чтобы по её пути появился нужный лог."
+
+stage
+  say "Сделай жёсткую ссылку backup.txt на notes.txt"
+  solve ln /home/student/notes.txt /home/student/backup.txt
+  observe /home/student/notes.txt /home/student/backup.txt
+  on enter read hard.md
+  neutral ls cat pwd cd
+  on pass say "ls -l теперь показывает у notes.txt и backup.txt цифру 2 — столько имён у этого файла."
+  hint tries 5 say "Жёсткую ссылку делает тот же ln — только без ключа символьной."
+
+stage
+  say "Удали notes.txt и убедись, что записи никуда не делись"
+  solve:
+    rm /home/student/notes.txt
+    cat /home/student/backup.txt
+  observe bool /home/student/notes.txt
+  observe output
+  neutral ls pwd cd
+  on pass say "Данные живут, пока у файла есть хоть одно имя. rm удаляет имя, а не файл."
+  hint tries 5 say "Удали notes.txt, а потом прочитай backup.txt."
+
+exec finale

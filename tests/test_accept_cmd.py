@@ -1,7 +1,7 @@
 """Tier1: `accept cmd` names the command the student RAN (anchored), and `ok` needs exit 0."""
 import pytest
 
-from hashpass.taskrun import _accepted_by_cmd
+from hashpass.taskrun import _accepted_by_cmd, _command_gates
 from hashpass.taskstore import StageMeta
 
 
@@ -70,3 +70,54 @@ def test_accept_pattern_may_spell_sudo_too():
     assert _cmd_matches("sudo rm -rf /", "sudo rm -rf /")
     assert _cmd_matches("sudo apt update", "sudo apt update")
     assert not _cmd_matches("sudo rm -rf /", "sudo ls -la /")   # positional words still must match
+
+
+_FILES = {"/etc/os-release", "/etc/hostname", "/etc", "/var"}
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize(("command", "cwd", "expected"), [
+    ("cat /etc/os-release", "/", True),
+    ("cat os-release", "/etc", True),                  # root-tour 2026-10-14: refused before
+    ("cat ./os-release", "/etc", True),
+    ("cat ../etc/os-release", "/var", True),
+    ("cat os-release", "/var", False),                 # a different file
+    ("cat /etc/hostname", "/etc", False),
+])
+def test_accept_cmd_compares_path_arguments_as_files(command, cwd, expected):
+    """A path in `accept cmd` names a FILE: any spelling of it from the student's cwd counts."""
+    assert _accepted_by_cmd(_stage("cat /etc/os-release"), command, 0, cwd=cwd,
+                            exists=_FILES.__contains__) is expected
+
+
+@pytest.mark.tier1
+def test_accept_cmd_relative_pattern_resolves_from_the_student_cwd():
+    assert _accepted_by_cmd(_stage("cat os-release"), "cat /etc/os-release", 0, cwd="/etc",
+                            exists=_FILES.__contains__)
+    assert not _accepted_by_cmd(_stage("apt update"), "apt /update", 0, cwd="/",
+                                exists=_FILES.__contains__)        # no such file: words differ
+
+
+def _gated(*, cmds: tuple[str, ...] = (), texts: tuple = (), acceptance: str = "command") -> StageMeta:
+    return StageMeta(message="m", neutral=(), check=None, on_enter=(), on_pass=(),
+                     acceptance=acceptance, accept_cmds=cmds, accept_texts=texts)
+
+
+@pytest.mark.tier1
+def test_command_gates_output_and_file_patterns():
+    files = {"/home/student/.vimrc": 'set nu\nnnoremap <F2> Iprint(data["<Esc>A"])<Esc>j\n'}
+    gate = _gated(texts=(("output", "Терпение должны"),))
+    assert _command_gates(gate, "cat x", 0, "…\nТерпение должны иметь мы\n", read=files.get) is True
+    assert _command_gates(gate, "cat x", 0, "реклама\n", read=files.get) is False
+    vim = _gated(texts=(("/home/student/.vimrc", r"^\s*:?n?(nore)?map\s"),))
+    assert _command_gates(vim, "vim f", 0, "", read=files.get) is True
+    assert _command_gates(vim, "vim f", 0, "", read={}.get) is False            # no ~/.vimrc yet
+    empty = _gated(cmds=("chatterbox.sh",), texts=(("output", None),))
+    assert _command_gates(empty, "./chatterbox.sh > /dev/null 2>&1", 0, "\n", read={}.get) is True
+    assert _command_gates(empty, "./chatterbox.sh > /dev/null", 0, "boo\n", read={}.get) is False
+    assert _command_gates(empty, "ls > /dev/null", 0, "", read={}.get) is False
+
+
+@pytest.mark.tier1
+def test_command_gates_are_none_without_command_checks():
+    assert _command_gates(_gated(acceptance="derived"), "x", 0, "", read={}.get) is None

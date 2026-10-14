@@ -23,7 +23,7 @@ read brief.md
 stage
   say "ls -l должен показать: ---x--x--x student student ./test — цифрами"
   solve chmod 111 /home/student/test
-  check exec perms test 111 student
+  observe perms /home/student/test
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
   hint tries 5 say "ls -l test — сравни свои тройки с целью."
@@ -31,7 +31,7 @@ stage
 stage
   say "ls -l должен показать: ---x-w--wx student student ./test — буквами"
   solve chmod 123 /home/student/test
-  check exec perms test 123 student
+  observe perms /home/student/test
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
   hint tries 5 say "Буквами: какие биты добавить, какие забрать — у кого?"
@@ -39,35 +39,35 @@ stage
 stage
   say "ls -l должен показать: -rw--w-r-x student student ./test — цифрами"
   solve chmod 625 /home/student/test
-  check exec perms test 625 student
+  observe perms /home/student/test
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
 
 stage
   say "ls -l должен показать: -rwx-w-r-x student student ./test — цифрами"
   solve chmod 725 /home/student/test
-  check exec perms test 725 student
+  observe perms /home/student/test
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
 
 stage
   say "ls -l должен показать: ---x-w--wx student student ./test — буквами"
   solve chmod 123 /home/student/test
-  check exec perms test 123 student
+  observe perms /home/student/test
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
 
 stage
   say "ls -l должен показать: --wx-w-r-x student student ./test — буквами"
   solve chmod 325 /home/student/test
-  check exec perms test 325 student
+  observe perms /home/student/test
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
 
 stage
   say "ls -l должен показать: -rwx-----x student student ./dir/dir/file — цифрами"
   solve chmod 701 /home/student/dir/dir/file
-  check exec perms dir/dir/file 701 student
+  observe perms /home/student/dir/dir/file
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
 
@@ -76,7 +76,7 @@ stage
   solve:
     chgrp minimal /home/student/test1
     chmod 000 /home/student/test1
-  check exec perms test1 000 minimal
+  observe perms /home/student/test1
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
   hint tries 5 say "Группа тоже должна совпасть. Какая команда меняет группу?"
@@ -84,7 +84,7 @@ stage
 stage
   say "ls -l должен показать: -rwx-w-r-x student student ./test2 — цифрами"
   solve chmod 725 /home/student/test2
-  check exec perms test2 725 student
+  observe perms /home/student/test2
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
 
@@ -93,14 +93,14 @@ stage
   solve:
     chgrp minimal /home/student/test3
     chmod 123 /home/student/test3
-  check exec perms test3 123 minimal
+  observe perms /home/student/test3
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
 
 stage
   say "ls -l должен показать: --wx-w-r-x student student ./test4 — буквами"
   solve chmod 325 /home/student/test4
-  check exec perms test4 325 student
+  observe perms /home/student/test4
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
 
@@ -109,7 +109,7 @@ stage
   solve:
     chgrp minimal /home/student/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir
     chmod 010 /home/student/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir
-  check exec perms dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir 010 minimal
+  observe perms /home/student/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir/dir
   block chmod match "chmod +(-[a-zA-Z]+ +)*[0-7]{3,4}( |$)" say "Используй только относительную запись прав для chmod (chmod +x)"
   neutral ls cat pwd cd
 
@@ -118,14 +118,14 @@ stage
   solve:
     chgrp student /home/student/test1
     chmod 010 /home/student/test1
-  check exec perms test1 010 student
+  observe perms /home/student/test1
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
 
 stage
   say "ls -l должен показать: -rwxr-xr-x student student ./test2 — цифрами"
   solve chmod 755 /home/student/test2
-  check exec perms test2 755 student
+  observe perms /home/student/test2
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
 
@@ -134,21 +134,21 @@ stage
   solve:
     chgrp minimal /home/student/test3
     chmod 723 /home/student/test3
-  check exec perms test3 723 minimal
+  observe perms /home/student/test3
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
 
 stage
   say "ls -l должен показать: -rwx-w-r-x student student ./test4 — цифрами"
   solve chmod 725 /home/student/test4
-  check exec perms test4 725 student
+  observe perms /home/student/test4
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
 
 stage
   say "ls -l должен показать: -rwxrw-rwx student student ./test4 — цифрами"
   solve chmod 767 /home/student/test4
-  check exec perms test4 767 student
+  observe perms /home/student/test4
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
   on pass say "Тварь я дрожащая или право имею?"

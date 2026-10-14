@@ -55,3 +55,15 @@ def test_run_stage_drops_excluded_prefix(tmp_path):
     assert "logs/keep.txt" in obs
     assert "logs/drop.tmp" not in obs   # dropped by exclude prefix
     r.teardown()
+
+
+@pytest.mark.tier1
+def test_run_stage_output_paths_are_absolute_from_where_solve_ended(tmp_path):
+    """`solve: cd workdir` + `ls` derives absolute paths, so a student's `ls` there matches (rm-basics)."""
+    r = TmpdirRunner(tmp_path / "run")
+    r.prepare([])
+    task = TaskCode(id="t", setup=("mkdir -p work/sub_1 work/sub_2",), stages=(
+        StageCode(commands=("cd work", "ls"), observe=()),))
+    obs = run_stage(r, task, 0)
+    assert obs["<output>"] == FileState("file", "/work/sub_1\n/work/sub_2\n")
+    r.teardown()

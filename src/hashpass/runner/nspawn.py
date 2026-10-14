@@ -1,3 +1,4 @@
+import base64
 import subprocess
 import time
 from pathlib import Path
@@ -109,13 +110,17 @@ class NspawnRunner:
         Run in the student's LIVE system (root): inside the console's machine while it is up.
 
         Without a console (build/derivation) it is a plain `run` on the student mount.
-        `machinectl shell` does not relay stdout, so only the exit code comes back.
+        `machinectl shell` does not relay stdout, so only the exit code comes back. systemd expands
+        `${VAR}` in its arguments (`${at}a` arrived as `a`), so a script travels base64-encoded:
+        no `$` reaches systemd, and the machine's /bin/sh decodes and runs it verbatim.
         """
         if self.live_machine is None:
             return self.run(argv)
+        if argv[:2] == ["sh", "-c"]:
+            b64 = base64.b64encode(argv[2].encode("utf-8")).decode("ascii")
+            argv = ["/bin/sh", "-c", f"echo {b64} | base64 -d | /bin/sh"]
         p = subprocess.run(
-            ["sudo", "machinectl", "shell", self.live_machine, *(["/bin/sh", "-c", argv[2]]
-                                                                  if argv[:2] == ["sh", "-c"] else argv)],
+            ["sudo", "machinectl", "shell", self.live_machine, *argv],
             capture_output=True, text=True, encoding="utf-8", check=False,
         )
         return RunResult("", p.stderr, p.returncode)

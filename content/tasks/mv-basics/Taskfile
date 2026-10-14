@@ -18,8 +18,6 @@ image mv-basics:1
 copy data/dir /home/student/dir
 run chown -R student:student /home/student/dir
 
-hidden hp
-
 settings
   pager on
 
@@ -29,7 +27,8 @@ read brief.md
 stage
   say "Перенеси всё содержимое директории dir в текущую"
   solve mv /home/student/dir/file1 /home/student/dir/file3 /home/student/dir/file4 /home/student/dir/file5 /home/student/dir/file6 /home/student/dir/file7 /home/student/dir/file8 /home/student/dir/file9 /home/student/
-  check exec moved
+  observe /home/student/file1 /home/student/file3 /home/student/file4 /home/student/file5 /home/student/file6 /home/student/file7 /home/student/file8 /home/student/file9
+  observe bool /home/student/dir/file1 /home/student/dir/file3 /home/student/dir/file4 /home/student/dir/file5 /home/student/dir/file6 /home/student/dir/file7 /home/student/dir/file8 /home/student/dir/file9
   neutral ls cat pwd cd
   on pass say "dir опустел, всё здесь. Заметил? Ни у одного файла нет расширения — ни .txt, ни .doc. Странно…"
   hint output "No such file or directory" say "Чего mv не нашёл? Сверь имя с ls."

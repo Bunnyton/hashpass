@@ -142,8 +142,8 @@ def _acceptance_of(stage: StageSpec) -> str:
         return "handler"
     if stage.observe or stage.observe_bool or stage.match_output:
         return "derived"       # FS paths and/or `observe output` (command stdout)
-    if stage.accept_cmds:
-        return "command"       # accepted purely by a matching student command (no FS grading)
+    if stage.accept_cmds or stage.accept_texts:
+        return "command"       # accepted by the command itself / what it printed (no FS grading)
     msg = f"stage {stage.message!r} has no `observe`, `check`, or `accept cmd`: cannot be accepted"
     raise ValueError(msg)
 
@@ -260,6 +260,7 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
             hints=s.hints,
             accept_cmds=s.accept_cmds,
             accept_ok=s.accept_ok,
+            accept_texts=s.accept_texts,
             match_output=s.match_output,
             deny=s.deny,
             allow=s.allow,

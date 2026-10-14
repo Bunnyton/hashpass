@@ -69,6 +69,7 @@ class _StageAcc:
     hints: list[HintRule] = field(default_factory=list)
     accept_cmds: list[str] = field(default_factory=list)
     accept_ok: bool = False
+    accept_texts: list[tuple[str, str | None]] = field(default_factory=list)
     match_output: bool = False
     variants: list[list[str]] = field(default_factory=list)
     deny: list[str] = field(default_factory=list)
@@ -398,16 +399,44 @@ def _apply_check(value: str, sacc: _StageAcc) -> None:
     sacc.check = _parse_exec(rest.strip())
 
 
+def _accept_text(verb: str, rest: str, value: str) -> tuple[str, str | None]:
+    """Parse the target + pattern of `accept output "<ERE>"|empty` / `accept file <path> "<ERE>"`."""
+    target = "output"
+    if verb == "file":
+        target, _, rest = rest.partition(" ")
+        rest = rest.strip()
+    if verb == "output" and rest == "empty":
+        return target, None
+    if not target or not rest.startswith('"'):
+        msg = f"accept {verb} takes a quoted pattern, got: {value!r}"
+        raise ValueError(msg)
+    pattern, tail = _take_quoted(rest)
+    if not pattern or tail:
+        msg = f"accept {verb} takes one quoted pattern, got: {value!r}"
+        raise ValueError(msg)
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        msg = f"accept {verb}: bad pattern {pattern!r}: {exc}"
+        raise ValueError(msg) from exc
+    return target, pattern
+
+
 def _apply_accept(value: str, sacc: _StageAcc) -> None:
     """
     Apply `accept cmd "<command start>" [ok]`: a concrete command that passes the stage on its own.
 
     `ok` additionally requires the command to have exited 0 (the console reports the status):
-    a `cmatrix` that dies on a missing library is not «запустил cmatrix».
+    a `cmatrix` that dies on a missing library is not «запустил cmatrix». `accept output "<ERE>"`
+    / `accept output empty` / `accept file <path> "<ERE>"` check what the command printed or what
+    a file holds -- the phrase found (`ls-mv-cp`), a key bound in ~/.vimrc (`vim-more`).
     """
     verb, _, rest = value.partition(" ")
+    if verb in ("output", "file"):
+        sacc.accept_texts.append(_accept_text(verb, rest.strip(), value))
+        return
     if verb != "cmd":
-        msg = f"accept requires 'cmd \"<command start>\"', got: {value!r}"
+        msg = f"accept requires 'cmd|output|file \"…\"', got: {value!r}"
         raise ValueError(msg)
     sub, tail = _take_quoted(rest.strip())
     if not sub or tail.strip() not in ("", "ok"):
@@ -419,10 +448,13 @@ def _apply_accept(value: str, sacc: _StageAcc) -> None:
 
 
 def _apply_observe(value: str, sacc: _StageAcc) -> None:
-    """Apply `observe <path...>` / `observe output` / `observe bool <path...>`."""
+    """Apply `observe <path...>` / `observe output` / `observe bool <path...>` / `observe perms <path...>`."""
     toks = value.split()
     if toks and toks[0] == "bool":
         sacc.observe_bool.extend(toks[1:])   # existence/kind only -- no content compared
+        return
+    if toks and toks[0] == "perms":          # mode + owner/group, marked for capture
+        sacc.observe.extend(f"perms:{p}" for p in toks[1:])
         return
     for tok in toks:
         if tok == "output":
@@ -460,7 +492,7 @@ def _apply_simple_directive(kw: str, value: str, sacc: _StageAcc) -> None:
 
 
 def _finalize_stage(sacc: _StageAcc) -> StageSpec:
-    if not sacc.solve and not sacc.accept_cmds:
+    if not sacc.solve and not sacc.accept_cmds and not sacc.accept_texts:
         msg = f"stage {sacc.message!r} has no 'solve' reference solution (nor an 'accept cmd')"
         raise ValueError(msg)
     if sacc.variants and not (sacc.observe or sacc.observe_bool or sacc.match_output):
@@ -484,6 +516,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         hints=tuple(sacc.hints),
         accept_cmds=tuple(sacc.accept_cmds),
         accept_ok=sacc.accept_ok,
+        accept_texts=tuple(sacc.accept_texts),
         match_output=sacc.match_output,
         variants=tuple(tuple(v) for v in sacc.variants),
         deny=tuple(sacc.deny),

@@ -238,6 +238,8 @@ class PoolServer:
         app.add_url_rule("/closure/<path:tail>", "closure", self._route_closure, methods=["GET"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_put",
                          self._route_attachment_put, methods=["PUT"])
+        app.add_url_rule("/attachment/<path:tail>", "attachment_get",
+                         self._route_attachment_get, methods=["GET"])
         # web dashboard (cookie session)
         app.add_url_rule("/web", "web_dashboard", self._web_dashboard, methods=["GET"])
         app.add_url_rule("/web/login", "web_login_get", self._web_login_get, methods=["GET"])
@@ -864,6 +866,26 @@ class PoolServer:
         except (ValueError, OSError):
             return self._empty(HTTPStatus.BAD_REQUEST)
         return self._empty(HTTPStatus.CREATED)
+
+    def _route_attachment_get(self, tail: str) -> Response:
+        """
+        Serve one attachment (Taskfile, source.tar.gz) to any author or admin -- never a student.
+
+        Like the web card's download: an author may READ another author's task sources (to learn
+        from them, or to see why a task refuses an answer), but writes stay namespace-bound.
+        """
+        parts = self._split_ref(tail)
+        if parts is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        _user, err = self._auth_role(_AUTHOR_ROLES)
+        if err is not None:
+            return self._empty(err)
+        name, version = parts
+        try:
+            blob = self.attachments().read_file(f"{name}:{version}", request.args.get("name", ""))
+        except (ValueError, FileNotFoundError, OSError):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        return Response(blob, status=HTTPStatus.OK, mimetype="application/octet-stream")
 
     # -- routes: web dashboard ---------------------------------------------
 

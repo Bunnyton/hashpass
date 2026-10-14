@@ -1,5 +1,0 @@
-#!/bin/sh
-# Принято после команды студента (task.sh вернулся — vim закрыт, или check.sh), когда edit.txt
-# в точности совпал с эталоном.
-[ -n "$1" ] || exit 1
-cmp -s /home/student/edit.txt /home/student/true.txt

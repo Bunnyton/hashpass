@@ -58,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_pull = sub.add_parser("pull", help="подтянуть образ/задание с пула")
     p_pull.add_argument("ref")
     p_pull.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
+    p_source = sub.add_parser("source", help="скачать исходники задания с пула "
+                              "(Taskfile, брифы, data/, hp/ — авторам и администраторам)")
+    p_source.add_argument("ref", help="задание на пуле, например 4istBorw/root-tour:1")
+    p_source.add_argument("dest", nargs="?", help="куда распаковать (по умолчанию ./<имя задания>)")
+    p_source.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
     sub.add_parser("images", help="список локально собранных образов и заданий")
     p_cat = sub.add_parser("catalog", help="каталог пула: раскладка по блокам (администратор)")
     p_cat.add_argument("action", choices=["layout"], help="layout — задать блоки и порядок")
@@ -92,6 +97,8 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911,
         return cli.cmd_logout(env, args.registry)
     if command == "pull":
         return cli.cmd_pull(env, args.ref, args.registry)
+    if command == "source":
+        return cli.cmd_source(env, args.ref, args.dest, args.registry)
     if command == "remote":
         return cli.cmd_remote_images(env, args.registry)
     if command == "catalog":

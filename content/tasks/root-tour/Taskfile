@@ -7,24 +7,28 @@ hidden hp
 
 settings
   pager on
+  similarity 100
 
 say "Открываем карту Linux: от корня до виртуальных файлов."
 read brief.md
 
 stage
-  say "Посмотри, какие каталоги начинаются прямо от корня файловой системы"
-  solve ls /
-  check exec root-output
+  say "Перейди в / и посмотри, какие каталоги начинаются от корня файловой системы"
+  solve:
+    cd /
+    ls
+  observe output
+  neutral "cd /"
   neutral pwd
   neutral clear
-  hint tries 5 say "Начни с ls и укажи ему самый короткий абсолютный путь."
+  hint tries 5 say "Сначала перейди в корень командой cd /, затем выведи его содержимое через ls."
   on pass say "Косая черта — вершина всего дерева. Следующая остановка — настройки системы."
 
 stage
   on enter read etc.md
   say "Узнай название и версию системы из /etc/os-release"
   solve cat /etc/os-release
-  check exec etc-output
+  observe output
   neutral pwd
   neutral clear
   neutral "ls /etc"
@@ -35,7 +39,7 @@ stage
   on enter read home.md
   say "Посмотри, чьи домашние каталоги есть в /home"
   solve ls /home
-  check exec home-output
+  observe output
   neutral pwd
   neutral clear
   hint tries 5 say "Каталог уже назван в цели — осталось показать его содержимое."
@@ -45,7 +49,7 @@ stage
   on enter read proc.md
   say "Узнай версию ядра из /proc/version"
   solve cat /proc/version
-  check exec proc-output
+  observe output
   neutral pwd
   neutral clear
   neutral "ls /proc"
@@ -56,7 +60,7 @@ stage
   on enter read dev.md
   say "Посмотри подробную информацию о /dev/null"
   solve ls -l /dev/null
-  check exec dev-output
+  accept output "^c[^ ]* +[0-9]+ +root +root +1, +3 +.* /dev/null$"
   neutral pwd
   neutral clear
   neutral "ls /dev"

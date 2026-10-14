@@ -10,20 +10,25 @@ A word is a path only if it LOOKS like one (has a `/`, or is `.`, `..`, `~…`) 
 the command's working directory, exists in the student's system. A bare word -- even one naming a
 file in the current directory -- stays as it is: a log line saying «search» must read the same
 from ~ and from ~/search. The exception is a line that IS one word: `find search` prints its root
-as `search`, `ls -1` prints bare names -- a lone existing name on its line is a path.
+as `search`, `ls -1` prints bare names -- a lone existing name on its line is a path. And a line
+whose EVERY word names an existing file is `ls` in columns (a terminal): it becomes one absolute
+path a line, like the reference `ls` (a pipe) prints.
 """
 import posixpath
 import re
 from collections.abc import Callable
 
 _WORD = re.compile(r"\S+")
+STUDENT_HOME = "/home/student"
 
 
-def _looks_like_path(word: str) -> bool:
+def looks_like_path(word: str) -> bool:
+    """Whether a word is SPELLED as a path: has a `/`, or is `.`, `..`, `~…`."""
     return "/" in word or word in (".", "..") or word.startswith("~")
 
 
-def _resolve(word: str, cwd: str, home: str) -> str:
+def resolve_path(word: str, cwd: str, home: str = STUDENT_HOME) -> str:
+    """Return the absolute, normalized path a word names when typed in `cwd` (`~` is `home`)."""
     if word == "~" or word.startswith("~/"):
         word = home + word[1:]
     elif not word.startswith("/"):
@@ -32,26 +37,32 @@ def _resolve(word: str, cwd: str, home: str) -> str:
 
 
 def absolutize(text: str, *, cwd: str, exists: Callable[[str], bool],
-               home: str = "/home/student") -> str:
+               home: str = STUDENT_HOME) -> str:
     """Return `text` with every word that names an existing path rewritten as its absolute path."""
     cwd = cwd or home
     lone = False                                    # the word is alone on its line
 
     def one(m: re.Match[str]) -> str:
         word = m.group(0)
-        if lone or _looks_like_path(word):
-            path = _resolve(word.rstrip("/") or "/", cwd, home)
+        if lone or looks_like_path(word):
+            path = resolve_path(word.rstrip("/") or "/", cwd, home)
             if exists(path):
                 return path
         head, sep, tail = word.partition(":")      # grep -r / grep -n: `path:rest`
-        if sep and head and _looks_like_path(head):
-            path = _resolve(head.rstrip("/") or "/", cwd, home)
+        if sep and head and looks_like_path(head):
+            path = resolve_path(head.rstrip("/") or "/", cwd, home)
             if exists(path):
                 return f"{path}:{tail}"
         return word
 
     out = []
     for line in text.split("\n"):
-        lone = len(line.split()) == 1
+        words = line.split()
+        lone = len(words) == 1
+        if len(words) > 1:                          # `ls` columns: every word names a file here
+            paths = [resolve_path(w.rstrip("/") or "/", cwd, home) for w in words]
+            if all(exists(p) for p in paths):
+                out.extend(paths)
+                continue
         out.append(_WORD.sub(one, line))
     return "\n".join(out)

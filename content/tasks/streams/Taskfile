@@ -1,0 +1,55 @@
+# streams — потоки ввода-вывода (исходники it_bastion: redirect/32_stderr, 33_stdout_to_stderr,
+# 34_to_command — одним заданием). Шаг 1: «перенаправь вывод в файл» — после `>` на экране
+# остаётся stderr самого exec_me.sh, он и объясняет потоки и настоящую цель (stdout.log /
+# stderr.log). Шаг 2: заглушить болтуна (chatterbox.sh) перенаправлением потоков друг в друга
+# и /dev/null (доза silence.md). Шаг 3: число слов в readme.txt одной командой и без имени файла
+# — wc -w < readme.txt (доза input.md).
+
+image streams:1
+
+# data: exec_me.sh и chatterbox.sh — из исходника (32, 33; концовка exec_me.sh переписана без
+# «ключа»); readme.txt — mkdata.py text --kind prose --lines 30 --seed 341
+copy data/home /home/student
+run chown student:student /home/student/exec_me.sh /home/student/chatterbox.sh /home/student/readme.txt
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "У программы не один голос."
+read brief.md
+
+stage
+  say "Перенаправь вывод ./exec_me.sh в файл"
+  solve /home/student/exec_me.sh > /home/student/stdout.log 2> /home/student/stderr.log
+  observe /home/student/stdout.log /home/student/stderr.log
+  neutral ls cat pwd cd
+  on pass say "Обычный вывод и ошибки — два разных потока: можно сохранять, читать и выбрасывать их по отдельности."
+  hint output "Permission denied" say "Скрипт не запускается — у него нет права на запуск? ls -l покажет."
+  hint tries 5 say "Перечитай, что exec_me.sh написал на экран даже после >. Он сам говорит, чего хочет."
+  hint tries 10 say "Номер потока ставится прямо перед >: так перенаправляют не только обычный вывод."
+
+stage
+  say "chatterbox.sh — болтун. Заставь его замолчать: ни строчки на экране, и в файлы тоже ничего"
+  solve /home/student/chatterbox.sh > /dev/null 2>&1
+  accept cmd "chatterbox.sh"
+  accept output empty
+  on enter read silence.md
+  neutral ls cat pwd cd
+  on pass say "Порядок важен: > /dev/null 2>&1 — сначала stdout в никуда, потом stderr туда же, куда stdout."
+  hint tries 5 say "На экране ещё что-то есть? Какой из двух потоков ты пока не отправил в /dev/null?"
+  hint tries 10 say "Загугли: «bash перенаправить stderr в stdout»."
+
+stage
+  say "Посчитай слова в readme.txt одной командой — чтобы на экране было только число"
+  solve wc -w < /home/student/readme.txt
+  observe output
+  on enter read input.md
+  neutral ls cat pwd cd
+  on pass say "< подаёт файл на вход команде: wc читает поток и не знает, как назывался файл."
+  hint tries 5 say "wc -w readme.txt печатает число и имя файла. А если отдать ему не файл, а его содержимое?"
+  hint tries 10 say "Значок < — зеркало >: он не забирает вывод, а подаёт файл на вход."
+
+exec finale

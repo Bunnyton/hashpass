@@ -1,7 +1,7 @@
 # vim-intro — vim (исходник docs/Задания «vim intro (24)»): ./task.sh открывает vim -O edit.txt
 # true.txt; искажённый отрывок «Онегина» надо исправить, чтобы он совпал с эталоном рядом
 # (:diffthis, Ctrl+w l/h — в шапке самого файла), проверка — ./check.sh. В консоли работают только
-# ./task.sh, ./check.sh, ls и vimtutor. Принято после выхода из vim, когда файлы совпали.
+# ./task.sh, ./check.sh, ls и vimtutor. Принято по содержимому edit.txt (observe) после выхода из vim.
 
 image vim-intro:1
 
@@ -26,7 +26,7 @@ read brief.md
 stage
   say "Отредактируй edit.txt, чтобы он в точности совпадал с текстом сбоку. Начни с ./task.sh"
   solve cp /home/student/true.txt /home/student/edit.txt
-  check exec same
+  observe /home/student/edit.txt
   allow ./task.sh task.sh ./check.sh check.sh vimtutor
   neutral ls
   on pass say "Вот теперь ты знаешь vim чуть-чуть. Остальное — в vimtutor: семь уроков, по одному в день."

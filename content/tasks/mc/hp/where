@@ -1,0 +1,5 @@
+#!/bin/sh
+# Называет файл, где лежал пароль: студент видит, что нашёл и где именно.
+f=$(grep -rl 'пароль от wi-fi' /home/student/notes 2>/dev/null | head -1)
+[ -n "$f" ] || exit 0
+printf '\033[36m│\033[0m Пароль лежал в \033[1m~%s\033[0m\n' "${f#/home/student}"

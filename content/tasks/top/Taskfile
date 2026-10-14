@@ -1,0 +1,51 @@
+# top — «диспетчер задач» Linux (исходник it_bastion: process/41_top «поработайте с top»; своя
+# вариация с разрешения пользователя). В образе две службы от student: indexer крутит пустой цикл
+# (100% одного ядра), cache-warmer держит ~200 МБ памяти. Их PID systemd пишет в /var/lib/hp-top
+# (только root), а при остановке — <имя>.dead (ExecStopPost): проверка идёт на копии файлов и
+# живых процессов не видит. Шаг 1: найти пожирателя процессора (P), записать PID и
+# остановить. Шаг 2: найти, кто держит память (M), и остановить. ps/pgrep/pkill/killall
+# закрыты — смотреть приходится через top.
+
+image top:1
+
+# data: файлы руками — две «службы» и их юниты
+copy data/usr/local/bin /usr/local/bin
+copy data/etc/systemd/system /etc/systemd/system
+run systemctl enable indexer.service cache-warmer.service >/dev/null 2>&1
+
+hidden hp
+
+settings
+  pager on
+
+say "Компьютер тормозит, вентилятор воет. Пора узнать, кто это делает."
+read brief.md
+
+stage
+  say "Кто-то ест процессор. Найди его через top, запиши его PID в /home/student/cpu.txt и останови"
+  solve:
+    pid=$(cat /var/lib/hp-top/indexer.pid); echo "$pid" > /home/student/cpu.txt; kill "$pid"
+  check exec cpu
+  neutral ls cat pwd cd top echo kill
+  block ps match "." say "Сегодня смотрим только через top."
+  block pgrep match "." say "Сегодня смотрим только через top."
+  block pkill match "." say "Останавливать — по номеру: kill PID или k прямо в top."
+  block killall match "." say "Останавливать — по номеру: kill PID или k прямо в top."
+  on pass say "Вентилятор стих. Но память всё ещё кто-то держит."
+  hint tries 5 say "В top нажми P — наверху окажется самый прожорливый по процессору. Его номер — в столбце PID."
+  hint tries 10 say "Номер в файл — через echo и >. Остановить — kill НОМЕР или k прямо в top."
+
+stage
+  say "Процессор свободен, но память кто-то держит. Найди его через top и останови"
+  solve kill "$(cat /var/lib/hp-top/cache-warmer.pid)"
+  check exec mem
+  neutral ls cat pwd cd top echo kill
+  block ps match "." say "Сегодня смотрим только через top."
+  block pgrep match "." say "Сегодня смотрим только через top."
+  block pkill match "." say "Останавливать — по номеру: kill PID или k прямо в top."
+  block killall match "." say "Останавливать — по номеру: kill PID или k прямо в top."
+  on pass say "top показывает всё, что происходит в системе прямо сейчас. Открывай его первым, когда что-то тормозит."
+  hint tries 5 say "P сортирует по процессору. А какая клавиша — по памяти? Загляни в теорию: readme."
+  hint tries 10 say "M — и смотри на столбцы RES и %MEM."
+
+exec finale

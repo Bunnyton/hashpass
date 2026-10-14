@@ -32,11 +32,12 @@ cd "$(dirname "$0")"
 # Формат строки: 'Название блока: каталог каталог …' (имена каталогов заданий здесь).
 BLOCKS=(
     'Знакомство: intro-hello first-commands cd-abs root-tour'
-    'Файлы и каталоги: cp-basics cp-more mv-basics rm-basics inventory ls-mv-cp'
-    'Поиск: pipes grep-hunt find'
+    'Файлы и каталоги: cp-basics cp-more mv-basics rm-basics inventory ls-mv-cp links mc'
+    'Поиск: pipes streams grep-hunt find xargs'
     'Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
-    'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit'
-    'Редактор и текст: vim-intro fruit-store'
+    'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit top'
+    'Редактор и текст: vim-intro vim-more fruit-store'
+    'Скрипты: my-command'
     'Призы: star-wars'
     'Архив: first-steps showcase'
 )

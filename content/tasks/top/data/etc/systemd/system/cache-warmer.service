@@ -1,0 +1,11 @@
+[Unit]
+Description=cache-warmer
+
+[Service]
+User=student
+ExecStart=/usr/local/bin/cache-warmer
+ExecStartPost=+/bin/sh -c 'mkdir -p -m 700 /var/lib/hp-top && systemctl show -p MainPID --value cache-warmer > /var/lib/hp-top/cache-warmer.pid'
+ExecStopPost=+/bin/sh -c 'touch /var/lib/hp-top/cache-warmer.dead'
+
+[Install]
+WantedBy=multi-user.target

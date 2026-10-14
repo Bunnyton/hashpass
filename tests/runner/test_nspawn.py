@@ -65,8 +65,33 @@ def test_run_live_goes_through_the_booted_console_machine(tmp_path, monkeypatch)
     r = NspawnRunner(tmp_path)
     r.live_machine = "hp-abc"
     assert r.run_live(["sh", "-c", "echo x > /home/student/f"]).exit_code == 0
-    assert calls[-1] == ["sudo", "machinectl", "shell", "hp-abc", "/bin/sh", "-c",
-                         "echo x > /home/student/f"]
+    assert calls[-1][:6] == ["sudo", "machinectl", "shell", "hp-abc", "/bin/sh", "-c"]
     r.live_machine = None                                  # no console (build): plain run
     r.run_live(["true"])
     assert calls[-1][:2] == ["sudo", "systemd-nspawn"]
+
+
+@pytest.mark.tier1
+def test_run_live_script_survives_systemd_expansion(tmp_path, monkeypatch):
+    """
+    A live script reaches the machine with no `$` and still runs verbatim.
+
+    `machinectl shell` lets systemd expand `${VAR}` in its arguments: `${at}a` reached the mc
+    task's hide script as `a` (2026-10-14) and sed appended the password after EVERY line.
+    """
+    import subprocess  # noqa: PLC0415
+
+    from hashpass.runner import nspawn  # noqa: PLC0415
+    real_run = subprocess.run
+    calls: list[list[str]] = []
+    monkeypatch.setattr(nspawn.subprocess, "run",
+                        lambda argv, **_kw: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""))
+    r = NspawnRunner(tmp_path)
+    r.live_machine = "hp-abc"
+    script = 'at=3; f="x y"; echo "${at}a $f $((at + 1))" > ' + str(tmp_path / "out")
+    r.run_live(["sh", "-c", script])
+    sent = calls[-1][4:]
+    assert sent[:2] == ["/bin/sh", "-c"]
+    assert not any("$" in a or "{" in a for a in sent)
+    real_run(sent, check=True)                             # what the machine's /bin/sh would do
+    assert (tmp_path / "out").read_text() == "3a x y 4\n"

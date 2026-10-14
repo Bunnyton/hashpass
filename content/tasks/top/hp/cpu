@@ -1,0 +1,6 @@
+#!/bin/sh
+# Шаг 1: в cpu.txt — PID того самого indexer, и он остановлен. Проверка идёт на копии файлов, живых
+# процессов она не видит: PID при старте и отметку о смерти (ExecStopPost) пишет systemd.
+want=$(cat /var/lib/hp-top/indexer.pid 2>/dev/null)
+got=$(tr -d ' \t\r\n' < /home/student/cpu.txt 2>/dev/null)
+[ -n "$want" ] && [ "$got" = "$want" ] && [ -e /var/lib/hp-top/indexer.dead ]

@@ -1,0 +1,11 @@
+[Unit]
+Description=indexer
+
+[Service]
+User=student
+ExecStart=/usr/local/bin/indexer
+ExecStartPost=+/bin/sh -c 'mkdir -p -m 700 /var/lib/hp-top && systemctl show -p MainPID --value indexer > /var/lib/hp-top/indexer.pid'
+ExecStopPost=+/bin/sh -c 'touch /var/lib/hp-top/indexer.dead'
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,7 @@ import argparse
 import base64
 import contextlib
 import getpass
+import io as _bytes_io
 import json
 import os
 import re
@@ -12,6 +13,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tarfile
 import termios
 import threading
 import time
@@ -1555,6 +1557,45 @@ def _push_call(fn: Callable[..., object], *args: object, **kwargs: object) -> ob
         raise RuntimeError(_pool_forbidden_message(exc)) from exc
 
 
+_SOURCE_NAME = "source.tar.gz"          # the whole task dir, attached on push (authors/admins read it)
+_SOURCE_MAX = 8 * 1024 * 1024           # the pool's per-attachment cap
+
+
+def pack_task_source(task_dir: Path) -> bytes:
+    """Pack a task directory as it is (Taskfile, briefs, data/, hp/) into a tar.gz, paths relative."""
+    buf = _bytes_io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for path in sorted(task_dir.rglob("*")):
+            if "__pycache__" in path.parts:
+                continue
+            tar.add(path, arcname=path.relative_to(task_dir).as_posix(), recursive=False)
+    return buf.getvalue()
+
+
+def unpack_task_source(blob: bytes, dest: Path) -> None:
+    """Unpack a `pack_task_source` archive into `dest`; a member escaping it raises TarError."""
+    dest.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=_bytes_io.BytesIO(blob), mode="r:gz") as tar:
+        tar.extractall(dest, filter="data")
+
+
+def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> None:
+    """On push, upload the whole task dir so authors/admins can read the task as it was written."""
+    name, version = split_ref(ref)
+    try:
+        blob = pack_task_source(task_dir)
+        if len(blob) > _SOURCE_MAX:
+            io.write(f"\x1b[33m⚠ исходники задания не приложены: архив {len(blob) // 1024} КиБ "
+                     f"больше {_SOURCE_MAX // 1024 // 1024} МиБ\x1b[0m\n")
+            return
+        client.push_attachment(name, version, _SOURCE_NAME, blob)
+    except (urllib.error.URLError, OSError, RuntimeError, ValueError, tarfile.TarError) as exc:
+        io.write(f"\x1b[33m⚠ не удалось приложить исходники задания: {exc}\x1b[0m\n")
+        return
+    io.write(f"\x1b[36m↑ приложены исходники задания\x1b[0m: {_SOURCE_NAME} "
+             f"(скачать: hashengine source {ref})\n")
+
+
 def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io) -> None:
     """On push, upload the Taskfile the image remembers (so its solutions/interactivity are on the pool)."""
     if ref == base_ref():
@@ -1574,6 +1615,7 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
         io.write(f"\x1b[33m⚠ не удалось прикрепить Taskfile: {exc}\x1b[0m\n")
         return
     io.write(f"\x1b[36m↑ прикреплён Taskfile\x1b[0m: {path.name}\n")
+    _attach_source(client, ref, path.parent, io)
 
 
 def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0913
@@ -1697,6 +1739,46 @@ def cmd_pull(env: Home, ref: str, registry: str | None = None, io: Io | None = N
     copied = RemoteRegistry(url).pull(ref, store)
     sys.stdout.write(f"подтянуто {ref} (слоёв: {len(copied)})\n")
     return 0
+
+
+def cmd_source(env: Home, ref: str, dest: str | None = None, registry: str | None = None,
+               io: Io | None = None) -> int:
+    """
+    Download a pool task's sources as its author wrote them (authors/admins only).
+
+    `source.tar.gz` unpacks into `dest` (default: ./<task name>); a task pushed before sources
+    were attached has only its Taskfile, which is saved there instead.
+    """
+    io = io or _default_io()
+    url = _ensure_registry_login(env, registry, io)
+    client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+    name, version = split_ref(ref)
+    out = Path(dest) if dest else Path.cwd() / name.rsplit("/", 1)[-1]
+    if out.exists() and any(out.iterdir()):
+        msg = f"{out} уже существует и не пуст — укажите другой каталог: hashengine source {ref} <каталог>"
+        raise RuntimeError(msg)
+    for filename in (_SOURCE_NAME, "Taskfile"):
+        try:
+            blob = client.get_attachment(name, version, filename)
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.NOT_FOUND:
+                continue
+            if exc.code == HTTPStatus.FORBIDDEN:
+                msg = "исходники заданий видят только авторы и администраторы пула"
+                raise RuntimeError(msg) from exc
+            raise
+        if filename == _SOURCE_NAME:
+            unpack_task_source(blob, out)
+            io.write(f"\x1b[32m✓ исходники {ref}\x1b[0m → {out}\n")
+        else:
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "Taskfile").write_bytes(blob)
+            io.write(f"\x1b[32m✓ {ref}\x1b[0m → {out / 'Taskfile'}\n"
+                     "\x1b[2m  задание выложено до того, как пул стал хранить исходники целиком: "
+                     "здесь только Taskfile (остальное — после следующего push автора)\x1b[0m\n")
+        return 0
+    msg = f"к {ref} на пуле не приложены исходники (нет ни source.tar.gz, ни Taskfile)"
+    raise RuntimeError(msg)
 
 
 def cmd_remote_images(env: Home, registry: str | None = None, io: Io | None = None) -> int:

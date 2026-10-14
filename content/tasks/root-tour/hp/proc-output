@@ -1,6 +1,0 @@
-#!/bin/sh
-set -eu
-
-got=$(printf '%s' "${HP_LAST_OUT:-}" | sed 's/\r$//')
-want=$(cat /proc/version)
-[ "$got" = "$want" ]

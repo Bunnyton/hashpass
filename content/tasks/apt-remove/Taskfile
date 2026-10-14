@@ -19,7 +19,7 @@ read brief.md
 stage
   say "Удали пакет sl из системы"
   solve sudo apt-get remove -y sl
-  check exec sh -c '! command -v sl >/dev/null 2>&1 && ! test -x /usr/games/sl'
+  observe bool /usr/games/sl
   neutral ls cat pwd
   on pass say "Удалённый пакет оставляет библиотеки-сироты, которые ставились ради него. Их подчищает apt autoremove."
   hint output "Permission denied" say "apt отказал: прав не хватает. Кто имеет право удалять пакеты — и как одолжить его права на одну команду?"

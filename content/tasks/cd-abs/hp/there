@@ -1,5 +1,0 @@
-#!/bin/sh
-# Принято: последней командой был ls, и в его выводе — содержимое cd_to_me.
-case "$1" in ls|ls\ *) ;; *) exit 1 ;; esac
-case "${HP_LAST_OUT:-}" in *look_here.txt*) exit 0 ;; esac
-exit 1

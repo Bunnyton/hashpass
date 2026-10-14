@@ -1,0 +1,48 @@
+# my-command — своя команда (исходник it_bastion: scripts/48_run_counter «напишите и установите
+# собственную команду, которая выводит количество запусков всего и после перезагрузки; для
+# перезагрузки — restart.sh»). Лесенка: шаг 1 — counter печатает номер запуска (счёт в ~/.counter);
+# шаг 2 — два числа: после перезагрузки (/tmp/counter) и всего. «Перезагрузка» — команда restart
+# (очищает /tmp и /dev/shm, как настоящий reboot). Проверка без скриптов (пользователь, 2026-10-14:
+# «вызов counter должен вывести 1 2 3, этот вывод детерминирован»): файл команды есть
+# (observe bool) и вывод с чистого счёта совпал с эталоном (observe output).
+
+image my-command:1
+
+# data: data/bin/restart — руками
+copy data/bin /usr/local/bin
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "Команды в Linux — это просто файлы. Значит, можно написать свою."
+read brief.md
+
+stage
+  say "Сделай команду counter: она печатает, в который раз её запустили (счёт — в ~/.counter). С чистого счёта counter; counter; counter выводит 1, 2, 3"
+  solve:
+    printf '#!/bin/sh\nn=$(cat ~/.counter 2>/dev/null || echo 0)\nn=$((n + 1))\necho $n > ~/.counter\necho $n\n' | sudo tee /usr/local/bin/counter >/dev/null
+    sudo chmod +x /usr/local/bin/counter
+    rm -f ~/.counter; counter; counter; counter
+  observe bool /usr/local/bin/counter
+  observe output
+  on pass say "Теперь counter — такая же команда, как ls. Только твоя."
+  hint tries 5 say "Счёт уже ушёл дальше единицы? Начни с чистого: удали ~/.counter."
+  hint tries 10 say "Прочитай число из файла, прибавь 1, запиши обратно, напечатай. И проверь: echo $PATH — лежит ли скрипт в одном из этих каталогов?"
+  hint tries 15 say "Загугли: «bash прочитать число из файла и увеличить»."
+
+stage
+  say "Пусть counter печатает два числа: сколько раз её запускали после перезагрузки (счёт — в /tmp/counter) и сколько всего. С чистого счёта counter; restart; counter выводит 1 1, затем 1 2"
+  solve:
+    printf '#!/bin/sh\nn=$(cat ~/.counter 2>/dev/null || echo 0)\nn=$((n + 1))\necho $n > ~/.counter\nb=$(cat /tmp/counter 2>/dev/null || echo 0)\nb=$((b + 1))\necho $b > /tmp/counter\necho $b $n\n' | sudo tee /usr/local/bin/counter >/dev/null
+    rm -f ~/.counter /tmp/counter; counter; restart; counter
+  observe bool /usr/local/bin/counter
+  observe output
+  on enter read reboot.md
+  on pass say "Что хранить в /tmp, а что в домашнем каталоге — первый вопрос любой программы, которая что-то запоминает."
+  hint tries 5 say "Начни с чистого счёта: удали оба файла. Какое из двух чисел restart должен сбросить?"
+  hint tries 10 say "Одному числу нужно место, которое перезагрузка очищает, другому — которое она не трогает."
+
+exec finale

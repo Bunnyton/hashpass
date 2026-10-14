@@ -3,7 +3,6 @@
 image cp-more:1
 
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/dir1 --seed 150 --depth 3 --dirs 9 --files 34 --lines 5-40 --plant 'file1.txt=Любопытной Варваре...' --plant 'file2.txt=...на базаре нос оторвали' --plant 'file3.txt=но она вернулась'
-# data: dir1.sha256 в скрытом слое: (cd data && find dir1 -type f | LC_ALL=C sort | xargs sha256sum) — эталон для проверки
 copy data/dir1 /home/student/dir1
 run mkdir -p /home/student/dir2
 run chown -R student:student /home/student/dir1 /home/student/dir2
@@ -19,7 +18,7 @@ read brief.md
 stage
   say "Скопируй всё содержимое /home/student/dir1 в /home/student/dir2 одной командой"
   solve cp -r /home/student/dir1/. /home/student/dir2/
-  check exec grade
+  observe /home/student/dir1 /home/student/dir2
   neutral ls cat pwd
   on pass say "Тридцать восемь файлов в десяти каталогах — одной командой, и dir1 цел."
   hint output "omitting directory" say "cp пропустил каталоги: «omitting directory». Каталог с содержимым он копирует только с ключом рекурсии — -r (recursive)."

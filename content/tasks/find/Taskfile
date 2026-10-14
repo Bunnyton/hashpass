@@ -3,7 +3,8 @@
 # пять шагов по нарастающей: глубина не больше 3 (cd запрещён) → ровно 3-й уровень, только файлы
 # (-name запрещён; без -type f — Стэйтем) → каталоги 4-го уровня именно через -name → «или» (-o,
 # доза or.md при входе) → непустые файлы. Приёмка каждого шага — множество путей из вывода
-# совпадает с эталонным find (порядок любой).
+# совпадает с эталонным find (observe output: порядок любой, пути нормализуются — абсолютные,
+# относительные, с ./ и без, из ~ или из search).
 
 image find:1
 
@@ -15,6 +16,7 @@ hidden hp
 
 settings
   pager on
+  similarity 100
 
 say "find — швейцарский нож поиска. Ключей — вагон."
 read brief.md
@@ -22,7 +24,7 @@ read brief.md
 stage
   say "Найди в директории search все файлы и директории, которые находятся не глубже 3-го уровня вложенности"
   solve find /home/student/search -maxdepth 3
-  check exec grade-depth
+  observe output
   block cd match "^cd" say "Куда собрался??? Придётся тебе остаться здесь!"
   neutral ls cat pwd
   on pass say "Это только начало..."
@@ -34,7 +36,7 @@ stage
 stage
   say "Найди все файлы, которые находятся на 3-м уровне вложенности в search"
   solve find /home/student/search -mindepth 3 -maxdepth 3 -type f
-  check exec grade-level3
+  observe output
   block find match "-i?name" say "Нельзя использовать -name — уровень нужно найти, а не угадать по имени."
   neutral ls cat pwd cd
   on pass say "Глубину можно зажать с двух сторон: -mindepth снизу, -maxdepth сверху."
@@ -45,7 +47,7 @@ stage
 stage
   say "Найди все директории 4-го уровня — при помощи -name"
   solve find /home/student/search -type d -name "level4*"
-  check exec grade-level4
+  observe output
   neutral ls cat pwd cd
   on pass say "Имя может хранить больше, чем название. Здесь оно хранило глубину."
   hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."
@@ -55,7 +57,7 @@ stage
 stage
   say "Найди все файлы, которые начинаются с level2 или содержат в названии «3»"
   solve find /home/student/search -type f \( -name "level2*" -o -name "*3*" \)
-  check exec grade-or
+  observe output
   on enter read or.md
   neutral ls cat pwd cd
   on pass say "А сколько файлов начинаются с level2 И содержат тройку одновременно?"
@@ -67,7 +69,7 @@ stage
 stage
   say "Найди все непустые файлы в search"
   solve find /home/student/search -type f -not -empty
-  check exec grade-nonempty
+  observe output
   neutral ls cat pwd cd
   on pass say "Глубина, тип, имя, «или», пустота — и это лишь малая часть критериев find."
   hint output "paths must precede expression" say "find ругается на порядок: сначала где искать, потом критерии."

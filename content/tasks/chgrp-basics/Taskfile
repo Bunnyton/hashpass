@@ -25,7 +25,7 @@ stage
   solve:
     sudo chgrp student /home/student/.secret/rock.txt
     cat /home/student/.secret/rock.txt
-  check exec rocked
+  observe output
   allow chgrp cat
   neutral ls cd echo pwd
   block cat match "^sudo " say "Команда запрещена"

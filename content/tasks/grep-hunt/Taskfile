@@ -32,12 +32,14 @@ stage
 stage
   say "Тимлид спрашивает, сколько всего TODO в notes.txt. Запиши число в /home/student/todo-count.txt"
   solve grep -c TODO /home/student/legacy/notes.txt > /home/student/todo-count.txt
-  check exec count
+  observe /home/student/todo-count.txt
   neutral ls cat less pwd
   block awk match "." say "Сегодня считает grep — awk отдыхает."
   block wc match "." say "wc сегодня в отпуске вместе с тимлидом. Считать умеет и сам grep."
   block sed match "." say "sed тут не поможет: считает grep."
   block | match "." say "Без конвейера: grep умеет считать строки сам."
+  block echo match "." say "Пересчитывать руками не надо: grep умеет считать строки сам."
+  block printf match "." say "Пересчитывать руками не надо: grep умеет считать строки сам."
   on pass say "grep -c считает совпавшие строки, а grep -v, наоборот, выводит всё, кроме них."
   hint tries 5 say "Какой ключ grep выводит не сами строки, а их количество? Ответ — в grep --help."
   hint tries 10 say "Загугли: «grep посчитать количество совпадений»."

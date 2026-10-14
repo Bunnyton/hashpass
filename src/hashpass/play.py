@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hashpass.canon import FileState, Observation
-from hashpass.canon.capture import read_state
+from hashpass.canon.capture import PERMS, read_perms, read_state
 from hashpass.grade import grade_stage
 from hashpass.hints import StuckState, match_hint
 from hashpass.progress import TaskProgress, current_stage, mark_passed_local
@@ -30,16 +30,22 @@ def capture_candidate(rootfs: Path, checks: StageChecks, last_output: str) -> Ob
     Mirrors each canonical key exactly (no dir recursion): a content key (a real text file whose
     reference has content) is read for content; every existence/kind-only key -- a directory, a
     binary, or an `observe bool` path -- is captured as KIND ONLY (text=None), so it matches on
-    existence, not content. Then the student's last stdout folds in under OUTPUT_KEY.
+    existence, not content (a file with two names still just "is" -- `hardlink` reads as `file`
+    there). A link key keeps where it points. Then the student's last stdout folds in under
+    OUTPUT_KEY.
     """
     rootfs = Path(rootfs)
     candidate: Observation = {}
     for key, want in checks.canonical.items():
         if key == OUTPUT_KEY:
             continue
-        state = read_state(rootfs / key)
-        content = want.kind == "file" and want.text is not None
-        candidate[key] = state if content else FileState(state.kind, None)
+        if key.startswith(PERMS):
+            candidate[key] = read_perms(rootfs / key[len(PERMS):])
+            continue
+        state = read_state(rootfs / key, "/" + key)
+        content = want.kind == "link" or (want.kind in ("file", "hardlink") and want.text is not None)
+        kind = "file" if state.kind == "hardlink" and want.kind == "file" and not content else state.kind
+        candidate[key] = state if content else FileState(kind, None)
     candidate[OUTPUT_KEY] = FileState("file", last_output)
     return candidate
 
