@@ -276,6 +276,7 @@ class PoolTUI(App):
         self._pending: list[TaskRow] = []            # download order; Enter moves a row first
         self._wake = threading.Condition(threading.Lock())
         self._stopping = False
+        self._paused = False                         # a task console is open: queued pulls wait
         self._autoload = True                        # start downloading everything on launch
         self._jobs: dict[str, TaskRow] = {}          # queued or downloading, by ref
         self._active: TaskRow | None = None
@@ -439,9 +440,26 @@ class PoolTUI(App):
 
     def _next_job(self) -> TaskRow | None:
         with self._wake:
-            while not self._pending and not self._stopping:
+            while (not self._pending or self._paused) and not self._stopping:
                 self._wake.wait()
             return None if self._stopping else self._pending.pop(0)
+
+    @contextlib.contextmanager
+    def downloads_paused(self):
+        """
+        Hold the download queue while a task console is open (the one in flight still finishes).
+
+        The console's typed theory is paced by the same process; background pulls (unpacking,
+        sha256) made it stutter (user, 2026-10-15: «подлагивать чтение стало, рывками»).
+        """
+        with self._wake:
+            self._paused = True
+        try:
+            yield
+        finally:
+            with self._wake:
+                self._paused = False
+                self._wake.notify_all()
 
     def _download_worker(self) -> None:
         """Worker thread: take queued tasks one by one and download each (its layers in parallel)."""
@@ -768,7 +786,7 @@ class PoolTUI(App):
         # reuse cli._now_iso (time.strftime needs a format string).
         io = Io(read=_read_line, write=lambda s: sys.stdout.write(s),  # noqa: PLW0108
                 clock=_now_iso)
-        with self.suspend():
+        with self.suspend(), self.downloads_paused():
             self._task_frame_start(row)
             cmd_pool_run(self.env, row.ref, io)
         # Textual's alt-screen buffer resumes on __exit__ — TUI is instantly back

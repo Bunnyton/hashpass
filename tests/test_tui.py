@@ -435,3 +435,19 @@ def test_the_chosen_theme_survives_a_restart(tmp_path: Path) -> None:
 
     asyncio.run(_choose())
     assert asyncio.run(_reopen()) == "nord"
+
+
+@pytest.mark.tier1
+def test_downloads_wait_while_a_task_console_is_open(tmp_path: Path) -> None:
+    """User, 2026-10-15: «подлагивать чтение стало, рывками» -- background pulls ran during the task."""
+    app = PoolTUI(_env(tmp_path), "http://pool.example", "stud", "tok")
+    row = TaskRow(ref="a:1", number=1, block="Б", available=True, digest="")
+    taken: list[str] = []
+    worker = threading.Thread(target=lambda: taken.append(app._next_job().ref), daemon=True)  # noqa: SLF001
+    with app.downloads_paused():
+        app._enqueue(row)  # noqa: SLF001
+        worker.start()
+        worker.join(timeout=0.5)
+        assert taken == []                        # a console is open: the queue waits
+    worker.join(timeout=2)
+    assert taken == ["a:1"]                       # back in the catalog: it goes on
