@@ -459,6 +459,13 @@ class RemoteRegistry:
                    headers={"Authorization": f"Bearer {self._auth_token(token)}",
                             "Content-Type": "application/octet-stream"})
 
+    def get_attachment(self, name: str, version: str, filename: str, *,
+                       token: str | None = None) -> bytes:
+        """Download one attachment of a pool card (authors/admins; raises HTTPError 403/404)."""
+        query = "?" + urllib.parse.urlencode({"name": filename})
+        return self._send("GET", f"/attachment/{name}/{version}{query}",
+                          headers={"Authorization": f"Bearer {self._auth_token(token)}"})
+
     def set_catalog_layout(self, blocks: list[dict[str, object]], *,
                            token: str | None = None) -> dict[str, object]:
         """Set the pool's catalog layout (admin); return {"catalog": numbered rows, "removed": refs}."""

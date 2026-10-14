@@ -63,15 +63,68 @@ def test_attach_taskfile_uploads_when_present(tmp_path):
     src.mkdir()
     (src / "f").write_text("x", encoding="utf-8")
     store.save("u/lab", "1", src, ())
-    tf = tmp_path / "Taskfile"
+    tdir = tmp_path / "lab"
+    (tdir / "hp").mkdir(parents=True)
+    tf = tdir / "Taskfile"
     tf.write_text("stage one\n", encoding="utf-8")
+    (tdir / "hp" / "check").write_text("#!/bin/sh\n", encoding="utf-8")
     store.set_taskfile_path("u/lab:1", str(tf))
     client = _FakeClient()
     out: list[str] = []
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
     cli._attach_taskfile(client, store, "u/lab:1", io)   # noqa: SLF001
-    assert client.calls == [("u/lab", "1", "Taskfile", b"stage one\n", True)]
+    assert client.calls[0] == ("u/lab", "1", "Taskfile", b"stage one\n", True)
+    name, version, filename, blob, taskfile = client.calls[1]   # the whole task dir, as is
+    assert (name, version, filename, taskfile) == ("u/lab", "1", "source.tar.gz", False)
+    dest = tmp_path / "out"
+    cli.unpack_task_source(blob, dest)
+    assert (dest / "Taskfile").read_text(encoding="utf-8") == "stage one\n"
+    assert (dest / "hp" / "check").exists()
     assert "прикреплён Taskfile" in "".join(out)
+    assert "исходники задания" in "".join(out)
+
+
+@pytest.mark.tier1
+def test_unpack_task_source_refuses_paths_outside_dest(tmp_path):
+    import io as _io  # noqa: PLC0415
+    import tarfile  # noqa: PLC0415
+    buf = _io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = b"evil"
+        info = tarfile.TarInfo("../escape.txt")
+        info.size = len(data)
+        tar.addfile(info, _io.BytesIO(data))
+    with pytest.raises(tarfile.TarError):
+        cli.unpack_task_source(buf.getvalue(), tmp_path / "out")
+    assert not (tmp_path / "escape.txt").exists()
+
+
+@pytest.mark.tier2
+def test_source_downloads_the_whole_task_or_falls_back_to_taskfile(registry, tmp_path):
+    from hashpass.imagestore.store import ImageStore as _Store  # noqa: PLC0415
+    src = tmp_path / "seed"
+    src.mkdir()
+    (src / "f").write_text("x", encoding="utf-8")
+    _Store(registry.store.root).save("bob/lab", "1", src, ())
+    _Store(registry.store.root).save("bob/old", "1", src, ())
+    registry.users.add("bob", "pw-correct", role="author")
+    registry.users.add("alice", "pw-correct", role="author")
+    env = _env(tmp_path)
+    bob = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / "bob-creds.json"))
+    bob.login("bob", "pw-correct")
+    tdir = tmp_path / "lab"
+    tdir.mkdir()
+    (tdir / "Taskfile").write_text("stage one\n", encoding="utf-8")
+    bob.push_attachment("bob/lab", "1", "source.tar.gz", cli.pack_task_source(tdir))
+    bob.push_attachment("bob/old", "1", "Taskfile", b"stage old\n", taskfile=True)
+    RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds)).login("alice", "pw-correct")
+    out: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
+    assert cli.cmd_source(env, "bob/lab:1", str(tmp_path / "got"), registry.base_url, io=io) == 0
+    assert (tmp_path / "got" / "Taskfile").read_text(encoding="utf-8") == "stage one\n"
+    assert cli.cmd_source(env, "bob/old:1", str(tmp_path / "old"), registry.base_url, io=io) == 0
+    assert (tmp_path / "old" / "Taskfile").read_text(encoding="utf-8") == "stage old\n"
+    assert "только Taskfile" in "".join(out)
 
 
 @pytest.mark.tier1

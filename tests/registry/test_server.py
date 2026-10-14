@@ -473,3 +473,24 @@ def test_in_flight_counts_a_request_until_its_body_is_sent():
     assert b"".join(body) == b"ab"
     body.close()
     assert wrapped.idle()
+
+
+@pytest.mark.tier2
+def test_attachment_get_is_for_authors_and_admins_only(registry, tmp_path):
+    """Task sources (Taskfile, source.tar.gz) carry the solutions: any author/admin reads, students never."""
+    _seed_ns(registry.store, tmp_path, "bob/app")
+    for user, role in (("bob", "author"), ("alice", "author"), ("root", "admin"), ("kid", "student")):
+        registry.users.add(user, "pw-correct", role=role)
+
+    def auth(user: str) -> dict[str, str]:
+        token = json.loads(_login(registry.base_url, user, "pw-correct")[1])["token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    url = f"{registry.base_url}/attachment/bob/app/1?name=source.tar.gz"
+    assert _http("PUT", url, data=b"tgz-bytes", headers=auth("bob"))[0] == HTTPStatus.CREATED
+    assert _http("GET", url)[0] == HTTPStatus.UNAUTHORIZED
+    assert _http("GET", url, headers=auth("kid"))[0] == HTTPStatus.FORBIDDEN
+    for reader in ("bob", "alice", "root"):                 # another author may read, not write
+        assert _http("GET", url, headers=auth(reader)) == (HTTPStatus.OK, b"tgz-bytes")
+    missing = f"{registry.base_url}/attachment/bob/app/1?name=nope.txt"
+    assert _http("GET", missing, headers=auth("alice"))[0] == HTTPStatus.NOT_FOUND
