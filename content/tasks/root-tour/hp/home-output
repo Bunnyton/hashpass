@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+words() {
+  tr -s '[:space:]' '\n' | sed '/^$/d' | sort
+}
+
+got=$(printf '%s\n' "${HP_LAST_OUT:-}" | words)
+want=$(ls -1 /home | words)
+[ "$got" = "$want" ]

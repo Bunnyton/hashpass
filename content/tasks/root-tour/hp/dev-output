@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+one_line() {
+  tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//'
+}
+
+got=$(printf '%s\n' "${HP_LAST_OUT:-}" | one_line)
+want=$(ls -l /dev/null | one_line)
+[ "$got" = "$want" ]
