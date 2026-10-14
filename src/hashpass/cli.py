@@ -1579,6 +1579,21 @@ def unpack_task_source(blob: bytes, dest: Path) -> None:
         tar.extractall(dest, filter="data")
 
 
+def _attach_about(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> None:
+    """On push, attach the task's about.md: the pool shows it as the task's description."""
+    about = task_dir / "about.md"
+    if not about.is_file():
+        io.write("\x1b[2mabout.md нет — у задания на пуле не будет описания\x1b[0m\n")
+        return
+    name, version = split_ref(ref)
+    try:
+        client.push_attachment(name, version, about.name, about.read_bytes())
+    except (urllib.error.URLError, OSError, RuntimeError, ValueError) as exc:
+        io.write(f"\x1b[33m⚠ не удалось приложить about.md: {exc}\x1b[0m\n")
+        return
+    io.write("\x1b[36m↑ описание\x1b[0m: about.md\n")
+
+
 def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> None:
     """On push, upload the whole task dir so authors/admins can read the task as it was written."""
     name, version = split_ref(ref)
@@ -1615,6 +1630,7 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
         io.write(f"\x1b[33m⚠ не удалось прикрепить Taskfile: {exc}\x1b[0m\n")
         return
     io.write(f"\x1b[36m↑ прикреплён Taskfile\x1b[0m: {path.name}\n")
+    _attach_about(client, ref, path.parent, io)
     _attach_source(client, ref, path.parent, io)
 
 

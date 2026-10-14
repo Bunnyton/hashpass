@@ -55,3 +55,13 @@ def test_ref_path_safety(tmp_path):
     for bad in ("../evil:1", "..:1", "a/../../x:1"):
         with pytest.raises(ValueError, match=r"образ|версия"):
             store.put_file(bad, "f", b"x")
+
+
+@pytest.mark.tier1
+def test_about_md_is_the_description(tmp_path):
+    """A task's about.md (attached on push) IS its description -- edited in the task, not the web."""
+    store = AttachmentStore(tmp_path)
+    store.set_description("lab:1", "старое описание из веба")
+    store.put_file("lab:1", "about.md", "Права в Linux: chmod.\n".encode())
+    assert store.describe("lab:1")["description"] == "Права в Linux: chmod."
+    assert store.describe("other:1")["description"] == ""

@@ -344,6 +344,14 @@ def _prepare_files(files: list[dict]) -> list[dict]:
              "taskfile": bool(f.get("taskfile"))} for f in files]
 
 
+def _about_parts(text: str) -> tuple[str, list[str]]:
+    """Split an about.md into its `# title` and paragraphs (blank-line separated), for the card."""
+    lines = text.strip().splitlines()
+    title = lines[0][2:].strip() if lines and lines[0].startswith("# ") else ""
+    body = "\n".join(lines[1:] if title else lines)
+    return title, [p.strip() for p in body.split("\n\n") if p.strip()]
+
+
 def _prepare_image(row: dict) -> dict:
     """Shape one image row (ref + files + description) for a template."""
     ref = str(row["ref"])
@@ -353,6 +361,7 @@ def _prepare_image(row: dict) -> dict:
             "kind": str(row.get("kind", "image")), "number": row.get("number"),
             "block_name": str(row.get("block_name", "")),
             "description": str(row.get("description", "")),
+            "about": _about_parts(str(row.get("description", ""))),
             "hidden": hidden, "files": _prepare_files(files)}
 
 

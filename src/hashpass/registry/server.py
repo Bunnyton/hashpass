@@ -68,7 +68,6 @@ _USER_RE = LOGIN_RE  # safe as a login + a per-user progress filename
 _AUTHOR_ROLES = ("author", "admin")
 _MAX_COMMENT = 500
 _MAX_ATTACH = 8 * 1024 * 1024   # per-file attachment cap (8 MiB)
-_MAX_DESC = 2000                # image description cap
 _MAX_HISTORY = 500              # command-history entries kept per submission
 _MAX_CMD = 1000                 # per-command length kept
 _AUTH_VERDICTS = ("typed", "pasted", "unknown")
@@ -271,8 +270,6 @@ class PoolServer:
                          self._web_image_card, methods=["GET"])
         app.add_url_rule("/web/images/file", "web_image_file",
                          self._web_image_file, methods=["GET"])
-        app.add_url_rule("/web/images/describe", "web_image_describe",
-                         self._web_image_describe, methods=["POST"])
         app.add_url_rule("/web/images/attach", "web_image_attach",
                          self._web_image_attach, methods=["POST"])
         app.add_url_rule("/web/images/attach-delete", "web_image_attach_delete",
@@ -1108,20 +1105,6 @@ class PoolServer:
     def _web_forbidden(self, name: str) -> Response:
         """Render a 403 page for a card/catalog write denied by ownership (same reason as the API)."""
         return self._html(_ownership_message(name), status=HTTPStatus.FORBIDDEN)
-
-    def _web_image_describe(self) -> Response:
-        user = self._session_role(_AUTHOR_ROLES)
-        if user is None:
-            return self._redirect("/web/login")
-        ref = request.form.get("ref", "")
-        if not ref or not self.store.exists(ref):
-            return self._redirect("/web/images")
-        name = ref.partition(":")[0]
-        if not self._may_write(user, name):
-            return self._web_forbidden(name)
-        with contextlib.suppress(ValueError, OSError):
-            self.attachments().set_description(ref, request.form.get("description", "")[:_MAX_DESC])
-        return self._redirect(self._card_url(ref))
 
     def _web_image_attach(self) -> Response:
         user = self._session_role(_AUTHOR_ROLES)

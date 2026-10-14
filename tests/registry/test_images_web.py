@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from hashpass.imagestore.store import ImageStore
+from hashpass.registry.attachments import AttachmentStore
 from hashpass.registry.blob import pack_image_to_file
 from hashpass.registry.catalog import Catalog
 from hashpass.registry.remote import RemoteRegistry
@@ -130,17 +131,25 @@ def test_attachment_upload_requires_author(registry, tmp_path):
     assert exc.value.code == HTTPStatus.FORBIDDEN
 
 
+def _about(registry, ref: str, text: str) -> None:
+    """Attach a task's about.md to its card, as `hashengine push` does."""
+    AttachmentStore(Path(registry.store.root) / "attachments").put_file(ref, "about.md", text.encode())
+
+
 @pytest.mark.tier2
-def test_web_describe_and_delete(registry, tmp_path):
+def test_web_card_shows_about_md_read_only(registry, tmp_path):
     _seed(registry, "lab:1", tmp_path)
     opener, cookie = _author_cookie(registry)
     base = registry.base_url
-    _req(opener, "POST", f"{base}/web/images/describe", cookie=cookie,
-         data={"ref": "lab:1", "description": "Описание образа"})
+    _about(registry, "lab:1", "# Лаборатория\n\nОписание образа")
     _req(opener, "POST", f"{base}/web/images/attach-delete", cookie=cookie,
          data={"ref": "lab:1", "name": "nope"})   # deleting a missing file is harmless
     _, _, body = _req(opener, "GET", f"{base}/web/image/lab:1", cookie=cookie)
-    assert "Описание образа" in body
+    assert "<h3>Лаборатория</h3>" in body and "<p>Описание образа</p>" in body   # like a README
+    assert "about.md" in body and "<textarea" not in body       # read-only: edited in the task
+    status, _, _ = _req(opener, "POST", f"{base}/web/images/describe", cookie=cookie,
+                        data={"ref": "lab:1", "description": "x"})
+    assert status in (HTTPStatus.NOT_FOUND, HTTPStatus.METHOD_NOT_ALLOWED)
 
 
 @pytest.mark.tier2
@@ -300,9 +309,6 @@ def test_web_write_routes_denied_for_other_authors_namespace(registry, tmp_path)
     opener, cookie = _login_cookie(registry, "alice", "pass123!")
     base = registry.base_url
 
-    status, _, _ = _req(opener, "POST", f"{base}/web/images/describe", cookie=cookie,
-                        data={"ref": "bob/lab:1", "description": "x"})
-    assert status == HTTPStatus.FORBIDDEN
     status, _, _ = _req(opener, "POST", f"{base}/web/images/attach-delete", cookie=cookie,
                         data={"ref": "bob/lab:1", "name": "nope"})
     assert status == HTTPStatus.FORBIDDEN
@@ -344,8 +350,7 @@ def test_web_write_routes_allowed_for_own_namespace(registry, tmp_path):
     student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
     sc = RemoteRegistry(registry.base_url)
 
-    _req(opener, "POST", f"{base}/web/images/describe", cookie=cookie,
-         data={"ref": "alice/lab:1", "description": "Описание образа"})
+    _about(registry, "alice/lab:1", "Описание образа")
     _, _, body = _req(opener, "GET", f"{base}/web/image/{urllib.parse.quote('alice/lab:1')}",
                       cookie=cookie)
     assert "Описание образа" in body
@@ -370,9 +375,7 @@ def test_web_write_routes_allowed_for_admin_on_others_namespace(registry, tmp_pa
     opener, cookie = _author_cookie(registry)
     base = registry.base_url
 
-    status, _, _ = _req(opener, "POST", f"{base}/web/images/describe", cookie=cookie,
-                        data={"ref": "bob/lab:1", "description": "Описание образа"})
-    assert status in (HTTPStatus.OK, HTTPStatus.SEE_OTHER, HTTPStatus.FOUND)
+    _about(registry, "bob/lab:1", "Описание образа")
     _, _, body = _req(opener, "GET", f"{base}/web/image/{urllib.parse.quote('bob/lab:1')}",
                       cookie=cookie)
     assert "Описание образа" in body

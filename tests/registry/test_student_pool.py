@@ -68,13 +68,14 @@ def test_attach_taskfile_uploads_when_present(tmp_path):
     tf = tdir / "Taskfile"
     tf.write_text("stage one\n", encoding="utf-8")
     (tdir / "hp" / "check").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tdir / "about.md").write_text("Лабораторная: права.\n", encoding="utf-8")
     store.set_taskfile_path("u/lab:1", str(tf))
     client = _FakeClient()
     out: list[str] = []
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
     cli._attach_taskfile(client, store, "u/lab:1", io)   # noqa: SLF001
     assert client.calls[0] == ("u/lab", "1", "Taskfile", b"stage one\n", True)
-    name, version, filename, blob, taskfile = client.calls[1]   # the whole task dir, as is
+    name, version, filename, blob, taskfile = next(c for c in client.calls if c[2] == "source.tar.gz")
     assert (name, version, filename, taskfile) == ("u/lab", "1", "source.tar.gz", False)
     dest = tmp_path / "out"
     cli.unpack_task_source(blob, dest)
@@ -82,6 +83,8 @@ def test_attach_taskfile_uploads_when_present(tmp_path):
     assert (dest / "hp" / "check").exists()
     assert "прикреплён Taskfile" in "".join(out)
     assert "исходники задания" in "".join(out)
+    assert ("u/lab", "1", "about.md", "Лабораторная: права.\n".encode(), False) in client.calls
+    assert "описание" in "".join(out)
 
 
 @pytest.mark.tier1
