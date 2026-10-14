@@ -26,8 +26,12 @@ class _ModClient(_StubClient):
     def me(self, *, token: str) -> dict:  # noqa: ARG002
         return {"role": self.role}
 
-    def approve(self, ref: str, *, token: str | None = None) -> None:  # noqa: ARG002
+    def approve(self, ref: str, *, digest: str | None = None, token: str | None = None) -> None:  # noqa: ARG002
         self.calls.append(("approve", ref))
+        self.approved_digest = digest
+
+    def set_block_open(self, block_id: str, *, open_: bool, token: str | None = None) -> None:  # noqa: ARG002
+        self.calls.append(("block", block_id))
 
     def reject(self, ref: str, reason: str = "", *, token: str | None = None) -> None:  # noqa: ARG002
         self.calls.append(("reject", ref, reason))
@@ -42,10 +46,11 @@ def _row(ref: str, **kw: object) -> dict:
 
 
 ENTRIES = [
-    _row("bob/new:1", state="pending", available=False, preview=True),
+    _row("bob/new:1", state="pending", available=False, preview=True, digest="d-new"),
     _row("bob/upd:1", state="pending", pending_update=True),
     _row("bob/bad:1", state="rejected", reason="нет финала", rejected=True, preview=True,
-         available=False, block_name="Отклонённые", expires_at=time.time() + 3 * 86400 - 60),
+         available=False, block_name="Отклонённые", block_id="rejected",
+         expires_at=time.time() + 3 * 86400 - 60),
     _row("alice/her:1", state="approved"),
 ]
 
@@ -142,3 +147,25 @@ def test_a_student_has_no_moderation_keys(tmp_path):
 
     client = _run(tmp_path, "kid", "student", steps)
     assert client.calls == []
+
+
+@pytest.mark.tier1
+def test_approve_sends_the_digest_the_admin_saw(tmp_path):
+    async def steps(app, pilot) -> None:
+        await _goto(app, pilot, "bob/new:1")
+        await pilot.press("a")
+        await pilot.pause()
+
+    client = _run(tmp_path, "root", "admin", steps)
+    assert client.approved_digest == "d-new"
+
+
+@pytest.mark.tier1
+def test_o_on_the_rejected_block_explains_instead_of_failing(tmp_path):
+    async def steps(app, pilot) -> None:
+        await _goto(app, pilot, "bob/bad:1")
+        await pilot.press("o")
+        await pilot.pause()
+
+    client = _run(tmp_path, "root", "admin", steps)
+    assert ("block", "rejected") not in client.calls

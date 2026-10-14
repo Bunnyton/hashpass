@@ -9,6 +9,7 @@ sibling `meta.json` ({description, files:{name:{size, taskfile, uploaded_at}}}).
 import contextlib
 import json
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -28,6 +29,17 @@ def safe_filename(filename: str) -> str:
     """Reduce an uploaded name to a safe basename, or raise ValueError."""
     base = Path(filename.strip().replace("\\", "/")).name
     return _check(_FILENAME, base, "файл")
+
+
+_REF_LOCKS: dict[str, threading.Lock] = {}
+_REF_LOCKS_GUARD = threading.Lock()
+
+
+def ref_lock(root: Path, ref: str) -> threading.Lock:
+    """One lock per (store, ref): two pushes of the same task never swap its files at once."""
+    key = f"{Path(root).resolve()}|{ref}"
+    with _REF_LOCKS_GUARD:
+        return _REF_LOCKS.setdefault(key, threading.Lock())
 
 
 def ref_dir(root: Path, ref: str) -> Path:

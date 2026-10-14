@@ -213,8 +213,11 @@ class PoolServer:
         A ref outside the catalog (a base image) is not moderated: current.
         """
         entry = self.catalog().find(ref)
-        if entry is None:
-            return "current"
+        if entry is None:                             # a base image: not moderated; a task -- not listed
+            try:
+                return None if (self.store.get(ref).layer.parent / "task").exists() else "current"
+            except KeyError:
+                return "current"
         if not entry.approved_digest:
             return None
         if self._current_is_approved(entry):
@@ -248,6 +251,15 @@ class PoolServer:
                                      task_digest=entry.approved_digest)
         if not entry.approved_image:                     # a legacy entry learns its approved image
             self.catalog().set_approved_image(ref, image)
+
+    def _keep_approved_or_error(self, ref: str) -> Response | None:
+        """Copy the approved version aside, or refuse the push with a readable reason (no bare 500)."""
+        try:
+            self._keep_approved(ref)
+        except (OSError, ValueError, tarfile.TarError) as exc:
+            return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {
+                "error": f"не удалось сохранить одобренную версию {ref}: {exc} — push не принят"})
+        return None
 
     def _delete_task(self, ref: str) -> None:
         """Remove a task from the pool entirely: image, task/, approved copy, sources, files, entry."""
@@ -731,7 +743,14 @@ class PoolServer:
         _user, err = self._auth_role(("admin",))
         if err is not None:
             return self._empty(err)
-        ref = str((request.get_json(silent=True) or {}).get("ref", ""))
+        data = request.get_json(silent=True) or {}
+        ref, seen = str(data.get("ref", "")), str(data.get("digest") or "")
+        entry = self.catalog().find(ref)
+        if entry is None:
+            return self._not_found(ref)
+        if seen and seen != entry.digest:             # re-pushed since the admin looked at it
+            return self._json(HTTPStatus.CONFLICT, {
+                "error": f"{ref} перезалили, пока вы его смотрели — обновите каталог и проверьте снова"})
         if self.catalog().approve(ref, image=self._image_digest(ref)) is None:
             return self._not_found(ref)
         self.approved().remove(ref)                       # the current version IS the approved one
@@ -925,9 +944,13 @@ class PoolServer:
         return rows
 
     def _route_images(self) -> Response:
-        if self._token_user() is None:
+        user = self._token_user()
+        if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
-        return self._json(HTTPStatus.OK, {"images": self._pool_image_rows()})
+        rows = self._pool_image_rows()
+        if self.users.role(user) not in _AUTHOR_ROLES:    # a student: images + open tasks only
+            rows = [r for r in rows if r["kind"] != "task" or r.get("available")]
+        return self._json(HTTPStatus.OK, {"images": rows})
 
     # -- routes: blobs (image / task / closure / attachment) ----------------
 
@@ -943,7 +966,9 @@ class PoolServer:
             _user, err = self._authorize_write(name, version)
             if err is not None:
                 return err
-            self._keep_approved(ref)                 # students keep the approved version
+            kept = self._keep_approved_or_error(ref)  # students keep the approved version
+            if kept is not None:
+                return kept
             resp = self._receive_image(name, version)
             if resp.status_code == HTTPStatus.CREATED and self.catalog().find(ref) is not None:
                 if self._auto_approved(name):
@@ -1078,6 +1103,11 @@ class PoolServer:
             return err
         if not self.store.exists(ref) and self.catalog().find(ref) is None:
             return self._not_found(ref)
+        dependents = [r for r in self.store.list()
+                      if r != ref and ref in self.store.get(r).parents]
+        if dependents:
+            return self._json(HTTPStatus.CONFLICT, {
+                "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их"})
         self._delete_task(ref)
         return self._empty(HTTPStatus.OK)
 
@@ -1089,7 +1119,9 @@ class PoolServer:
             return err
         if not self.store.exists(ref):
             return self._empty(HTTPStatus.NOT_FOUND)
-        self._keep_approved(ref)
+        kept = self._keep_approved_or_error(ref)
+        if kept is not None:
+            return kept
         task_dir = self.store.get(ref).layer.parent / "task"
         try:
             unpack_task(request.get_data(cache=False, as_text=False), task_dir)
@@ -1123,6 +1155,16 @@ class PoolServer:
         if parts is None:
             return self._empty(HTTPStatus.NOT_FOUND)
         name, version = parts
+        ref = f"{name}:{version}"
+        view = "current" if self._fresh_for(self._token_user(), name) else self._approved_view(ref)
+        if view is None:
+            return self._not_found(ref)
+        if view == "copy":                            # the approved copy's own `from` chain
+            try:
+                refs = [r for p in self.approved().parents(ref) for r in closure_refs(p, self.store)]
+            except KeyError as exc:
+                return self._not_found(str(exc.args[0]) if exc.args else ref)
+            return self._json(HTTPStatus.OK, {"refs": [*dict.fromkeys(refs), ref]})
         try:
             refs = closure_refs(f"{name}:{version}", self.store)
         except KeyError as exc:                 # the ref itself OR one of its parents is missing

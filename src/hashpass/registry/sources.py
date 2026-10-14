@@ -14,21 +14,28 @@ import tarfile
 import uuid
 from pathlib import Path
 
-from hashpass.registry.attachments import ref_dir
+from hashpass.registry.attachments import ref_dir, ref_lock
+
+MAX_UNPACKED = 64 * 1024 * 1024   # a task's sources, unpacked: plenty for data/, never a disk bomb
 
 
 class SourceStore:
     """Per-ref source trees under `root`."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, max_unpacked: int = MAX_UNPACKED) -> None:
         """Open (creating on write) the source store rooted at `root`."""
         self._root = Path(root)
+        self._max = max_unpacked
 
     def _dir(self, ref: str) -> Path:
         return ref_dir(self._root, ref)
 
     def put_archive(self, ref: str, blob: bytes) -> None:
-        """Replace `ref`'s tree with the archive's files; an escaping member raises TarError."""
+        """Replace `ref`'s tree with the archive's files; an escaping or oversized one raises TarError."""
+        with ref_lock(self._root, ref):
+            self._put_archive(ref, blob)
+
+    def _put_archive(self, ref: str, blob: bytes) -> None:
         final = self._dir(ref)
         final.parent.mkdir(parents=True, exist_ok=True)
         tmp = final.parent / f".{final.name}.{uuid.uuid4().hex}.new"
@@ -36,6 +43,9 @@ class SourceStore:
         try:
             tmp.mkdir()
             with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as tar:
+                if sum(m.size for m in tar.getmembers()) > self._max:
+                    msg = f"исходники больше {self._max // 1024 // 1024} МиБ в распакованном виде"
+                    raise tarfile.TarError(msg)
                 tar.extractall(tmp, filter="data")
             if final.exists():
                 final.rename(old)

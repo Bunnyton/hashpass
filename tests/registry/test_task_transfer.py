@@ -64,7 +64,7 @@ def test_push_task_author_gated_then_pull(registry, tmp_path):
     task_src = tmp_path / "task"
     task_src.mkdir()
     _make_task_dir(task_src)
-    author_c.push_task(task_src, "author1/lab", "1", token=author_tok)
+    author_c.push_task(task_src, "author1/lab", "1", publish=True, token=author_tok)   # in the catalog
 
     # a logged-in student pulls the task, and the digest survives transport
     dest = tmp_path / "pulled"

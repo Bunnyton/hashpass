@@ -1552,13 +1552,19 @@ def _pool_forbidden_message(exc: urllib.error.HTTPError) -> str:
 
 
 def _push_call(fn: Callable[..., object], *args: object, **kwargs: object) -> object:
-    """Call a pool write (push/push_task); turn a 403 into a RuntimeError with the pool's reason."""
+    """Call a pool write (push/push_task); a refusal becomes a RuntimeError with the pool's reason."""
     try:
         return fn(*args, **kwargs)
     except urllib.error.HTTPError as exc:
-        if exc.code != HTTPStatus.FORBIDDEN:
-            raise
-        raise RuntimeError(_pool_forbidden_message(exc)) from exc
+        if exc.code == HTTPStatus.FORBIDDEN:
+            raise RuntimeError(_pool_forbidden_message(exc)) from exc
+        try:                                          # any other refusal that says why (409, 500 …)
+            reason = json.loads(exc.read()).get("error")
+        except (ValueError, UnicodeDecodeError, AttributeError):
+            reason = None
+        if isinstance(reason, str) and reason:
+            raise RuntimeError(reason) from exc
+        raise
 
 
 _SOURCE_NAME = "source.tar.gz"          # the whole task dir, attached on push (authors/admins read it)

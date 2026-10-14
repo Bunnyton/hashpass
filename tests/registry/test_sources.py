@@ -140,3 +140,38 @@ def test_a_task_pushed_before_source_files_lists_its_attached_archive(registry, 
     with pytest.raises(urllib.error.HTTPError) as exc:                       # nothing at all: 404
         bob.source_listing("bob/none:1")
     assert exc.value.code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.tier1
+def test_an_archive_that_unpacks_too_big_is_refused(tmp_path):
+    store = SourceStore(tmp_path / "src", max_unpacked=100)
+    d = tmp_path / "big"
+    d.mkdir()
+    (d / "Taskfile").write_bytes(b"x" * 1000)
+    blob = cli.pack_task_source(d)
+    with pytest.raises(tarfile.TarError, match="больше"):
+        store.put_archive("u/lab:1", blob)
+
+
+@pytest.mark.tier1
+def test_two_pushes_of_the_same_task_at_once_both_succeed(tmp_path):
+    """Review 2026-10-14: the second rename hit ENOTEMPTY when two PUTs of one ref overlapped."""
+    import threading  # noqa: PLC0415
+    store = SourceStore(tmp_path / "src")
+    blob = cli.pack_task_source(_task(tmp_path))
+    errors: list[BaseException] = []
+
+    def push() -> None:
+        try:
+            for _ in range(20):
+                store.put_archive("u/lab:1", blob)
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=push) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert store.read("u/lab:1", "Taskfile") == b"stage\n"

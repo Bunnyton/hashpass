@@ -475,9 +475,9 @@ class RemoteRegistry:
                    headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}",
                             "Content-Type": "application/json"})
 
-    def approve(self, ref: str, *, token: str | None = None) -> None:
-        """Admin: approve a task's current version (students get it from now on)."""
-        self._post_ref("/catalog/approve", {"ref": normalize_ref(ref)}, token)
+    def approve(self, ref: str, *, digest: str | None = None, token: str | None = None) -> None:
+        """Admin: approve a task's current version; with `digest`, only if it is still the one seen."""
+        self._post_ref("/catalog/approve", {"ref": normalize_ref(ref), "digest": digest or ""}, token)
 
     def reject(self, ref: str, reason: str = "", *, token: str | None = None) -> None:
         """Admin: reject a task's current version; the author sees the reason for a week."""
@@ -606,7 +606,7 @@ class RemoteRegistry:
     def _closure(self, ref: str) -> list[str]:
         name, version = split_ref(ref)
         try:
-            body = self._send("GET", f"/closure/{name}/{version}")
+            body = self._send("GET", f"/closure/{name}/{version}", headers=self._reader_headers())
         except urllib.error.HTTPError as exc:
             err = _not_found_error(exc, ref)
             if err is None:

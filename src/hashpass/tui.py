@@ -610,7 +610,9 @@ class PoolTUI(App):
     def action_approve(self) -> None:
         """Approve the task's current version (a, admin) -- students get it."""
         if self.role == "admin":
-            self._moderate("одобрено", lambda row: self.client.approve(row.ref, token=self.token))
+            # the digest the admin is looking at: a version re-pushed meanwhile is refused (409)
+            self._moderate("одобрено", lambda row: self.client.approve(row.ref, digest=row.digest or None,
+                                                                         token=self.token))
 
     def action_reject(self) -> None:
         """n: reject the task's current version (admin), with an optional reason."""
@@ -696,6 +698,10 @@ class PoolTUI(App):
             return
         current = next((r for r in self.rows if r.block_id == block_id), None)
         if current is None:
+            return
+        if block_id == "rejected":
+            self.notify("«Отклонённые» — служебный блок: студентам он не показывается.",
+                        severity="warning", timeout=5)
             return
         open_ = not current.block_open
         try:

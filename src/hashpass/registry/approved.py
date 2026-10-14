@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 from hashpass.imagestore.store import ImageStore, StoredImage
-from hashpass.registry.attachments import ref_dir
+from hashpass.registry.attachments import ref_dir, ref_lock
 from hashpass.registry.blob import pack_image
 
 _BLOB = "layer.blob"
@@ -34,6 +34,11 @@ class ApprovedStore:
     def take(self, ref: str, img: StoredImage, task_dir: Path, store: ImageStore, *,
              task_digest: str = "") -> str:
         """Copy the current version (blob + task/) as the approved one; return its blob digest."""
+        with ref_lock(self._root, ref):
+            return self._take(ref, img, task_dir, store, task_digest=task_digest)
+
+    def _take(self, ref: str, img: StoredImage, task_dir: Path, store: ImageStore, *,
+              task_digest: str) -> str:
         final = self._dir(ref)
         final.parent.mkdir(parents=True, exist_ok=True)
         tmp = final.parent / f".{final.name}.{uuid.uuid4().hex}.new"
