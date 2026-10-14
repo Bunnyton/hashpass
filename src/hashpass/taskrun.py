@@ -19,7 +19,7 @@ from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore
 from hashpass.key import local_key
 from hashpass.markdown import render_markdown
-from hashpass.paths import absolutize
+from hashpass.paths import absolutize, looks_like_path, resolve_path
 from hashpass.play import capture_candidate
 from hashpass.progress import current_stage, mark_passed_local, new_progress
 from hashpass.recipe.model import (
@@ -320,7 +320,16 @@ def _word_matches(want: str, got: str) -> bool:
     return want == got or (not (want[-1].isalnum() or want[-1] in "_-") and got.startswith(want))
 
 
-def _cmd_matches(pattern: str, command: str) -> bool:
+def _same_file(want: str, got: str, cwd: str, exists: Callable[[str], bool]) -> bool:
+    """Whether two words, at least one spelled as a path, resolve to the same existing file."""
+    if not (looks_like_path(want) or looks_like_path(got)):
+        return False
+    path = resolve_path(want.rstrip("/") or "/", cwd)
+    return path == resolve_path(got.rstrip("/") or "/", cwd) and exists(path)
+
+
+def _cmd_matches(pattern: str, command: str, *, cwd: str | None = None,
+                 exists: Callable[[str], bool] | None = None) -> bool:
     """
     Whether an `accept cmd` pattern names the command the student ran.
 
@@ -333,7 +342,15 @@ def _cmd_matches(pattern: str, command: str) -> bool:
     as `cmatrix`. A pattern word ending in `/` or `.` (`apt install ./`) matches by prefix. The
     live console ships the LAST simple command of a pipeline/`&&` chain; the segment split
     matters for the test/`feed()` path, which sees the whole line.
+
+    A word that names an existing file names it in any spelling: with the student's `cwd`,
+    `cat os-release` run in /etc is `cat /etc/os-release` (root-tour, 2026-10-14) -- the same
+    rule as for paths in the output (`paths.absolutize`).
     """
+    def same(w: str, g: str) -> bool:
+        return _word_matches(w, g) or (cwd is not None and exists is not None
+                                       and _same_file(w, g, cwd, exists))
+
     want = _without_sudo(pattern).split()   # the pattern may spell `sudo` too
     if not want:
         return False
@@ -344,21 +361,23 @@ def _cmd_matches(pattern: str, command: str) -> bool:
         got_pos = [w for w in got if not _is_option(w)]
         got_opt = [w for w in got if _is_option(w)]
         if len(got_pos) < len(want_pos) or not all(
-                _word_matches(w, g) for w, g in zip(want_pos, got_pos, strict=False)):
+                same(w, g) for w, g in zip(want_pos, got_pos, strict=False)):
             continue
         if all(any(_word_matches(w, g) for g in got_opt) for w in want_opt):
             return True
     return False
 
 
-def _accepted_by_cmd(sm: StageMeta, command: str, rc: int | None) -> bool:
+def _accepted_by_cmd(sm: StageMeta, command: str, rc: int | None, *, cwd: str | None = None,
+                     exists: Callable[[str], bool] | None = None) -> bool:
     """
     Whether `command` passes the stage by an `accept cmd` match (see `_cmd_matches`).
 
     With `accept cmd "…" ok` the command must also have exited 0; an unknown status (an older
     console that does not report it) is not held against the student.
     """
-    if not sm.accept_cmds or not any(_cmd_matches(sub, command) for sub in sm.accept_cmds):
+    if not sm.accept_cmds or not any(_cmd_matches(sub, command, cwd=cwd, exists=exists)
+                                     for sub in sm.accept_cmds):
         return False
     return not (sm.accept_ok and rc is not None and rc != 0)
 
@@ -506,7 +525,8 @@ class TaskSession:
     def _accept(self, stage: int, sm: StageMeta, command: str,  # noqa: PLR0913
                 out: str, ts: str, *, rc: int | None = None) -> tuple[bool, str | None]:
         """Decide acceptance: `accept cmd` match, else handler check-run, else derived host-side."""
-        if _accepted_by_cmd(sm, command, rc):
+        if _accepted_by_cmd(sm, command, rc, cwd=self._cwd or self.meta.settings.workdir,
+                            exists=self._exists):
             return True, local_key(self.task_id, stage, self.nonce)  # a concrete solution command
         if sm.acceptance == "command":
             return False, None       # accepted ONLY by an `accept cmd` match (no FS grading)

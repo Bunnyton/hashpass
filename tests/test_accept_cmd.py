@@ -70,3 +70,29 @@ def test_accept_pattern_may_spell_sudo_too():
     assert _cmd_matches("sudo rm -rf /", "sudo rm -rf /")
     assert _cmd_matches("sudo apt update", "sudo apt update")
     assert not _cmd_matches("sudo rm -rf /", "sudo ls -la /")   # positional words still must match
+
+
+_FILES = {"/etc/os-release", "/etc/hostname", "/etc", "/var"}
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize(("command", "cwd", "expected"), [
+    ("cat /etc/os-release", "/", True),
+    ("cat os-release", "/etc", True),                  # root-tour 2026-10-14: refused before
+    ("cat ./os-release", "/etc", True),
+    ("cat ../etc/os-release", "/var", True),
+    ("cat os-release", "/var", False),                 # a different file
+    ("cat /etc/hostname", "/etc", False),
+])
+def test_accept_cmd_compares_path_arguments_as_files(command, cwd, expected):
+    """A path in `accept cmd` names a FILE: any spelling of it from the student's cwd counts."""
+    assert _accepted_by_cmd(_stage("cat /etc/os-release"), command, 0, cwd=cwd,
+                            exists=_FILES.__contains__) is expected
+
+
+@pytest.mark.tier1
+def test_accept_cmd_relative_pattern_resolves_from_the_student_cwd():
+    assert _accepted_by_cmd(_stage("cat os-release"), "cat /etc/os-release", 0, cwd="/etc",
+                            exists=_FILES.__contains__)
+    assert not _accepted_by_cmd(_stage("apt update"), "apt /update", 0, cwd="/",
+                                exists=_FILES.__contains__)        # no such file: words differ
