@@ -64,9 +64,9 @@ stage
 stage
   say "Установи пакет sl"
   solve:
-    apt-get update >/dev/null 2>&1
-    apt-get install -y sl >/dev/null 2>&1
-  check exec command -v sl || test -x /usr/games/sl
+    sudo apt-get update >/dev/null 2>&1
+    sudo apt-get install -y sl >/dev/null 2>&1
+  observe bool /usr/games/sl
   neutral ls cat pwd
   on enter exec intro2
   on pass say "dpkg -L sl покажет, куда пакет разложил свои файлы."

@@ -69,7 +69,8 @@ stage
   solve:
     rm /home/student/notes.txt
     cat /home/student/backup.txt
-  check exec survived
+  observe bool /home/student/notes.txt
+  observe output
   neutral ls pwd cd
   on pass say "Данные живут, пока у файла есть хоть одно имя. rm удаляет имя, а не файл."
   hint tries 5 say "Удали notes.txt, а потом прочитай backup.txt."

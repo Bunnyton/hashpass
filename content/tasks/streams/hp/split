@@ -1,6 +1,0 @@
-#!/bin/sh
-# Принято: обычный вывод exec_me.sh — в stdout.log, ошибки — в stderr.log (порядок записи любой).
-cd /home/student || exit 1
-[ "$(grep -c 'Стандартный поток' stdout.log 2>/dev/null)" = 6 ] || exit 1
-! grep -q 'Стандартный поток' stderr.log 2>/dev/null || exit 1
-grep -q 'stderr.log' stderr.log 2>/dev/null && ! grep -q 'stderr.log' stdout.log

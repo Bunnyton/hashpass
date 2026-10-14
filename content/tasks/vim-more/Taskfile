@@ -1,8 +1,8 @@
 # vim-more — замена и свои клавиши в vim (исходники it_bastion: vim/20_s «:%s, остановитесь на
 # wonderful» и vim/21_nnoremap «теперь все, и используйте nnoremap»). Шаг 1: в vim.txt обернуть
 # слова в print(data["…"]) с Adorable до Wonderful — :s с диапазоном. Шаг 2: в vim2.txt — все,
-# своей клавишей из ~/.vimrc (nnoremap). Приёмка — файл совпал с эталоном в hp/ (+ nnoremap в
-# ~/.vimrc на шаге 2). Редактировать можно только vim-ом: sed/awk/perl и т.п. закрыты (allow).
+# своей клавишей из ~/.vimrc (nnoremap). Приёмка — по содержимому файла (observe); на шаге 2
+# сначала проверяется способ: в ~/.vimrc есть своя клавиша (hp/mapped). Редактировать можно только vim-ом: sed/awk/perl и т.п. закрыты (allow).
 # Чистые копии файлов — в /opt/vim-more (испортил и сохранил — cp оттуда, сказано в брифе).
 
 image vim-more:1
@@ -25,8 +25,8 @@ read brief.md
 
 stage
   say "Открой vim.txt и сделай, что написано в первой строке. Одной командой"
-  solve cp /hp/vim.want /home/student/vim.txt
-  check exec subst
+  solve sed -i '3,35s/.*/print(data["&"])/' /home/student/vim.txt
+  observe /home/student/vim.txt
   allow vim vi
   neutral ls cat less cd pwd cp
   on pass say "Диапазон, шаблон, замена — и сотня строк правится одной командой."
@@ -35,15 +35,19 @@ stage
 
 stage
   say "А теперь vim2.txt — все слова, но без :s. Заведи в ~/.vimrc свою клавишу и пройди ей по файлу"
-  solve:
-    cp /hp/vim2.want /home/student/vim2.txt
-    echo 'nnoremap <F2> Iprint(data["<Esc>A"])<Esc>j' > /home/student/.vimrc
+  solve echo 'nnoremap <F2> Iprint(data["<Esc>A"])<Esc>j' > /home/student/.vimrc
   check exec mapped
   on enter read mapping.md
   allow vim vi
   neutral ls cat less cd pwd cp
-  on pass say "Своя клавиша в ~/.vimrc — навсегда. Так vim и подгоняют под себя."
   hint tries 5 say "Клавиша должна обернуть строку и спуститься на следующую. Тогда её можно просто держать."
   hint tries 10 say "I — вставить в начало строки, A — в конец, <Esc> — выйти из вставки, j — вниз."
+
+stage
+  solve sed -i '3,$s/.*/print(data["&"])/' /home/student/vim2.txt
+  observe /home/student/vim2.txt
+  allow vim vi
+  neutral ls cat less cd pwd cp
+  on pass say "Своя клавиша в ~/.vimrc — навсегда. Так vim и подгоняют под себя."
 
 exec finale

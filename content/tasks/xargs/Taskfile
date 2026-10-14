@@ -34,7 +34,7 @@ stage
   solve:
     cd /home/student/archives && ls | grep .zip | xargs -I {} unzip -o {} >/dev/null
     cd /home/student/archives && ls | grep .unknown_archive | xargs -I {} tar -xzf {}
-  check exec unpacked
+  observe /home/student/archives
   on enter read xargs.md
   neutral ls cat pwd cd
   on pass say "xargs превращает список строк в команды. Сотня архивов — две команды, а не сотня."

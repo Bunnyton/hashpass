@@ -1,7 +1,7 @@
 # first-commands — вводное: ls → cat → ls -l → ls -la → --help → man (исходники docs/Задания
 # «Простейший ls (1)», «cat (2)», «ls_la (3)», «help (4)», «man (5)» — одним заданием).
 # Теория приходит дозами: бриф — только ls; каждый следующий шаг приносит свою порцию.
-# Шаги 2 и 4 принимаются скрытой проверкой по выводу последней команды (HP_LAST_OUT).
+# Шаги 2 и 4 принимаются по выводу последней команды (observe output: содержимое файла на экране).
 
 image first-commands:1
 
@@ -27,7 +27,7 @@ stage
 stage
   say "Прочитай readme_please.txt"
   solve cat /home/student/readme_please.txt
-  check exec readme
+  observe output
   on enter read cat.md
   neutral ls pwd
   on pass say "Пятьдесят строк рекламы ради одной настоящей — привыкай, логи бывают такими же."
@@ -43,7 +43,7 @@ stage
 stage
   say "Где-то рядом прячется скрытый файл. Найди его и прочитай"
   solve cat /home/student/.hidden_file
-  check exec hidden
+  observe output
   neutral ls pwd
   on pass say "Так прячут настройки: в каждом домашнем каталоге их полно."
   hint tries 5 say "Обычный ls скрытое не показывает. А с каким ключом покажет?"

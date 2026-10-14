@@ -1,6 +1,0 @@
-#!/bin/sh
-# Принято: на экране только число слов readme.txt, и файл подан на вход через < (как в исходнике).
-case "$1" in *"<"*) ;; *) exit 1 ;; esac
-want=$(wc -w < /home/student/readme.txt)
-got=$(printf '%s' "${HP_LAST_OUT:-}" | tr -d '[:space:]')
-[ "$got" = "$want" ]

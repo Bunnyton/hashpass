@@ -30,7 +30,8 @@ stage
 stage
   say "Удали всё в текущей директории"
   solve rm -r /home/student/workdir/subdir_1 /home/student/workdir/subdir_2 /home/student/workdir/subdir_3 /home/student/workdir/subdir_4 /home/student/workdir/subdir_5 /home/student/workdir/subdir_6
-  check exec wiped
+  observe bool /home/student/workdir/subdir_1 /home/student/workdir/subdir_2 /home/student/workdir/subdir_3 /home/student/workdir/subdir_4 /home/student/workdir/subdir_5 /home/student/workdir/subdir_6
+  block rm unless "\*" say "А где же звёздочка?"
   neutral ls pwd cd cat
   on pass say "Готово? Проверь."
   hint output "Is a directory" say "rm не трогает каталоги без спроса. Чтобы снести каталог со всем содержимым, нужен ключ -r (recursive); -f (force) не задаёт лишних вопросов."
@@ -45,7 +46,7 @@ stage
 stage
   say "Крушить, ломать!"
   solve rm -rf /home/student/workdir/.subdir_1 /home/student/workdir/.subdir_2 /home/student/workdir/.subdir_3 /home/student/workdir/.subdir_4 /home/student/workdir/.subdir_5 /home/student/workdir/.subdir_6 /home/student/workdir/.look_at_me.txt
-  check exec empty
+  observe bool /home/student/workdir /home/student/workdir/.subdir_1 /home/student/workdir/.subdir_2 /home/student/workdir/.subdir_3 /home/student/workdir/.subdir_4 /home/student/workdir/.subdir_5 /home/student/workdir/.subdir_6 /home/student/workdir/.look_at_me.txt
   block rm unless "\*" say "А где же звёздочка?"
   neutral ls pwd cd cat
   on pass say "Теперь пусто по-настоящему. rm не спрашивает и корзины у него нет — вот почему ls -a идёт первым."

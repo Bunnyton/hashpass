@@ -45,7 +45,7 @@ stage
     chmod 700 /home/student/perm_dir/exec_me.sh
     chmod 664 /home/student/perm_dir/file.txt
     /home/student/perm_dir/exec_me.sh
-  check exec allowed
+  observe output
   neutral ls cat pwd cd
   on pass read symbolic.md
   hint output "Permission denied" say "Запустить не дали. Чьи права у exec_me.sh — и какая тройка твоя?"

@@ -16,6 +16,7 @@ hidden hp
 
 settings
   pager on
+  similarity 100
 
 say "У программы не один голос."
 read brief.md
@@ -23,7 +24,7 @@ read brief.md
 stage
   say "Перенаправь вывод ./exec_me.sh в файл"
   solve /home/student/exec_me.sh > /home/student/stdout.log 2> /home/student/stderr.log
-  check exec split
+  observe /home/student/stdout.log /home/student/stderr.log
   neutral ls cat pwd cd
   on pass say "Обычный вывод и ошибки — два разных потока: можно сохранять, читать и выбрасывать их по отдельности."
   hint output "Permission denied" say "Скрипт не запускается — у него нет права на запуск? ls -l покажет."
@@ -43,7 +44,7 @@ stage
 stage
   say "Посчитай слова в readme.txt одной командой — чтобы на экране было только число"
   solve wc -w < /home/student/readme.txt
-  check exec counted
+  observe output
   on enter read input.md
   neutral ls cat pwd cd
   on pass say "< подаёт файл на вход команде: wc читает поток и не знает, как назывался файл."

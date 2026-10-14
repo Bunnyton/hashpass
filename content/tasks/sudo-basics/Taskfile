@@ -27,7 +27,7 @@ stage
 
 stage
   say "А теперь удали его"
-  solve rm /home/file.txt
+  solve rm -f /home/file.txt || true
   check exec refused
   block rm match "^sudo " say "Сначала без sudo"
   neutral ls cat pwd cd
@@ -37,7 +37,7 @@ stage
 stage
   say "А теперь используй sudo"
   solve sudo rm /home/file.txt
-  check exec test ! -e /home/file.txt
+  observe bool /home/file.txt
   block rm match "^sudo +rm +.*(-[a-zA-Z]*[rR]|--recursive)" say "Не рекомендую шутить с этой командой))"
   neutral ls cat pwd cd
   on pass say "Но можно натворить бед, неправильно используя свои права. В обычной системе — больно, а здесь — можно попробовать."
