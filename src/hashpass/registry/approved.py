@@ -31,7 +31,8 @@ class ApprovedStore:
     def _dir(self, ref: str) -> Path:
         return ref_dir(self._root, ref)
 
-    def take(self, ref: str, img: StoredImage, task_dir: Path, store: ImageStore) -> str:
+    def take(self, ref: str, img: StoredImage, task_dir: Path, store: ImageStore, *,
+             task_digest: str = "") -> str:
         """Copy the current version (blob + task/) as the approved one; return its blob digest."""
         final = self._dir(ref)
         final.parent.mkdir(parents=True, exist_ok=True)
@@ -49,8 +50,8 @@ class ApprovedStore:
                 digest = hashlib.sha256(data).hexdigest()
             if task_dir.is_dir():
                 shutil.copytree(task_dir, tmp / _TASK, symlinks=True)
-            (tmp / _META).write_text(json.dumps({"digest": digest, "parents": list(img.parents)}),
-                                     encoding="utf-8")
+            (tmp / _META).write_text(json.dumps({"digest": digest, "parents": list(img.parents),
+                                                 "task_digest": task_digest}), encoding="utf-8")
             if final.exists():
                 final.rename(old)
             tmp.rename(final)
@@ -63,6 +64,13 @@ class ApprovedStore:
         """Return the approved copy's blob digest, or None if there is no copy."""
         try:
             return str(json.loads((self._dir(ref) / _META).read_text(encoding="utf-8"))["digest"])
+        except (OSError, ValueError, KeyError):
+            return None
+
+    def task_digest(self, ref: str) -> str | None:
+        """Return the task digest the copy was taken at (the catalog's `approved_digest`), or None."""
+        try:
+            return str(json.loads((self._dir(ref) / _META).read_text(encoding="utf-8"))["task_digest"])
         except (OSError, ValueError, KeyError):
             return None
 

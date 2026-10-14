@@ -12,6 +12,7 @@ import html
 import json
 import os
 import re
+import shutil
 import socket
 import ssl
 import tarfile
@@ -30,6 +31,7 @@ from werkzeug.wsgi import ClosingIterator
 
 from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
+from hashpass.registry.approved import ApprovedStore
 from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
 from hashpass.registry.catalog import Catalog
@@ -70,6 +72,8 @@ _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
 _USER_RE = LOGIN_RE  # safe as a login + a per-user progress filename
 _AUTHOR_ROLES = ("author", "admin")
 _MAX_COMMENT = 500
+_MAX_REASON = 500                # a rejection reason, shown to the author
+_REJECTED_BLOCK = "rejected"     # the virtual block of rejected tasks (author + admin)
 _MAX_ATTACH = 8 * 1024 * 1024   # per-file attachment cap (8 MiB)
 _MAX_HISTORY = 500              # command-history entries kept per submission
 _MAX_CMD = 1000                 # per-command length kept
@@ -192,6 +196,56 @@ class PoolServer:
         return PoolSettings((self.catalog_path or (Path(self.store.root) / "catalog.json")).parent
                             / "pool-settings.json")
 
+    def approved(self) -> ApprovedStore:
+        """Open the copies of approved versions, served to students while an update waits."""
+        return ApprovedStore(Path(self.store.root) / "approved")
+
+    def _fresh_for(self, user: str | None, name: str) -> bool:
+        """Whether `user` gets a task's latest push: its author or an admin (others get the approved one)."""
+        return user is not None and (self.users.role(user) == "admin" or _owner_of(name) == user)
+
+    def _approved_view(self, ref: str) -> str | None:
+        """
+        Which version of `ref` a non-author gets: "current", "copy" (the approved copy) or None.
+
+        A ref outside the catalog (a base image) is not moderated: current.
+        """
+        entry = self.catalog().find(ref)
+        if entry is None:
+            return "current"
+        if not entry.approved_digest:
+            return None
+        if entry.approved_digest == entry.digest:
+            return "current"
+        return "copy" if self.approved().task_digest(ref) == entry.approved_digest else None
+
+    def _keep_approved(self, ref: str) -> None:
+        """Copy the approved version aside before a push overwrites it (students keep it)."""
+        entry = self.catalog().find(ref)
+        if (entry is None or not entry.approved_digest or entry.approved_digest != entry.digest
+                or not self.store.exists(ref)
+                or self.approved().task_digest(ref) == entry.approved_digest):
+            return
+        img = self.store.get(ref)
+        self.approved().take(ref, img, img.layer.parent / "task", self.store,
+                             task_digest=entry.approved_digest)
+
+    def _delete_task(self, ref: str) -> None:
+        """Remove a task from the pool entirely: image, task/, approved copy, sources, files, entry."""
+        name, _, version = ref.partition(":")
+        self.catalog().remove_task(ref)
+        self.approved().remove(ref)
+        self.sources().remove(ref)
+        with contextlib.suppress(ValueError, OSError):
+            shutil.rmtree(self.attachments().ref_path(ref), ignore_errors=True)
+        with contextlib.suppress(ValueError, OSError):
+            shutil.rmtree(self.store.dir(name, version), ignore_errors=True)
+
+    def _purge_rejected(self) -> None:
+        """Delete tasks rejected a week ago (spec: «хранятся неделю, потом удаляются»)."""
+        for ref in self.catalog().purge_rejected(time.time()):
+            self._delete_task(ref)
+
     def _auto_approved(self, name: str) -> bool:
         """Whether a push of `name` approves itself: the pool's switch or its author's flag."""
         owner = _owner_of(name)
@@ -250,7 +304,15 @@ class PoolServer:
         app.add_url_rule("/image/<path:tail>", "image_blob", self._route_image_blob,
                          methods=["GET", "HEAD", "PUT"])
         app.add_url_rule("/task/<path:tail>", "task_blob", self._route_task_blob,
+                         methods=["GET", "PUT", "DELETE"])
+        app.add_url_rule("/catalog/approve", "catalog_approve", self._route_catalog_approve,
+                         methods=["POST"])
+        app.add_url_rule("/catalog/reject", "catalog_reject", self._route_catalog_reject,
+                         methods=["POST"])
+        app.add_url_rule("/pool/settings", "pool_settings", self._route_pool_settings,
                          methods=["GET", "PUT"])
+        app.add_url_rule("/users/<user>/auto-approve", "user_auto_approve",
+                         self._route_user_auto_approve, methods=["PUT"])
         app.add_url_rule("/closure/<path:tail>", "closure", self._route_closure, methods=["GET"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_put",
                          self._route_attachment_put, methods=["PUT"])
@@ -557,12 +619,81 @@ class PoolServer:
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
-        # A student sees only what is open to them -- hidden tasks and closed blocks are simply not
-        # there; an author/admin sees everything, the locked ones marked `preview`.
-        staff = self.users.role(user) in _AUTHOR_ROLES
-        rows = [e.as_dict() | ({"preview": True} if not e.available else {})
-                for e in self.catalog().entries() if staff or e.available]
-        return self._json(HTTPStatus.OK, {"catalog": rows})
+        self._purge_rejected()
+        return self._json(HTTPStatus.OK, {"catalog": self._catalog_rows(user)})
+
+    def _catalog_rows(self, user: str) -> list[dict[str, object]]:
+        """
+        Return the catalog as `user` may see it.
+
+        A student sees only what is open to them, at the APPROVED version (its digest). An
+        author sees approved tasks (locked ones marked `preview`) and all of their own; the
+        admin sees everything. Rejected tasks go to a block «Отклонённые» at the end -- for their
+        author and the admin only.
+        """
+        role = self.users.role(user)
+        staff, admin = role in _AUTHOR_ROLES, role == "admin"
+        rows: list[dict[str, object]] = []
+        rejected: list[dict[str, object]] = []
+        for e in self.catalog().entries():
+            mine = admin or e.owner == user
+            if not staff:
+                if e.available:
+                    rows.append(e.as_dict() | {"digest": e.approved_digest})
+                continue
+            if e.state == "rejected" and mine:
+                rejected.append(e.as_dict() | {"preview": True, "rejected": True,
+                                               "block_id": _REJECTED_BLOCK, "block_name": "Отклонённые"})
+                continue
+            if not (mine or e.approved_digest):
+                continue                                  # someone else's, never approved
+            row = e.as_dict() | ({"preview": True} if not e.available else {})
+            if not mine:
+                row["digest"] = e.approved_digest          # they get the approved copy
+            rows.append(row)
+        return rows + rejected
+
+    def _route_catalog_approve(self) -> Response:
+        """Admin: approve a task's current version -- students get it from now on."""
+        _user, err = self._auth_role(("admin",))
+        if err is not None:
+            return self._empty(err)
+        ref = str((request.get_json(silent=True) or {}).get("ref", ""))
+        if self.catalog().approve(ref) is None:
+            return self._not_found(ref)
+        self.approved().remove(ref)                       # the current version IS the approved one
+        return self._json(HTTPStatus.OK, {"ref": ref, "state": "approved"})
+
+    def _route_catalog_reject(self) -> Response:
+        """Admin: reject a task's current version, with an optional reason for its author."""
+        _user, err = self._auth_role(("admin",))
+        if err is not None:
+            return self._empty(err)
+        data = request.get_json(silent=True) or {}
+        ref, reason = str(data.get("ref", "")), str(data.get("reason", ""))[:_MAX_REASON]
+        if not self.catalog().reject(ref, reason, now=time.time()):
+            return self._not_found(ref)
+        return self._json(HTTPStatus.OK, {"ref": ref, "state": "rejected"})
+
+    def _route_pool_settings(self) -> Response:
+        """Admin: read / switch pool-wide auto-approval."""
+        _user, err = self._auth_role(("admin",))
+        if err is not None:
+            return self._empty(err)
+        settings = self.pool_settings()
+        if request.method == "PUT":
+            settings.set_auto_approve(on=bool((request.get_json(silent=True) or {}).get("auto_approve")))
+        return self._json(HTTPStatus.OK, {"auto_approve": settings.auto_approve})
+
+    def _route_user_auto_approve(self, user: str) -> Response:
+        """Admin: switch one author's auto-approval (the admin's own too)."""
+        _actor, err = self._auth_role(("admin",))
+        if err is not None:
+            return self._empty(err)
+        if not self.users.has(user):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        self.users.set_auto_approve(user, on=bool((request.get_json(silent=True) or {}).get("on")))
+        return self._json(HTTPStatus.OK, {"user": user, "auto_approve": self.users.auto_approve(user)})
 
     def _route_catalog_layout(self) -> Response:
         """
@@ -681,7 +812,7 @@ class PoolServer:
         if not entry.available:
             return self._json(HTTPStatus.OK, {"status": "unavailable"})
         prog = self.progress()
-        if digest != entry.digest:
+        if digest not in (entry.digest, entry.approved_digest):
             prog.record(user, task_ref, status="failed", ts=_now(), digest=digest,
                         history=history, authenticity=authenticity)
             return self._json(HTTPStatus.OK, {"status": "failed", "reason": "digest-mismatch"})
@@ -735,6 +866,21 @@ class PoolServer:
             return self._empty(HTTPStatus.NOT_FOUND)
         name, version = parts
         ref = f"{name}:{version}"
+        if request.method == "PUT":
+            _user, err = self._authorize_write(name, version)
+            if err is not None:
+                return err
+            self._keep_approved(ref)                 # students keep the approved version
+            return self._receive_image(name, version)
+        return self._serve_image_for(name, ref)
+
+    def _serve_image_for(self, name: str, ref: str) -> Response:
+        """HEAD/GET an image: the author/admin get the latest push, others the approved version."""
+        view = "current" if self._fresh_for(self._token_user(), name) else self._approved_view(ref)
+        if view is None:                             # never approved: not for others yet
+            return self._not_found_head(ref) if request.method == "HEAD" else self._not_found(ref)
+        if view == "copy":
+            return self._serve_approved_blob(ref)
         if request.method == "HEAD":
             try:
                 img = self.store.get(ref)
@@ -744,12 +890,24 @@ class PoolServer:
             if img.digest:
                 resp.headers["X-Image-Digest"] = img.digest
             return resp
-        if request.method == "PUT":
-            _user, err = self._authorize_write(name, version)
-            if err is not None:
-                return err
-            return self._receive_image(name, version)
         return self._serve_image_blob(ref)
+
+    def _serve_approved_blob(self, ref: str) -> Response:
+        """HEAD/GET the approved copy's blob, with its own digest."""
+        approved = self.approved()
+        path, digest = approved.blob(ref), approved.digest(ref)
+        if path is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        if request.method == "HEAD":
+            resp = self._empty(HTTPStatus.OK)
+        else:
+            f = path.open("rb")
+            size = os.fstat(f.fileno()).st_size
+            resp = send_file(f, mimetype="application/octet-stream", conditional=False)
+            resp.content_length = size
+        if digest:
+            resp.headers["X-Image-Digest"] = digest
+        return resp
 
     def _serve_image_blob(self, ref: str) -> Response:
         """
@@ -822,35 +980,61 @@ class PoolServer:
             resp.headers["X-Image-Digest"] = img.digest
         return resp
 
-    def _route_task_blob(self, tail: str) -> Response:   # noqa: PLR0911
+    def _route_task_blob(self, tail: str) -> Response:
         parts = self._split_ref(tail)
         if parts is None:
             return self._empty(HTTPStatus.NOT_FOUND)
         name, version = parts
-        ref = f"{name}:{version}"
+        if request.method == "DELETE":
+            return self._task_delete(name, version)
         if request.method == "PUT":
-            _user, err = self._authorize_write(name, version)
-            if err is not None:
-                return err
-            if not self.store.exists(ref):
-                return self._empty(HTTPStatus.NOT_FOUND)
-            task_dir = self.store.get(ref).layer.parent / "task"
-            try:
-                unpack_task(request.get_data(cache=False, as_text=False), task_dir)
-            except (ValueError, OSError, tarfile.TarError):
-                return self._empty(HTTPStatus.BAD_REQUEST)
-            if request.args.get("publish", "") == "1":   # `push --task [--block B]`: into the catalog,
-                self.catalog().add_task(ref, task_digest(task_dir),   # hidden until shown
-                                        auto=self._auto_approved(name),
-                                        block_name=request.args.get("block") or None)
-            return self._empty(HTTPStatus.CREATED)
-        # GET (a task's grader is not public)
-        if self._token_user() is None:
+            return self._task_put(name, version)
+        return self._task_get(name, version)
+
+    def _task_delete(self, name: str, version: str) -> Response:
+        """Remove a task from the pool: its author (namespace owner) or an admin."""
+        ref = f"{name}:{version}"
+        _user, err = self._authorize_write(name, version)
+        if err is not None:
+            return err
+        if not self.store.exists(ref) and self.catalog().find(ref) is None:
+            return self._not_found(ref)
+        self._delete_task(ref)
+        return self._empty(HTTPStatus.OK)
+
+    def _task_put(self, name: str, version: str) -> Response:
+        """`push --task [--block B]`: the task's grader; with `publish`, into the catalog to moderate."""
+        ref = f"{name}:{version}"
+        _user, err = self._authorize_write(name, version)
+        if err is not None:
+            return err
+        if not self.store.exists(ref):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        self._keep_approved(ref)
+        task_dir = self.store.get(ref).layer.parent / "task"
+        try:
+            unpack_task(request.get_data(cache=False, as_text=False), task_dir)
+        except (ValueError, OSError, tarfile.TarError):
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        if request.args.get("publish", "") == "1":
+            self.catalog().add_task(ref, task_digest(task_dir), auto=self._auto_approved(name),
+                                    block_name=request.args.get("block") or None)
+        return self._empty(HTTPStatus.CREATED)
+
+    def _task_get(self, name: str, version: str) -> Response:
+        """Send a task's grader (never public): the latest to its author/admin, the approved one to others."""
+        ref = f"{name}:{version}"
+        user = self._token_user()
+        if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         if not self.store.exists(ref):
             return self._not_found(ref)
-        task_dir = self.store.get(ref).layer.parent / "task"
-        if not task_dir.exists():
+        view = "current" if self._fresh_for(user, name) else self._approved_view(ref)
+        if view is None:
+            return self._not_found(ref)
+        task_dir = (self.approved().task_dir(ref) if view == "copy"
+                    else self.store.get(ref).layer.parent / "task")
+        if task_dir is None or not task_dir.exists():
             return self._empty(HTTPStatus.NOT_FOUND)
         return self._blob(HTTPStatus.OK, pack_task(task_dir))
 

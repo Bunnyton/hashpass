@@ -51,6 +51,10 @@ class AttachmentStore:
     def _dir(self, ref: str) -> Path:
         return ref_dir(self._root, ref)
 
+    def ref_path(self, ref: str) -> Path:
+        """Return the directory holding `ref`'s description and files (removed with the task)."""
+        return self._dir(ref)
+
     def _meta_path(self, ref: str) -> Path:
         return self._dir(ref) / "meta.json"
 
