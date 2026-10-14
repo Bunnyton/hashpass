@@ -92,6 +92,9 @@ class RemoteRegistry:
     base_url: str
     cache: CredentialCache | None = None
     sudo: bool = False
+    # Read images AS this user: the pool gives a task's author/admin its latest push and everyone
+    # else the approved version (moderation, 2026-10-14). Falls back to the cached token.
+    token: str | None = None
     _resolved_base: str | None = field(default=None, init=False, repr=False, compare=False)
     # Downloads run in parallel (pull_many); the local unpack+meta write is serialized.
     _unpack_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False,
@@ -258,11 +261,18 @@ class RemoteRegistry:
 
     # --- images -----------------------------------------------------------------
 
+    def _reader_headers(self) -> dict[str, str]:
+        """Build Authorization for reading images, if this client knows who it is (else anonymous)."""
+        token = self.token
+        if token is None and self.cache is not None:
+            token = self.cache.cached_token(self.base_url, now=time())
+        return {"Authorization": f"Bearer {token}"} if token else {}
+
     def has_image(self, ref: str) -> bool:
         """Whether the pool holds `ref` (HEAD)."""
         name, version = split_ref(ref)
         try:
-            self._request("HEAD", f"/image/{name}/{version}")
+            self._request("HEAD", f"/image/{name}/{version}", headers=self._reader_headers())
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.NOT_FOUND:
                 return False
@@ -275,7 +285,8 @@ class RemoteRegistry:
         """Return the pool's digest for `ref`; None when absent OR a legacy record without a digest."""
         name, version = split_ref(ref)
         try:
-            _body, headers = self._request("HEAD", f"/image/{name}/{version}")
+            _body, headers = self._request("HEAD", f"/image/{name}/{version}",
+                                           headers=self._reader_headers())
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.NOT_FOUND:
                 return None
@@ -293,7 +304,7 @@ class RemoteRegistry:
         name, version = split_ref(ref)
         with dest.open("wb") as sink:
             _body, headers = self._request("GET", f"/image/{name}/{version}", sink=sink,
-                                           on_bytes=on_bytes)
+                                           on_bytes=on_bytes, headers=self._reader_headers())
         expected = headers.get(_DIGEST_HEADER, "")
         if not expected:
             return ""
@@ -309,7 +320,7 @@ class RemoteRegistry:
 
     def _get_image(self, ref: str) -> bytes:              # kept for tests / small images
         name, version = split_ref(ref)
-        return self._send("GET", f"/image/{name}/{version}")
+        return self._send("GET", f"/image/{name}/{version}", headers=self._reader_headers())
 
     def _wants(self, ref: str, store: ImageStore, *, refresh: bool) -> bool:
         """Whether `ref` needs fetching: missing locally, or (`refresh`) present but digest-stale."""
@@ -458,6 +469,25 @@ class RemoteRegistry:
         self._send("PUT", f"/attachment/{name}/{version}{query}", data=blob,
                    headers={"Authorization": f"Bearer {self._auth_token(token)}",
                             "Content-Type": "application/octet-stream"})
+
+    def _post_ref(self, path: str, payload: dict[str, object], token: str | None) -> None:
+        self._send("POST", path, data=json.dumps(payload).encode("utf-8"),
+                   headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}",
+                            "Content-Type": "application/json"})
+
+    def approve(self, ref: str, *, token: str | None = None) -> None:
+        """Admin: approve a task's current version (students get it from now on)."""
+        self._post_ref("/catalog/approve", {"ref": normalize_ref(ref)}, token)
+
+    def reject(self, ref: str, reason: str = "", *, token: str | None = None) -> None:
+        """Admin: reject a task's current version; the author sees the reason for a week."""
+        self._post_ref("/catalog/reject", {"ref": normalize_ref(ref), "reason": reason}, token)
+
+    def delete_task(self, ref: str, *, token: str | None = None) -> None:
+        """Remove a task from the pool -- your own (an admin: any)."""
+        name, version = split_ref(ref)
+        self._send("DELETE", f"/task/{name}/{version}",
+                   headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}"})
 
     def push_source(self, name: str, version: str, blob: bytes, *, token: str | None = None) -> None:
         """Send a task's sources (tar.gz of its directory); the pool keeps them as files."""

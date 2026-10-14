@@ -183,7 +183,7 @@ class PoolTUI(App):
         self.url = url
         self.user = user
         self.token = token
-        self.client = RemoteRegistry(url)
+        self.client = RemoteRegistry(url, token=token)
         self.store = ImageStore(env.images)
         self.rows: list[TaskRow] = []
         self._load_error: str | None = None    # why the catalog could not be fetched

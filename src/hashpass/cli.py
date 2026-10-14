@@ -2092,7 +2092,7 @@ def runnable(entry: dict[str, object]) -> bool:
 def pull_new(env: Home, url: str, token: str, *, workers: int = 8) -> tuple[int, int]:
     """Pull catalog images (parallel) + changed task bundles; return (layers, tasks) fetched."""
     store = ImageStore(env.images)
-    client = RemoteRegistry(url)
+    client = RemoteRegistry(url, token=token)   # an author reads own latest push, others approved
     entries = [e for e in client.catalog(token=token) if runnable(e)]  # skip locked
     layers = client.pull_many([str(e["ref"]) for e in entries], store, workers=workers, refresh=True)
 
@@ -2304,7 +2304,7 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
         return 0, None
     outcome: dict[str, bool | None] = {"solved": None}   # stays None unless the console ran
     store = ImageStore(env.images)
-    client = RemoteRegistry(url)
+    client = RemoteRegistry(url, token=token)
     # Fetch the task image if missing, refresh it if the pool re-published it (digest changed).
     # The base is NOT pulled here: ensure_base_image(pool=client) inside _run_task fetches or
     # refreshes it and degrades to a good local base when the download fails or is torn.
