@@ -459,6 +459,30 @@ class RemoteRegistry:
                    headers={"Authorization": f"Bearer {self._auth_token(token)}",
                             "Content-Type": "application/octet-stream"})
 
+    def push_source(self, name: str, version: str, blob: bytes, *, token: str | None = None) -> None:
+        """Send a task's sources (tar.gz of its directory); the pool keeps them as files."""
+        self._send("PUT", f"/source/{name}/{version}", data=blob,
+                   headers={"Authorization": f"Bearer {self._auth_token(token)}",
+                            "Content-Type": "application/octet-stream"})
+
+    def _source_get(self, ref: str, query: dict[str, str], token: str | None) -> bytes:
+        name, _, version = ref.partition(":")
+        q = ("?" + urllib.parse.urlencode(query)) if query else ""
+        return self._send("GET", f"/source/{name}/{version or 'latest'}{q}",
+                          headers={"Authorization": f"Bearer {self._auth_token(token)}"})
+
+    def source_listing(self, ref: str, *, token: str | None = None) -> list[dict[str, object]]:
+        """List a task's source files: [{path, size, dir}] (authors/admins)."""
+        return list(json.loads(self._source_get(ref, {}, token).decode("utf-8"))["files"])
+
+    def source_file(self, ref: str, path: str, *, token: str | None = None) -> bytes:
+        """Fetch one source file of a task (authors/admins)."""
+        return self._source_get(ref, {"path": path}, token)
+
+    def source_archive(self, ref: str, *, token: str | None = None) -> bytes:
+        """Fetch the task's sources packed as a tar.gz (authors/admins)."""
+        return self._source_get(ref, {"archive": "1"}, token)
+
     def get_attachment(self, name: str, version: str, filename: str, *,
                        token: str | None = None) -> bytes:
         """Download one attachment of a pool card (authors/admins; raises HTTPError 403/404)."""

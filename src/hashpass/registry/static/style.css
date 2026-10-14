@@ -187,3 +187,5 @@ body.drag-active,body.drag-active *{cursor:grabbing !important;user-select:none}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(max-width:640px){main{padding:20px 14px 56px}.nav{padding:10px 14px}h1{font-size:22px}.hero h1{font-size:30px}
   .add-panel{right:auto;left:0;min-width:min(90vw,340px)}}
+pre.source{white-space:pre;overflow:auto;padding:1em;background:var(--panel,#111);border-radius:6px}
+ul.tree{list-style:none;padding-left:0;margin:.4em 0}

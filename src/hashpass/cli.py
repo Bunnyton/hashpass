@@ -1603,7 +1603,12 @@ def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> 
             io.write(f"\x1b[33m⚠ исходники задания не приложены: архив {len(blob) // 1024} КиБ "
                      f"больше {_SOURCE_MAX // 1024 // 1024} МиБ\x1b[0m\n")
             return
-        client.push_attachment(name, version, _SOURCE_NAME, blob)
+        try:
+            client.push_source(name, version, blob)            # kept as files on the pool
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (HTTPStatus.NOT_FOUND, HTTPStatus.METHOD_NOT_ALLOWED):
+                raise
+            client.push_attachment(name, version, _SOURCE_NAME, blob)   # a pool before /source
     except (urllib.error.URLError, OSError, RuntimeError, ValueError, tarfile.TarError) as exc:
         io.write(f"\x1b[33m⚠ не удалось приложить исходники задания: {exc}\x1b[0m\n")
         return
@@ -1773,9 +1778,10 @@ def cmd_source(env: Home, ref: str, dest: str | None = None, registry: str | Non
     if out.exists() and any(out.iterdir()):
         msg = f"{out} уже существует и не пуст — укажите другой каталог: hashengine source {ref} <каталог>"
         raise RuntimeError(msg)
-    for filename in (_SOURCE_NAME, "Taskfile"):
+    for filename in ("", _SOURCE_NAME, "Taskfile"):   # "" = the tree the pool keeps as files
         try:
-            blob = client.get_attachment(name, version, filename)
+            blob = (client.source_archive(f"{name}:{version}") if not filename
+                    else client.get_attachment(name, version, filename))
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.NOT_FOUND:
                 continue
@@ -1783,7 +1789,7 @@ def cmd_source(env: Home, ref: str, dest: str | None = None, registry: str | Non
                 msg = "исходники заданий видят только авторы и администраторы пула"
                 raise RuntimeError(msg) from exc
             raise
-        if filename == _SOURCE_NAME:
+        if filename in ("", _SOURCE_NAME):
             unpack_task_source(blob, out)
             io.write(f"\x1b[32m✓ исходники {ref}\x1b[0m → {out}\n")
         else:

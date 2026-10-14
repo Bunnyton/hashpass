@@ -45,6 +45,7 @@ from hashpass.registry.passwords import (
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
+from hashpass.registry.sources import SourceStore
 from hashpass.registry.token import issue_token, verify_token
 from hashpass.registry.web import (
     render_catalog,
@@ -58,6 +59,7 @@ from hashpass.registry.web import (
     render_password_form,
     render_reset_form,
     render_reset_link,
+    render_source_file,
     render_users,
 )
 from hashpass.taskdigest import task_digest
@@ -190,6 +192,10 @@ class PoolServer:
     def attachments(self) -> AttachmentStore:
         return AttachmentStore(self.attachments_path or (Path(self.store.root) / "attachments"))
 
+    def sources(self) -> SourceStore:
+        """Open the store of task sources as files (authors/admins read, the namespace owner writes)."""
+        return SourceStore(Path(self.store.root) / "sources")
+
     # -- Flask app + route wiring --------------------------------------------
 
     def _build_app(self) -> Flask:
@@ -239,6 +245,8 @@ class PoolServer:
                          self._route_attachment_put, methods=["PUT"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_get",
                          self._route_attachment_get, methods=["GET"])
+        app.add_url_rule("/source/<path:tail>", "source", self._route_source,
+                         methods=["GET", "PUT"])
         # web dashboard (cookie session)
         app.add_url_rule("/web", "web_dashboard", self._web_dashboard, methods=["GET"])
         app.add_url_rule("/web/login", "web_login_get", self._web_login_get, methods=["GET"])
@@ -272,6 +280,10 @@ class PoolServer:
                          self._web_image_file, methods=["GET"])
         app.add_url_rule("/web/images/attach", "web_image_attach",
                          self._web_image_attach, methods=["POST"])
+        app.add_url_rule("/web/images/source", "web_source_file", self._web_source_file,
+                         methods=["GET"])
+        app.add_url_rule("/web/images/source-archive", "web_source_archive",
+                         self._web_source_archive, methods=["GET"])
         app.add_url_rule("/web/images/attach-delete", "web_image_attach_delete",
                          self._web_image_attach_delete, methods=["POST"])
         app.add_url_rule("/web/history", "web_history", self._web_history, methods=["GET"])
@@ -884,6 +896,44 @@ class PoolServer:
             return self._empty(HTTPStatus.NOT_FOUND)
         return Response(blob, status=HTTPStatus.OK, mimetype="application/octet-stream")
 
+    def _route_source(self, tail: str) -> Response:  # noqa: PLR0911
+        """
+        Serve a task's sources as files.
+
+        PUT a tar.gz (namespace owner/admin); GET the listing, one file (`?path=`) or the whole
+        tree as a tar.gz (`?archive=1`) -- any author or admin, never a student.
+        """
+        parts = self._split_ref(tail)
+        if parts is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        name, version = parts
+        ref = f"{name}:{version}"
+        if request.method == "PUT":
+            _user, err = self._authorize_write(name, version)
+            if err is not None:
+                return err
+            body = request.get_data(cache=False, as_text=False)
+            if not body or len(body) > _MAX_ATTACH:
+                return self._empty(HTTPStatus.BAD_REQUEST)
+            try:
+                self.sources().put_archive(ref, body)
+            except (ValueError, OSError, tarfile.TarError):
+                return self._empty(HTTPStatus.BAD_REQUEST)
+            return self._empty(HTTPStatus.CREATED)
+        _user, err = self._auth_role(_AUTHOR_ROLES)
+        if err is not None:
+            return self._empty(err)
+        src = self.sources()
+        try:
+            if "path" in request.args:
+                return Response(src.read(ref, request.args["path"]), status=HTTPStatus.OK,
+                                mimetype="application/octet-stream")
+            if request.args.get("archive") == "1":
+                return self._blob(HTTPStatus.OK, src.archive(ref))
+            return self._json(HTTPStatus.OK, {"files": src.listing(ref)})
+        except (ValueError, FileNotFoundError, OSError):
+            return self._empty(HTTPStatus.NOT_FOUND)
+
     # -- routes: web dashboard ---------------------------------------------
 
     def _web_dashboard(self) -> Response:
@@ -918,8 +968,38 @@ class PoolServer:
         if row is None:
             return self._empty(HTTPStatus.NOT_FOUND)
         entry = self.catalog().find(ref)
-        row = {**row, "hidden": entry.hidden if entry else False}
+        row = {**row, "hidden": entry.hidden if entry else False,
+               "sources": self.sources().listing(ref)}
         return self._html(render_image_card(row))
+
+    def _web_source_file(self) -> Response:
+        """Show one source file of a task as a page (text) -- authors/admins."""
+        if self._session_role(_AUTHOR_ROLES) is None:
+            return self._redirect("/web/login")
+        ref, path = request.args.get("ref", ""), request.args.get("path", "")
+        try:
+            blob = self.sources().read(ref, path)
+        except (ValueError, FileNotFoundError, OSError):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        try:
+            text: str | None = blob.decode("utf-8")
+        except UnicodeDecodeError:
+            text = None
+        return self._html(render_source_file(ref, path, text, len(blob)))
+
+    def _web_source_archive(self) -> Response:
+        """Send the task's sources as one tar.gz download -- authors/admins."""
+        if self._session_role(_AUTHOR_ROLES) is None:
+            return self._redirect("/web/login")
+        ref = request.args.get("ref", "")
+        try:
+            blob = self.sources().archive(ref)
+        except (ValueError, FileNotFoundError, OSError):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        resp = Response(blob, status=200, mimetype="application/gzip")
+        name = re.sub(r"[^A-Za-z0-9._-]+", "-", ref).strip("-") or "source"
+        resp.headers["Content-Disposition"] = f'attachment; filename="{name}.tar.gz"'
+        return resp
 
     def _web_history(self) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:

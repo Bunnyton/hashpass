@@ -15,6 +15,17 @@
 <p class='sub'>Описание — это файл <code>about.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashengine push</code>.</p>
 </div>
 <div class='card'>
+<h2>Исходники</h2>
+{% if image.sources %}
+<ul class='tree mono'>
+{% for f in image.sources %}<li style='padding-left:{{ f.depth * 1.4 }}em'>{% if f.dir %}{{ f.name }}/{% else %}<a href='/web/images/source?ref={{ image.ref_q }}&path={{ f.path_q }}'>{{ f.name }}</a>{% endif %}</li>
+{% endfor %}</ul>
+<p><a class='btn sm ghost' href='/web/images/source-archive?ref={{ image.ref_q }}'>скачать архивом</a></p>
+{% else %}
+<p class='sub'>Исходников нет — они приходят на пул с <code>hashengine push</code>.</p>
+{% endif %}
+</div>
+<div class='card'>
 <h2>Файлы</h2>
 {% if image.files %}
 <table>

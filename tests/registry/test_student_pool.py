@@ -1,4 +1,6 @@
 """Student TUI menu + self-check: local-solved vs server-credited status, and push auto-attach."""
+import urllib.error
+
 import pytest
 
 from hashpass import cli
@@ -54,6 +56,17 @@ class _FakeClient:
     def push_attachment(self, name, version, filename, blob, *, taskfile=False, token=None) -> None:  # noqa: PLR0913, ARG002
         self.calls.append((name, version, filename, blob, taskfile))
 
+    def push_source(self, name, version, blob, *, token=None) -> None:  # noqa: ARG002
+        self.calls.append((name, version, "<source>", blob, False))
+
+
+class _OldPoolClient(_FakeClient):
+    """A pool without `/source` (before 2026-10-14): sources fall back to an attachment."""
+
+    def push_source(self, name, version, blob, *, token=None) -> None:  # noqa: ARG002
+        url = "/source"
+        raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+
 
 @pytest.mark.tier1
 def test_attach_taskfile_uploads_when_present(tmp_path):
@@ -75,8 +88,8 @@ def test_attach_taskfile_uploads_when_present(tmp_path):
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
     cli._attach_taskfile(client, store, "u/lab:1", io)   # noqa: SLF001
     assert client.calls[0] == ("u/lab", "1", "Taskfile", b"stage one\n", True)
-    name, version, filename, blob, taskfile = next(c for c in client.calls if c[2] == "source.tar.gz")
-    assert (name, version, filename, taskfile) == ("u/lab", "1", "source.tar.gz", False)
+    name, version, _kind, blob, taskfile = next(c for c in client.calls if c[2] == "<source>")
+    assert (name, version, taskfile) == ("u/lab", "1", False)   # the pool keeps them as files
     dest = tmp_path / "out"
     cli.unpack_task_source(blob, dest)
     assert (dest / "Taskfile").read_text(encoding="utf-8") == "stage one\n"
@@ -190,3 +203,15 @@ def test_menu_loop_rejects_bad_number_then_quits(tmp_path, monkeypatch):
     assert cli.cmd_pool_home(env, io) == 0
     assert ran == []
     assert "нет такого номера" in "".join(out)
+
+
+@pytest.mark.tier1
+def test_attach_source_falls_back_to_an_attachment_on_an_old_pool(tmp_path):
+    tdir = tmp_path / "lab"
+    tdir.mkdir()
+    (tdir / "Taskfile").write_text("stage one\n", encoding="utf-8")
+    client = _OldPoolClient()
+    out: list[str] = []
+    cli._attach_source(client, "u/lab:1", tdir, cli.Io(read=lambda _p: None, write=out.append,   # noqa: SLF001
+                                                         clock=lambda: ""))
+    assert [c[2] for c in client.calls] == ["source.tar.gz"]

@@ -30,6 +30,17 @@ def safe_filename(filename: str) -> str:
     return _check(_FILENAME, base, "файл")
 
 
+def ref_dir(root: Path, ref: str) -> Path:
+    """`<root>/<name segments>/<version>` for a ref, every segment checked (no `..`, no `/`)."""
+    name, _, version = ref.partition(":")
+    version = _check(_COMPONENT, version or "latest", "версия")
+    parts = [_check(_COMPONENT, seg, "образ") for seg in name.split("/") if seg]
+    if not parts:
+        msg = f"пустой ref: {ref!r}"
+        raise ValueError(msg)
+    return Path(root).joinpath(*parts, version)
+
+
 class AttachmentStore:
     """A per-ref store of a description and named file blobs, persisted under `root`."""
 
@@ -38,13 +49,7 @@ class AttachmentStore:
         self._root = Path(root)
 
     def _dir(self, ref: str) -> Path:
-        name, _, version = ref.partition(":")
-        version = _check(_COMPONENT, version or "latest", "версия")
-        parts = [_check(_COMPONENT, seg, "образ") for seg in name.split("/") if seg]
-        if not parts:
-            msg = f"пустой ref: {ref!r}"
-            raise ValueError(msg)
-        return self._root.joinpath(*parts, version)
+        return ref_dir(self._root, ref)
 
     def _meta_path(self, ref: str) -> Path:
         return self._dir(ref) / "meta.json"

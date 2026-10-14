@@ -362,7 +362,11 @@ def _prepare_image(row: dict) -> dict:
             "block_name": str(row.get("block_name", "")),
             "description": str(row.get("description", "")),
             "about": _about_parts(str(row.get("description", ""))),
-            "hidden": hidden, "files": _prepare_files(files)}
+            "hidden": hidden, "files": _prepare_files(files),
+            "sources": [{**f, "path_q": quote(str(f["path"]), safe=""),
+                         "depth": str(f["path"]).count("/"),
+                         "name": str(f["path"]).rsplit("/", 1)[-1]}
+                        for f in row.get("sources") or []]}
 
 
 def render_catalog(images: list[dict], blocks: list[dict]) -> str:
@@ -397,6 +401,13 @@ def render_image_card(image: dict) -> str:
     return _env.get_template("image_card.html.j2").render(
         title=f"{image.get('ref', '')} — hashpass", nav=True, active="/web/images",
         image=_prepare_image(image))
+
+
+def render_source_file(ref: str, path: str, text: str | None, size: int) -> str:
+    """One source file of a task: its text, or a note that it is binary."""
+    return _env.get_template("source_file.html.j2").render(
+        title=f"{path} — {ref}", nav=True, active="/web/images",
+        ref=ref, ref_url=quote(ref, safe="/:"), path=path, text=text, size=size)
 
 
 _ROLES = ("student", "author", "admin")

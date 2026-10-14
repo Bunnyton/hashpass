@@ -1,0 +1,6 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<p class='crumb'><a href='/web/image/{{ ref_url }}'>← {{ ref }}</a></p>
+<h1 class='mono'>{{ path }}</h1>
+{% if text is not none %}<pre class='source'>{{ text }}</pre>{% else %}<p class='sub'>Двоичный файл, {{ size }} байт.</p>{% endif %}
+{% endblock %}

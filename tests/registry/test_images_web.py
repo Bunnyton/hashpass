@@ -485,3 +485,25 @@ def test_students_never_see_hidden_or_closed_tasks_staff_see_all(registry, tmp_p
     _req(opener, "POST", f"{base}/web/tasks/toggle", cookie=cookie, data={"ref": "lab:2", "hidden": "0"})
     assert [e["ref"] for e in RemoteRegistry(base).catalog(token=student)] == ["lab:2"]
     assert [e["ref"] for e in RemoteRegistry(base).catalog(token=teacher)] == ["lab:1", "lab:2"]
+
+
+@pytest.mark.tier2
+def test_web_card_lists_sources_shows_a_file_and_gives_the_archive(registry, tmp_path):
+    from hashpass import cli  # noqa: PLC0415
+    from hashpass.registry.sources import SourceStore  # noqa: PLC0415
+    _seed(registry, "lab:1", tmp_path, task=True)
+    tdir = tmp_path / "lab-src"
+    (tdir / "hp").mkdir(parents=True)
+    (tdir / "Taskfile").write_text('stage\n  say "цель"\n', encoding="utf-8")
+    (tdir / "hp" / "check").write_text("#!/bin/sh\n", encoding="utf-8")
+    SourceStore(Path(registry.store.root) / "sources").put_archive("lab:1", cli.pack_task_source(tdir))
+    opener, cookie = _author_cookie(registry)
+    base = registry.base_url
+    _, _, body = _req(opener, "GET", f"{base}/web/image/lab:1", cookie=cookie)
+    assert "Исходники" in body and "path=hp%2Fcheck" in body and "source-archive" in body
+    _, _, page = _req(opener, "GET", f"{base}/web/images/source?ref=lab%3A1&path=Taskfile", cookie=cookie)
+    assert "say &#34;цель&#34;" in page or 'say "цель"' in page or "say &quot;цель&quot;" in page
+    status, _, _ = _req(opener, "GET", f"{base}/web/images/source?ref=lab%3A1&path=..%2F..%2Fx", cookie=cookie)
+    assert status == HTTPStatus.NOT_FOUND
+    status, headers, _ = _req(opener, "GET", f"{base}/web/images/source-archive?ref=lab%3A1", cookie=cookie)
+    assert status == HTTPStatus.OK and "lab-1.tar.gz" in headers.get("Content-Disposition", "")
