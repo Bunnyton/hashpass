@@ -43,7 +43,7 @@ def capture_candidate(rootfs: Path, checks: StageChecks, last_output: str) -> Ob
             candidate[key] = read_perms(rootfs / key[len(PERMS):])
             continue
         state = read_state(rootfs / key, "/" + key)
-        content = want.kind == "link" or (want.kind in ("file", "hardlink") and want.text is not None)
+        content = want.kind in ("file", "hardlink", "link") and want.text is not None
         kind = "file" if state.kind == "hardlink" and want.kind == "file" and not content else state.kind
         candidate[key] = state if content else FileState(kind, None)
     candidate[OUTPUT_KEY] = FileState("file", last_output)

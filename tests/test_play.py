@@ -149,3 +149,14 @@ def test_capture_candidate_reads_perms_keys(tmp_path):
     checks = _stage({"perms:t": FileState("perms", "0701 0:0"), OUTPUT_KEY: FileState("file", "")})
     got = capture_candidate(tmp_path, checks, "")["perms:t"]
     assert got == FileState("perms", f"0701 {os.getuid()}:{os.getgid()}")
+
+
+@pytest.mark.tier1
+def test_observe_bool_on_a_link_matches_on_existence_only(tmp_path):
+    """links: «перенеси ссылку» observes the moved (broken) link only as «there is a link here»."""
+    home = tmp_path / "home" / "student"
+    (home / "dir").mkdir(parents=True)
+    (home / "dir" / "l").symlink_to("dir/dir/dir/file.txt")          # broken, whatever it says
+    checks = _stage({"home/student/dir/l": FileState("link", None), OUTPUT_KEY: FileState("file", "")})
+    cand = capture_candidate(tmp_path, checks, "")
+    assert matches({"home/student/dir/l": FileState("link", None)}, cand)
