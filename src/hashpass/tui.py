@@ -19,13 +19,16 @@ import contextlib
 import json
 import sys
 import threading
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer, Static, Tree
+from textual.containers import Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Footer, Input, Label, Static, Tree
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.remote import RemoteRegistry
@@ -99,6 +102,26 @@ class TaskRow:
     error: str = ""                 # why the last download failed (shown next to «ошибка загрузки»)
     block_id: str = ""
     block_open: bool = True         # the block is open to students (staff toggle it with o)
+    moderation: str = "approved"    # pending / approved / rejected (the pool's moderation)
+    pending_update: bool = False    # approved earlier; a newer push waits for approval
+    reason: str = ""                # why it was rejected
+    expires_at: float | None = None  # when a rejected task is deleted (unix)
+    owner: str = ""                 # the author (ref namespace)
+
+    def moderation_badge(self) -> str:
+        """Moderation state for the staff: на проверке / обновление на проверке / отклонено …."""
+        if self.moderation == "rejected":
+            why = f": {escape(self.reason)}" if self.reason else ""
+            days = ""
+            if self.expires_at is not None:
+                left = max(0, -(-int(self.expires_at - time.time()) // 86400))   # ceil, in days
+                days = f" · удалится через {left} дн."
+            return f"   [red]· отклонено{why}{days}[/]"
+        if self.pending_update:
+            return "   [yellow]· обновление на проверке[/]"
+        if self.moderation == "pending":
+            return "   [yellow]· на проверке[/]"
+        return ""
 
     def status_label(self) -> str:
         """One-line status without Rich markup (used by tests / plain-text callers)."""
@@ -144,9 +167,59 @@ class TaskRow:
         else:
             down = "[dim]○ не загружено[/]"
         tail = f"   {local_dot}   {server_dot}   {down}"
-        if self.preview:
+        badge = self.moderation_badge()
+        if self.preview and not badge:
             tail += "   [yellow]· скрыто[/]"
-        return f"{self.ref}{tail}"
+        return f"{self.ref}{tail}{badge}"
+
+
+class ReasonScreen(ModalScreen[str | None]):
+    """Ask the admin why a task is rejected (Enter -- with or without a reason, Esc -- cancel)."""
+
+    BINDINGS = [Binding("escape", "cancel", "Отмена")]   # noqa: RUF012
+
+    def __init__(self, ref: str) -> None:
+        """Remember which task is being rejected."""
+        super().__init__()
+        self.ref = ref
+
+    def compose(self) -> ComposeResult:
+        """Build a label and one input line."""
+        with Vertical(id="dialog"):
+            yield Label(f"Отклонить [b]{escape(self.ref)}[/]? Причина (необязательно), Enter — отклонить:")
+            yield Input(placeholder="что поправить", id="reason")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Enter: reject with what was typed."""
+        self.dismiss(event.value.strip())
+
+    def action_cancel(self) -> None:
+        """Esc: do not reject."""
+        self.dismiss(None)
+
+
+class ConfirmScreen(ModalScreen[bool]):
+    """A yes/no question (y/д -- yes; n/н/Esc -- no)."""
+
+    BINDINGS = [   # noqa: RUF012
+        Binding("y,Y,д,Д,н,Н", "answer(True)", "Да"),
+        Binding("n,N,т,Т,escape", "answer(False)", "Нет"),
+    ]
+
+    def __init__(self, question: str) -> None:
+        """Remember the question."""
+        super().__init__()
+        self.question = question
+
+    def compose(self) -> ComposeResult:
+        """Build the question and the keys."""
+        with Vertical(id="dialog"):
+            yield Label(self.question)
+            yield Label("[b]y[/] — да, [b]n[/] — нет")
+
+    def action_answer(self, yes: bool) -> None:  # noqa: FBT001
+        """Close with the answer."""
+        self.dismiss(yes)
 
 
 class PoolTUI(App):
@@ -154,6 +227,8 @@ class PoolTUI(App):
 
     CSS = """
     Screen { background: $surface; }
+    ReasonScreen, ConfirmScreen { align: center middle; }
+    #dialog { width: 80; height: auto; padding: 1 2; border: thick $accent; background: $panel; }
     Tree { padding: 1 2; background: $surface; }
     Tree > .tree--cursor { background: $accent 40%; color: $text; }
     Tree > .tree--highlight-line { background: $accent 20%; }
@@ -174,6 +249,11 @@ class PoolTUI(App):
         # priority: the Tree would take Shift+arrows as plain cursor moves otherwise
         Binding("shift+up", "move(-1)", "Выше", priority=True),
         Binding("shift+down", "move(1)", "Ниже", priority=True),
+        # Moderation (spec 2026-10-14): the admin approves / rejects, an author deletes own tasks.
+        Binding("a,A,ф,Ф", "approve", "Одобрить"),
+        Binding("n,N,т,Т", "reject", "Отклонить"),
+        Binding("delete", "delete_task", "Удалить"),
+        Binding("z,Z,я,Я", "toggle_rejected", "Отклонённые"),
     ]
 
     def __init__(self, env: Home, url: str, user: str, token: str) -> None:
@@ -203,6 +283,7 @@ class PoolTUI(App):
         self._notes: list[str] = []                  # toasts from the worker, shown by the timer
         self._leaf_nodes: dict[str, object] = {}          # ref -> its Tree leaf (relabelled in place)
         self.role = "student"                        # from the pool's /me on mount
+        self._show_rejected = True                   # «Отклонённые» shown (z toggles, remembered)
 
     # -- lifecycle --------------------------------------------------------
 
@@ -228,19 +309,30 @@ class PoolTUI(App):
     def _theme_file(self):  # noqa: ANN202
         return self.env.root / "tui.json"
 
+    def _prefs(self) -> dict:
+        with contextlib.suppress(OSError, ValueError, TypeError):
+            data = json.loads(self._theme_file().read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        return {}
+
+    def _save_prefs(self, **changes: object) -> None:
+        """Remember UI choices (theme, show_rejected) across launches in tui.json."""
+        with contextlib.suppress(OSError):
+            self._theme_file().parent.mkdir(parents=True, exist_ok=True)
+            self._theme_file().write_text(json.dumps({**self._prefs(), **changes}), encoding="utf-8")
+
     def _load_theme(self) -> None:
-        with contextlib.suppress(OSError, ValueError, KeyError, TypeError):
-            name = json.loads(self._theme_file().read_text(encoding="utf-8"))["theme"]
-            if name in self.available_themes:
-                self.theme = name
+        name = self._prefs().get("theme")
+        if name in self.available_themes:
+            self.theme = name
+        self._show_rejected = bool(self._prefs().get("show_rejected", True))
 
     def watch_theme(self, theme: str) -> None:
         """Remember the theme the user picked (user, 2026-10-13: «сохрани выбор темы»)."""
         if not getattr(self, "_theme_loaded", False):
             return                                       # the startup default is not a choice
-        with contextlib.suppress(OSError):
-            self._theme_file().parent.mkdir(parents=True, exist_ok=True)
-            self._theme_file().write_text(json.dumps({"theme": theme}), encoding="utf-8")
+        self._save_prefs(theme=theme)
 
     def on_mount(self) -> None:
         """Load the catalog once; welcome the student; no ticking timer, no background pulls."""
@@ -285,6 +377,8 @@ class PoolTUI(App):
         rows: list[TaskRow] = []
         for e in entries:
             ref = str(e["ref"])
+            if e.get("rejected") and not self._show_rejected:
+                continue
             hidden = not runnable(e)
             digest = str(e.get("digest", ""))
             ready = False
@@ -305,7 +399,12 @@ class PoolTUI(App):
                 server=server_status, local=ref in solved,
                 state="готово" if ready else "ожидает", hidden=hidden,
                 preview=bool(e.get("preview", False)), task_hidden=bool(e.get("hidden", False)),
-                block_id=str(e.get("block_id", "")), block_open=bool(e.get("block_open", True))))
+                block_id=str(e.get("block_id", "")), block_open=bool(e.get("block_open", True)),
+                moderation=str(e.get("state") or "approved"),
+                pending_update=bool(e.get("pending_update", False)),
+                reason=str(e.get("reason") or ""),
+                expires_at=float(e["expires_at"]) if e.get("expires_at") else None,
+                owner=str(e.get("owner") or "")))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
@@ -485,7 +584,66 @@ class PoolTUI(App):
             return self.role in ("author", "admin")
         if action == "move":
             return self.role in ("author", "admin")   # an author is told why it is refused
+        if action in ("approve", "reject"):
+            return self.role == "admin"
+        if action in ("delete_task", "toggle_rejected"):
+            return self.role in ("author", "admin")
         return super().check_action(action, parameters)
+
+    # -- moderation ---------------------------------------------------------
+
+    def _moderate(self, done: str, call) -> None:
+        """Run one moderation call against the pool; flash the outcome; reload."""
+        row = self._cursor_row()
+        if row is None:
+            return
+        try:
+            call(row)
+        except Exception as exc:                           # noqa: BLE001
+            self.notify(str(exc), severity="error", timeout=5)
+            return
+        self._flash(f"{row.ref}: {done}")
+        self._after_edit(row.ref)
+
+    def action_approve(self) -> None:
+        """Approve the task's current version (a, admin) -- students get it."""
+        if self.role == "admin":
+            self._moderate("одобрено", lambda row: self.client.approve(row.ref, token=self.token))
+
+    def action_reject(self) -> None:
+        """n: reject the task's current version (admin), with an optional reason."""
+        row = self._cursor_row()
+        if row is None or self.role != "admin":
+            return
+
+        def _done(reason: str | None) -> None:
+            if reason is not None:
+                self._moderate("отклонено", lambda r: self.client.reject(r.ref, reason, token=self.token))
+
+        self.push_screen(ReasonScreen(row.ref), _done)
+
+    def action_delete_task(self) -> None:
+        """Delete: remove the task from the pool -- only your own (the admin: any), after a yes."""
+        row = self._cursor_row()
+        if row is None or self.role not in ("author", "admin"):
+            return
+        if self.role != "admin" and row.owner != self.user:
+            self.notify(f"Это задание автора {row.owner or 'admin'}: удалить его может только он "
+                        "или администратор.", severity="warning", timeout=5)
+            return
+
+        def _done(yes: bool | None) -> None:  # noqa: FBT001
+            if yes:
+                self._moderate("удалено с пула", lambda r: self.client.delete_task(r.ref, token=self.token))
+
+        self.push_screen(ConfirmScreen(f"Удалить [b]{escape(row.ref)}[/] с пула насовсем?"), _done)
+
+    def action_toggle_rejected(self) -> None:
+        """z: show or hide the «Отклонённые» block (remembered, shown by default)."""
+        self._show_rejected = not self._show_rejected
+        self._save_prefs(show_rejected=self._show_rejected)
+        self._reload_catalog()
+        self._flash("отклонённые показаны" if self._show_rejected else "отклонённые скрыты")
 
     def _cursor_row(self) -> TaskRow | None:
         node = self.query_one("#tasks", Tree).cursor_node
