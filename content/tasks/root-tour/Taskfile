@@ -13,7 +13,8 @@ read brief.md
 
 stage
   say "Посмотри, какие каталоги начинаются прямо от корня файловой системы"
-  accept cmd "ls /" ok
+  solve ls /
+  observe output
   neutral pwd
   neutral clear
   hint tries 5 say "Начни с ls и укажи ему самый короткий абсолютный путь."
@@ -22,7 +23,8 @@ stage
 stage
   on enter read etc.md
   say "Узнай название и версию системы из /etc/os-release"
-  accept cmd "cat /etc/os-release" ok
+  solve cat /etc/os-release
+  observe output
   neutral pwd
   neutral clear
   neutral "ls /etc"
@@ -32,7 +34,8 @@ stage
 stage
   on enter read home.md
   say "Посмотри, чьи домашние каталоги есть в /home"
-  accept cmd "ls /home" ok
+  solve ls /home
+  observe output
   neutral pwd
   neutral clear
   hint tries 5 say "Каталог уже назван в цели — осталось показать его содержимое."
@@ -41,7 +44,8 @@ stage
 stage
   on enter read proc.md
   say "Узнай версию ядра из /proc/version"
-  accept cmd "cat /proc/version" ok
+  solve cat /proc/version
+  observe output
   neutral pwd
   neutral clear
   neutral "ls /proc"
@@ -51,9 +55,8 @@ stage
 stage
   on enter read dev.md
   say "Посмотри подробную информацию о /dev/null"
-  accept cmd "ls -l /dev/null" ok
-  accept cmd "ls -la /dev/null" ok
-  accept cmd "ls -al /dev/null" ok
+  solve ls -l /dev/null
+  observe output
   neutral pwd
   neutral clear
   neutral "ls /dev"
