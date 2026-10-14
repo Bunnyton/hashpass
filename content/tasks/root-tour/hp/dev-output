@@ -1,10 +1,14 @@
 #!/bin/sh
 set -eu
 
-one_line() {
-  tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//'
-}
-
-got=$(printf '%s\n' "${HP_LAST_OUT:-}" | one_line)
-want=$(ls -l /dev/null | one_line)
-[ "$got" = "$want" ]
+# /dev/null создаётся заново для отдельных запусков nspawn, поэтому дата в
+# `ls -l` может отличаться между студенческой консолью и этой проверкой.
+# Проверяем устойчивые поля самого устройства, не время и не текст команды.
+printf '%s\n' "${HP_LAST_OUT:-}" | awk '
+  NF {
+    lines++
+    valid = ($1 ~ /^c/ && $3 == "root" && $4 == "root" &&
+             $5 == "1," && $6 == "3" && $NF == "/dev/null")
+  }
+  END { exit !(lines == 1 && valid) }
+'
