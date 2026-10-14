@@ -19,7 +19,7 @@ def _seed(registry, ref: str, tmp_path) -> None:
     src.mkdir(parents=True, exist_ok=True)
     (src / "f.txt").write_text("x", encoding="utf-8")
     registry.store.save(name, version, src, ())
-    Catalog(registry.catalog_path).add_task(ref, "d")
+    Catalog(registry.catalog_path).add_task(ref, "d", auto=True)
 
 
 def _put(base_url: str, token: str | None, payload: dict) -> tuple[int, dict]:

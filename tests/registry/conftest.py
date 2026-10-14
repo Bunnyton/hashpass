@@ -9,6 +9,7 @@ import pytest
 
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.passwords import UserStore
+from hashpass.registry.pool_settings import PoolSettings
 from hashpass.registry.server import make_server
 
 _SECRET = secrets.token_bytes(32)
@@ -44,6 +45,9 @@ def registry(tmp_path: Path) -> Iterator[RunningRegistry]:
     store = ImageStore(tmp_path / "srv")
     users = UserStore(tmp_path / "users.json")
     catalog_path = tmp_path / "catalog.json"
+    # Tests of layout/visibility treat published tasks as approved: pool-wide auto-approval on.
+    # Moderation tests switch it off (PoolSettings(...).set_auto_approve(on=False)).
+    PoolSettings(tmp_path / "pool-settings.json").set_auto_approve(on=True)
     server = make_server(store, users, _SECRET, catalog_path=catalog_path)
     host, port = server.server_address
     thread = threading.Thread(target=server.serve_forever, daemon=True)

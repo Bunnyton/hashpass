@@ -19,7 +19,7 @@ from hashpass.registry.server import _parse_multipart
 
 @pytest.mark.tier2
 def test_history_and_antibot_recorded_and_shown(registry):
-    Catalog(registry.catalog_path).add_task("lab:1", "d1", hidden=False)
+    Catalog(registry.catalog_path).add_task("lab:1", "d1", hidden=False, auto=True)
     student = RemoteRegistry(registry.base_url)
     stok = student.register("stud", "pass123!", group="G")
     history = [{"command": "echo pasted solution here", "ts": "T", "typing": 0.02, "pasted": True}]

@@ -4,12 +4,20 @@ Task catalog grouped into teacher-managed blocks, persisted as JSON.
 A task's display name IS its image ref (no separate title). Order is implicit in the JSON
 arrays (blocks, and tasks within a block); the student-facing number is derived from that
 order. Availability is per block: a task is open to students iff its block is open.
+
+Moderation (spec 2026-10-14): a task is `pending` until an admin approves it (or auto-approval is
+on), `approved` -- and then `approved_digest` names the version students get -- or `rejected`
+(kept a week, then purged). A new push of an approved task waits for approval again while
+students keep the approved version. A catalog written before moderation reads as approved.
 """
 import json
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+REJECT_TTL = 7 * 24 * 3600   # a rejected task lives a week, then the pool deletes it
+_STATES = ("pending", "approved", "rejected")
 
 
 @dataclass(frozen=True)
@@ -22,9 +30,18 @@ class CatalogEntry:
     digest: str
     block_id: str
     block_name: str
-    available: bool      # visible to students: block.open AND NOT task.hidden
+    available: bool      # visible to students: approved version AND block.open AND NOT hidden
     hidden: bool = False  # per-task teacher override (default: visible when the block is open)
     block_open: bool = True  # the block's own state (staff toggle it: web ⋯ menu, hashpass `o`)
+    state: str = "approved"       # pending | approved | rejected
+    approved_digest: str = ""     # the version students get ("" = never approved)
+    reason: str = ""              # why it was rejected (optional)
+    rejected_at: float = 0.0      # when (unix), for the weekly purge
+
+    @property
+    def owner(self) -> str:
+        """The author: the ref's namespace (`bob/lab` -> bob); "" for a ref without one (admin)."""
+        return self.name.split("/", 1)[0] if "/" in self.name else ""
 
     @property
     def ref(self) -> str:
@@ -36,7 +53,12 @@ class CatalogEntry:
         return {"number": self.number, "name": self.name, "version": self.version,
                 "digest": self.digest, "ref": self.ref, "block_id": self.block_id,
                 "block_name": self.block_name, "available": self.available,
-                "hidden": self.hidden, "block_open": self.block_open}
+                "hidden": self.hidden, "block_open": self.block_open,
+                "state": self.state, "approved_digest": self.approved_digest,
+                "reason": self.reason, "rejected_at": self.rejected_at,
+                "expires_at": self.rejected_at + REJECT_TTL if self.state == "rejected" else None,
+                "pending_update": self.state != "approved" and bool(self.approved_digest),
+                "owner": self.owner}
 
 
 @dataclass(frozen=True)
@@ -52,6 +74,15 @@ class Block:
         """Serializable view including the block's ordered tasks."""
         return {"id": self.id, "name": self.name, "open": self.open,
                 "tasks": [e.as_dict() for e in self.entries]}
+
+
+def _moderation(t: dict) -> tuple[str, str, str, float]:
+    """(state, approved_digest, reason, rejected_at) of a stored task; a pre-moderation one is approved."""
+    if "state" not in t:
+        return "approved", str(t.get("digest", "")), "", 0.0
+    state = str(t.get("state")) if t.get("state") in _STATES else "pending"
+    return (state, str(t.get("approved_digest") or ""), str(t.get("reason") or ""),
+            float(t.get("rejected_at") or 0.0))
 
 
 def _new_id() -> str:
@@ -116,10 +147,13 @@ class Catalog:
             for t in b.get("tasks", []):
                 number += 1
                 hidden = bool(t.get("hidden", False))
+                state, approved, reason, rejected_at = _moderation(t)
                 entries.append(CatalogEntry(
                     number, str(t.get("name", "")), str(t.get("version", "")),
                     str(t.get("digest", "")), str(b.get("id", "")), str(b.get("name", "")),
-                    available=is_open and not hidden, hidden=hidden, block_open=is_open))
+                    available=bool(approved) and is_open and not hidden, hidden=hidden,
+                    block_open=is_open, state=state, approved_digest=approved, reason=reason,
+                    rejected_at=rejected_at))
             result.append(Block(str(b.get("id", "")), str(b.get("name", "")), is_open, entries))
         return result
 
@@ -172,8 +206,8 @@ class Catalog:
                 return True
         return False
 
-    def add_task(self, ref: str, digest: str, *, block_id: str | None = None,
-                 block_name: str | None = None, hidden: bool = True) -> None:
+    def add_task(self, ref: str, digest: str, *, block_id: str | None = None,  # noqa: PLR0913
+                 block_name: str | None = None, hidden: bool = True, auto: bool = False) -> None:
         """
         Publish a task into a block -- HIDDEN by default, so its author can test it first.
 
@@ -182,6 +216,9 @@ class Catalog:
         its hidden flag when re-published into the same block (or with no block given) -- only
         the digest changes; moving it to an explicitly named other block keeps its flag too.
         (Moving every re-publish to the last block once put a whole catalog into «Архив».)
+
+        Every push is a version to moderate: `pending` (students keep the approved one, if any),
+        or straight `approved` when `auto` (the pool's or the author's auto-approval).
         """
         name, _, version = ref.partition(":")
         data = self._load()
@@ -191,21 +228,58 @@ class Catalog:
             return f"{t.get('name')}:{t.get('version')}" == ref
 
         home = next((b for b in blocks for t in b.get("tasks", []) if is_ref(t)), None)
+        record = {"name": name, "version": version, "digest": digest, "hidden": hidden,
+                  "approved_digest": ""}
+        if home is not None:
+            old = next(t for t in home["tasks"] if is_ref(t))
+            record = {**old, "hidden": bool(old.get("hidden", False)),
+                      "approved_digest": _moderation(old)[1], "digest": digest}
+        record.update({"state": "approved" if auto else "pending", "reason": "", "rejected_at": 0.0})
+        if auto:
+            record["approved_digest"] = digest
         if home is not None:
             same = block_id is None and block_name in (None, home.get("name"))
             if same or block_id == home.get("id"):
-                for t in home["tasks"]:
-                    if is_ref(t):
-                        t["digest"] = digest
+                home["tasks"] = [record if is_ref(t) else t for t in home["tasks"]]
                 self._save(data)
                 return
-            hidden = bool(next(t for t in home["tasks"] if is_ref(t)).get("hidden", False))
         target = _target_block(blocks, block_id, block_name)
         for b in blocks:   # a ref lives in exactly one block
             b["tasks"] = [t for t in b.get("tasks", []) if not is_ref(t)]
-        target.setdefault("tasks", []).append(
-            {"name": name, "version": version, "digest": digest, "hidden": hidden})
+        target.setdefault("tasks", []).append(record)
         self._save(data)
+
+    def _update(self, ref: str, change: Callable[[dict], None]) -> dict | None:
+        """Apply `change` to the stored task `ref` (normalized to moderation fields); return it."""
+        data = self._load()
+        for b in data.get("blocks", []):
+            for t in b.get("tasks", []):
+                if f"{t.get('name')}:{t.get('version')}" == ref:
+                    state, approved, reason, rejected_at = _moderation(t)
+                    t.update({"state": state, "approved_digest": approved, "reason": reason,
+                              "rejected_at": rejected_at})
+                    change(t)
+                    self._save(data)
+                    return t
+        return None
+
+    def approve(self, ref: str) -> str | None:
+        """Approve the current version (students get it now); return its digest, None if no such task."""
+        t = self._update(ref, lambda t: t.update({"state": "approved", "reason": "", "rejected_at": 0.0,
+                                                  "approved_digest": str(t.get("digest", ""))}))
+        return None if t is None else str(t["approved_digest"])
+
+    def reject(self, ref: str, reason: str, *, now: float) -> bool:
+        """Reject the current version (students keep an approved one, if any); False if no such task."""
+        return self._update(ref, lambda t: t.update({"state": "rejected", "reason": reason,
+                                                     "rejected_at": now})) is not None
+
+    def purge_rejected(self, now: float, ttl: float = REJECT_TTL) -> list[str]:
+        """Drop tasks rejected at least `ttl` ago (re-pushed ones are pending again); return their refs."""
+        gone = [e.ref for e in self.entries() if e.state == "rejected" and now - e.rejected_at >= ttl]
+        for ref in gone:
+            self.remove_task(ref)
+        return gone
 
     def set_task_hidden(self, ref: str, *, hidden: bool) -> bool:
         """Toggle a single task's per-teacher hidden flag; return whether it existed."""
@@ -284,8 +358,9 @@ class Catalog:
         `layout` is an ordered list of blocks: {id?, name, open, tasks: [ref, ...]}. Unknown refs
         (no stored digest) are dropped. This is how reorder / move-between-blocks is applied.
         """
-        digest = {e.ref: e.digest for e in self.entries()}
-        hidden = {e.ref: e.hidden for e in self.entries()}
+        stored = {f"{t.get('name')}:{t.get('version')}": t
+                  for b in self._load().get("blocks", []) if isinstance(b, dict)
+                  for t in b.get("tasks", [])}
         prev = {str(b.get("id")): b for b in self._load().get("blocks", []) if isinstance(b, dict)}
         blocks: list[dict[str, object]] = []
         for b in layout:
@@ -294,11 +369,9 @@ class Catalog:
             tasks = []
             for raw in b.get("tasks", []):
                 ref = str(raw)
-                if ref not in digest:
+                if ref not in stored:
                     continue
-                name, _, version = ref.partition(":")
-                tasks.append({"name": name, "version": version, "digest": digest[ref],
-                              "hidden": hidden.get(ref, False)})
+                tasks.append(dict(stored[ref]))   # digest, hidden and moderation travel with it
             blocks.append({"id": block_id, "name": str(b.get("name", was.get("name", ""))),
                            "open": bool(b.get("open", was.get("open", True))), "tasks": tasks})
         self._save({"blocks": blocks})

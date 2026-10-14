@@ -165,8 +165,8 @@ def test_pool_status_local_vs_server(registry, tmp_path):
     env = _env(tmp_path)
     c = RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds))
     tok = c.register("stud", "pass123!", group="G")
-    Catalog(registry.catalog_path).add_task("lab:1", "d1", hidden=False)
-    Catalog(registry.catalog_path).add_task("lab2:1", "d2", hidden=False)
+    Catalog(registry.catalog_path).add_task("lab:1", "d1", hidden=False, auto=True)
+    Catalog(registry.catalog_path).add_task("lab2:1", "d2", hidden=False, auto=True)
     cli.mark_solved(env, "lab:1")                          # solved locally only
     c.submit("lab2:1", "d2", passed=True, token=tok)       # credited on the server only
     rows = {r["number"]: r for r in cli.pool_status(env, registry.base_url, tok, "stud")}

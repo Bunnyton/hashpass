@@ -42,6 +42,7 @@ from hashpass.registry.passwords import (
     WeakPasswordError,
     validate_password,
 )
+from hashpass.registry.pool_settings import PoolSettings
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
@@ -185,6 +186,16 @@ class PoolServer:
 
     def catalog(self) -> Catalog:
         return Catalog(self.catalog_path or (Path(self.store.root) / "catalog.json"))
+
+    def pool_settings(self) -> PoolSettings:
+        """Pool-wide switches (auto-approval), next to the catalog."""
+        return PoolSettings((self.catalog_path or (Path(self.store.root) / "catalog.json")).parent
+                            / "pool-settings.json")
+
+    def _auto_approved(self, name: str) -> bool:
+        """Whether a push of `name` approves itself: the pool's switch or its author's flag."""
+        owner = _owner_of(name)
+        return self.pool_settings().auto_approve or bool(owner and self.users.auto_approve(owner))
 
     def progress(self) -> ProgressStore:
         return ProgressStore(self.progress_path or (Path(self.store.root) / "progress"))
@@ -830,6 +841,7 @@ class PoolServer:
                 return self._empty(HTTPStatus.BAD_REQUEST)
             if request.args.get("publish", "") == "1":   # `push --task [--block B]`: into the catalog,
                 self.catalog().add_task(ref, task_digest(task_dir),   # hidden until shown
+                                        auto=self._auto_approved(name),
                                         block_name=request.args.get("block") or None)
             return self._empty(HTTPStatus.CREATED)
         # GET (a task's grader is not public)
@@ -1242,7 +1254,7 @@ class PoolServer:
         task_dir = self.store.get(ref).layer.parent / "task"
         if not task_dir.exists():   # only a task image (with a grader) can join the catalog
             return self._redirect("/web/images")
-        self.catalog().add_task(ref, task_digest(task_dir),
+        self.catalog().add_task(ref, task_digest(task_dir), auto=self._auto_approved(name),
                                 block_id=request.form.get("block_id") or None)
         return self._redirect("/web/images")
 

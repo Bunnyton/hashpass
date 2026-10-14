@@ -100,10 +100,10 @@ def _decoy_record() -> str:
     return hash_password("\x00decoy\x00")
 
 
-def _record(pw_hash: str, role: str, group: str, comment: str,
-            created_at: float) -> dict[str, object]:
+def _record(pw_hash: str, role: str, group: str, comment: str,  # noqa: PLR0913
+            created_at: float, *, auto_approve: bool = False) -> dict[str, object]:
     return {"pw": pw_hash, "role": role, "group": group,
-            "comment": comment, "created_at": created_at}
+            "comment": comment, "created_at": created_at, "auto_approve": auto_approve}
 
 
 def _normalize(value: object) -> dict[str, object]:
@@ -113,7 +113,7 @@ def _normalize(value: object) -> dict[str, object]:
     v = value if isinstance(value, dict) else {}   # older records may carry a dropped full_name
     return _record(str(v.get("pw", "")), str(v.get("role", "student")),
                    str(v.get("group", "")), str(v.get("comment", "")),
-                   float(v.get("created_at", 0.0)))
+                   float(v.get("created_at", 0.0)), auto_approve=bool(v.get("auto_approve", False)))
 
 
 class UserStore:
@@ -174,7 +174,8 @@ class UserStore:
         if rec is None:
             return None
         return {"user": user, "role": rec["role"], "group": rec["group"],
-                "comment": rec["comment"], "created_at": rec["created_at"]}
+                "comment": rec["comment"], "created_at": rec["created_at"],
+                "auto_approve": rec["auto_approve"]}
 
     def role(self, user: str) -> str | None:
         """Return the user's role, or None if unknown."""
@@ -215,6 +216,19 @@ class UserStore:
         if user not in users:
             raise KeyError(user)
         users[user]["comment"] = comment
+        self._save(users)
+
+    def auto_approve(self, user: str) -> bool:
+        """Whether this author's tasks approve themselves on push (off by default, admin too)."""
+        rec = self._load().get(user)
+        return bool(rec and rec["auto_approve"])
+
+    def set_auto_approve(self, user: str, *, on: bool) -> None:
+        """Turn an author's auto-approval on/off (KeyError if unknown)."""
+        users = self._load()
+        if user not in users:
+            raise KeyError(user)
+        users[user]["auto_approve"] = on
         self._save(users)
 
     def all_users(self) -> list[dict[str, object]]:
