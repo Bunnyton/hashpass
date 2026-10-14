@@ -119,3 +119,23 @@ def test_capture_candidate_bool_dir_key_matches_without_recursion(tmp_path):
     cand = capture_candidate(tmp_path, checks, "")
     assert cand["d"] == FileState("dir", None) and "d/junk" not in cand   # the dir, not its content
     assert matches(checks.canonical, cand)
+
+
+@pytest.mark.tier1
+def test_capture_candidate_keeps_link_targets(tmp_path):
+    home = tmp_path / "home" / "student"
+    home.mkdir(parents=True)
+    (home / "f").write_text("x", encoding="utf-8")
+    (home / "l").symlink_to("f")
+    checks = _stage({"home/student/l": FileState("link", "/home/student/f"),
+                     OUTPUT_KEY: FileState("file", "")})
+    candidate = capture_candidate(tmp_path, checks, "")
+    assert candidate["home/student/l"] == FileState("link", "/home/student/f")
+
+
+@pytest.mark.tier1
+def test_observe_bool_file_still_exists_when_it_has_two_names(tmp_path):
+    (tmp_path / "a").write_text("x", encoding="utf-8")
+    (tmp_path / "b").hardlink_to(tmp_path / "a")
+    checks = _stage({"b": FileState("file", None), OUTPUT_KEY: FileState("file", "")})
+    assert capture_candidate(tmp_path, checks, "")["b"] == FileState("file", None)

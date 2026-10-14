@@ -1,5 +1,0 @@
-#!/bin/sh
-# Принято: backup.txt и notes.txt — два имени одного файла (один inode), не копия и не ссылка.
-cd /home/student || exit 1
-[ -f notes.txt ] && [ -f backup.txt ] && [ ! -L backup.txt ] || exit 1
-[ "$(stat -c %i notes.txt)" = "$(stat -c %i backup.txt)" ]

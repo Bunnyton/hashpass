@@ -1,5 +1,0 @@
-#!/bin/sh
-# Принято: latest.log — та же ссылка (путь в ней не меняли), и по ней открывается последний лог.
-l=/home/student/latest.log
-[ -L "$l" ] && [ "$(readlink "$l")" = logs/app.log ] || exit 1
-cmp -s "$l" "$(dirname "$0")/last.log"

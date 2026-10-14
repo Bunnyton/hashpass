@@ -17,6 +17,7 @@ hidden hp
 
 settings
   pager on
+  similarity 100
 
 say "Иногда один файл нужен сразу в нескольких местах."
 read brief.md
@@ -26,7 +27,7 @@ stage
   solve:
     ln -s dir/dir/dir/file.txt /home/student/file_link.txt
     ln -s dir/dir/dir /home/student/dir_link
-  check exec linked
+  observe /home/student/file_link.txt /home/student/dir_link
   neutral ls cat pwd cd
   on pass say "Ссылка — указатель: открываешь её, а попадаешь в файл. Куда она смотрит, покажет ls -l."
   hint output "File exists" say "Такое имя уже занято. Посмотри ls -l: может, ссылка уже есть и смотрит не туда?"
@@ -39,7 +40,9 @@ stage
     rm -f /home/student/file_link.txt
     ln -s /home/student/dir/dir/dir/file.txt /home/student/dir/file_link.txt
     cat /home/student/dir/file_link.txt
-  check exec moved
+  observe /home/student/dir/file_link.txt
+  observe bool /home/student/file_link.txt
+  observe output
   neutral ls pwd cd
   on pass say "Ссылка с путём от корня переносится куда угодно. Относительная — только вместе со своей целью."
   hint output "No such file or directory" read relative.md
@@ -49,7 +52,7 @@ stage
 stage
   say "Ссылка latest.log должна показывать последний лог из logs. Почини её, не трогая саму ссылку"
   solve cp /home/student/logs/app-2026-10-12.log /home/student/logs/app.log
-  check exec revived
+  observe /home/student/latest.log /home/student/logs/app.log
   neutral ls cat pwd cd
   on pass say "Символьная ссылка хранит только путь. Появился файл по этому пути — ссылка ожила, хотя её никто не трогал."
   hint tries 5 say "ls -l latest.log — какой путь записан в ссылке? Есть ли по нему файл?"
@@ -58,7 +61,7 @@ stage
 stage
   say "Сделай жёсткую ссылку backup.txt на notes.txt"
   solve ln /home/student/notes.txt /home/student/backup.txt
-  check exec hardlinked
+  observe /home/student/notes.txt /home/student/backup.txt
   on enter read hard.md
   neutral ls cat pwd cd
   on pass say "ls -l теперь показывает у notes.txt и backup.txt цифру 2 — столько имён у этого файла."

@@ -1,6 +1,0 @@
-#!/bin/sh
-# Принято: ссылка лежит в dir, ведёт на файл, и последней командой файл прочитан через неё.
-l=/home/student/dir/file_link.txt
-[ -L "$l" ] && [ "$(readlink -f "$l")" = /home/student/dir/dir/dir/file.txt ] || exit 1
-case "${HP_LAST_OUT:-}" in *"Рано ещё"*) exit 0 ;; esac
-exit 1

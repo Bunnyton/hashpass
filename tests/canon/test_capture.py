@@ -28,3 +28,34 @@ def test_capture_bool_observe_is_existence_kind_only(tmp_path):
     assert obs["d"] == FileState("dir", None)           # the dir itself, not its children
     assert "d/child" not in obs                         # no recursion
     assert obs["gone"] == FileState("absent", None)
+
+
+@pytest.mark.tier1
+def test_capture_symlink_is_a_link_to_its_resolved_target_however_spelled(tmp_path):
+    """The links task: a symlink is observed as WHERE it points (any spelling), never as a copy."""
+    home = tmp_path / "home" / "student"
+    (home / "d" / "d").mkdir(parents=True)
+    (home / "d" / "d" / "f.txt").write_text("x", encoding="utf-8")
+    (home / "rel").symlink_to("d/d/f.txt")
+    (home / "abs").symlink_to("/home/student/d/d/f.txt")      # absolute INSIDE the student's system
+    (home / "dot").symlink_to("./d/../d/d/f.txt")
+    (home / "dirlink").symlink_to("d/d")
+    (home / "copy").write_text("x", encoding="utf-8")
+    (home / "d" / "moved").symlink_to("d/d/f.txt")              # relative link moved: now broken
+    keys = ["home/student/" + n for n in ("rel", "abs", "dot", "dirlink", "copy", "d/moved")]
+    obs = capture(tmp_path, keys)
+    want = FileState("link", "/home/student/d/d/f.txt")
+    assert obs["home/student/rel"] == obs["home/student/abs"] == obs["home/student/dot"] == want
+    assert obs["home/student/dirlink"] == FileState("link", "/home/student/d/d")   # not expanded
+    assert obs["home/student/copy"] == FileState("file", "x")
+    assert obs["home/student/d/moved"] == FileState("link", "/home/student/d/d/d/f.txt")
+
+
+@pytest.mark.tier1
+def test_capture_hard_linked_file_differs_from_a_copy(tmp_path):
+    (tmp_path / "notes.txt").write_text("todo", encoding="utf-8")
+    (tmp_path / "backup.txt").hardlink_to(tmp_path / "notes.txt")
+    (tmp_path / "copy.txt").write_text("todo", encoding="utf-8")
+    obs = capture(tmp_path, ["notes.txt", "backup.txt", "copy.txt"])
+    assert obs["notes.txt"] == obs["backup.txt"] == FileState("hardlink", "todo")
+    assert obs["copy.txt"] == FileState("file", "todo")
