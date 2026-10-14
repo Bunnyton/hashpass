@@ -1,7 +1,0 @@
-#!/bin/sh
-# Принято: последней командой студент прочитал look_here.txt (cat/less/head/tail/more), и в выводе —
-# уже новая записка (её кладёт moved после шага с pwd).
-case "$1" in cat\ *|less\ *|more\ *|head\ *|tail\ *) ;; *) exit 1 ;; esac
-case "$1" in *look_here.txt*) ;; *) exit 1 ;; esac
-case "${HP_LAST_OUT:-}" in *"Хватит ходить"*) exit 0 ;; esac
-exit 1

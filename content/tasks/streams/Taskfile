@@ -34,7 +34,8 @@ stage
 stage
   say "chatterbox.sh — болтун. Заставь его замолчать: ни строчки на экране, и в файлы тоже ничего"
   solve /home/student/chatterbox.sh > /dev/null 2>&1
-  check exec silenced
+  accept cmd "chatterbox.sh"
+  accept output empty
   on enter read silence.md
   neutral ls cat pwd cd
   on pass say "Порядок важен: > /dev/null 2>&1 — сначала stdout в никуда, потом stderr туда же, куда stdout."

@@ -15,14 +15,17 @@ hidden hp
 
 settings
   pager on
+  similarity 100
 
 say "rm — remove. Крушить, ломать! Но сначала осмотрись."
 read brief.md
 
 stage
   say "Сразу к делу: перейди в директорию workdir и выполни ls"
-  solve ls /home/student/workdir
-  check exec listed
+  solve:
+    cd /home/student/workdir
+    ls
+  observe output
   neutral pwd
   on pass say "Видишь всё это? Сейчас его не станет."
   hint tries 5 say "Сначала переход, потом ls."

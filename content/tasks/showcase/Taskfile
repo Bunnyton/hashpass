@@ -57,9 +57,9 @@ stage
   hint tries 5 say "Строки с ERROR ты уже видишь — как их не показать, а посчитать?"
   hint tries 10 say "man grep — ищи «count». Или загугли: «посчитать строки со словом в файле linux»."
 
-# --- Задание 3: sudo + пакет, которого НЕТ; проверка ОДНОЙ inline-командой (без скрипта) ---
-# `check exec <команда>` запускает проверку прямо строкой (exit 0 = принято). Скрипт не нужен;
-# и это шаг-часовой (sentinel) — `solve` при сборке НЕ выполняется (apt не гоняется во время build).
+# --- Задание 3: sudo + пакет, которого НЕТ; проверка — наличие файла (observe bool) ---
+# Эталон строится из solve при сборке (apt гоняется во время build), студент принимается, когда
+# /usr/games/sl появился — какой бы командой он ни ставил.
 # `on enter exec intro2` — пример действия-скрипта из скрытого слоя.
 stage
   say "Установи пакет sl"
@@ -83,12 +83,12 @@ stage
   neutral ls cat less
   on pass say "Поезд ушёл. А sl -F — улетит."
 
-# --- Задание 5: скрытая проверка из скрытого слоя судит ответ ---
+# --- Задание 5: ответ в файле — observe сравнивает его с эталоном из solve, без скрипта ---
 stage
   say "Запиши в /home/student/secret фразу, которая открывает пещеру"
   solve:
     echo open-sesame > /home/student/secret
-  check exec grade
+  observe /home/student/secret
   neutral ls cat pwd
   on enter read clue3.md
   on pass say "Фраза известна. Пещера открыта."

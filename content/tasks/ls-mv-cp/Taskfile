@@ -4,7 +4,7 @@
 # cd ls cat mv rm cp (решается и одной командой: cat со звёздочками). Шаг 2: «автоматизируй
 # поиск» — фраза перепрятана в случайный файл, в ~ появились subdir_5 … subdir_14, ограничение снято:
 # «найди нужную команду сам. Just Google it!». Приёмка обоих шагов — фраза в выводе последней
-# команды (скрытая проверка по HP_LAST_OUT); после находки where называет файл.
+# команды (accept output "Терпение должны иметь мы"); после находки where называет файл.
 
 image ls-mv-cp:1
 
@@ -25,7 +25,7 @@ stage
   say "Найди в файлах subdir_1 … subdir_4 единственную строку по-русски и выведи её на экран"
   solve cat /home/student/subdir_1/level1_2GyK/level2_AB3p/level3_0J5f/file_B2nJ2l.json
   on enter apply hide
-  check exec found
+  accept output "Терпение должны иметь мы"
   allow cat cp mv rm
   neutral ls cd pwd
   on pass exec where
@@ -36,7 +36,7 @@ stage
 stage
   say "Теперь автоматизируй поиск: фраза перепрятана, а в домашнем каталоге уже subdir_1 … subdir_14"
   solve grep -r Терпение /home/student
-  check exec found
+  accept output "Терпение должны иметь мы"
   on enter apply rehide
   on enter say "Команды — всё те же: cd, ls, cat, mv, rm, cp."
   on enter say "Ладно, я же не изверг! Хотя... Тебе доступно неограниченное количество команд. Но придётся самому найти нужные. Just Google it!"

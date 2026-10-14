@@ -16,5 +16,5 @@ def test_observe_paths_are_absolute(task: Path) -> None:
     # student's ~/hello.txt never passed.
     recipe = parse_recipe((task / "Taskfile").read_text(encoding="utf-8"))
     rel = [p for s in recipe.stages for p in (*s.observe, *s.observe_bool)
-           if p != "output" and not p.startswith("/")]
+           if p != "output" and not p.removeprefix("perms:").startswith("/")]
     assert not rel, f"{task.name}: observe needs absolute paths: {rel}"

@@ -1,7 +1,0 @@
-#!/bin/sh
-# Принято: последней запускали chatterbox.sh, на экране пусто, и потоки слиты друг в друга (как в
-# исходнике) и выброшены в /dev/null.
-case "$1" in *chatterbox.sh*) ;; *) exit 1 ;; esac
-case "$1" in */dev/null*) ;; *) exit 1 ;; esac
-printf '%s\n' "$1" | grep -Eq '2>&1|1?>&2' || exit 1
-[ -z "$(printf '%s' "${HP_LAST_OUT:-}" | tr -d '[:space:]')" ]

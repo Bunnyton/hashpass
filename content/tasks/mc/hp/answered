@@ -1,4 +1,0 @@
-#!/bin/sh
-# В ~/answer.txt — тот самый пароль (его загадал hp/hide при входе).
-pass=$(cat /var/lib/hp-mc/pass 2>/dev/null)
-[ -n "$pass" ] && grep -Fq "$pass" /home/student/answer.txt 2>/dev/null

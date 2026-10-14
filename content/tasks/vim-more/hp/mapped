@@ -1,4 +1,0 @@
-#!/bin/sh
-# Способ шага 2: в ~/.vimrc есть своя клавиша обычного режима (nnoremap, nmap, noremap, map).
-# Сам vim2.txt проверяется по содержимому на следующем шаге.
-grep -Eq '^[[:space:]]*:?n?(nore)?map[[:space:]]' /home/student/.vimrc 2>/dev/null

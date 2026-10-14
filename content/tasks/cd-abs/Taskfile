@@ -21,8 +21,10 @@ read brief.md
 
 stage
   say "Перейди в dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me и выполни там ls"
-  solve ls /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
-  check exec there
+  solve:
+    cd /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me
+    ls
+  observe output
   block cd unless "^cd +/home/student/" say "no no no, mister fish! Используй абсолютный путь"
   neutral pwd
   on pass say "Что-то нашлось. Загляни внутрь."
@@ -44,7 +46,7 @@ stage
 stage
   say "Ты почти у цели: вернись в cd_to_me — в look_here.txt тебя кое-что ждёт :)"
   solve cat /home/student/dir1/dir2/dir3/dir4/dir5/dir6/dir7/dir8/dir9/cd_to_me/look_here.txt
-  check exec readback
+  accept output "Хватит ходить"
   neutral ls pwd cd
   on pass say "Розыгрыш удался. Зато теперь cd в обе стороны — твоя стихия."
   hint tries 5 say "Где лежит look_here.txt? Ты там уже был — дорога знакомая."

@@ -18,7 +18,8 @@ stage
   solve:
     sudo touch /home/file.txt
     ls -l /home/file.txt
-  check exec looked
+  accept cmd "ls -l"
+  accept output "root +root .*file\.txt"
   block rm match "^sudo +rm +.*(-[a-zA-Z]*[rR]|--recursive)" say "Не рекомендую шутить с этой командой))"
   neutral ls cat pwd cd
   on pass say "Обрати внимание: владелец файла — root. А в /home создать файл обычных прав не хватает."
@@ -28,7 +29,8 @@ stage
 stage
   say "А теперь удали его"
   solve rm -f /home/file.txt || true
-  check exec refused
+  accept cmd "rm"
+  observe bool /home/file.txt
   block rm match "^sudo " say "Сначала без sudo"
   neutral ls cat pwd cd
   on pass say "Не вышло: файл чужой — root'а, и каталог /home тоже его."

@@ -1,8 +1,0 @@
-#!/bin/sh
-# Принято: в выводе только порты (номер/протокол), без названий служб и комментариев, и их
-# много — почти весь /etc/services (строки с комментарием в конце можно было и выбросить).
-out=$(printf '%s\n' "${HP_LAST_OUT:-}" | sed '/^[[:space:]]*$/d')
-[ -n "$out" ] || exit 1
-printf '%s\n' "$out" | grep -Evq '^[0-9]+/[a-z]+$' && exit 1
-total=$(grep -v '^#' /etc/services | grep -c '[0-9]/')
-[ "$(printf '%s\n' "$out" | wc -l)" -ge $((total / 2)) ]

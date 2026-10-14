@@ -23,7 +23,7 @@ read brief.md
 stage
   say "Выведи из /etc/services только порты — без названий служб и комментариев"
   solve grep -v '^#' /etc/services | awk '{print $2}'
-  check exec ports
+  observe output
   neutral ls cat pwd cd less head
   on pass say "cut режет по символу-разделителю, awk — по пробелам любой длины. Для конфигов чаще берут awk."
   hint tries 5 say "Строки с # — комментарии, их убери. А из остальных нужен только второй столбец."

@@ -2,7 +2,7 @@
 # wonderful» и vim/21_nnoremap «теперь все, и используйте nnoremap»). Шаг 1: в vim.txt обернуть
 # слова в print(data["…"]) с Adorable до Wonderful — :s с диапазоном. Шаг 2: в vim2.txt — все,
 # своей клавишей из ~/.vimrc (nnoremap). Приёмка — по содержимому файла (observe); на шаге 2
-# сначала проверяется способ: в ~/.vimrc есть своя клавиша (hp/mapped). Редактировать можно только vim-ом: sed/awk/perl и т.п. закрыты (allow).
+# ещё и способ: в ~/.vimrc есть своя клавиша (accept file). Редактировать можно только vim-ом: sed/awk/perl и т.п. закрыты (allow).
 # Чистые копии файлов — в /opt/vim-more (испортил и сохранил — cp оттуда, сказано в брифе).
 
 image vim-more:1
@@ -35,19 +35,16 @@ stage
 
 stage
   say "А теперь vim2.txt — все слова, но без :s. Заведи в ~/.vimrc свою клавишу и пройди ей по файлу"
-  solve echo 'nnoremap <F2> Iprint(data["<Esc>A"])<Esc>j' > /home/student/.vimrc
-  check exec mapped
+  solve:
+    echo 'nnoremap <F2> Iprint(data["<Esc>A"])<Esc>j' > /home/student/.vimrc
+    sed -i '3,$s/.*/print(data["&"])/' /home/student/vim2.txt
+  accept file /home/student/.vimrc "^\s*:?n?(nore)?map\s"
+  observe /home/student/vim2.txt
   on enter read mapping.md
   allow vim vi
   neutral ls cat less cd pwd cp
   hint tries 5 say "Клавиша должна обернуть строку и спуститься на следующую. Тогда её можно просто держать."
   hint tries 10 say "I — вставить в начало строки, A — в конец, <Esc> — выйти из вставки, j — вниз."
-
-stage
-  solve sed -i '3,$s/.*/print(data["&"])/' /home/student/vim2.txt
-  observe /home/student/vim2.txt
-  allow vim vi
-  neutral ls cat less cd pwd cp
   on pass say "Своя клавиша в ~/.vimrc — навсегда. Так vim и подгоняют под себя."
 
 exec finale

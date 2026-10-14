@@ -31,7 +31,7 @@ read brief.md
 stage
   say "В perm_dir нарушены права. Выставь каталогу права drwxr----x — побитовой записью"
   solve chmod 741 /home/student/perm_dir
-  check exec sh -c 'test "$(stat -c %a /home/student/perm_dir)" = "741"'
+  observe perms /home/student/perm_dir
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Только побитовая запись — цифрами (chmod 754 …)."
   neutral ls cat pwd cd
   on pass say "Каталог открыт. Загляни внутрь — там кое-кто просит помощи."
