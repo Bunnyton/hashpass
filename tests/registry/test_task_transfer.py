@@ -83,3 +83,28 @@ def test_put_task_before_image_is_404(registry, tmp_path):
     with pytest.raises(urllib.error.HTTPError) as exc:
         c.push_task(task_src, "ghost", "1", token=tok)
     assert exc.value.code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.tier1
+def test_unpacking_a_task_replaces_the_old_one_entirely(tmp_path):
+    """
+    A re-pulled task is exactly the pool's: files the new version dropped do not linger.
+
+    User, 2026-10-14: «chmod-evil всё перезапуливается снова и снова» -- hp/perms, removed from the
+    task, stayed in every student's copy, so its digest never matched the catalog's and hashpass
+    downloaded it again and again.
+    """
+    from hashpass.registry.blob import pack_task, unpack_task  # noqa: PLC0415
+    from hashpass.taskdigest import task_digest  # noqa: PLC0415
+    old = tmp_path / "old"
+    (old / "hp" / "work").mkdir(parents=True)
+    (old / "hp" / "work" / "perms").write_text("old grader", encoding="utf-8")
+    (old / "task-meta.json").write_text("{}", encoding="utf-8")
+    new = tmp_path / "new"
+    (new / "hp" / "work").mkdir(parents=True)
+    (new / "task-meta.json").write_text('{"v": 2}', encoding="utf-8")
+    dest = tmp_path / "dest"
+    unpack_task(pack_task(old), dest)
+    unpack_task(pack_task(new), dest)
+    assert not (dest / "hp" / "work" / "perms").exists()
+    assert task_digest(dest) == task_digest(new)

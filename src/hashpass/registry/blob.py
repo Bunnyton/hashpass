@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import shutil
 import stat
 import subprocess
 import tarfile
@@ -309,8 +310,25 @@ def pack_task(task_dir: Path) -> bytes:
 
 
 def unpack_task(blob: bytes, dest_task_dir: Path) -> None:
-    """Extract a task blob into dest_task_dir (creating it); mirrors `pack_task`."""
+    """
+    Replace dest_task_dir with the task blob's files (mirrors `pack_task`).
+
+    The old dir is swapped out, not merged into: a file the new version dropped must not linger
+    -- `hp/perms` left over after chmod-evil lost it made every copy's digest differ from the
+    catalog's and hashpass re-pulled the task forever (user, 2026-10-14). Extracted next to the
+    old dir first, so a broken blob leaves the old task in place.
+    """
     dest = Path(dest_task_dir)
-    dest.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(fileobj=io.BytesIO(blob), mode="r") as tar:
-        tar.extractall(dest, filter="data")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.parent / f".{dest.name}.{uuid.uuid4().hex}.new"
+    old = dest.parent / f".{dest.name}.{uuid.uuid4().hex}.old"
+    try:
+        tmp.mkdir()
+        with tarfile.open(fileobj=io.BytesIO(blob), mode="r") as tar:
+            tar.extractall(tmp, filter="data")
+        if dest.exists():
+            dest.rename(old)
+        tmp.rename(dest)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(old, ignore_errors=True)
