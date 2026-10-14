@@ -40,8 +40,8 @@ def test_words_that_are_not_paths_stay_as_they_are() -> None:
 @pytest.mark.tier1
 def test_grep_r_prefix_and_several_paths_on_a_line() -> None:
     assert _abs("legacy/notes.txt:TODO: retry", HOME) == "/home/student/legacy/notes.txt:TODO: retry"
-    assert _abs("search  ./legacy\t.bashrc ~/.bashrc", HOME) == \
-        "search  /home/student/legacy\t.bashrc /home/student/.bashrc"
+    assert _abs("legacy/notes.txt:12 search/a/f.txt", HOME) == \
+        "/home/student/legacy/notes.txt:12 /home/student/search/a/f.txt"
     assert _abs(".", "/home/student/search") == "/home/student/search"
 
 
@@ -52,3 +52,12 @@ def test_a_bare_word_is_never_taken_for_a_path() -> None:
     line = "2026-09-13 web-02 search legacy ERROR"
     assert _abs(line, HOME) == line
     assert _abs(line, "/home/student/search") == line
+
+
+@pytest.mark.tier1
+def test_ls_columns_become_one_path_per_line() -> None:
+    """`ls` in a terminal prints columns, `ls` in a pipe (the reference) one name a line -- same files."""
+    assert _abs("search  legacy\t.bashrc", HOME) == \
+        "/home/student/search\n/home/student/legacy\n/home/student/.bashrc"
+    assert _abs("a", "/home/student/search") == "/home/student/search/a"
+    assert _abs("search  nothing_here", HOME) == "search  nothing_here"     # not all of them files

@@ -59,3 +59,15 @@ def test_capture_hard_linked_file_differs_from_a_copy(tmp_path):
     obs = capture(tmp_path, ["notes.txt", "backup.txt", "copy.txt"])
     assert obs["notes.txt"] == obs["backup.txt"] == FileState("hardlink", "todo")
     assert obs["copy.txt"] == FileState("file", "todo")
+
+
+@pytest.mark.tier1
+def test_capture_perms_marker_reads_mode_and_owner(tmp_path):
+    import os  # noqa: PLC0415
+    f = tmp_path / "home" / "student" / "test"
+    f.parent.mkdir(parents=True)
+    f.write_text("x", encoding="utf-8")
+    f.chmod(0o123)
+    obs = capture(tmp_path, ["perms:/home/student/test", "perms:/home/student/gone"])
+    assert obs["perms:home/student/test"] == FileState("perms", f"0123 {os.getuid()}:{os.getgid()}")
+    assert obs["perms:home/student/gone"] == FileState("absent", None)

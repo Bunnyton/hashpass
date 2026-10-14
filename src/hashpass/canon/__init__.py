@@ -20,7 +20,7 @@ def _same(want: FileState, got: FileState, *, threshold: float, mode: str, k: in
     """Whether one observed path matches its canonical state."""
     if got.kind != want.kind:
         return False
-    if want.kind == "link":                              # where it points, exactly
+    if want.kind in ("link", "perms"):                  # where it points / mode + owner, exactly
         return got.text == want.text
     if want.kind not in ("file", "hardlink"):
         return True

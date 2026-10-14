@@ -57,3 +57,11 @@ def test_strict_threshold_is_exact_even_for_large_outputs():
     canon = {"<output>": FileState("file", want)}
     assert matches(canon, {"<output>": FileState("file", want)}, threshold=1.0, mode="line", k=1)
     assert not matches(canon, {"<output>": FileState("file", got)}, threshold=1.0, mode="line", k=1)
+
+
+@pytest.mark.tier1
+def test_matches_perms_exactly():
+    want = {"perms:t": FileState("perms", "0123 1000:1000")}
+    assert matches(want, {"perms:t": FileState("perms", "0123 1000:1000")})
+    assert not matches(want, {"perms:t": FileState("perms", "0133 1000:1000")})
+    assert not matches(want, {"perms:t": FileState("perms", "0123 1000:1001")})

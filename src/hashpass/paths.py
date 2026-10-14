@@ -10,7 +10,9 @@ A word is a path only if it LOOKS like one (has a `/`, or is `.`, `..`, `~…`) 
 the command's working directory, exists in the student's system. A bare word -- even one naming a
 file in the current directory -- stays as it is: a log line saying «search» must read the same
 from ~ and from ~/search. The exception is a line that IS one word: `find search` prints its root
-as `search`, `ls -1` prints bare names -- a lone existing name on its line is a path.
+as `search`, `ls -1` prints bare names -- a lone existing name on its line is a path. And a line
+whose EVERY word names an existing file is `ls` in columns (a terminal): it becomes one absolute
+path a line, like the reference `ls` (a pipe) prints.
 """
 import posixpath
 import re
@@ -55,6 +57,12 @@ def absolutize(text: str, *, cwd: str, exists: Callable[[str], bool],
 
     out = []
     for line in text.split("\n"):
-        lone = len(line.split()) == 1
+        words = line.split()
+        lone = len(words) == 1
+        if len(words) > 1:                          # `ls` columns: every word names a file here
+            paths = [resolve_path(w.rstrip("/") or "/", cwd, home) for w in words]
+            if all(exists(p) for p in paths):
+                out.extend(paths)
+                continue
         out.append(_WORD.sub(one, line))
     return "\n".join(out)

@@ -1,7 +1,7 @@
 """Tier1: `accept cmd` names the command the student RAN (anchored), and `ok` needs exit 0."""
 import pytest
 
-from hashpass.taskrun import _accepted_by_cmd
+from hashpass.taskrun import _accepted_by_cmd, _command_gates
 from hashpass.taskstore import StageMeta
 
 
@@ -96,3 +96,28 @@ def test_accept_cmd_relative_pattern_resolves_from_the_student_cwd():
                             exists=_FILES.__contains__)
     assert not _accepted_by_cmd(_stage("apt update"), "apt /update", 0, cwd="/",
                                 exists=_FILES.__contains__)        # no such file: words differ
+
+
+def _gated(*, cmds: tuple[str, ...] = (), texts: tuple = (), acceptance: str = "command") -> StageMeta:
+    return StageMeta(message="m", neutral=(), check=None, on_enter=(), on_pass=(),
+                     acceptance=acceptance, accept_cmds=cmds, accept_texts=texts)
+
+
+@pytest.mark.tier1
+def test_command_gates_output_and_file_patterns():
+    files = {"/home/student/.vimrc": 'set nu\nnnoremap <F2> Iprint(data["<Esc>A"])<Esc>j\n'}
+    gate = _gated(texts=(("output", "Терпение должны"),))
+    assert _command_gates(gate, "cat x", 0, "…\nТерпение должны иметь мы\n", read=files.get) is True
+    assert _command_gates(gate, "cat x", 0, "реклама\n", read=files.get) is False
+    vim = _gated(texts=(("/home/student/.vimrc", r"^\s*:?n?(nore)?map\s"),))
+    assert _command_gates(vim, "vim f", 0, "", read=files.get) is True
+    assert _command_gates(vim, "vim f", 0, "", read={}.get) is False            # no ~/.vimrc yet
+    empty = _gated(cmds=("chatterbox.sh",), texts=(("output", None),))
+    assert _command_gates(empty, "./chatterbox.sh > /dev/null 2>&1", 0, "\n", read={}.get) is True
+    assert _command_gates(empty, "./chatterbox.sh > /dev/null", 0, "boo\n", read={}.get) is False
+    assert _command_gates(empty, "ls > /dev/null", 0, "", read={}.get) is False
+
+
+@pytest.mark.tier1
+def test_command_gates_are_none_without_command_checks():
+    assert _command_gates(_gated(acceptance="derived"), "x", 0, "", read={}.get) is None

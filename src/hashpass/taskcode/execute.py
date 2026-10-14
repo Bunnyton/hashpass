@@ -1,9 +1,27 @@
 """Run a task stage in a Runner and snapshot its Observation (state + own output)."""
+import re
+from pathlib import Path
+
 from hashpass.canon import FileState, Observation, capture, run_noise
+from hashpass.paths import absolutize
 from hashpass.runner.base import Runner
 from hashpass.taskcode.model import TaskCode
 
 OUTPUT_KEY = "<output>"
+_CWD_MARK = "HP-SOLVE-CWD="
+# After the solve, report where it ended (stderr, so the captured stdout stays the command's own).
+_CWD_TAIL = f'\n__hp_rc=$?; printf "\\n{_CWD_MARK}%s\\n" "$PWD" >&2; exit $__hp_rc'
+
+
+def _solve_cwd(stderr: str, rootfs: Path) -> str | None:
+    """Where the solve ended, as a path inside the student's system (a tmpdir runner's host path cut)."""
+    found = re.findall(rf"^{_CWD_MARK}(.*)$", stderr, re.MULTILINE)
+    if not found:
+        return None
+    cwd, root = found[-1], str(rootfs).rstrip("/")
+    if cwd == root or cwd.startswith(root + "/"):
+        cwd = cwd[len(root):] or "/"
+    return cwd
 
 
 def _script(commands: tuple[str, ...]) -> str:
@@ -44,7 +62,7 @@ def run_stage(runner: Runner, task: TaskCode, stage_index: int,  # noqa: PLR0913
     # TARGET: capture only the LAST command's stdout, same shell (matches runtime .cmd.out).
     # `override` runs an ALTERNATIVE solution (a `variant`) as the target; prep/observe unchanged.
     commands = override if override is not None else target.commands
-    result = runner.run(["sh", "-c", _target_script(commands)], user=user)
+    result = runner.run(["sh", "-c", _target_script(commands) + _CWD_TAIL], user=user)
     if result.exit_code != 0:
         # A failed solve means the reference is being derived from a broken run -- surface it
         # instead of silently canonicalizing whatever state the failed nspawn left behind.
@@ -53,7 +71,13 @@ def run_stage(runner: Runner, task: TaskCode, stage_index: int,  # noqa: PLR0913
         raise RuntimeError(msg)
     run_noise(runner, noise)
     obs = capture(runner.rootfs, list(target.observe), bool_observe=list(target.observe_bool))
-    obs[OUTPUT_KEY] = FileState("file", result.stdout)
+    # Paths in the reference output become absolute from where the solve ended (`cd workdir` +
+    # `ls`), the way the console reads the student's: the same files read the same.
+    root = Path(runner.rootfs)
+    cwd = _solve_cwd(result.stderr, root)
+    out = result.stdout if cwd is None else absolutize(
+        result.stdout, cwd=cwd, exists=lambda p: (root / p.lstrip("/")).exists())
+    obs[OUTPUT_KEY] = FileState("file", out)
     for key in list(obs):
         if key != OUTPUT_KEY and any(key.startswith(prefix) for prefix in target.exclude):
             del obs[key]

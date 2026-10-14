@@ -382,6 +382,37 @@ def _accepted_by_cmd(sm: StageMeta, command: str, rc: int | None, *, cwd: str | 
     return not (sm.accept_ok and rc is not None and rc != 0)
 
 
+def _texts_hold(sm: StageMeta, out: str, read: Callable[[str], str | None]) -> bool:
+    """Every `accept output|file "<ERE>"` holds: the pattern is found (None = the output is empty)."""
+    for target, pattern in sm.accept_texts:
+        text = out if target == "output" else read(target)
+        if text is None:
+            return False
+        if pattern is None:
+            if text.strip():
+                return False
+        elif re.search(pattern, text, re.MULTILINE) is None:
+            return False
+    return True
+
+
+def _command_gates(sm: StageMeta, command: str, rc: int | None, out: str, *,  # noqa: PLR0913
+                   read: Callable[[str], str | None], cwd: str | None = None,
+                   exists: Callable[[str], bool] | None = None) -> bool | None:
+    """
+    Run the Taskfile-written checks on the command itself: `accept cmd` and `accept output|file`.
+
+    None when the stage has none; otherwise whether ALL of them hold. They combine with an
+    `observe` or a `check exec` in the same stage (sudo-basics: `accept cmd "rm"` + the file is
+    still there) -- every check present must pass.
+    """
+    if not sm.accept_cmds and not sm.accept_texts:
+        return None
+    if sm.accept_cmds and not _accepted_by_cmd(sm, command, rc, cwd=cwd, exists=exists):
+        return False
+    return _texts_hold(sm, out, read)
+
+
 def normalize_output_checks(checks: StageChecks, out: str, *, cwd: str, workdir: str,
                             exists: Callable[[str], bool]) -> tuple[StageChecks, str]:
     """
@@ -459,6 +490,13 @@ class TaskSession:
         except (OSError, AttributeError, TypeError):
             return False
 
+    def _read_file(self, path: str) -> str | None:
+        """Read a text file of the student's system (`accept file`); None if it is not there."""
+        try:
+            return (Path(self.student.rootfs) / path.lstrip("/")).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError, AttributeError, TypeError):
+            return None
+
     def _ctx(self, command: str, tries: int, stage: int, last_out: str = "") -> HandlerContext:
         """Build the HP_* handler context for one delegated action (with the output's paths made absolute)."""
         cwd = self._cwd or self.meta.settings.workdir
@@ -525,11 +563,12 @@ class TaskSession:
     def _accept(self, stage: int, sm: StageMeta, command: str,  # noqa: PLR0913
                 out: str, ts: str, *, rc: int | None = None) -> tuple[bool, str | None]:
         """Decide acceptance: `accept cmd` match, else handler check-run, else derived host-side."""
-        if _accepted_by_cmd(sm, command, rc, cwd=self._cwd or self.meta.settings.workdir,
-                            exists=self._exists):
-            return True, local_key(self.task_id, stage, self.nonce)  # a concrete solution command
-        if sm.acceptance == "command":
-            return False, None       # accepted ONLY by an `accept cmd` match (no FS grading)
+        gates = _command_gates(sm, command, rc, out, read=self._read_file,
+                               cwd=self._cwd or self.meta.settings.workdir, exists=self._exists)
+        if gates is False:
+            return False, None
+        if sm.acceptance == "command":   # accepted ONLY by the command's own checks (no FS grading)
+            return (True, local_key(self.task_id, stage, self.nonce)) if gates else (False, None)
         if sm.acceptance == "handler":
             ctx = self._ctx(command, self.tries[stage], stage, out)
             res = run_handler(self.student, ExecAction(sm.check), ctx, hp_dir=self.hp_dir)

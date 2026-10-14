@@ -139,3 +139,13 @@ def test_observe_bool_file_still_exists_when_it_has_two_names(tmp_path):
     (tmp_path / "b").hardlink_to(tmp_path / "a")
     checks = _stage({"b": FileState("file", None), OUTPUT_KEY: FileState("file", "")})
     assert capture_candidate(tmp_path, checks, "")["b"] == FileState("file", None)
+
+
+@pytest.mark.tier1
+def test_capture_candidate_reads_perms_keys(tmp_path):
+    import os  # noqa: PLC0415
+    (tmp_path / "t").write_text("x", encoding="utf-8")
+    (tmp_path / "t").chmod(0o701)
+    checks = _stage({"perms:t": FileState("perms", "0701 0:0"), OUTPUT_KEY: FileState("file", "")})
+    got = capture_candidate(tmp_path, checks, "")["perms:t"]
+    assert got == FileState("perms", f"0701 {os.getuid()}:{os.getgid()}")

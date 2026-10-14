@@ -156,6 +156,9 @@ class StageSpec:
     hints: tuple[HintRule, ...] = ()
     accept_cmds: tuple[str, ...] = ()   # `accept cmd "<start>"`: a command that passes the stage
     accept_ok: bool = False             # `accept cmd "…" ok`: … and it must have exited 0
+    # `accept output "<ERE>"` / `accept output empty` / `accept file <path> "<ERE>"`: the output or a
+    # file must contain the pattern (None = the output is empty). All must hold, with any other check.
+    accept_texts: tuple[tuple[str, str | None], ...] = ()
     match_output: bool = False          # `observe output`: grade on command stdout (fuzzy, `similarity`)
     variants: tuple[tuple[str, ...], ...] = ()  # alt `variant` solutions; reference = output COMMON to all
     deny: tuple[str, ...] = ()           # `deny <cmd...>`: base commands forbidden to pass the stage

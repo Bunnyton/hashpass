@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hashpass.canon import FileState, Observation
-from hashpass.canon.capture import read_state
+from hashpass.canon.capture import PERMS, read_perms, read_state
 from hashpass.grade import grade_stage
 from hashpass.hints import StuckState, match_hint
 from hashpass.progress import TaskProgress, current_stage, mark_passed_local
@@ -38,6 +38,9 @@ def capture_candidate(rootfs: Path, checks: StageChecks, last_output: str) -> Ob
     candidate: Observation = {}
     for key, want in checks.canonical.items():
         if key == OUTPUT_KEY:
+            continue
+        if key.startswith(PERMS):
+            candidate[key] = read_perms(rootfs / key[len(PERMS):])
             continue
         state = read_state(rootfs / key, "/" + key)
         content = want.kind == "link" or (want.kind in ("file", "hardlink") and want.text is not None)

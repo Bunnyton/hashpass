@@ -8,11 +8,22 @@ from pathlib import Path
 class FileState:
     """Snapshot of a file's state: kind and (optionally) text content."""
 
-    kind: str  # "file" | "hardlink" | "link" | "dir" | "absent"
+    kind: str  # "file" | "hardlink" | "link" | "dir" | "perms" | "absent"
     text: str | None
 
 
 Observation = dict[str, "FileState"]
+
+PERMS = "perms:"   # `observe perms <path>` rides on observe as `perms:<path>`
+
+
+def read_perms(p: Path) -> FileState:
+    """Mode bits + numeric owner:group of a path (not following a symlink) -- `chmod`/`chgrp` results."""
+    try:
+        st = p.lstat()
+    except OSError:
+        return FileState("absent", None)
+    return FileState("perms", f"{st.st_mode & 0o7777:04o} {st.st_uid}:{st.st_gid}")
 
 
 def read_state(p: Path, inside: str | None = None) -> FileState:
@@ -45,6 +56,10 @@ def capture(rootfs: Path, observe: list[str], *, output_path: str | None = None,
     rootfs = Path(rootfs)
     obs: Observation = {}
     for rel in observe:
+        if rel.startswith(PERMS):
+            path = rel[len(PERMS):].lstrip("/")
+            obs[PERMS + path] = read_perms(rootfs / path)
+            continue
         base = rootfs / rel.lstrip("/")
         if base.is_dir() and not base.is_symlink():
             for f in sorted(base.rglob("*")):
