@@ -1669,8 +1669,9 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
         name, version = split_ref(ref)
         _push_call(client.push_task, tdir, name, version, publish=True, block=block)
         where = f" (блок «{block}»)" if block else ""
-        sys.stdout.write(f"опубликовано в каталог{where}: {ref} — новое задание скрыто от студентов, "
-                         "пока его не покажут в веб-каталоге\n")
+        sys.stdout.write(f"опубликовано в каталог{where}: {ref} — студенты увидят эту версию, когда "
+                         "её одобрит администратор (новое задание ещё и скрыто, пока вы его не "
+                         "покажете: h в hashpass)\n")
     return 0
 
 
