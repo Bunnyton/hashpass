@@ -33,6 +33,7 @@ from textual.widgets import Footer, Input, Label, Static, Tree
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.taskdigest import task_digest
+from hashpass.viewer import SourceViewer, listing_or_taskfile
 
 if TYPE_CHECKING:
     from hashpass.cli import Home
@@ -254,6 +255,7 @@ class PoolTUI(App):
         Binding("n,N,т,Т", "reject", "Отклонить"),
         Binding("delete", "delete_task", "Удалить"),
         Binding("z,Z,я,Я", "toggle_rejected", "Отклонённые"),
+        Binding("v,V,м,М", "view", "Исходники"),
     ]
 
     def __init__(self, env: Home, url: str, user: str, token: str) -> None:
@@ -586,7 +588,7 @@ class PoolTUI(App):
             return self.role in ("author", "admin")   # an author is told why it is refused
         if action in ("approve", "reject"):
             return self.role == "admin"
-        if action in ("delete_task", "toggle_rejected"):
+        if action in ("delete_task", "toggle_rejected", "view"):
             return self.role in ("author", "admin")
         return super().check_action(action, parameters)
 
@@ -637,6 +639,18 @@ class PoolTUI(App):
                 self._moderate("удалено с пула", lambda r: self.client.delete_task(r.ref, token=self.token))
 
         self.push_screen(ConfirmScreen(f"Удалить [b]{escape(row.ref)}[/] с пула насовсем?"), _done)
+
+    def action_view(self) -> None:
+        """v: the task's files as its author wrote them (authors and admins)."""
+        row = self._cursor_row()
+        if row is None or self.role not in ("author", "admin"):
+            return
+        try:
+            files, fetch = listing_or_taskfile(self.client, row.ref, self.token)
+        except Exception as exc:                           # noqa: BLE001
+            self.notify(f"исходники не открылись: {exc}", severity="error", timeout=5)
+            return
+        self.push_screen(SourceViewer(row.ref, files, fetch))
 
     def action_toggle_rejected(self) -> None:
         """z: show or hide the «Отклонённые» block (remembered, shown by default)."""
