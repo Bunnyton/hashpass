@@ -1,0 +1,1 @@
+../src/hashpass/runtime/usr/local/share/hashpass/install-vim.sh

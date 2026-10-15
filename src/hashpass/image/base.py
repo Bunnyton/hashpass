@@ -1,4 +1,7 @@
+import hashlib
+import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
 
 # Runtime lives INSIDE the hashpass package (src/hashpass/runtime/) so it ships with
@@ -59,6 +62,33 @@ _SYSTEMD_INSTALL = (
     "[ -r /etc/hp-bashrc ] && . /etc/hp-bashrc\\n' >> /etc/bash.bashrc "
     "&& useradd -D -s /bin/bash"
 )
+
+
+# The comfortable vim and carbonyl (user, 2026-10-15): the same scripts ship in the runtime, so
+# anyone can run them on their own machine (/usr/local/share/hashpass/ in the base, or the repo).
+CARBONYL_URL = "https://github.com/fathyb/carbonyl/releases/download/v0.0.3/carbonyl.linux-amd64.zip"
+CARBONYL_SHA256 = "46a902ea29bb32f773fb4ee341423705b92345a810422b8df93eaea6a1ec7ad2"
+_CARBONYL_IN = "/tmp/carbonyl.zip"   # noqa: S108  (inside the base build, bound read-only)
+_SETUP = ("/usr/local/share/hashpass/install-vim.sh "
+          f"&& /usr/local/share/hashpass/install-carbonyl.sh {_CARBONYL_IN}")
+
+
+def carbonyl_zip(cache: Path) -> Path:
+    """Return the carbonyl release archive, downloaded once into `cache` and checked by sha256."""
+    dest = Path(cache) / CARBONYL_URL.rsplit("/", 1)[1]
+    if dest.is_file() and hashlib.sha256(dest.read_bytes()).hexdigest() == CARBONYL_SHA256:
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_suffix(".part")
+    with urllib.request.urlopen(CARBONYL_URL, timeout=60) as r, part.open("wb") as f:
+        shutil.copyfileobj(r, f)
+    got = hashlib.sha256(part.read_bytes()).hexdigest()
+    if got != CARBONYL_SHA256:
+        part.unlink()
+        msg = f"carbonyl: архив не тот (sha256 {got}, ждали {CARBONYL_SHA256})"
+        raise RuntimeError(msg)
+    part.rename(dest)
+    return dest
 
 
 def _base_version_current(dest: Path) -> bool:
@@ -136,5 +166,12 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
     subprocess.run(
         ["sudo", "rsync", "-a", str(_RUNTIME) + "/", str(dest) + "/"],
         check=True,
+    )
+    # The comfortable vim + carbonyl, by the scripts the runtime just brought in.
+    subprocess.run(
+        ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no", "-D", str(dest),
+         f"--bind-ro={carbonyl_zip(Path(from_tar).parent)}:{_CARBONYL_IN}", "sh", "-c", _SETUP],
+        check=True,
+        stdin=subprocess.DEVNULL,
     )
     return dest

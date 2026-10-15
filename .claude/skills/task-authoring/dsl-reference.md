@@ -160,6 +160,12 @@ hint idle 240  say "Долгая пауза. Перечитай задание: 
 ## Рантайм: что важно знать автору
 
 - Консоль передаёт код возврата каждой команды (runtime ≥ 20) — его использует `accept cmd … ok`.
+- В базе (runtime ≥ 46) — настроенный vim (`/etc/vim/vimrc.local`: airline, подсветка, русская
+  раскладка через langmap, история и undo в `~/.local/state/vim/undo`; свой `~/.vimrc` читается
+  после) и браузер `carbonyl` (Chromium в терминале, без звука; выход — Ctrl+C). Видео для
+  carbonyl клади в задание и открывай `file://…` с `--autoplay-policy=no-user-gesture-required`
+  (образец — `content/tasks/moria`): YouTube в нём не играет (embed — «Error 153», страница
+  стоит на 0:00). Запускай его только при `[ -t 1 ]`, иначе сборка (`solve`) повиснет на браузере.
 - PATH консоли (и у `student`, и у `root`) включает `/usr/games` и `/usr/local/games` (runtime ≥ 19):
   пакеты вроде `sl`, `cmatrix` запускаются по имени. `check exec` выполняется НЕ в оболочке
   студента — в проверках пиши полные пути или `command -v X || test -x /usr/games/X`.

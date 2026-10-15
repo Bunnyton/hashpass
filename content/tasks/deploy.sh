@@ -38,7 +38,7 @@ BLOCKS=(
     'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit top'
     'Редактор и текст: vim-intro vim-more fruit-store'
     'Скрипты: my-command'
-    'Призы: star-wars'
+    'Призы: star-wars moria'
     'Архив: first-steps showcase'
 )
 # Порядок сборки/пуша — тот же, что в блоках (родитель из `from` раньше потомка).

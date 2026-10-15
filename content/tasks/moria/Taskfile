@@ -1,0 +1,50 @@
+# moria — призовое задание: Врата Мории (Толкин, «Братство Кольца»). Врата — скрипт ~/moria/gate
+# без права на запуск: Permission denied → chmod +x (урок chmod-basics). Запуск «при луне» проявляет
+# надпись inscription.txt на синдарине; «pedo mellon a minno» переводится по dictionary.txt
+# (grep, урок grep-hunt) — пароль и есть слово «друг», mellon. Врата хранят только sha256 пароля,
+# так что cat gate ответа не выдаёт. Открытые врата создают ~/moria/khazad-dum и в терминале
+# запускают carbonyl (он в базе) с Epic Sax Gandalf — бесконечным повтором; выход — Ctrl+C.
+# Ролик лежит в задании (/opt/moria/hall), а не на YouTube: встроенный плеер YouTube без
+# страницы-источника отвечает «Error 153», полная страница в Chromium из carbonyl (2023) стоит
+# на 0:00, а в России YouTube ещё и замедлен.
+
+image moria:1
+
+# data: data/moria — руками: gate, dictionary.txt (словарь синдарина, 129 слов)
+copy data/moria /home/student/moria
+# data: data/hall/gandalf.webm — «Epic Sax Gandalf» (youtu.be/evef8FCK6wk), 30 с с 0:20,
+# ffmpeg -vf "crop=192:108:0:18,fps=15" -c:v libvpx -b:v 110k; index.html — руками
+copy data/hall /opt/moria/hall
+run chmod 644 /home/student/moria/gate
+run chown -R student:student /home/student/moria
+
+hidden hp
+
+settings
+  pager on
+
+say "Ты у западного входа в Морию. Отряд ждёт, Гэндальф сидит на камне и курит трубку."
+read brief.md
+
+stage
+  say "Врата Мории — это ~/moria/gate. Разбуди их: запусти"
+  solve:
+    chmod +x /home/student/moria/gate
+    /home/student/moria/gate < /dev/null || true
+  observe bool /home/student/moria/inscription.txt
+  neutral ls cat pwd cd less
+  on pass say "Ithildin — «звёздолуние»: эльфийское серебро, которое видно только при свете луны и звёзд."
+  hint output "Permission denied" say "Врата не слушаются. Спроси у ls -l, кому их можно запускать."
+  hint tries 5 say "Запускать файл можно, только если у него есть право x. Кто раздаёт права?"
+
+stage
+  say "Скажи вратам слово — и они откроются"
+  solve /home/student/moria/gate mellon
+  observe bool /home/student/moria/khazad-dum
+  neutral ls cat pwd cd less grep
+  on pass say "Гэндальф просидел у этих дверей полдня: пароль был написан прямо на них."
+  hint tries 5 say "Надпись на вратах — на эльфийском. А что ещё лежит рядом с ними?"
+  hint tries 10 say "Переведи надпись слово за словом: каждое ищется в словаре."
+  hint tries 15 say "pedo — «скажи». А что сказать?"
+
+exec finale

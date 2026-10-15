@@ -1,0 +1,48 @@
+#!/bin/sh
+# Врата Дурина, западный вход в Морию. Пароль хранится не словом, а его отпечатком (sha256).
+here=$(cd "$(dirname "$0")" && pwd)
+seal=83006a438f94daf3a7dd9c7b27f70c15e443c0ca55d58fcdfa76899ae466b455
+
+if [ ! -e "$here/inscription.txt" ]; then
+    cat > "$here/inscription.txt" <<'RUNES'
+         .  *  .   Ithildin   .  *  .
+
+    Ennyn Durin Aran Moria:
+    pedo mellon a minno.
+    Im Narvi hain echant.
+    Celebrimbor o Eregion teithant i thiw hin.
+RUNES
+    echo "Из-за туч выходит луна, и на гладком камне проступают серебряные знаки."
+    echo "Надпись появилась: $here/inscription.txt"
+fi
+
+word=${1:-}
+if [ -z "$word" ] && [ -t 0 ]; then
+    printf "Врата ждут слова: "
+    read -r word || true
+fi
+
+case "$word" in
+    "")
+        echo "Врата молчат: слова им никто не сказал."
+        exit 1 ;;
+    друг|Друг|ДРУГ)
+        echo "Врата не понимают по-русски: надпись-то эльфийская."
+        exit 1 ;;
+esac
+
+if [ "$(printf %s "$word" | tr 'A-Z' 'a-z' | sha256sum | cut -d' ' -f1)" != "$seal" ]; then
+    echo "Врата молчат. Гэндальф задумчиво чешет затылок."
+    exit 1
+fi
+
+mkdir -p "$here/khazad-dum"
+echo "Каменные створки беззвучно расходятся. Путь в Казад-Дум открыт."
+if [ -t 1 ] && command -v carbonyl >/dev/null 2>&1; then
+    echo "А в чертогах кто-то уже включил музыку…  (выход — Ctrl+C)"
+    sleep 3
+    carbonyl --autoplay-policy=no-user-gesture-required file:///opt/moria/hall/index.html 2>/dev/null
+    stty sane 2>/dev/null
+    clear
+fi
+exit 0
