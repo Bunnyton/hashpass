@@ -20,6 +20,8 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Static, Tree
 
+from hashpass.treekeys import VIM_BINDINGS, vim_walk
+
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
@@ -55,7 +57,11 @@ class SourceViewer(Screen):
     #src-tree { width: 40%; border-right: solid $accent; }
     #src-body { padding: 0 1; }
     """
-    BINDINGS = [Binding("escape,q,Q,й,Й", "app.pop_screen", "Назад")]   # noqa: RUF012
+    BINDINGS = [   # noqa: RUF012
+        Binding("escape,q,Q,й,Й", "app.pop_screen", "Назад"),
+        # vim keys, as in the catalog: j/k -- down/up, l -- open / unfold, h -- up a folder / fold
+        *VIM_BINDINGS,
+    ]
 
     def __init__(self, ref: str, files: list[dict[str, object]], fetch: Fetch) -> None:
         """Show `files` of `ref`; `fetch(path)` returns a file's bytes (cached once read)."""
@@ -109,3 +115,7 @@ class SourceViewer(Screen):
         path = event.node.data
         if isinstance(path, str) and not event.node.allow_expand:
             self.open_path(path)
+
+    def action_vim(self, where: str) -> None:
+        """Walk the tree with vim keys (j/k/h/l/g/G)."""
+        vim_walk(self.query_one("#src-tree", Tree), where)

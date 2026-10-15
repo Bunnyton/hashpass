@@ -1681,7 +1681,7 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
         where = f" (блок «{block}»)" if block else ""
         sys.stdout.write(f"опубликовано в каталог{where}: {ref} — студенты увидят эту версию, когда "
                          "её одобрит администратор (новое задание ещё и скрыто, пока вы его не "
-                         "покажете: h в hashpass)\n")
+                         "покажете: x в hashpass)\n")
     return 0
 
 

@@ -280,7 +280,7 @@ def _cursor_to(app: PoolTUI, ref: str) -> None:
 
 
 @pytest.mark.tier1
-def test_staff_hides_and_shows_a_task_with_h(tmp_path: Path) -> None:
+def test_staff_hides_and_shows_a_task_with_x(tmp_path: Path) -> None:
     # User (2026-10-12): «хочу править прямо внутри hashpass скрытость … и даже перемещать».
     client = _EditClient(_edit_entries(), role="author")
 
@@ -292,13 +292,13 @@ def test_staff_hides_and_shows_a_task_with_h(tmp_path: Path) -> None:
             await pilot.pause()
             _cursor_to(app, "b:1")
             await pilot.pause()
-            await pilot.press("h")
+            await pilot.press("x")
             await pilot.pause()
             assert client.calls == [("hidden", "b:1", True)]
             assert any("b:1" in s and "скрыто" in s for s in _leaves(app))
             _cursor_to(app, "b:1")
             await pilot.pause()
-            await pilot.press("р")                         # Russian layout, same key
+            await pilot.press("ч")                         # Russian layout, same key
             await pilot.pause()
             assert client.calls[-1] == ("hidden", "b:1", False)
             await pilot.press("q")
@@ -344,7 +344,8 @@ def test_an_author_cannot_move_and_a_student_cannot_edit(tmp_path: Path) -> None
                 _cursor_to(app, "b:1")
                 await pilot.pause()
                 await pilot.press("shift+up")
-                await pilot.press("h")
+                await pilot.press("K")
+                await pilot.press("x")
                 await pilot.pause()
                 if client.role == "student":
                     assert client.calls == []
@@ -451,3 +452,72 @@ def test_downloads_wait_while_a_task_console_is_open(tmp_path: Path) -> None:
         assert taken == []                        # a console is open: the queue waits
     worker.join(timeout=2)
     assert taken == ["a:1"]                       # back in the catalog: it goes on
+
+
+@pytest.mark.tier1
+def test_vim_keys_walk_the_catalog(tmp_path: Path) -> None:
+    # User, 2026-10-15: «в hashpass интерфейс заданий добавь поддержку клавиш как в vim hjkl».
+    client = _EditClient(_edit_entries(), role="student")
+
+    async def _drive() -> None:
+        from textual.widgets import Tree  # noqa: PLC0415
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "t", "tok")
+        app.client = client
+        app._autoload = False  # noqa: SLF001
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#tasks", Tree)
+
+            def at() -> object:
+                node = tree.cursor_node
+                return node.data.ref if isinstance(node.data, TaskRow) else "block"
+
+            _cursor_to(app, "a:1")
+            await pilot.pause()
+            await pilot.press("j")
+            assert at() == "b:1"
+            await pilot.press("k")
+            assert at() == "a:1"
+            await pilot.press("о")                          # j on the Russian layout
+            assert at() == "b:1"
+            await pilot.press("h")                          # task -> its block
+            assert at() == "block"
+            await pilot.press("h")                          # block -> folded
+            await pilot.pause()
+            assert not tree.cursor_node.is_expanded
+            await pilot.press("l")                          # block -> unfolded, first task
+            await pilot.pause()
+            assert tree.cursor_node.is_expanded or at() == "a:1"
+            await pilot.press("l")
+            assert at() == "a:1"
+            await pilot.press("G")
+            assert at() == "b:1"
+            await pilot.press("g")
+            assert at() == "block"
+            assert client.calls == []                       # walking edits nothing
+            await pilot.press("q")
+
+    asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_admin_moves_a_task_with_shift_j_k(tmp_path: Path) -> None:
+    client = _EditClient(_edit_entries(), role="admin")
+
+    async def _drive() -> None:
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "t", "tok")
+        app.client = client
+        app._autoload = False  # noqa: SLF001
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            _cursor_to(app, "b:1")
+            await pilot.pause()
+            await pilot.press("K")
+            await pilot.pause()
+            assert client.calls == [("move", "b:1", -1)]
+            await pilot.press("J")
+            await pilot.pause()
+            assert client.calls[-1] == ("move", "b:1", 1)
+            await pilot.press("q")
+
+    asyncio.run(_drive())

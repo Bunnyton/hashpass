@@ -113,3 +113,34 @@ def test_file_names_are_not_markup():
             assert [str(n.label) for n in tree.root.children] == ["[red]x"]
 
     asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_vim_keys_in_the_viewer(tmp_path: Path):
+    # User, 2026-10-15: «клавиш как в vim hjkl как минимум» -- the viewer too.
+    from hashpass.tui import PoolTUI  # noqa: PLC0415
+    client = _SourceClient(ENTRIES, "author")
+
+    async def _drive() -> None:
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "bob", "tok")
+        app.client = client
+        async with app.run_test(size=(160, 40)) as pilot:
+            await pilot.pause()
+            from textual.widgets import Tree  # noqa: PLC0415
+            app.query_one("#tasks", Tree).move_cursor(app._leaf_nodes["bob/new:1"])  # noqa: SLF001
+            await pilot.pause()
+            await pilot.press("v")
+            await pilot.pause()
+            viewer = app.screen
+            await pilot.press("j", "l")                     # root -> Taskfile -> open it
+            await pilot.pause()
+            assert 'say "цель"' in viewer.shown_text()
+            await pilot.press("j", "j", "l")                # data/ -> blob.bin -> open
+            await pilot.pause()
+            assert "двоичный файл" in viewer.shown_text()
+            await pilot.press("q")
+            await pilot.pause()
+            assert not isinstance(app.screen, SourceViewer)
+            await pilot.press("q")
+
+    asyncio.run(_drive())

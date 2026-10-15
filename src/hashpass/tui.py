@@ -33,6 +33,7 @@ from textual.widgets import Footer, Input, Label, Static, Tree
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.taskdigest import task_digest
+from hashpass.treekeys import VIM_BINDINGS, vim_walk
 from hashpass.viewer import SourceViewer, listing_or_taskfile
 
 if TYPE_CHECKING:
@@ -245,11 +246,16 @@ class PoolTUI(App):
         Binding("s,S,ы,Ы", "resync", "Самопроверка"),
         # Catalog editing for staff (shown only to them, see check_action): the same rights as
         # the web catalog -- an author hides/shows its own tasks, the admin also moves them.
-        Binding("h,H,р,Р", "toggle_hidden", "Скрыть/показать"),
+        Binding("x,X,ч,Ч", "toggle_hidden", "Скрыть/показать"),
         Binding("o,O,щ,Щ", "toggle_block", "Открыть/закрыть блок"),
         # priority: the Tree would take Shift+arrows as plain cursor moves otherwise
         Binding("shift+up", "move(-1)", "Выше", priority=True),
         Binding("shift+down", "move(1)", "Ниже", priority=True),
+        Binding("K,Л", "move(-1)", "Выше", show=False),
+        Binding("J,О", "move(1)", "Ниже", show=False),
+        # vim keys (user, 2026-10-15: «клавиш как в vim hjkl как минимум»): j/k -- down/up,
+        # h -- to the block / fold it, l -- unfold / into it / run the task, g/G -- top/bottom.
+        *VIM_BINDINGS,
         # Moderation (spec 2026-10-14): the admin approves / rejects, an author deletes own tasks.
         Binding("a,A,ф,Ф", "approve", "Одобрить"),
         Binding("n,N,т,Т", "reject", "Отклонить"),
@@ -691,8 +697,12 @@ class PoolTUI(App):
             tree = self.query_one("#tasks", Tree)
             self.call_after_refresh(tree.move_cursor, node)
 
+    def action_vim(self, where: str) -> None:
+        """Walk the tree with vim keys (j/k/h/l/g/G)."""
+        vim_walk(self.query_one("#tasks", Tree), where)
+
     def action_toggle_hidden(self) -> None:
-        """h: hide a task from students or show it again (an author -- only its own)."""
+        """x: hide a task from students or show it again (an author -- only its own)."""
         row = self._cursor_row()
         if row is None or self.role not in ("author", "admin"):
             return
