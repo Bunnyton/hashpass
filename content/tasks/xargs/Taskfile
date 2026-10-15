@@ -1,8 +1,9 @@
 # xargs — конвейер, который выбирает столбцы и действует над каждой строкой (исходники
 # it_bastion: pipe/36_services, pipe/38_archives — одним заданием). Шаг 1: порты из
 # /etc/services — только номера (cut/awk, «загляни в царство конфигов»). Шаг 2: распаковать
-# 70 zip и 70 tar-архивов (с хитрым расширением .unknown_archive) как можно меньшим числом
-# команд — unzip и tar берут по одному архиву, поэтому нужен xargs (доза xargs.md при входе).
+# 70 zip и 70 tar-архивов (с хитрым расширением .unknown_archive) в ДОМАШНИЙ каталог как можно
+# меньшим числом команд — unzip и tar берут по одному архиву, поэтому нужен xargs (доза xargs.md
+# при входе). Принято по файлам в ~ (observe /home/student, сами архивы — exclude).
 
 image xargs:1
 
@@ -30,11 +31,12 @@ stage
   hint tries 10 say "Загугли: «awk вывести второй столбец»."
 
 stage
-  say "В archives лежат 140 архивов. Распакуй их все — за как можно меньшее число команд"
+  say "В archives лежат 140 архивов. Распакуй их все в домашний каталог — за как можно меньшее число команд"
   solve:
-    cd /home/student/archives && ls | grep .zip | xargs -I {} unzip -o {} >/dev/null
-    cd /home/student/archives && ls | grep .unknown_archive | xargs -I {} tar -xzf {}
-  observe /home/student/archives
+    cd /home/student && ls archives | grep .zip | xargs -I {} unzip -o archives/{} >/dev/null
+    cd /home/student && ls archives | grep .unknown_archive | xargs -I {} tar -xzf archives/{}
+  observe /home/student
+  exclude archives
   on enter read xargs.md
   neutral ls cat pwd cd
   on pass say "xargs превращает список строк в команды. Сотня архивов — две команды, а не сотня."
@@ -42,5 +44,6 @@ stage
   hint output "not in gzip format" say "Расширение .unknown_archive врёт. Спроси у системы, что это за файлы на самом деле: file."
   hint tries 5 say "Что выдаст ls | grep .zip? А теперь — сделать с каждой строкой unzip."
   hint tries 10 say "man xargs — ищи ключ -I."
+  hint tries 15 say "Файлы легли в archives? Нужен домашний каталог: запускай из ~ с путём archives/…, или unzip -d, tar -C."
 
 exec finale
