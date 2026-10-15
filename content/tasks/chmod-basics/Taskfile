@@ -40,15 +40,17 @@ stage
   hint tries 10 say "Каждая тройка — одна цифра: сумма r=4, w=2, x=1."
 
 stage
-  say "Сделай так, чтобы exec_me.sh запускался, но не мог запустить file.txt"
+  say "Сделай так, чтобы exec_me.sh запускался, но не мог запустить file.txt — и запусти его"
   solve:
     chmod 700 /home/student/perm_dir/exec_me.sh
     chmod 664 /home/student/perm_dir/file.txt
     /home/student/perm_dir/exec_me.sh
   observe output
+  observe bool /home/student/perm_dir/file.txt
+  block rm match "file\.txt" say "Удалить — не то же самое, что запретить: file.txt остаётся, меняются только его права."
   neutral ls cat pwd cd
   on pass read symbolic.md
-  hint output "Permission denied" say "Запустить не дали. Чьи права у exec_me.sh — и какая тройка твоя?"
+  hint output "Permission denied" say "Запустить не дали. Скрипт оболочка сначала читает, потом выполняет — каких прав у exec_me.sh не хватает тебе?"
   hint output "Что-то не так" say "file.txt запустился — и права ему вернули на 777. Кто должен лишиться права на запуск?"
   hint tries 5 say "Сначала прочитай exec_me.sh — он сам говорит, чего хочет."
   hint tries 10 say "ls -l: у файлов три тройки. Ты — владелец; какая цифра отвечает за x владельца?"
