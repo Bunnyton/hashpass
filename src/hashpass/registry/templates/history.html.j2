@@ -1,8 +1,20 @@
 {% extends 'base.html.j2' %}
+{% block head %}{% if live %}<meta http-equiv='refresh' content='5'>{% endif %}{% endblock %}
+{% macro commands(rows) %}
+<table class='cmds'><tr><th>Команда и вывод</th><th class='c'>Скорость</th><th class='c'>Пометки</th></tr>
+{% for h in rows %}
+<tr><td class='mono'><div class='cmd'>$ {{ h.command }}</div>{% if h.output %}<pre class='out'>{{ h.output }}</pre>{% endif %}</td>
+<td class='c'>{{ h.speed }}</td>
+<td class='c'>{% if h.pasted %}<span class='pill no sm'>вставка</span>{% endif %}
+{% if h.is_ref %}<span class='pill warn sm'>эталон</span>{% endif %}</td></tr>
+{% endfor %}
+</table>
+{% endmacro %}
 {% block main %}
 <p class='crumb'><a href='/web'>← Прогресс</a></p>
 <h1>История: {{ user }}</h1>
-<p class='sub'><span class='mono'>{{ ref }}</span> — {{ status }}</p>
+<p class='sub'><span class='mono'>{{ ref }}</span>{% if solution %} — <span class='ok'>зачтено</span>{% elif attempts or rows %} — <span class='run'>выполняется</span>{% endif %}
+{% if live %} <span class='pill warn live-dot'>● сейчас решает</span>{% endif %}</p>
 <div class='flags'>
 <span class='pill'>всего: {{ total }}</span>
 <span class='pill{% if pasted %} no{% endif %}'>вставок: {{ pasted }}</span>
@@ -14,16 +26,26 @@
 <p class='sub small'>Пометки — на решение препода. «Вставка» — команду вставили (клиент отметил).
 «Дословно эталон» — команда совпадает с solve-командой из Taskfile.
 «Сверх эталона» — команды, которых нет в solve (шум или исследование).</p>
-{% if rows %}
-<table><tr><th>Команда</th><th class='c'>Скорость</th><th class='c'>Пометки</th></tr>
-{% for h in rows %}
-<tr><td class='mono'>{{ h.command }}</td>
-<td class='c'>{{ h.speed }}</td>
-<td class='c'>{% if h.pasted %}<span class='pill no sm'>вставка</span>{% endif %}
-{% if h.is_ref %}<span class='pill warn sm'>эталон</span>{% endif %}</td></tr>
+{% if solution %}
+<section class='session solution'>
+<h2><span class='ok'>✓ решение</span> <span class='sub small'>{{ solution.when }} · {{ solution.duration }} · команд: {{ solution.rows|length }}</span></h2>
+{{ commands(solution.rows) }}
+{% if solution.truncated %}<p class='sub small'>дальше сессия обрезана (лимит размера)</p>{% endif %}
+</section>
+{% endif %}
+{% if attempts %}
+<h2>Попытки</h2>
+{% for a in attempts %}
+<details class='session'{% if a.live %} open{% endif %}>
+<summary>{{ a.when }} · {{ a.duration }} · команд: {{ a.rows|length }} · <span class='{% if a.live %}run{% else %}dim{% endif %}'>{{ a.outcome }}</span></summary>
+{% if a.rows %}{{ commands(a.rows) }}{% else %}<p class='sub small'>команд пока нет</p>{% endif %}
+{% if a.truncated %}<p class='sub small'>дальше сессия обрезана (лимит размера)</p>{% endif %}
+</details>
 {% endfor %}
-</table>
-{% else %}
+{% endif %}
+{% if rows %}
+{{ commands(rows) }}
+{% elif not solution and not attempts %}
 <p class='sub'>История команд не записана (старый рантайм или нет данных).</p>
 {% endif %}
 {% endblock %}

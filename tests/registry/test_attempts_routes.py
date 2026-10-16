@@ -66,3 +66,20 @@ def test_attempt_unknown_ref_and_bad_session(registry, tmp_path):
     with pytest.raises(urllib.error.HTTPError) as err:
         sc.attempt("lab:1", "../x", 0, [], token=tok)
     assert err.value.code == HTTPStatus.BAD_REQUEST
+
+
+@pytest.mark.tier2
+def test_teacher_sees_attempts_with_output_on_the_site(registry, tmp_path):
+    from tests.registry.test_images_web import _author_cookie, _req  # noqa: PLC0415
+    _publish(registry, tmp_path)
+    sc = RemoteRegistry(registry.base_url)
+    tok = sc.register("stud", "pass123!", group="G")
+    sc.attempt("lab:1", SID, 0, [_e("cat nofile", "cat: nofile: No such file or directory\n")],
+               token=tok)
+    opener, cookie = _author_cookie(registry)
+    _, _, matrix = _req(opener, "GET", f"{registry.base_url}/web", cookie=cookie)
+    assert "◐" in matrix
+    _, _, body = _req(opener, "GET", f"{registry.base_url}/web/history?user=stud&ref=lab%3A1",
+                      cookie=cookie)
+    assert "cat: nofile: No such file or directory" in body
+    assert "сейчас решает" in body

@@ -1,6 +1,7 @@
 {% extends 'base.html.j2' %}
 {% block main %}
 <h1>Прогресс студентов</h1>
+<p class='sub small legend'><span class='dim'>·</span> не выполнялось &nbsp; <span class='run'>◐</span> выполняется &nbsp; <span class='ok'>✓</span> зачтено</p>
 {% if groups %}
 <p>Группы: <a class='pill' href='/web'>все</a>
 {% for g in groups %} <a class='pill' href='/web?group={{ g }}'>{{ g }}</a>{% endfor %}</p>
@@ -11,7 +12,7 @@
 {% if rows %}{% for r in rows %}
 <tr><td class='mono'>{{ r.user }}</td><td>{{ r.group }}</td><td>{{ r.comment }}</td><td class='c'>{{ r.passed }}/{{ r.total }}</td>
 {% for c in r.cells %}
-{% if c.mark %}<td class='{{ c.cls }}'><a href='{{ c.href }}' title='история'>{{ c.mark }}</a></td>{% else %}<td class='c'>·</td>{% endif %}
+{% if c.mark %}<td class='{{ c.cls }}'><a href='{{ c.href }}' title='{{ c.title }}'>{{ c.mark }}</a></td>{% else %}<td class='c dim' title='{{ c.title }}'>·</td>{% endif %}
 {% endfor %}
 </tr>
 {% endfor %}{% else %}

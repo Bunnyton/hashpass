@@ -67,7 +67,7 @@ def test_dashboard_rows_cells_and_group_filter():
     assert "Админ" in html           # admins share the `authors` group
     assert "authors" in html         # synthetic group listed in dropdown
     assert "✓" in html
-    assert "✗" in html
+    assert "◐" in html               # a failed (digest-mismatch) record is still «выполняется»
     only31 = render_dashboard(profiles, entries, progress, group="ИУ7-31")
     assert "Иван" in only31
     assert "Пётр" not in only31

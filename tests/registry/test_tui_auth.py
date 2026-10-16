@@ -1,5 +1,4 @@
 """Tier2: the TUI's login / sign-up / relogin forms and the solution viewer, on a live pool."""
-# ruff: noqa: S106, PLR2004
 import asyncio
 
 import pytest

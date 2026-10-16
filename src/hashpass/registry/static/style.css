@@ -189,3 +189,16 @@ body.drag-active,body.drag-active *{cursor:grabbing !important;user-select:none}
   .add-panel{right:auto;left:0;min-width:min(90vw,340px)}}
 pre.source{white-space:pre;overflow:auto;padding:1em;background:var(--panel,#111);border-radius:6px}
 ul.tree{list-style:none;padding-left:0;margin:.4em 0}
+
+/* attempts & solutions (spec 2026-10-16) */
+.run{color:var(--warn);font-weight:700}td.run a{color:var(--warn)}td.run.live a{animation:hp-pulse 1.6s ease-in-out infinite}
+@keyframes hp-pulse{50%{opacity:.35}}
+.legend span{font-weight:700}
+.session{margin:1em 0;padding:.6em 1em;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.session.solution{border-color:var(--ok)}
+.session>summary{cursor:pointer;font-weight:600}
+.session h2{margin:.2em 0 .6em;font-size:1.05em}
+table.cmds td.mono{max-width:0;width:100%}
+.cmd{font-weight:600;white-space:pre-wrap;word-break:break-word}
+pre.out{margin:.35em 0 .2em;padding:.5em .7em;background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+  white-space:pre-wrap;word-break:break-word;max-height:24em;overflow:auto;font:inherit;font-size:.92em;color:var(--muted)}

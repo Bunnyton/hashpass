@@ -1319,10 +1319,13 @@ class PoolServer:
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
         group = request.args.get("group") or None
+        profiles = self.users.all_users()
+        attempts = self.attempts()
         return self._html(render_dashboard(
-            self.users.all_users(),
+            profiles,
             [e.as_dict() for e in self.catalog().entries()],
-            self.progress().all(), group=group))
+            self.progress().all(), group=group,
+            attempts={str(p["user"]): attempts.summary(str(p["user"])) for p in profiles}))
 
     def _web_users(self) -> Response:
         actor = self._session_role(("admin",))
@@ -1404,8 +1407,10 @@ class PoolServer:
             return self._redirect("/web/login")
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
         record = self.progress().get(user).get(ref, {}) if user else {}
+        sessions = self.attempts().sessions(user, ref) if user and ref else []
         return self._html(render_history(user, ref, record,
-                                         ref_commands=self._reference_commands(ref)))
+                                         ref_commands=self._reference_commands(ref),
+                                         sessions=sessions))
 
     def _reference_commands(self, ref: str) -> list[str]:
         """Return the task's `solve` commands parsed from its Taskfile attachment, or []."""

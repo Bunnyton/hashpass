@@ -1,10 +1,12 @@
 """Server-rendered web dashboard for the pool (Jinja2 templates): install scripts + render_* HTML."""
+import time
 from pathlib import Path
 from urllib.parse import quote
 
 from flask import g, has_request_context
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from hashpass.registry.attempt_store import is_live
 from hashpass.registry.reference import normalise as _norm_cmd
 from hashpass.version import TRUSTED_HOSTS
 
@@ -250,18 +252,26 @@ def render_reset_link(user: str, link: str) -> str:
         title="Сброс пароля — hashpass", nav=True, active="", user=user, link=link)
 
 
-def _cell(user: str, ref: str, record: dict | None) -> dict:
-    """One matrix cell: {mark, cls, href} for a rendered result, {mark: ''} for an empty cell."""
+def _cell(user: str, ref: str, record: dict | None, summary: dict | None = None) -> dict:
+    """
+    One matrix cell (spec 2026-10-16): `·` not run, `◐` in progress, `✓` passed.
+
+    «In progress» = the pool has sessions or a non-passing result, but no pass yet. A failed
+    (digest-mismatch) result is in progress too: the student is still at it.
+    """
     status = (record or {}).get("status")
-    if status not in ("passed", "failed"):
-        return {"mark": "", "cls": "c", "href": ""}
-    verdict = ((record or {}).get("authenticity") or {}).get("verdict")
+    summary = summary or {}
     href = f"/web/history?user={quote(user, safe='')}&ref={quote(ref, safe='')}"
-    if status == "passed":
-        return {"mark": "✓⚠" if verdict == "pasted" else "✓",
-                "cls": "c no" if verdict == "pasted" else "c ok",
-                "href": href}
-    return {"mark": "✗", "cls": "c no", "href": href}
+    if status == "passed" or summary.get("passed"):
+        verdict = ((record or {}).get("authenticity") or {}).get("verdict")
+        pasted = verdict == "pasted"
+        return {"mark": "✓⚠" if pasted else "✓", "cls": "c no" if pasted else "c ok",
+                "href": href, "title": "зачтено" + (" (вставки)" if pasted else "")}
+    if status == "failed" or summary.get("sessions"):
+        live = bool(summary.get("live"))
+        return {"mark": "◐", "cls": "c run live" if live else "c run", "href": href,
+                "title": "выполняется — сейчас решает" if live else "выполняется"}
+    return {"mark": "", "cls": "c", "href": "", "title": "не выполнялось"}
 
 
 _AUTHOR_GROUP = "authors"
@@ -275,7 +285,8 @@ def _dashboard_group_of(profile: dict) -> str:
 
 
 def render_dashboard(profiles: list[dict], entries: list[dict],
-                     progress: dict[str, dict], *, group: str | None = None) -> str:
+                     progress: dict[str, dict], *, group: str | None = None,
+                     attempts: dict[str, dict] | None = None) -> str:
     # Students appear under their real class group; authors/admins share a synthetic `authors`
     # group so they can test-solve alongside (not mixed into) the student roster.
     """Progress matrix: users (login + group, comment on hover) × task numbers, cells passed/failed."""
@@ -289,8 +300,10 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
     for p in users:
         user = str(p["user"])
         done = progress.get(user, {})
-        cells = [_cell(user, str(e["ref"]), done.get(str(e["ref"]))) for e in entries]
-        passed = sum(1 for e in entries if (done.get(str(e["ref"])) or {}).get("status") == "passed")
+        seen = (attempts or {}).get(user, {})
+        cells = [_cell(user, str(e["ref"]), done.get(str(e["ref"])), seen.get(str(e["ref"])))
+                 for e in entries]
+        passed = sum(1 for c in cells if c["mark"].startswith("✓"))
         rows.append({"user": user, "group": p["_dash_group"],
                      "comment": str(p.get("comment", "")),
                      "passed": passed, "total": len(entries), "cells": cells})
@@ -299,37 +312,71 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
         entries=entries, rows=rows, groups=groups)
 
 
-def render_history(user: str, ref: str, record: dict,
-                   *, ref_commands: list[str] | None = None) -> str:
-    """
-    Render one student's command history for one task, as anti-bot flags — no verdict.
-
-    Flags on each command: `вставка` (client-supplied paste signal) and `эталон` (matches a
-    reference `solve` command from the Taskfile). A small summary at the top gives raw counts
-    (typed / pasted / matches-reference / extras); the teacher decides.
-    """
-    ref_set = {c for c in (ref_commands or []) if c}
+def _history_rows(items: list[dict], ref_set: set[str]) -> list[dict]:
+    """Shape commands for the history table: speed, paste/reference flags, output."""
     rows = []
-    matches = 0
-    for h in record.get("history", []):
+    for h in items:
         cmd = str(h.get("command", ""))
         typing = h.get("typing")
         speed = (f"{len(cmd) / typing:.0f} зн/с"
                  if isinstance(typing, (int, float)) and typing > 0 else "—")
-        is_ref = _norm_cmd(cmd) in ref_set if ref_set else False
-        matches += 1 if is_ref else 0
-        rows.append({"command": cmd, "speed": speed,
-                     "pasted": bool(h.get("pasted")), "is_ref": is_ref})
+        rows.append({"command": cmd, "speed": speed, "pasted": bool(h.get("pasted")),
+                     "is_ref": _norm_cmd(cmd) in ref_set if ref_set else False,
+                     "output": str(h.get("output") or "").rstrip("\n")})
+    return rows
+
+
+_OUTCOMES = {"passed": "зачтено", "abandoned": "вышел", "failed": "не принято"}
+
+
+def _session_view(rec: dict, ref_set: set[str], now: float | None) -> dict:
+    """One console session for the history page: when, how long, outcome, commands."""
+    started, updated = rec.get("started"), rec.get("updated")
+    when = (time.strftime("%d.%m %H:%M", time.localtime(float(started)))
+            if isinstance(started, (int, float)) else "")
+    mins = (int((float(updated) - float(started)) // 60)
+            if isinstance(started, (int, float)) and isinstance(updated, (int, float)) else 0)
+    live = is_live(rec, now)
+    final = str(rec.get("final") or "")
+    return {"when": when, "duration": f"{mins} мин" if mins else "< 1 мин",
+            "outcome": "идёт сейчас" if live else _OUTCOMES.get(final, "оборвалась"),
+            "live": live, "truncated": bool(rec.get("truncated")),
+            "rows": _history_rows(list(rec.get("entries") or []), ref_set)}
+
+
+def render_history(user: str, ref: str, record: dict,  # noqa: PLR0913
+                   *, ref_commands: list[str] | None = None,
+                   sessions: list[dict] | None = None, now: float | None = None) -> str:
+    """
+    Render one student's work on one task: the solution, then every attempt, with outputs.
+
+    Spec 2026-10-16: the passed session (the solution) is open on top, the other sessions
+    (newest first) fold under it, each command with its output -- the teacher sees what does not
+    work. A session being solved right now makes the page refresh itself. The anti-bot flags
+    (`вставка`, `эталон`) and the counts at the top stay; they describe the solution, else the
+    latest session, else -- a record from before sessions -- the submitted command history.
+    """
+    ref_set = {c for c in (ref_commands or []) if c}
+    sessions = list(sessions or [])
+    solution = next((s for s in sessions if s.get("final") == "passed"), None)
+    others = [s for s in sessions if s is not solution]
+    shown = solution or (sessions[0] if sessions else None)
+    rows = (_history_rows(list(shown.get("entries") or []), ref_set) if shown
+            else _history_rows(list(record.get("history", [])), ref_set))
+    matches = sum(1 for r in rows if r["is_ref"])
     auth = record.get("authenticity") or {}
-    typed_n = int(auth.get("typed", 0))
-    pasted_n = int(auth.get("pasted", 0))
+    typed_n = int(auth.get("typed", 0)) if not shown else sum(1 for r in rows if not r["pasted"])
+    pasted_n = int(auth.get("pasted", 0)) if not shown else sum(1 for r in rows if r["pasted"])
     total = len(rows) or (typed_n + pasted_n)
-    extras = max(0, total - matches)
+    views = [_session_view(s, ref_set, now) for s in others]
     return _env.get_template("history.html.j2").render(
         title="История — hashpass", nav=True, active="/web",
         user=user, ref=ref, status=str(record.get("status", "")),
         total=total, typed=typed_n, pasted=pasted_n,
-        matches=matches, extras=extras, has_ref=bool(ref_set), rows=rows)
+        matches=matches, extras=max(0, total - matches), has_ref=bool(ref_set),
+        rows=[] if sessions else rows,
+        solution=_session_view(solution, ref_set, now) if solution else None,
+        attempts=views, live=any(v["live"] for v in views))
 
 
 def _fmt_size(n: object) -> str:
