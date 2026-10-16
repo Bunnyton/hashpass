@@ -32,7 +32,14 @@ from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 
-from hashpass.attempts import AttemptUploader, flush_outbox, load_solution, save_solution
+from hashpass.account import current as account_current
+from hashpass.attempts import (
+    AttemptUploader,
+    flush_outbox,
+    load_solution,
+    save_solution,
+    solution_text,
+)
 from hashpass.build import build, run_image
 from hashpass.image.base import _base_version_current, build_base, runtime_stamp
 from hashpass.imagestore.store import ImageStore, did_you_mean, registry_key
@@ -2139,6 +2146,35 @@ def _resolve_pool_ref(client: RemoteRegistry, token: str, arg: str) -> str:
             raise RuntimeError(msg)
         return str(entry["ref"])
     return arg
+
+
+NO_SOLUTION = "Решение не сохранено (зачтено до появления этой функции)"
+
+
+def find_solution(env: Home, url: str, token: str, ref: str) -> dict[str, object] | None:
+    """Return the solution of `ref`: kept here, else fetched from the pool (and kept)."""
+    local = load_solution(env.root, ref)
+    if local is not None or not (url and token):
+        return local
+    try:
+        remote = RemoteRegistry(url).solution(ref, token=token)
+    except (urllib.error.URLError, RuntimeError, ValueError, OSError):
+        return None                                  # 404 (none on the pool) is an HTTPError too
+    save_solution(env.root, ref, remote)
+    return remote
+
+
+def cmd_solution(env: Home, arg: str, io: Io | None = None) -> int:
+    """Print a solved task's solution: every command and its output."""
+    io = io or _default_io()
+    url, _user, token = account_current(env)
+    ref = _resolve_pool_ref(RemoteRegistry(url), token, arg) if arg.isdigit() and token else arg
+    record = find_solution(env, url, token, ref)
+    if record is None:
+        io.write(f"{NO_SOLUTION}: {ref}\n")
+        return 1
+    io.write(solution_text(record))
+    return 0
 
 
 def cmd_pool_pull(env: Home, io: Io | None = None) -> int:

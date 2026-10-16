@@ -11,6 +11,7 @@ from hashpass.attempts import (
     flush_outbox,
     load_solution,
     save_solution,
+    solution_text,
     sync_solutions,
 )
 
@@ -129,3 +130,21 @@ def test_save_and_load_solution(tmp_path):
     save_solution(tmp_path, "x/y:2", {"session_id": "s"})
     assert load_solution(tmp_path, "x/y:2") == {"session_id": "s"}
     assert load_solution(tmp_path, "nope:1") is None
+
+
+@pytest.mark.tier1
+def test_solution_text_and_cli(tmp_path, monkeypatch):
+    from hashpass import cli  # noqa: PLC0415
+    monkeypatch.delenv("HASHPASS_POOL", raising=False)
+    env = cli.Home(tmp_path)
+    rec = {"ref": "ns/a:1", "updated": 0.0, "entries": [_cmd(0), {"command": "true", "output": ""}]}
+    text = solution_text(rec, ansi=False)
+    assert text.splitlines()[0].startswith("ns/a:1  ·  зачтено ")
+    assert "$ c0\no0\n$ true\n" in text
+    out: list[str] = []
+    io_ = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "T")
+    assert cli.cmd_solution(env, "ns/a:1", io_) == 1
+    assert cli.NO_SOLUTION in out[-1]
+    save_solution(tmp_path, "ns/a:1", rec)
+    assert cli.cmd_solution(env, "ns/a:1", io_) == 0
+    assert "$ c0" in out[-1]

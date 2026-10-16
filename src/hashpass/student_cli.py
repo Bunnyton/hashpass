@@ -28,6 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("pull", help="подтянуть новые/обновлённые задания с пула")
     p_run = sub.add_parser("run", help="запустить задание по номеру или ref")
     p_run.add_argument("task", help="номер из каталога (напр. 1) или ref (имя:версия)")
+    p_sol = sub.add_parser("solution", help="показать своё решение задания (команды и вывод)")
+    p_sol.add_argument("task", help="номер из каталога (напр. 1) или ref (имя:версия)")
     p_cfg = sub.add_parser("config", help="показать/задать настройки (адрес пула)")
     cfg_sub = p_cfg.add_subparsers(dest="config_key")
     p_cfg_pool = cfg_sub.add_parser("pool", help="показать или задать адрес пула")
@@ -52,6 +54,8 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911
         return cli.cmd_logout(env, args.pool)
     if command == "pull":
         return cli.cmd_pool_pull(env)
+    if command == "solution":
+        return cli.cmd_solution(env, args.task)
     if command == "config":
         return cli.cmd_config_pool(env, getattr(args, "url", None))
     return cli.cmd_pool_run(env, args.task)

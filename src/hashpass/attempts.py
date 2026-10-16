@@ -197,3 +197,20 @@ def sync_solutions(root: Path, client, token: str,
         if mark is not None:
             mark(ref)
     return pulled
+
+
+def solution_text(record: dict[str, object], *, ansi: bool = True) -> str:
+    """Return a solution as a terminal log: `$ command` (bold) and its output under it."""
+    bold, dim, off = ("\x1b[1m", "\x1b[2m", "\x1b[0m") if ansi else ("", "", "")
+    at = record.get("updated")
+    when = time.strftime("%Y-%m-%d %H:%M", time.localtime(float(at))) if isinstance(
+        at, (int, float)) else ""
+    lines = [f"{bold}{record.get('ref', '')}{off}  ·  зачтено {when}".rstrip(), ""]
+    for e in record.get("entries") or []:   # type: ignore[union-attr]
+        lines.append(f"{bold}$ {e.get('command', '')}{off}")
+        out = str(e.get("output") or "").rstrip("\n")
+        if out:
+            lines.append(out)
+    if not record.get("entries"):
+        lines.append(f"{dim}команды не записаны{off}")
+    return "\n".join(lines) + "\n"
