@@ -44,6 +44,8 @@ def test_signed_out_starts_on_login_and_wrong_password_stays(registry, env):
         app = PoolTUI(env, registry.base_url, "", "")
         async with app.run_test(size=(100, 40)) as pilot:
             await _wait(pilot, lambda: isinstance(app.screen, LoginScreen))
+            await pilot.press("tab")                       # Tab walks the form while signed out
+            assert app.focused.id == "password"
             await _type(pilot, app, "user", "stud")
             await _type(pilot, app, "password", "wrong")
             await pilot.click("#login")

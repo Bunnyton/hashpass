@@ -697,7 +697,7 @@ class PoolTUI(App):
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Editing keys exist only for staff: hide/show for an author, moving too for the admin."""
-        if not self.token and action != "quit":
+        if not self.token and action in _CATALOG_ACTIONS:
             return False                                  # signed out: only the login form
         if action in ("toggle_hidden", "toggle_block"):
             return self.role in ("author", "admin")
@@ -920,6 +920,11 @@ class PoolTUI(App):
                 Io(read=lambda _p: None, write=buf.append, clock=_now_iso))
         self._flash("\n".join(buf).strip() or "готово")
         self._reload_catalog()
+
+
+# The catalog's own keys (not Textual's tab / quit): off while signed out (spec 2026-10-16).
+_CATALOG_ACTIONS = frozenset(
+    b.action.split("(")[0] for b in PoolTUI.BINDINGS if b.action != "quit")
 
 
 def failure_note(ref: str, exc: BaseException) -> str:

@@ -40,6 +40,10 @@ LoginScreen, RegisterScreen { align: center middle; background: $surface; }
 #login-hint { color: $warning; height: auto; }
 #auth-buttons { height: auto; margin-top: 1; align-horizontal: center; }
 #auth-buttons Button { margin: 0 1; }
+#auth-card .pair { height: auto; }
+#auth-card .pair > Vertical { width: 1fr; height: auto; }
+#auth-card .pair > Vertical:first-child { margin-right: 1; }
+RegisterScreen #auth-card { width: 76; }
 """
 
 PASSWORD_RULE = "Пароль: от 8 символов, хотя бы одна буква, одна цифра и один спецсимвол."  # noqa: S105  (a hint, not a password)
@@ -157,14 +161,20 @@ class RegisterScreen(Screen[Session | None]):
             yield Label("Логин")
             yield Input(self.user, placeholder="латиница, цифры, . _ -", id="user")
             yield Static("", id="login-hint")
-            yield Label("Пароль")
-            yield Input(placeholder="пароль", password=True, id="password")
-            yield Label("Повторите пароль")
-            yield Input(placeholder="ещё раз", password=True, id="password2")
-            yield Label("Группа (необязательно)")
-            yield Input(placeholder="например ИУ7-31", id="group")
-            yield Label("Комментарий (необязательно)")
-            yield Input(placeholder="имя и фамилия", id="comment")
+            with Horizontal(classes="pair"):
+                with Vertical():
+                    yield Label("Пароль")
+                    yield Input(placeholder="пароль", password=True, id="password")
+                with Vertical():
+                    yield Label("Повторите пароль")
+                    yield Input(placeholder="ещё раз", password=True, id="password2")
+            with Horizontal(classes="pair"):
+                with Vertical():
+                    yield Label("Группа (необязательно)")
+                    yield Input(placeholder="например ИУ7-31", id="group")
+                with Vertical():
+                    yield Label("Комментарий (необязательно)")
+                    yield Input(placeholder="имя и фамилия", id="comment")
             yield Static(f"{PASSWORD_RULE}\n{TEACHER_SEES}", id="auth-note")
             yield Static("", id="auth-error")
             with Horizontal(id="auth-buttons"):
