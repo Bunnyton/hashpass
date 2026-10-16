@@ -142,3 +142,32 @@ def test_solution_key_opens_viewer(registry, env):
             await pilot.pause()
             assert not isinstance(app.screen, SolutionViewer)
     asyncio.run(drive())
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("role", ["student", "admin"])
+def test_footer_shows_solution_and_relogin_for_every_role(tmp_path, role):
+    """User, 2026-10-16: «В футере нет» -- staff keys pushed p/L past the edge of the footer."""
+    import html  # noqa: PLC0415
+    import re  # noqa: PLC0415
+
+    class _Pool:
+        def catalog(self, *, token: str) -> list:  # noqa: ARG002
+            return []
+
+        def progress(self, *, token: str) -> dict:  # noqa: ARG002
+            return {}
+
+        def me(self, *, token: str) -> dict:  # noqa: ARG002
+            return {"role": role}
+
+    async def drive() -> None:
+        app = PoolTUI(Home(tmp_path / "h"), "http://pool", "u", "tok")
+        app.client = _Pool()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause(0.3)
+            text = html.unescape(re.sub(r"<[^>]+>", "", app.export_screenshot())).replace("\xa0", " ")
+            footer = next(line for line in text.splitlines() if "Выход" in line)
+            assert "Решение" in footer
+            assert "Сменить аккаунт" in footer
+    asyncio.run(drive())

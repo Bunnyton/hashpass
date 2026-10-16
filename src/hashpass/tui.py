@@ -249,13 +249,18 @@ class PoolTUI(App):
         Binding("q,Q,й,Й", "quit", "Выход"),
         Binding("r,R,к,К", "refresh", "Обновить"),
         Binding("s,S,ы,Ы", "resync", "Самопроверка"),
+        # spec 2026-10-16: the own solution (commands + output), another account -- right after
+        # the common keys: the staff keys below overflow the footer (user: «В футере нет»)
+        Binding("p,P,з,З", "solution", "Решение"),
+        Binding("L,Д", "relogin", "Сменить аккаунт"),
         # Catalog editing for staff (shown only to them, see check_action): the same rights as
         # the web catalog -- an author hides/shows its own tasks, the admin also moves them.
         Binding("x,X,ч,Ч", "toggle_hidden", "Скрыть/показать"),
         Binding("o,O,щ,Щ", "toggle_block", "Открыть/закрыть блок"),
         # priority: the Tree would take Shift+arrows as plain cursor moves otherwise
-        Binding("shift+up", "move(-1)", "Выше", priority=True),
-        Binding("shift+down", "move(1)", "Ниже", priority=True),
+        # not in the footer: priority keys go first there and pushed p/L off its edge
+        Binding("shift+up", "move(-1)", "Выше", priority=True, show=False),
+        Binding("shift+down", "move(1)", "Ниже", priority=True, show=False),
         Binding("K,Л", "move(-1)", "Выше", show=False),
         Binding("J,О", "move(1)", "Ниже", show=False),
         # vim keys (user, 2026-10-15: «клавиш как в vim hjkl как минимум»): j/k -- down/up,
@@ -267,9 +272,6 @@ class PoolTUI(App):
         Binding("delete", "delete_task", "Удалить"),
         Binding("z,Z,я,Я", "toggle_rejected", "Отклонённые"),
         Binding("v,V,м,М", "view", "Исходники"),
-        # spec 2026-10-16: the student's own solution (commands + output), and another account
-        Binding("p,P,з,З", "solution", "Решение"),
-        Binding("L,Д", "relogin", "Сменить аккаунт"),
     ]
 
     def __init__(self, env: Home, url: str, user: str, token: str) -> None:
