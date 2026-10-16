@@ -113,7 +113,7 @@ def test_cmd_pool_run_submits_on_completion(registry, tmp_path, monkeypatch):
 
     monkeypatch.setattr(RemoteRegistry, "pull_many", spy_pull_many)
 
-    def fake_run(_env, _ref, _io, *, student_id, on_complete, pool=None) -> int:  # noqa: ARG001
+    def fake_run(_env, _ref, _io, *, student_id, on_complete, pool=None, **_k: object) -> int:  # noqa: ARG001
         on_complete(True, [])   # noqa: FBT003  (pretend every stage passed; no history)
         return 0
 
@@ -153,7 +153,7 @@ def _student_env(registry, tmp_path, monkeypatch, who: str):  # noqa: ANN202
 def _stub_cmd_run(monkeypatch) -> list[str]:
     ran: list[str] = []
 
-    def fake_run(_env, ref, _io, *, student_id, on_complete, pool=None) -> int:  # noqa: ARG001
+    def fake_run(_env, ref, _io, *, student_id, on_complete, pool=None, **_k: object) -> int:  # noqa: ARG001
         ran.append(ref)
         on_complete(True, [])   # noqa: FBT003
         return 0

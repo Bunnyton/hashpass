@@ -1,4 +1,5 @@
 """Tier2: /attempt streaming, /submit closing a session, /solutions + /solution isolation."""
+# ruff: noqa: PLR2004
 import urllib.error
 from http import HTTPStatus
 

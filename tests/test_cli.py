@@ -369,7 +369,19 @@ def test_render_observe_records_command_history():
     io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "T")
     hist: list[dict] = []
     cli._render_observe(session, "echo hello world done", "out", 0.05, None, io, history=hist)  # noqa: SLF001
-    assert hist == [{"command": "echo hello world done", "ts": "T", "typing": 0.05, "pasted": True}]
+    assert hist == [{"command": "echo hello world done", "ts": "T", "typing": 0.05, "pasted": True,
+                     "output": "out"}]
+
+
+@pytest.mark.tier1
+def test_render_observe_caps_a_huge_output():
+    session = SimpleNamespace(observe=lambda *_a, **_k: FeedResult(advanced=False, stage=0,
+                                                                   local_key=""))
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "T")
+    hist: list[dict] = []
+    cli._render_observe(session, "yes | head -c 99999", "y\n" * 50000, 2.0, 0, io, history=hist)  # noqa: SLF001
+    assert len(hist[0]["output"]) < 17 * 1024
+    assert hist[0]["output"].endswith("…обрезано")
 
 
 @pytest.mark.tier1

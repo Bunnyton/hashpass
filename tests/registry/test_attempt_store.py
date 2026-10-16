@@ -1,4 +1,5 @@
 """Tier1: AttemptStore -- one file per console session, seq-gated appends, caps, rotation."""
+# ruff: noqa: PLR2004, PT011
 import pytest
 
 from hashpass.registry.attempt_store import (

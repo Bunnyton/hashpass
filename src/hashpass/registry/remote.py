@@ -590,7 +590,7 @@ class RemoteRegistry:
         return self._post_json("/attempt", payload, token=self._auth_token(token))
 
     def solutions(self, *, token: str | None = None) -> dict[str, dict[str, object]]:
-        """The caller's solved tasks with a saved solution: {ref: {session_id, at}}."""
+        """List the caller's solved tasks with a saved solution: {ref: {session_id, at}}."""
         return dict(self._get_json("/solutions", token=self._auth_token(token)).get("solutions", {}))
 
     def solution(self, ref: str, *, user: str | None = None,

@@ -32,6 +32,7 @@ from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 
+from hashpass.attempts import AttemptUploader, flush_outbox, load_solution, save_solution
 from hashpass.build import build, run_image
 from hashpass.image.base import _base_version_current, build_base, runtime_stamp
 from hashpass.imagestore.store import ImageStore, did_you_mean, registry_key
@@ -46,6 +47,7 @@ from hashpass.recipe.model import (
     is_task,
 )
 from hashpass.recipe.parse import load_recipe
+from hashpass.registry.attempt_store import cap_output
 from hashpass.registry.config import load_config
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.passwords import (
@@ -764,7 +766,8 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
     ts = io.clock()
     if history is not None and len(history) < _HISTORY_CAP:
         history.append({"command": command[:1000], "ts": ts, "typing": typing,
-                        "pasted": _looks_pasted(command, typing)})
+                        "pasted": _looks_pasted(command, typing),
+                        "output": cap_output(output)})   # the teacher sees it (spec 2026-10-16)
     res = session.observe(command, ts=ts, output=output, rc=rc, cwd=cwd)  # grade + hints + on_pass
     if not res.advanced:
         if getattr(res, "dose", False):
@@ -968,7 +971,8 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR0913
               student_id: str = _DEFAULT_STUDENT,
               on_complete: Callable[[bool, list[dict[str, object]]], None] | None = None,
-              pool: RemoteRegistry | None = None) -> int:
+              pool: RemoteRegistry | None = None,
+              history: list[dict[str, object]] | None = None) -> int:
     """Boot the task console; grade live, then report pass + command history via on_complete."""
     # Unique workdir per run: a fresh overlay each session (no stale files -> no false
     # auto-pass) and no clash with a machine leaked by a previous run on a reused path.
@@ -979,7 +983,8 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
                        student_id=student_id, nonce=uuid.uuid4().hex,
                        sink=router.write, sleep=time.sleep)
     stop = threading.Event()
-    history: list[dict[str, object]] = []              # every command the student runs, in order
+    # every command the student runs, in order; a caller's list is streamed to the pool live
+    history = history if history is not None else []
     port, grader = _grade_server(session, router, io.clock, stop, session.meta.readme, history)
     completed = False
     try:
@@ -1089,7 +1094,8 @@ def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
 def cmd_run(env: Home, ref: str, io: Io | None = None, *,  # noqa: PLR0913
             student_id: str = _DEFAULT_STUDENT,
             on_complete: Callable[[bool, list[dict[str, object]]], None] | None = None,
-            pool: RemoteRegistry | None = None) -> int:
+            pool: RemoteRegistry | None = None,
+            history: list[dict[str, object]] | None = None) -> int:
     """Run a task (interactive student session) or a bare image (interactive shell)."""
     io = io or _default_io()
     store = ImageStore(env.images)
@@ -1099,7 +1105,8 @@ def cmd_run(env: Home, ref: str, io: Io | None = None, *,  # noqa: PLR0913
         io.write(f"{_no_such_image(store, ref)}\n")
         return 1
     if (stored.layer.parent / "task").exists():
-        return _run_task(env, ref, store, io, student_id=student_id, on_complete=on_complete, pool=pool)
+        return _run_task(env, ref, store, io, student_id=student_id, on_complete=on_complete,
+                         pool=pool, history=history)
     return _run_image(env, ref, store, io)
 
 
@@ -2143,6 +2150,11 @@ def cmd_pool_pull(env: Home, io: Io | None = None) -> int:
     return 0
 
 
+def _outbox_dir(env: Home) -> Path:
+    """Console sessions not yet sent to the pool (offline), sent with the next one."""
+    return env.root / "outbox"
+
+
 def _solved_path(env: Home) -> Path:
     return env.root / "solved.json"
 
@@ -2220,6 +2232,7 @@ def _render_pool_menu(rows: list[dict[str, object]], user: str) -> str:
 def _resync(env: Home, url: str, user: str, token: str, io: Io) -> None:
     """Self-check: re-submit tasks solved locally but not yet credited on the server."""
     client = RemoteRegistry(url)
+    flush_outbox(client, _outbox_dir(env), token)   # sessions recorded offline go first
     mine = client.progress(token=token).get(user, {})
     store = ImageStore(env.images)
     sent = 0
@@ -2230,7 +2243,9 @@ def _resync(env: Home, url: str, user: str, token: str, io: Io) -> None:
         if not tdir.exists():
             continue
         try:
-            result = client.submit(ref, task_digest(tdir), passed=True, token=token)
+            sol = load_solution(env.root, ref) or {}
+            result = client.submit(ref, task_digest(tdir), passed=True, token=token,
+                                   session_id=str(sol.get("session_id") or "") or None)
         except (urllib.error.URLError, RuntimeError, ValueError):
             continue
         sent += result.get("status") == "passed"
@@ -2330,16 +2345,27 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
     if not tdir.exists() or (server_digest and task_digest(tdir) != server_digest):
         RemoteRegistry(url).pull_task(ref, tdir, token=token)
 
+    # The session goes to the pool while it runs: the teacher sees the attempts (spec 2026-10-16).
+    live: list[dict[str, object]] = []
+    uploader = AttemptUploader(RemoteRegistry(url), ref, live, token=token,
+                               outbox=_outbox_dir(env))
+    threading.Thread(target=flush_outbox, args=(RemoteRegistry(url), _outbox_dir(env), token),
+                     daemon=True).start()   # sessions left offline earlier
+    uploader.start()
+
     def _submit(completed: bool, history: list[dict[str, object]]) -> None:  # noqa: FBT001
         outcome["solved"] = completed
+        uploader.close("passed" if completed else "abandoned")
         if not completed:
             return  # only report a real completion; the server digest-gates the credit
         mark_solved(env, ref)   # record «решено» locally before the network: a failed submit keeps it
+        save_solution(env.root, ref, uploader.record("passed"))   # viewable offline (p in the TUI)
         digest = task_digest(task_dir(ref, store))
         authenticity = _authenticity(history)
         try:
             result = RemoteRegistry(url).submit(ref, digest, passed=True, token=token,
-                                                history=history, authenticity=authenticity)
+                                                history=history, authenticity=authenticity,
+                                                session_id=uploader.session_id)
         except (urllib.error.URLError, RuntimeError, ValueError) as exc:
             io.write(f"\x1b[33mне зачтено (нет связи?): {exc}\x1b[0m\n"
                      "\x1b[2m  позже нажмите s в меню для самопроверки\x1b[0m\n")
@@ -2351,7 +2377,10 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
             io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"
                      "\x1b[0m\n")
 
-    rc = cmd_run(env, ref, io, student_id=user, on_complete=_submit, pool=client)
+    try:
+        rc = cmd_run(env, ref, io, student_id=user, on_complete=_submit, pool=client, history=live)
+    finally:
+        uploader.close("abandoned")   # no-op after _submit closed it; covers a crashed console
     return rc, outcome["solved"]
 
 

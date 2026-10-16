@@ -34,7 +34,7 @@ class SeqMismatch(Exception):  # noqa: N818  (a signal, not a failure)
 
 
 def safe_name(ref: str) -> str:
-    """A task ref as one path component (`ns/x:1` -> `ns_x_1`); the ref itself lives in the file."""
+    """Turn a task ref into one path component (`ns/x:1` -> `ns_x_1`); the ref itself lives in the file."""
     return re.sub(r"[^A-Za-z0-9._-]", "_", ref) or "_"
 
 
@@ -163,19 +163,19 @@ class AttemptStore:
         return out
 
     def summary(self, user: str, *, now: float | None = None) -> dict[str, dict[str, object]]:
-        """ref -> {sessions, passed, live}: what the teacher's matrix needs."""
+        """Ref -> {sessions, passed, live}: what the teacher's matrix needs."""
         return {ref: {"sessions": len(recs),
                       "passed": any(r.get("final") == "passed" for r in recs),
                       "live": any(is_live(r, now) for r in recs)}
                 for ref, recs in self._all(user).items()}
 
     def solution(self, user: str, ref: str) -> dict[str, object] | None:
-        """The latest passed session of a task, or None."""
+        """Return the latest passed session of a task, or None."""
         passed = [s for s in self.sessions(user, ref) if s.get("final") == "passed"]
         return max(passed, key=lambda r: float(r.get("updated") or 0)) if passed else None
 
     def solutions(self, user: str) -> dict[str, dict[str, object]]:
-        """ref -> {session_id, at} of every task the user has a solution for."""
+        """Ref -> {session_id, at} of every task the user has a solution for."""
         out: dict[str, dict[str, object]] = {}
         for ref in self._all(user):
             sol = self.solution(user, ref)

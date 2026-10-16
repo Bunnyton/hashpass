@@ -33,6 +33,7 @@ from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
 from hashpass.registry.approved import ApprovedStore
 from hashpass.registry.attachments import AttachmentStore, safe_filename
+from hashpass.registry.attempt_store import AttemptStore, SeqMismatch
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
@@ -45,7 +46,6 @@ from hashpass.registry.passwords import (
     validate_password,
 )
 from hashpass.registry.pool_settings import PoolSettings
-from hashpass.registry.attempt_store import AttemptStore, SeqMismatch
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs

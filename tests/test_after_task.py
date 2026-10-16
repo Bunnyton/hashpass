@@ -42,7 +42,7 @@ def test_failed_run_shows_no_verdict(tmp_path, monkeypatch):
 
 @pytest.mark.tier1
 def test_unsolved_exit_shows_no_verdict_either(tmp_path, monkeypatch):
-    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool) -> int:  # noqa: ARG001
+    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool, **_k: object) -> int:  # noqa: ARG001
         on_complete(False, [])  # noqa: FBT003
         return 0
     monkeypatch.setattr(cli, "_require_pool_identity", lambda _env, _io: ("http://pool", "stud"))
@@ -73,7 +73,7 @@ class _OfflinePool(_FakePool):
 @pytest.mark.tier1
 def test_failed_submit_is_still_reported(tmp_path, monkeypatch):
     # Silence is for success only: a credit that did not reach the pool must say so.
-    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool) -> int:  # noqa: ARG001
+    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool, **_k: object) -> int:  # noqa: ARG001
         on_complete(True, [])  # noqa: FBT003
         return 0
     monkeypatch.setattr(cli, "_require_pool_identity", lambda _env, _io: ("http://pool", "stud"))
@@ -93,7 +93,7 @@ def test_after_exit_the_student_goes_straight_back_to_the_menu(tmp_path, monkeyp
     """User (2026-10-12): «после exit пускай выходит сразу в меню» -- one task, no question."""
     runs: list[str] = []
 
-    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool) -> int:  # noqa: ARG001
+    def fake_cmd_run(_env, ref, _io, *, student_id, on_complete, pool, **_k: object) -> int:  # noqa: ARG001
         runs.append(ref)
         on_complete(True, [])  # noqa: FBT003
         return 0
