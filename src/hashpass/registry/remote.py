@@ -568,14 +568,37 @@ class RemoteRegistry:
     def submit(self, task_ref: str, digest: str, *, passed: bool,  # noqa: PLR0913
                history: list[dict[str, object]] | None = None,
                authenticity: dict[str, object] | None = None,
-               token: str | None = None) -> dict[str, object]:
+               token: str | None = None, session_id: str | None = None) -> dict[str, object]:
         """Submit a task result (+ optional command history / anti-bot signal); returns {status,...}."""
         payload: dict[str, object] = {"task_ref": task_ref, "digest": digest, "passed": passed}
+        if session_id:
+            payload["session_id"] = session_id   # the console session this pass closes
         if history is not None:
             payload["history"] = history
         if authenticity is not None:
             payload["authenticity"] = authenticity
         return self._post_json("/submit", payload, token=self._auth_token(token))
+
+    def attempt(self, task_ref: str, session_id: str, seq: int,  # noqa: PLR0913
+                entries: list[dict[str, object]], *, final: str | None = None,
+                token: str | None = None) -> dict[str, object]:
+        """Stream a console session's new commands (+ output) from position `seq`; {length}."""
+        payload: dict[str, object] = {"task_ref": task_ref, "session_id": session_id,
+                                      "seq": seq, "entries": entries}
+        if final:
+            payload["final"] = final
+        return self._post_json("/attempt", payload, token=self._auth_token(token))
+
+    def solutions(self, *, token: str | None = None) -> dict[str, dict[str, object]]:
+        """The caller's solved tasks with a saved solution: {ref: {session_id, at}}."""
+        return dict(self._get_json("/solutions", token=self._auth_token(token)).get("solutions", {}))
+
+    def solution(self, ref: str, *, user: str | None = None,
+                 token: str | None = None) -> dict[str, object]:
+        """One saved solution (a passed session with commands + output); `user` -- staff only."""
+        query = f"?user={urllib.parse.quote(user, safe='')}" if user else ""
+        return self._get_json(f"/solution/{urllib.parse.quote(ref, safe='/:')}{query}",
+                              token=self._auth_token(token))
 
     def progress(self, *, token: str | None = None) -> dict[str, object]:
         """Return progress: an author sees every student; a student sees only their own."""

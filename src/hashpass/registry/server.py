@@ -45,6 +45,7 @@ from hashpass.registry.passwords import (
     validate_password,
 )
 from hashpass.registry.pool_settings import PoolSettings
+from hashpass.registry.attempt_store import AttemptStore, SeqMismatch
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
@@ -318,6 +319,11 @@ class PoolServer:
     def progress(self) -> ProgressStore:
         return ProgressStore(self.progress_path or (Path(self.store.root) / "progress"))
 
+    def attempts(self) -> AttemptStore:
+        """Console sessions (commands + output), next to the progress dir."""
+        base = Path(self.progress_path).parent if self.progress_path else Path(self.store.root)
+        return AttemptStore(base / "attempts")
+
     def attachments(self) -> AttachmentStore:
         return AttachmentStore(self.attachments_path or (Path(self.store.root) / "attachments"))
 
@@ -366,6 +372,9 @@ class PoolServer:
                          self._route_admin_registration, methods=["POST"])
         app.add_url_rule("/admin/role", "admin_role", self._route_admin_role, methods=["POST"])
         app.add_url_rule("/submit", "submit", self._route_submit, methods=["POST"])
+        app.add_url_rule("/attempt", "attempt", self._route_attempt, methods=["POST"])
+        app.add_url_rule("/solutions", "solutions", self._route_solutions, methods=["GET"])
+        app.add_url_rule("/solution/<path:ref>", "solution", self._route_solution, methods=["GET"])
         app.add_url_rule("/me", "me", self._route_me, methods=["GET"])
         app.add_url_rule("/users/<user>/exists", "user_exists",
                          self._route_user_exists, methods=["GET"])
@@ -912,10 +921,56 @@ class PoolServer:
             prog.record(user, task_ref, status="failed", ts=_now(), digest=digest,
                         history=history, authenticity=authenticity)
             return self._json(HTTPStatus.OK, {"status": "failed"})
+        session_id = str(data.get("session_id", ""))
+        if session_id:
+            with contextlib.suppress(ValueError):          # a bad id just leaves no solution
+                self.attempts().finish(user, task_ref, session_id, "passed")
         gkey = global_key(self.secret, user, task_ref)   # bound to the authenticated principal
         prog.record(user, task_ref, status="passed", ts=_now(), global_key=gkey, digest=digest,
                     history=history, authenticity=authenticity)
         return self._json(HTTPStatus.OK, {"status": "passed", "global_key": gkey})
+
+    def _route_attempt(self) -> Response:
+        """Append a console session's new commands (+ output); 409 says where to resume."""
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict) or not isinstance(data.get("seq"), int):
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        task_ref = str(data.get("task_ref", ""))
+        if self.catalog().find(task_ref) is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        final = data.get("final")
+        try:
+            length = self.attempts().append(
+                user, task_ref, str(data.get("session_id", "")), int(data["seq"]),
+                data.get("entries") or [],
+                final=str(final) if isinstance(final, str) and final != "passed" else None)
+        except SeqMismatch as exc:
+            return self._json(HTTPStatus.CONFLICT, {"length": exc.have})
+        except ValueError:
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        return self._json(HTTPStatus.OK, {"length": length})
+
+    def _route_solutions(self) -> Response:
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        return self._json(HTTPStatus.OK, {"solutions": self.attempts().solutions(user)})
+
+    def _route_solution(self, ref: str) -> Response:
+        """One saved solution: your own, or -- for an author/admin -- any student's (`?user=`)."""
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        target = request.args.get("user") or user
+        if target != user and self.users.role(user) not in _AUTHOR_ROLES:
+            return self._empty(HTTPStatus.FORBIDDEN)
+        sol = self.attempts().solution(target, ref)
+        if sol is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        return self._json(HTTPStatus.OK, sol)
 
     def _route_progress(self) -> Response:
         user = self._token_user()
@@ -1485,6 +1540,7 @@ class PoolServer:
         if target and target != actor:                 # never delete yourself
             self.users.delete(target)
             self.progress().delete(target)
+            self.attempts().delete_user(target)
         return self._redirect("/web/users")
 
     def _web_users_delete_group(self) -> Response:
@@ -1499,6 +1555,7 @@ class PoolServer:
                 if str(profile.get("group", "")) == group and user != actor:
                     self.users.delete(user)
                     prog.delete(user)
+                    self.attempts().delete_user(user)
         return self._redirect("/web/users")
 
     def _web_ref_form(self) -> tuple[str, str] | None:
