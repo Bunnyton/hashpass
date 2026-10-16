@@ -176,3 +176,17 @@ def test_the_pool_watch_leaves_a_developer_checkout_alone():
                       idle=lambda: True, restart=lambda _a: events.append("restart"),
                       write=lambda _s: None)
     assert events == []
+
+
+@pytest.mark.tier1
+def test_a_slow_github_answer_still_finds_the_new_commit(monkeypatch):
+    # User, 2026-10-16: «Не подтянулись изменения … автоматом должно при hashengine». `git
+    # ls-remote` measured 0.6-5.7 s through a slow network; a 4 s limit read a slow answer as
+    # «offline» and silently skipped the update.
+    def run(cmd: list[str], *, timeout: float, **_kw: object) -> subprocess.CompletedProcess:
+        if timeout < 6:   # noqa: PLR2004  (the slowest answer measured)
+            raise subprocess.TimeoutExpired(cmd, timeout)
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"{NEW}\trefs/heads/main\n", stderr="")
+
+    monkeypatch.setattr(version.subprocess, "run", run)
+    assert version.remote_commit() == NEW

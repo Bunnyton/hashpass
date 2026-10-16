@@ -15,7 +15,7 @@ _REPO_URL = f"https://github.com/{_REPO}"
 _BRANCH = "main"
 _ENV_NO_UPDATE = "HASHPASS_NO_UPDATE"
 _ENV_UPDATED = "HASHPASS_JUST_UPDATED"   # set across the re-exec so one launch updates at most once
-_LS_REMOTE_TIMEOUT = 4.0
+_LS_REMOTE_TIMEOUT = 15.0   # measured up to 5.7 s on a slow link; a timeout reads as «offline»
 # A school/office network may MITM TLS with a self-signed cert: pip and git then refuse GitHub.
 # The second try trusts exactly these hosts (the repo tarball + PyPI for the build backend).
 TRUSTED_HOSTS = ("github.com", "codeload.github.com", "pypi.org", "files.pythonhosted.org")
