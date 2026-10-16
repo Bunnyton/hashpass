@@ -2295,8 +2295,6 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
     # `_default_io()` returns a fresh Io on every call.
     interactive = io is None
     io = io or _default_io()
-    url, user = _require_pool_identity(env, io)
-    token = _pool_token(env, url) or ""
     if interactive:
         tty = sys.stdout.isatty() and sys.stdin.isatty()
         try:
@@ -2307,9 +2305,14 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
                      "  pip install --user --break-system-packages textual\x1b[0m\n")
         else:
             if tty:
+                # Signed out (or the account is gone) -> the TUI's own login form, not a prompt
+                # here (spec 2026-10-16).
+                url, user, token = account_current(env)
                 return run_tui(env, url, user, token)
             io.write("\x1b[33m⚠ stdin/stdout не терминал — TUI требует TTY. "
                      "Текстовое меню ниже.\x1b[0m\n")
+    url, user = _require_pool_identity(env, io)
+    token = _pool_token(env, url) or ""
     # No blocking pull at startup — a task's image is fetched on demand by cmd_pool_run.
     while True:
         rows = pool_status(env, url, token, user)

@@ -9,6 +9,7 @@ attachment -- then the tree is that one file.
 """
 from __future__ import annotations
 
+import time
 import urllib.error
 from collections.abc import Callable
 from http import HTTPStatus
@@ -119,3 +120,60 @@ class SourceViewer(Screen):
     def action_vim(self, where: str) -> None:
         """Walk the tree with vim keys (j/k/h/l/g/G)."""
         vim_walk(self.query_one("#src-tree", Tree), where)
+
+
+class SolutionViewer(Screen):
+    """
+    A solved task's solution: every command the student ran and its output (spec 2026-10-16).
+
+    The text is a rich `Text`, never markup -- a `[` in a command or its output stays as typed.
+    """
+
+    CSS = """
+    #sol-body { padding: 1 2; }
+    """
+    BINDINGS = [   # noqa: RUF012
+        Binding("escape,q,Q,й,Й", "app.pop_screen", "Назад"),
+        Binding("j,о,down", "scroll(1)", "Вниз", show=False),
+        Binding("k,л,up", "scroll(-1)", "Вверх", show=False),
+        Binding("g,п,home", "edge(0)", "В начало", show=False),
+        Binding("G,П,end", "edge(1)", "В конец", show=False),
+    ]
+
+    def __init__(self, record: dict[str, object]) -> None:
+        """Show `record` -- a passed session as the pool keeps it."""
+        super().__init__()
+        self.record = record
+
+    def rendered(self) -> Text:
+        """Return the log: a header, then `$ command` in bold and its output under it."""
+        text = Text()
+        at = self.record.get("updated")
+        when = (time.strftime("%Y-%m-%d %H:%M", time.localtime(float(at)))
+                if isinstance(at, (int, float)) else "")
+        text.append(str(self.record.get("ref", "")), style="bold")
+        text.append(f"  ·  зачтено {when}\n\n" if when else "  ·  зачтено\n\n", style="green")
+        entries = self.record.get("entries") or []
+        for e in entries:                              # type: ignore[union-attr]
+            text.append(f"$ {e.get('command', '')}\n", style="bold cyan")
+            out = str(e.get("output") or "").rstrip("\n")
+            if out:
+                text.append(out + "\n")
+        if not entries:
+            text.append("команды не записаны\n", style="dim")
+        return text
+
+    def compose(self) -> ComposeResult:
+        """One scrolling log + the key legend."""
+        with VerticalScroll(id="sol-scroll"):
+            yield Static(self.rendered(), id="sol-body")
+        yield Footer()
+
+    def action_scroll(self, step: int) -> None:
+        """j/k: scroll a line."""
+        self.query_one("#sol-scroll", VerticalScroll).scroll_relative(y=step, animate=False)
+
+    def action_edge(self, end: int) -> None:
+        """g/G: to the top / the bottom."""
+        box = self.query_one("#sol-scroll", VerticalScroll)
+        (box.scroll_end if end else box.scroll_home)(animate=False)

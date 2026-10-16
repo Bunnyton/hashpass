@@ -20,7 +20,9 @@ import json
 import sys
 import threading
 import time
+import urllib.error
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from rich.markup import escape
@@ -30,11 +32,14 @@ from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Input, Label, Static, Tree
 
+from hashpass import account
+from hashpass.attempts import flush_outbox, sync_solutions
+from hashpass.auth_screens import LoginScreen
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.taskdigest import task_digest
 from hashpass.treekeys import VIM_BINDINGS, vim_walk
-from hashpass.viewer import SourceViewer, listing_or_taskfile
+from hashpass.viewer import SolutionViewer, SourceViewer, listing_or_taskfile
 
 if TYPE_CHECKING:
     from hashpass.cli import Home
@@ -262,6 +267,9 @@ class PoolTUI(App):
         Binding("delete", "delete_task", "Удалить"),
         Binding("z,Z,я,Я", "toggle_rejected", "Отклонённые"),
         Binding("v,V,м,М", "view", "Исходники"),
+        # spec 2026-10-16: the student's own solution (commands + output), and another account
+        Binding("p,P,з,З", "solution", "Решение"),
+        Binding("L,Д", "relogin", "Сменить аккаунт"),
     ]
 
     def __init__(self, env: Home, url: str, user: str, token: str) -> None:
@@ -344,18 +352,101 @@ class PoolTUI(App):
         self._save_prefs(theme=theme)
 
     def on_mount(self) -> None:
-        """Load the catalog once; welcome the student; no ticking timer, no background pulls."""
-        self.title = f"hashpass · {self.user}"
+        """Sign in first when there is no live token; then load the catalog and welcome."""
         self._load_theme()
         self._theme_loaded = True
-        with contextlib.suppress(Exception):               # offline / old pool -> a student's view
-            self.role = str(self.client.me(token=self.token).get("role") or "student")
-        self.refresh_bindings()
-        self._reload_catalog()
         threading.Thread(target=self._download_worker, daemon=True).start()
         self.set_interval(_TICK, self._tick)
+        if not self.token:
+            self._ask_login()
+            return
+        self._start_session()
+
+    def _ask_login(self, error: str = "") -> None:
+        """Show the login form (spec 2026-10-16); Esc there quits."""
+        self.title = "hashpass"
+        self.push_screen(LoginScreen(self.env, self.url, user=self.user, error=error),
+                         callback=self._signed_in)
+
+    def _signed_in(self, session: tuple[str, str, str] | None) -> None:
+        if session is None:
+            self.exit()
+            return
+        self.url, self.user, self.token = session
+        self.client = RemoteRegistry(self.url, token=self.token)
+        self.call_after_refresh(self._start_session)   # the login screen is off the stack by then
+
+    def _start_session(self) -> None:
+        """Check the account, load the catalog, pull the solutions kept on the pool."""
+        self.title = f"hashpass · {self.user}"
+        self.role = "student"
+        try:
+            self.role = str(self.client.me(token=self.token).get("role") or "student")
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.UNAUTHORIZED:      # an admin deleted the account
+                gone = self.user
+                account.logout(self.env, self.url)
+                self.token = ""
+                self._ask_login(f"Аккаунта «{gone}» больше нет на пуле — войдите или "
+                                "зарегистрируйтесь заново.")
+                return
+        except Exception:                                  # noqa: BLE001, S110  (offline / old pool)
+            pass
+        self.refresh_bindings()
+        self._reload_catalog()
+        threading.Thread(target=self._sync_solutions, args=(self.token,), daemon=True).start()
         # Textual toast in the corner -- friendly hello, not a modal
         self.notify(f"Добро пожаловать, {self.user}!", severity="information", timeout=4)
+
+    def _sync_solutions(self, token: str) -> None:
+        """Background: send sessions left offline; pull solutions solved on other devices."""
+        from hashpass.cli import _outbox_dir, load_solved, mark_solved  # noqa: PLC0415
+        client = RemoteRegistry(self.url)
+        with contextlib.suppress(Exception):
+            flush_outbox(client, _outbox_dir(self.env), token)
+        solved = load_solved(self.env)
+        marked: list[str] = []
+
+        def mark(ref: str) -> None:
+            if ref not in solved:
+                mark_solved(self.env, ref)
+                marked.append(ref)
+        pulled = 0
+        with contextlib.suppress(Exception):
+            pulled = sync_solutions(self.env.root, client, token, mark)
+        if (pulled or marked) and token == self.token:
+            with contextlib.suppress(Exception):          # the app may be closing
+                self.call_from_thread(self._reload_catalog)
+
+    def action_relogin(self) -> None:
+        """L: log out and sign in as someone else (spec 2026-10-16)."""
+        def answer(yes: bool | None) -> None:  # noqa: FBT001
+            if not yes:
+                return
+            account.logout(self.env, self.url)
+            self.token = ""
+            self.role = "student"
+            with self._rows_lock:
+                self.rows = []
+            self._paint_tree()
+            self._ask_login()
+        self.push_screen(ConfirmScreen(f"Выйти из аккаунта [b]{escape(self.user)}[/]?"),
+                         callback=answer)
+
+    def action_solution(self) -> None:
+        """p: the solution of the task under the cursor -- commands and their output."""
+        from hashpass.cli import NO_SOLUTION, find_solution  # noqa: PLC0415
+        row = self._cursor_row()
+        if row is None:
+            return
+        if row.server != "passed" and not row.local:
+            self._flash("Задание ещё не решено — решения нет")
+            return
+        record = find_solution(self.env, self.url, self.token, row.ref)
+        if record is None:
+            self.notify(NO_SOLUTION, timeout=5)
+            return
+        self.push_screen(SolutionViewer(record))
 
     def on_unmount(self) -> None:
         """Stop the download worker on quit (a layer in flight is abandoned with the process)."""
@@ -606,6 +697,8 @@ class PoolTUI(App):
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Editing keys exist only for staff: hide/show for an author, moving too for the admin."""
+        if not self.token and action != "quit":
+            return False                                  # signed out: only the login form
         if action in ("toggle_hidden", "toggle_block"):
             return self.role in ("author", "admin")
         if action == "move":
@@ -841,9 +934,11 @@ def failure_note(ref: str, exc: BaseException) -> str:
     return f"{ref}: не удалось загрузить — {why}"
 
 
-def run_tui(env: Home, url: str, user: str, token: str) -> int:
-    """Enter the Textual app; on quit print a friendly goodbye. Errors bubble up."""
-    PoolTUI(env, url, user, token).run()
-    sys.stdout.write(f"\n\x1b[36mДо скорой встречи, {user}!\x1b[0m\n")
+def run_tui(env: Home, url: str, user: str = "", token: str = "") -> int:
+    """Enter the Textual app (signed out -> the login form first); on quit say goodbye."""
+    app = PoolTUI(env, url, user, token)
+    app.run()
+    if app.user and app.token:
+        sys.stdout.write(f"\n\x1b[36mДо скорой встречи, {app.user}!\x1b[0m\n")
     sys.stdout.flush()
     return 0

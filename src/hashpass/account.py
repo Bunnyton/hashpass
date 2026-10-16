@@ -33,9 +33,7 @@ def _client(env: Home, url: str) -> RemoteRegistry:
 
 
 def _reason(exc: urllib.error.HTTPError) -> str:
-    from hashpass.cli import (  # noqa: PLC0415  (cli imports this module)
-        _http_error_reason,
-    )
+    from hashpass.cli import _http_error_reason  # noqa: PLC0415  (cli imports this module)
     return _http_error_reason(exc)
 
 
