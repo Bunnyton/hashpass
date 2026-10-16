@@ -48,14 +48,14 @@ def test_output_capped_and_session_truncated(tmp_path):
 
 
 @pytest.mark.tier1
-def test_rotation_keeps_passed(tmp_path):
+def test_rotation_keeps_ten_and_the_solution(tmp_path):
     st = AttemptStore(tmp_path)
     st.append("u", "r:1", "f" * 32, 0, [_e("good")], now=0)
     st.finish("u", "r:1", "f" * 32, "passed", now=0)
-    for i in range(31):
+    for i in range(11):
         st.append("u", "r:1", f"{i:032x}", 0, [_e(f"try{i}")], now=i + 1)
     sessions = st.sessions("u", "r:1")
-    assert len([s for s in sessions if s["final"] != "passed"]) == 30
+    assert len([s for s in sessions if s["final"] != "passed"]) == 10
     assert "0" * 32 not in {s["session_id"] for s in sessions}   # oldest attempt dropped
     assert st.solution("u", "r:1")["session_id"] == "f" * 32
 
@@ -77,3 +77,17 @@ def test_solutions_summary_and_live(tmp_path):
 def test_bad_session_id_rejected(tmp_path):
     with pytest.raises(ValueError):
         AttemptStore(tmp_path).append("u", "r:1", "../etc", 0, [_e("ls")])
+
+
+@pytest.mark.tier1
+def test_old_attempts_of_a_passed_task_expire_the_solution_stays(tmp_path):
+    day = 24 * 3600
+    st = AttemptStore(tmp_path)
+    st.append("u", "done:1", "1" * 32, 0, [_e("try")], now=0)                 # old attempt
+    st.append("u", "done:1", "2" * 32, 0, [_e("win")], now=1)
+    st.finish("u", "done:1", "2" * 32, "passed", now=1)
+    st.append("u", "done:1", "3" * 32, 0, [_e("recent")], now=59 * day)    # not old yet
+    st.append("u", "open:1", "4" * 32, 0, [_e("stuck")], now=0)            # task not passed
+    st.summary("u", now=61 * day)
+    assert {s["session_id"] for s in st.sessions("u", "done:1")} == {"2" * 32, "3" * 32}
+    assert [s["session_id"] for s in st.sessions("u", "open:1")] == ["4" * 32]

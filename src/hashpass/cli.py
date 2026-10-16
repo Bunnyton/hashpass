@@ -2360,6 +2360,15 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     return rc
 
 
+def _credited_on_pool(client: RemoteRegistry, token: str, user: str, ref: str) -> bool:
+    """Whether the pool has credited `ref` to `user` (offline -> False: send as usual)."""
+    try:
+        rec = client.progress(token=token).get(user, {}).get(ref)
+    except (urllib.error.URLError, RuntimeError, ValueError, OSError):
+        return False
+    return isinstance(rec, dict) and rec.get("status") == "passed"
+
+
 def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa: PLR0913, PLR0917
                    io: Io) -> tuple[int, bool | None]:
     """Run ONE pool task; return (exit code, solved) -- None when nothing was graded (locked/failed)."""
@@ -2385,18 +2394,27 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
         RemoteRegistry(url).pull_task(ref, tdir, token=token)
 
     # The session goes to the pool while it runs: the teacher sees the attempts (spec 2026-10-16).
+    # A task the pool has already credited is practice: nothing is sent, the first solution stays
+    # (user, 2026-10-16: «зачтенные даже не отправляй и не получай, не обрабатывай»).
+    credited = _credited_on_pool(client0, token, user, ref)
     live: list[dict[str, object]] = []
     uploader = AttemptUploader(RemoteRegistry(url), ref, live, token=token,
                                outbox=_outbox_dir(env))
-    threading.Thread(target=flush_outbox, args=(RemoteRegistry(url), _outbox_dir(env), token),
-                     daemon=True).start()   # sessions left offline earlier
-    uploader.start()
+    if credited:
+        uploader.disabled = True
+    else:
+        threading.Thread(target=flush_outbox, args=(RemoteRegistry(url), _outbox_dir(env), token),
+                         daemon=True).start()   # sessions left offline earlier
+        uploader.start()
 
     def _submit(completed: bool, history: list[dict[str, object]]) -> None:  # noqa: FBT001
         outcome["solved"] = completed
         uploader.close("passed" if completed else "abandoned")
         if not completed:
             return  # only report a real completion; the server digest-gates the credit
+        if credited:
+            mark_solved(env, ref)
+            return
         mark_solved(env, ref)   # record «решено» locally before the network: a failed submit keeps it
         save_solution(env.root, ref, uploader.record("passed"))   # viewable offline (p in the TUI)
         digest = task_digest(task_dir(ref, store))

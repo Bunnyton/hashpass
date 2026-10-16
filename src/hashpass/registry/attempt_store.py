@@ -17,7 +17,8 @@ from pathlib import Path
 MAX_OUTPUT = 16 * 1024          # one command's output
 MAX_ENTRIES = 1000              # commands per session
 MAX_SESSION_OUTPUT = 512 * 1024  # output per session; beyond -> truncated
-KEEP_ATTEMPTS = 30              # unpassed sessions kept per task (passed ones are never dropped)
+KEEP_ATTEMPTS = 10              # unpassed sessions kept per task (the solution is never dropped)
+KEEP_SECONDS = 60 * 24 * 3600   # a passed task's attempts older than this are dropped
 LIVE_SECONDS = 60               # an open session updated this recently is «идёт сейчас»
 FINALS = ("passed", "abandoned", "failed")
 _TRUNC = "\n…обрезано"
@@ -144,6 +145,16 @@ class AttemptStore:
         for old in unpassed[KEEP_ATTEMPTS:]:
             self._path(user, ref, str(old["session_id"])).unlink(missing_ok=True)
 
+    def prune(self, user: str, *, now: float | None = None) -> None:
+        """Drop attempts older than KEEP_SECONDS of the tasks the user has passed (user, 2026-10-16)."""
+        cutoff = (time.time() if now is None else now) - KEEP_SECONDS
+        for ref, recs in self._all(user).items():
+            if not any(r.get("final") == "passed" for r in recs):
+                continue                              # still at it: the teacher needs every try
+            for r in recs:
+                if r.get("final") != "passed" and float(r.get("updated") or 0) < cutoff:
+                    self._path(user, ref, str(r["session_id"])).unlink(missing_ok=True)
+
     def sessions(self, user: str, ref: str) -> list[dict[str, object]]:
         """All sessions of a task, newest first."""
         d = self._dir(user, ref)
@@ -163,7 +174,8 @@ class AttemptStore:
         return out
 
     def summary(self, user: str, *, now: float | None = None) -> dict[str, dict[str, object]]:
-        """Ref -> {sessions, passed, live}: what the teacher's matrix needs."""
+        """Ref -> {sessions, passed, live}: what the teacher's matrix needs (expired tries pruned)."""
+        self.prune(user, now=now)
         return {ref: {"sessions": len(recs),
                       "passed": any(r.get("final") == "passed" for r in recs),
                       "live": any(is_live(r, now) for r in recs)}

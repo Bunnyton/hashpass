@@ -5,6 +5,7 @@ from http import HTTPStatus
 import pytest
 
 from hashpass import cli
+from hashpass.attempts import load_solution
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.catalog import Catalog
 from hashpass.registry.creds import CredentialCache
@@ -213,3 +214,39 @@ def test_cmd_pool_run_survives_failing_base_download_with_local_base(registry, t
     # and the base path itself degrades to that local base instead of raising
     client = RemoteRegistry(registry.base_url)
     assert cli.ensure_base_image(env, local, pool=client, io=io) == local.get(cli.base_ref()).layer
+
+
+@pytest.mark.tier2
+def test_rerun_of_a_credited_task_sends_nothing(registry, tmp_path, monkeypatch):
+    """A task already credited: the re-run streams no attempt and submits nothing (user, 2026-10-16)."""
+    monkeypatch.setenv("HASHPASS_POOL", registry.base_url)
+    _publish(registry, tmp_path)
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "stud")}, default_home=tmp_path)
+    RemoteRegistry(registry.base_url, cache=CredentialCache(env.creds)).register(
+        "stud", "pass123!", group="G")
+    calls: list[str] = []
+    for name in ("attempt", "submit"):
+        orig = getattr(RemoteRegistry, name)
+
+        def spy(self, *a: object, _orig=orig, _name=name, **k: object):  # noqa: ANN202
+            calls.append(_name)
+            return _orig(self, *a, **k)
+        monkeypatch.setattr(RemoteRegistry, name, spy)
+
+    def fake_run(_env, _ref, _io, *, student_id, on_complete, pool=None, history=None,  # noqa: ARG001
+                 **_k: object) -> int:
+        history.append({"command": "whoami", "output": "stud\n", "ts": "t", "typing": 1.0,
+                        "pasted": False})
+        on_complete(True, history)   # noqa: FBT003
+        return 0
+
+    monkeypatch.setattr(cli, "cmd_run", fake_run)
+    io = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "t")
+    assert cli.cmd_pool_run(env, "1", io) == 0
+    assert "submit" in calls
+    assert "attempt" in calls
+    first = load_solution(env.root, "lab:1")
+    calls.clear()
+    assert cli.cmd_pool_run(env, "1", io) == 0
+    assert calls == []                                   # nothing sent for the re-run
+    assert load_solution(env.root, "lab:1") == first     # the first solution stays

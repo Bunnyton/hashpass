@@ -83,3 +83,24 @@ def test_teacher_sees_attempts_with_output_on_the_site(registry, tmp_path):
                       cookie=cookie)
     assert "cat: nofile: No such file or directory" in body
     assert "сейчас решает" in body
+
+
+@pytest.mark.tier2
+def test_a_passed_task_is_not_processed_again(registry, tmp_path):
+    td, _ = _publish(registry, tmp_path)
+    sc = RemoteRegistry(registry.base_url)
+    tok = sc.register("stud", "pass123!", group="G")
+    sc.attempt("lab:1", SID, 0, [_e("whoami", "stud\n")], token=tok)
+    first = sc.submit("lab:1", task_digest(td), passed=True, session_id=SID, token=tok)
+    before = sc.progress(token=tok)["stud"]["lab:1"]
+    again = "c" * 32
+    # a re-run of a credited task: the pool neither stores its commands nor a second solution
+    assert sc.attempt("lab:1", again, 0, [_e("ls", "x\n")], token=tok)["ignored"] is True
+    second = sc.submit("lab:1", task_digest(td), passed=True, session_id=again, token=tok)
+    assert second == first
+    assert sc.progress(token=tok)["stud"]["lab:1"] == before
+    assert sc.solution("lab:1", token=tok)["session_id"] == SID
+    assert sc.solutions(token=tok)["lab:1"]["session_id"] == SID
+    # a digest-mismatch after the credit does not take it back either
+    sc.submit("lab:1", "other-digest", passed=True, token=tok)
+    assert sc.progress(token=tok)["stud"]["lab:1"]["status"] == "passed"

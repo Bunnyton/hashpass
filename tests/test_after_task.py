@@ -8,6 +8,9 @@ class _FakePool:
     def __init__(self, url: str, **_kw: object) -> None:
         self.url = url
 
+    def progress(self, *, token: str = "") -> dict[str, object]:  # noqa: ARG002
+        return {}                              # nothing credited yet
+
     def catalog(self, *, token: str = "") -> list[dict[str, object]]:  # noqa: ARG002
         return [{"number": 1, "ref": "b/a:1", "name": "a", "available": True, "hidden": False,
                  "digest": ""},

@@ -913,6 +913,10 @@ class PoolServer:
         if not entry.available:
             return self._json(HTTPStatus.OK, {"status": "unavailable"})
         prog = self.progress()
+        if self._credited(user, task_ref):
+            # credited once -- final: a re-run neither rewrites the record nor adds a solution
+            return self._json(HTTPStatus.OK, {"status": "passed",
+                                              "global_key": global_key(self.secret, user, task_ref)})
         if digest not in (entry.digest, entry.approved_digest):
             prog.record(user, task_ref, status="failed", ts=_now(), digest=digest,
                         history=history, authenticity=authenticity)
@@ -930,7 +934,7 @@ class PoolServer:
                     history=history, authenticity=authenticity)
         return self._json(HTTPStatus.OK, {"status": "passed", "global_key": gkey})
 
-    def _route_attempt(self) -> Response:
+    def _route_attempt(self) -> Response:  # noqa: PLR0911
         """Append a console session's new commands (+ output); 409 says where to resume."""
         user = self._token_user()
         if user is None:
@@ -941,6 +945,11 @@ class PoolServer:
         task_ref = str(data.get("task_ref", ""))
         if self.catalog().find(task_ref) is None:
             return self._empty(HTTPStatus.NOT_FOUND)
+        if self._credited(user, task_ref):
+            # a re-run of a credited task is not kept (user, 2026-10-16): the first solution stays
+            entries = data.get("entries") if isinstance(data.get("entries"), list) else []
+            return self._json(HTTPStatus.OK, {"length": int(data["seq"]) + len(entries),
+                                              "ignored": True})
         final = data.get("final")
         try:
             length = self.attempts().append(
@@ -952,6 +961,11 @@ class PoolServer:
         except ValueError:
             return self._empty(HTTPStatus.BAD_REQUEST)
         return self._json(HTTPStatus.OK, {"length": length})
+
+    def _credited(self, user: str, ref: str) -> bool:
+        """Whether the pool already credited `ref` to `user`."""
+        rec = self.progress().get(user).get(ref)
+        return isinstance(rec, dict) and rec.get("status") == "passed"
 
     def _route_solutions(self) -> Response:
         user = self._token_user()
