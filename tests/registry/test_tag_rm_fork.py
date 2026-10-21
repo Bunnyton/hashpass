@@ -113,10 +113,12 @@ def test_the_base_a_revision_was_built_on_cannot_be_removed(pool: _Pool) -> None
     pool.put("image", "bob/lab", "1", sid, pool.blob("bob/lab", "1", "one"))
     assert pool.commit("bob/lab", "1", sid)[1]["ref"] == "bob/lab:1_v1"
     assert pool.r.store.get("bob/lab:1_v1").base == "bunnyton/debian:trixie_v1"
+    assert _tag(pool, "bob/lab:1_v1", "stable")[0] == 201  # noqa: PLR2004
+    assert pool.r.store.get("bob/lab:stable_v1").base == "bunnyton/debian:trixie_v1"
     code, body = _http("DELETE", f"{pool.url}/revisions/bunnyton/debian/trixie/1",
                        token=pool.tok["bunnyton"])
     assert code == 409  # noqa: PLR2004
-    assert body["dependents"] == ["bob/lab:1_v1"]
+    assert body["dependents"] == ["bob/lab:1_v1", "bob/lab:stable_v1"]
 
 
 @pytest.mark.tier1

@@ -1375,6 +1375,8 @@ class PoolServer:
         try:
             made.append(self.store.dir(name, revision_version(tag, n)))
             self.store.link_revision(src_ref, name, revision_version(tag, n), parents=img.parents)
+            if img.base:                                # the base it stands on comes along
+                self._set_meta_field(made[0], "base", img.base)
             for live in (self.attachments(), self.sources()):
                 src_dir, out = live._dir(src_ref), live._dir(ref)            # noqa: SLF001
                 if src_dir.is_dir():
