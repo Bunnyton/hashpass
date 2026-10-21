@@ -14,7 +14,8 @@ def test_add_with_profile_and_role(tmp_path):
     assert not us.verify("bob", "nope")
     prof = us.get("bob")
     assert prof == {"user": "bob", "role": "student", "group": "ИУ7-11",
-                    "comment": "note", "created_at": prof["created_at"], "auto_approve": False}
+                    "comment": "note", "created_at": prof["created_at"], "auto_approve": False,
+                    "tz": ""}
     assert "pw" not in prof                    # never leak the hash in a profile
     assert us.role("bob") == "student"
 

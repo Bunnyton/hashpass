@@ -202,3 +202,13 @@ table.cmds td.mono{max-width:0;width:100%}
 .cmd{font-weight:600;white-space:pre-wrap;word-break:break-word}
 pre.out{margin:.35em 0 .2em;padding:.5em .7em;background:var(--surface2);border:1px solid var(--border);border-radius:6px;
   white-space:pre-wrap;word-break:break-word;max-height:24em;overflow:auto;font:inherit;font-size:.92em;color:var(--muted)}
+/* sortable tables (static/sort.js) */
+th.sort{cursor:pointer;user-select:none;white-space:nowrap}
+th.sort:hover{color:var(--text)}
+th.sort[aria-sort=ascending]::after{content:' ▲'}
+th.sort[aria-sort=descending]::after{content:' ▼'}
+th a{color:inherit;text-decoration:none}th a:hover{color:var(--accent)}
+/* inline autosave feedback (static/users.js) */
+.inline-edit.saving{opacity:.6}
+.inline-edit.saved{box-shadow:0 0 0 2px var(--ok-soft)}
+.inline-edit.failed{box-shadow:0 0 0 2px var(--danger)}

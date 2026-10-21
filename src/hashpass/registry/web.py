@@ -1,10 +1,12 @@
 """Server-rendered web dashboard for the pool (Jinja2 templates): install scripts + render_* HTML."""
+import calendar
 import time
 from pathlib import Path
 from urllib.parse import quote
 
 from flask import g, has_request_context
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
 
 from hashpass.registry.attempt_store import is_live
 from hashpass.registry.reference import normalise as _norm_cmd
@@ -19,6 +21,43 @@ _env = Environment(loader=FileSystemLoader(str(_TEMPLATES)),
                    trim_blocks=False, lstrip_blocks=False)
 # Who is looking (set by the server per request): the nav shows admin-only pages to the admin only.
 _env.globals["viewer_is_admin"] = lambda: bool(getattr(g, "hp_admin", False)) if has_request_context() else False
+# The viewer's time zone from their settings ("" = the browser's): static/time.js renders every
+# <time class='ts'> in it.
+_env.globals["viewer_tz"] = lambda: str(getattr(g, "hp_tz", "")) if has_request_context() else ""
+
+
+def _epoch(value: object) -> float | None:
+    """Convert a stored moment -- epoch seconds or an ISO `YYYY-MM-DDTHH:MM:SSZ` -- to epoch seconds."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value:
+        try:
+            return float(calendar.timegm(time.strptime(value, "%Y-%m-%dT%H:%M:%SZ")))
+        except ValueError:
+            return None
+    return None
+
+
+def ts_html(value: object) -> Markup | str:
+    """
+    One moment for a page: `<time class='ts' datetime=UTC>` with a UTC fallback text.
+
+    The page shows it in the viewer's zone (settings, else the browser's) -- static/time.js
+    rewrites the text; without JS the UTC time stays readable.
+    """
+    sec = _epoch(value)
+    if sec is None:
+        return "—"
+    iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(sec))
+    text = time.strftime("%d.%m.%Y %H:%M UTC", time.gmtime(sec))
+    return Markup(f"<time class='ts' datetime='{iso}'>{text}</time>")  # noqa: S704  (no user text)
+
+
+_env.globals["ts"] = ts_html
+_env.filters["q"] = lambda v: quote(str(v), safe="")
+_env.filters["ref_url"] = lambda v: quote(str(v), safe="/:")
 
 
 _INSTALL_TEMPLATE = """\
@@ -233,10 +272,8 @@ def render_login(error: str = "", *, signed_in: str = "", role: str = "") -> str
 
 
 def render_password_form(error: str = "", *, done: bool = False) -> str:
-    """Change-own-password form (for a logged-in author/admin)."""
-    return _env.get_template("password.html.j2").render(
-        title="Пароль — hashpass", nav=True, active="",
-        error=error, done=done, hint=_PW_HINT)
+    """Change-own-password form alone (the settings page without the time-zone card)."""
+    return render_settings(tz="", zones=[], error=error, done="Пароль изменён." if done else "")
 
 
 def render_reset_form(token: str, error: str = "") -> str:
@@ -266,22 +303,25 @@ def _cell(user: str, ref: str, record: dict | None, summary: dict | None = None)
         verdict = ((record or {}).get("authenticity") or {}).get("verdict")
         pasted = verdict == "pasted"
         return {"mark": "✓⚠" if pasted else "✓", "cls": "c no" if pasted else "c ok",
-                "href": href, "title": "зачтено" + (" (вставки)" if pasted else "")}
+                "href": href, "title": "зачтено" + (" (вставки)" if pasted else ""),
+                "rank": 2 if pasted else 3}
     if status == "failed" or summary.get("sessions"):
         live = bool(summary.get("live"))
         return {"mark": "◐", "cls": "c run live" if live else "c run", "href": href,
-                "title": "выполняется — сейчас решает" if live else "выполняется"}
-    return {"mark": "", "cls": "c", "href": "", "title": "не выполнялось"}
+                "title": "выполняется — сейчас решает" if live else "выполняется", "rank": 1}
+    return {"mark": "", "cls": "c", "href": "", "title": "не выполнялось", "rank": 0}
+
 
 
 _AUTHOR_GROUP = "authors"
 
 
 def _dashboard_group_of(profile: dict) -> str:
-    """Synthetic group for the dashboard: authors and admins go into a single `authors` bucket."""
-    if profile.get("role") in ("author", "admin"):
+    """Group on the dashboard: the user's own; authors/admins without one share `authors`."""
+    group = str(profile.get("group", ""))
+    if not group and profile.get("role") in ("author", "admin"):
         return _AUTHOR_GROUP
-    return str(profile.get("group", ""))
+    return group
 
 
 def render_dashboard(profiles: list[dict], entries: list[dict],
@@ -304,7 +344,7 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
         cells = [_cell(user, str(e["ref"]), done.get(str(e["ref"])), seen.get(str(e["ref"])))
                  for e in entries]
         passed = sum(1 for c in cells if c["mark"].startswith("✓"))
-        rows.append({"user": user, "group": p["_dash_group"],
+        rows.append({"user": user, "user_q": quote(user, safe=""), "group": p["_dash_group"],
                      "comment": str(p.get("comment", "")),
                      "passed": passed, "total": len(entries), "cells": cells})
     return _env.get_template("dashboard.html.j2").render(
@@ -332,8 +372,7 @@ _OUTCOMES = {"passed": "зачтено", "abandoned": "вышел", "failed": "�
 def _session_view(rec: dict, ref_set: set[str], now: float | None) -> dict:
     """One console session for the history page: when, how long, outcome, commands."""
     started, updated = rec.get("started"), rec.get("updated")
-    when = (time.strftime("%d.%m %H:%M", time.localtime(float(started)))
-            if isinstance(started, (int, float)) else "")
+    when = ts_html(started) if isinstance(started, (int, float)) else ""
     mins = (int((float(updated) - float(started)) // 60)
             if isinstance(started, (int, float)) and isinstance(updated, (int, float)) else 0)
     live = is_live(rec, now)
@@ -372,6 +411,7 @@ def render_history(user: str, ref: str, record: dict,  # noqa: PLR0913
     return _env.get_template("history.html.j2").render(
         title="История — hashpass", nav=True, active="/web",
         user=user, ref=ref, status=str(record.get("status", "")),
+        user_q=quote(user, safe=""), ref_url=quote(ref, safe="/:"),
         total=total, typed=typed_n, pasted=pasted_n,
         matches=matches, extras=max(0, total - matches), has_ref=bool(ref_set),
         rows=[] if sessions else rows,
@@ -465,7 +505,8 @@ _ROLES = ("student", "author", "admin")
 def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "",
                  pool_auto: bool = False) -> str:
     """User management: per-user role change / reset link / delete, delete-group, registration toggle."""
-    rows = [{"user": str(p["user"]),
+    rows = [{"user": str(p["user"]), "user_q": quote(str(p["user"]), safe=""),
+             "created_at": p.get("created_at") or None,
              "group": str(p.get("group", "")),
              "role": str(p.get("role", "student")),
              "comment": str(p.get("comment", "")),
@@ -477,3 +518,66 @@ def render_users(profiles: list[dict], *, registration_open: bool, current_user:
         reg_label="открыта" if registration_open else "закрыта",
         toggle_to="false" if registration_open else "true",
         toggle_label="Закрыть регистрацию" if registration_open else "Открыть регистрацию")
+
+
+def _duration(seconds: float) -> str:
+    mins = int(seconds // 60)
+    if mins < 1:
+        return "< 1 мин"
+    return f"{mins // 60} ч {mins % 60} мин" if mins >= 60 else f"{mins} мин"  # noqa: PLR2004
+
+
+_STATUS_RU = {"✓": "зачтено", "✓⚠": "зачтено (вставки)", "◐": "выполняется", "": "не начато"}
+
+
+def _profile_row(user: str, number: object, ref: str, record: dict | None,
+                 recs: list[dict]) -> dict:
+    """One task on a profile: status, tries, time spent, last activity, credited at."""
+    summary = {"sessions": len(recs), "passed": any(r.get("final") == "passed" for r in recs),
+               "live": any(is_live(r) for r in recs)}
+    cell = _cell(user, ref, record, summary)
+    spent = sum(max(0.0, float(r.get("updated") or 0) - float(r.get("started") or 0))
+                for r in recs if isinstance(r.get("started"), (int, float)))
+    last = max([float(r.get("updated") or r.get("started") or 0) for r in recs] +
+               [_epoch((record or {}).get("ts")) or 0.0])
+    passed_at = ((record or {}).get("ts") if (record or {}).get("status") == "passed"
+                 else max((r.get("updated") for r in recs if r.get("final") == "passed"),
+                          default=None, key=lambda v: float(v or 0)))
+    return {"number": number if number is not None else "", "ref": ref,
+            "ref_url": quote(ref, safe="/:"), "cell": cell,
+            "status": _STATUS_RU.get(cell["mark"], ""), "tries": len(recs),
+            "spent": _duration(spent) if recs else "—", "spent_s": int(spent),
+            "last": last or None, "passed_at": passed_at,
+            "passed_s": _epoch(passed_at) or 0}
+
+
+def render_profile(profile: dict, entries: list[dict], progress: dict[str, dict],
+                   sessions: dict[str, list[dict]]) -> str:
+    """
+    One user's page: who they are + every catalog task with status, tries, time and links.
+
+    Tasks off the catalog that still carry progress (removed / renamed) are listed after it,
+    so nothing the student did disappears from view.
+    """
+    user = str(profile["user"])
+    refs = [str(e["ref"]) for e in entries]
+    rows = [_profile_row(user, e.get("number"), str(e["ref"]),
+                         progress.get(str(e["ref"])), list(sessions.get(str(e["ref"])) or []))
+            for e in entries]
+    extra = sorted((set(progress) | set(sessions)) - set(refs))
+    rows += [_profile_row(user, None, ref, progress.get(ref), list(sessions.get(ref) or []))
+             for ref in extra]
+    passed = sum(1 for r in rows[:len(entries)] if r["cell"]["mark"].startswith("✓"))
+    return _env.get_template("profile.html.j2").render(
+        title=f"{user} — hashpass", nav=True, active="/web",
+        p={"user": user, "role": str(profile.get("role", "")),
+           "group": str(profile.get("group", "")), "comment": str(profile.get("comment", "")),
+           "created_at": profile.get("created_at") or None},
+        rows=rows, passed=passed, total=len(entries), off_catalog=len(extra))
+
+
+def render_settings(*, tz: str, zones: list[str], error: str = "", done: str = "") -> str:
+    """Render the viewer's settings: time zone (default -- the browser's) and password change."""
+    return _env.get_template("password.html.j2").render(
+        title="Настройки — hashpass", nav=True, active="/web/settings",
+        tz=tz, zones=zones, error=error, done=done, hint=_PW_HINT, now=time.time())

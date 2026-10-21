@@ -1,0 +1,30 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<p class='crumb'><a href='/web'>← Прогресс</a>{% if viewer_is_admin() %} · <a href='/web/users'>← Пользователи</a>{% endif %}</p>
+<h1>{{ p.user }}</h1>
+<div class='flags'>
+<span class='pill {{ p.role }}'>{{ p.role }}</span>
+{% if p.group %}<a class='pill' href='/web?group={{ p.group|q }}'>{{ p.group }}</a>{% endif %}
+<span class='pill ok'>зачтено: {{ passed }}/{{ total }}</span>
+{% if p.created_at %}<span class='pill'>создан: {{ ts(p.created_at) }}</span>{% endif %}
+</div>
+{% if p.comment %}<p class='sub'>{{ p.comment }}</p>{% endif %}
+<h2>Прогресс по заданиям</h2>
+<p class='sub small'>Клик по названию — карточка задания, по статусу — история команд и попыток. Заголовки столбцов сортируют.</p>
+<table class='sortable'>
+<thead><tr><th>№</th><th>Задание</th><th>Статус</th><th>Попыток</th><th>Время в консоли</th><th>Последняя активность</th><th>Зачтено</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr><td class='c' data-sort='{{ r.number if r.number != "" else "" }}'>{{ r.number if r.number != "" else "вне каталога" }}</td>
+<td class='mono'><a href='/web/image/{{ r.ref_url }}'>{{ r.ref }}</a></td>
+<td class='{{ r.cell.cls }}' data-sort='{{ r.cell.rank }}'>{% if r.cell.href %}<a href='{{ r.cell.href }}' title='{{ r.cell.title }}'>{{ r.cell.mark }} {{ r.status }}</a>{% else %}<span class='dim'>· {{ r.status }}</span>{% endif %}</td>
+<td class='c'>{{ r.tries }}</td>
+<td class='c' data-sort='{{ r.spent_s }}'>{{ r.spent }}</td>
+<td data-sort='{{ (r.last or 0)|int }}'>{{ ts(r.last) }}</td>
+<td data-sort='{{ r.passed_s|int }}'>{{ ts(r.passed_at) }}</td></tr>
+{% else %}
+<tr><td colspan=7 class='dim'>каталог пуст</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

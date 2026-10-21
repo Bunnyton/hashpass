@@ -11,9 +11,9 @@
 </table>
 {% endmacro %}
 {% block main %}
-<p class='crumb'><a href='/web'>← Прогресс</a></p>
-<h1>История: {{ user }}</h1>
-<p class='sub'><span class='mono'>{{ ref }}</span>{% if solution %} — <span class='ok'>зачтено</span>{% elif attempts or rows %} — <span class='run'>выполняется</span>{% endif %}
+<p class='crumb'><a href='/web'>← Прогресс</a> · <a href='/web/user/{{ user_q }}'>← профиль {{ user }}</a></p>
+<h1>История: <a href='/web/user/{{ user_q }}'>{{ user }}</a></h1>
+<p class='sub'><a class='mono' href='/web/image/{{ ref_url }}'>{{ ref }}</a>{% if solution %} — <span class='ok'>зачтено</span>{% elif attempts or rows %} — <span class='run'>выполняется</span>{% endif %}
 {% if live %} <span class='pill warn live-dot'>● сейчас решает</span>{% endif %}</p>
 <div class='flags'>
 <span class='pill'>всего: {{ total }}</span>

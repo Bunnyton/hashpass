@@ -7,6 +7,7 @@ endpoints check the caller's role. It may be self-hosted as the pool; it must st
 at or used to touch the legacy server (no 185.x).
 """
 import contextlib
+import functools
 import hashlib
 import html
 import json
@@ -19,6 +20,7 @@ import tarfile
 import threading
 import time
 import uuid
+import zoneinfo
 from collections.abc import Callable, Iterable
 from http import HTTPStatus
 from pathlib import Path
@@ -60,9 +62,10 @@ from hashpass.registry.web import (
     render_image_card,
     render_install_script,
     render_login,
-    render_password_form,
+    render_profile,
     render_reset_form,
     render_reset_link,
+    render_settings,
     render_source_file,
     render_users,
 )
@@ -72,6 +75,12 @@ _BEARER = "Bearer "
 _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
 _USER_RE = LOGIN_RE  # safe as a login + a per-user progress filename
 _AUTHOR_ROLES = ("author", "admin")
+
+
+@functools.cache
+def _time_zones() -> list[str]:
+    """IANA zones a viewer may pick on the settings page (zone/city names, sorted)."""
+    return sorted(z for z in zoneinfo.available_timezones() if "/" in z and not z.startswith("Etc/"))
 _MAX_COMMENT = 500
 _MAX_REASON = 500                # a rejection reason, shown to the author
 _REJECTED_BLOCK = "rejected"     # the virtual block of rejected tasks (author + admin)
@@ -433,6 +442,11 @@ class PoolServer:
                          self._web_users_delete, methods=["POST"])
         app.add_url_rule("/web/users/delete-group", "web_users_delete_group",
                          self._web_users_delete_group, methods=["POST"])
+        app.add_url_rule("/web/user/<path:login>", "web_user_profile",
+                         self._web_user_profile, methods=["GET"])
+        app.add_url_rule("/web/settings", "web_settings", self._web_password_get, methods=["GET"])
+        app.add_url_rule("/web/settings/tz", "web_settings_tz",
+                         self._web_settings_tz, methods=["POST"])
         app.add_url_rule("/web/password", "web_password_get",
                          self._web_password_get, methods=["GET"])
         app.add_url_rule("/web/password", "web_password_post",
@@ -582,6 +596,7 @@ class PoolServer:
         if user is None or not self.users.has(user):
             return None
         g.hp_admin = self.users.role(user) == "admin"    # the nav shows admin pages to the admin only
+        g.hp_tz = str((self.users.get(user) or {}).get("tz", ""))   # pages show times in it
         return user
 
     def _session_role(self, roles: tuple[str, ...]) -> str | None:
@@ -1457,10 +1472,27 @@ class PoolServer:
     def _web_logout(self) -> Response:
         return self._redirect("/web/login", clear_cookie=True)
 
+    def _settings_page(self, user: str, *, error: str = "", done: str = "") -> Response:
+        tz = str((self.users.get(user) or {}).get("tz", ""))
+        return self._html(render_settings(tz=tz, zones=_time_zones(), error=error, done=done))
+
     def _web_password_get(self) -> Response:
-        if self._session_user() is None:
+        user = self._session_user()
+        if user is None:
             return self._redirect("/web/login")
-        return self._html(render_password_form())
+        return self._settings_page(user)
+
+    def _web_settings_tz(self) -> Response:
+        """Save the viewer's own time zone for the web pages ("" = the browser's)."""
+        user = self._session_user()
+        if user is None:
+            return self._redirect("/web/login")
+        tz = request.form.get("tz", "").strip()
+        if tz and tz not in _time_zones():
+            return self._settings_page(user, error="неизвестный часовой пояс")
+        self.users.set_tz(user, tz)
+        g.hp_tz = tz
+        return self._settings_page(user, done="Часовой пояс сохранён.")
 
     def _web_password_post(self) -> Response:
         user = self._session_user()
@@ -1468,15 +1500,28 @@ class PoolServer:
             return self._redirect("/web/login")
         new, confirm = request.form.get("new", ""), request.form.get("confirm", "")
         if not new or new != confirm:
-            return self._html(render_password_form("новые пароли пусты или не совпадают"))
+            return self._settings_page(user, error="новые пароли пусты или не совпадают")
         if not self.users.verify(user, request.form.get("old", "")):
-            return self._html(render_password_form("неверный текущий пароль"))
+            return self._settings_page(user, error="неверный текущий пароль")
         try:
             validate_password(new)
         except WeakPasswordError as exc:
-            return self._html(render_password_form(str(exc)))
+            return self._settings_page(user, error=str(exc))
         self.users.set_password(user, new)
-        return self._html(render_password_form(done=True))
+        return self._settings_page(user, done="Пароль изменён.")
+
+    def _web_user_profile(self, login: str) -> Response:
+        """One user's profile: every catalog task with status, tries, time -- authors/admins."""
+        if self._session_role(_AUTHOR_ROLES) is None:
+            return self._redirect("/web/login")
+        profile = self.users.get(login)
+        if profile is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        attempts = self.attempts()
+        attempts.prune(login)
+        return self._html(render_profile(
+            profile, [e.as_dict() for e in self.catalog().entries()],
+            self.progress().get(login), attempts.by_task(login)))
 
     def _web_reset_get(self) -> Response:
         token = request.args.get("token", "")
@@ -1519,7 +1564,7 @@ class PoolServer:
         if self.users.has(target):
             with contextlib.suppress(KeyError):
                 self.users.set_group(target, group)
-        return self._redirect("/web/users")
+        return self._inline_saved()
 
     def _web_users_comment(self) -> Response:
         actor = self._session_role(("admin",))
@@ -1530,6 +1575,12 @@ class PoolServer:
         if self.users.has(target):
             with contextlib.suppress(KeyError):
                 self.users.set_comment(target, comment)
+        return self._inline_saved()
+
+    def _inline_saved(self) -> Response:
+        """Answer an inline edit: 204 to the page's background save (`?bg=1`), else back to the list."""
+        if request.args.get("bg") == "1":
+            return self._empty(HTTPStatus.NO_CONTENT)
         return self._redirect("/web/users")
 
     def _web_users_registration(self) -> Response:

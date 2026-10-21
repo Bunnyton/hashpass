@@ -101,9 +101,9 @@ def _decoy_record() -> str:
 
 
 def _record(pw_hash: str, role: str, group: str, comment: str,  # noqa: PLR0913
-            created_at: float, *, auto_approve: bool = False) -> dict[str, object]:
+            created_at: float, *, auto_approve: bool = False, tz: str = "") -> dict[str, object]:
     return {"pw": pw_hash, "role": role, "group": group,
-            "comment": comment, "created_at": created_at, "auto_approve": auto_approve}
+            "comment": comment, "created_at": created_at, "auto_approve": auto_approve, "tz": tz}
 
 
 def _normalize(value: object) -> dict[str, object]:
@@ -113,7 +113,8 @@ def _normalize(value: object) -> dict[str, object]:
     v = value if isinstance(value, dict) else {}   # older records may carry a dropped full_name
     return _record(str(v.get("pw", "")), str(v.get("role", "student")),
                    str(v.get("group", "")), str(v.get("comment", "")),
-                   float(v.get("created_at", 0.0)), auto_approve=bool(v.get("auto_approve", False)))
+                   float(v.get("created_at", 0.0)), auto_approve=bool(v.get("auto_approve", False)),
+                   tz=str(v.get("tz", "")))
 
 
 class UserStore:
@@ -175,7 +176,7 @@ class UserStore:
             return None
         return {"user": user, "role": rec["role"], "group": rec["group"],
                 "comment": rec["comment"], "created_at": rec["created_at"],
-                "auto_approve": rec["auto_approve"]}
+                "auto_approve": rec["auto_approve"], "tz": rec["tz"]}
 
     def role(self, user: str) -> str | None:
         """Return the user's role, or None if unknown."""
@@ -216,6 +217,14 @@ class UserStore:
         if user not in users:
             raise KeyError(user)
         users[user]["comment"] = comment
+        self._save(users)
+
+    def set_tz(self, user: str, tz: str) -> None:
+        """Set the time zone the web shows times in for this user; "" = the browser's (KeyError if unknown)."""
+        users = self._load()
+        if user not in users:
+            raise KeyError(user)
+        users[user]["tz"] = tz
         self._save(users)
 
     def auto_approve(self, user: str) -> bool:

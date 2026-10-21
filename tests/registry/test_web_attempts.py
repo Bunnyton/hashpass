@@ -9,7 +9,7 @@ ENTRIES = [{"number": 1, "ref": "lab:1"}, {"number": 2, "ref": "lab:2"},
 
 
 def _cells(html: str) -> list[str]:
-    row = html[html.index("<td class='mono'>s1</td>"):]
+    row = html[html.index("<td class='mono'><a href='/web/user/s1'>s1</a></td>"):]
     row = row[:row.index("</tr>")]
     return [m for m in ("·", "◐", "✓") for _ in range(row.count(m))]
 

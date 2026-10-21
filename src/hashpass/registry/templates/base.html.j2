@@ -10,7 +10,7 @@
 <title>{{ title }}</title>
 {% block head %}{% endblock %}
 </head>
-<body>
+<body data-tz='{{ viewer_tz() }}'>
 {%- if nav %}
 <div class='nav'><span class='brand'><span class='logo'></span>hash<b>pass</b></span>
 <a href='/web'{% if active == '/web' %} class='on'{% endif %}>Прогресс</a>
@@ -18,7 +18,9 @@
 {%- if viewer_is_admin() %}
 <a href='/web/users'{% if active == '/web/users' %} class='on'{% endif %}>Пользователи</a>
 {%- endif %}
-<span class='sp'></span><a href='/web/password'>Пароль</a><a href='/web/logout'>Выход</a></div>
+<span class='sp'></span><a href='/web/settings'{% if active == '/web/settings' %} class='on'{% endif %}>Настройки</a><a href='/web/logout'>Выход</a></div>
 {%- endif %}
 <main>{% block main %}{% endblock %}</main>
+<script src='/static/time.js'></script>
+<script src='/static/sort.js'></script>
 </body></html>

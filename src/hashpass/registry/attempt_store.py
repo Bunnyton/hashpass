@@ -173,6 +173,10 @@ class AttemptStore:
                     out.setdefault(str(rec["ref"]), []).append(rec)
         return out
 
+    def by_task(self, user: str) -> dict[str, list[dict[str, object]]]:
+        """Ref -> every stored session of the user (the profile page)."""
+        return self._all(user)
+
     def summary(self, user: str, *, now: float | None = None) -> dict[str, dict[str, object]]:
         """Ref -> {sessions, passed, live}: what the teacher's matrix needs (expired tries pruned)."""
         self.prune(user, now=now)

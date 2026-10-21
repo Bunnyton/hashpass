@@ -23,23 +23,26 @@
 </form></div>
 <h2>Все пользователи</h2>
 <p class='sub small'>Группа и комментарий редактируются кликом по ячейке (Enter/уход из поля — сохраняет). Не отображаются студентам.</p>
-<table class='wide'>
-<tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th><th>Изменить роль</th><th>Авто-одобрение</th><th>Пароль</th><th>Удалить</th></tr>
+<p class='sub small'>Клик по заголовку столбца — сортировка (повторный — в обратную сторону). Логин открывает профиль с прогрессом.</p>
+<table class='wide sortable'>
+<thead><tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th><th>Создан</th><th data-nosort>Изменить роль</th><th>Авто-одобрение</th><th data-nosort>Пароль</th><th data-nosort>Удалить</th></tr></thead>
+<tbody>
 {% if rows %}{% for r in rows %}
-<tr><td class='mono'>{{ r.user }}</td>
+<tr><td class='mono'><a href='/web/user/{{ r.user_q }}'>{{ r.user }}</a></td>
 <td>
 <form class='inline user-edit' method='post' action='/web/users/group'>
 <input type='hidden' name='user' value='{{ r.user }}'>
 <input name='group' value='{{ r.group }}' placeholder='—' class='inline-edit' style='width:9em' maxlength='64'>
 </form>
 </td>
-<td><span class='pill {{ r.role }}'>{{ r.role }}</span></td>
+<td data-sort='{{ {'admin': 'a', 'author': 'b', 'student': 'c'}.get(r.role, r.role) }}'><span class='pill {{ r.role }}'>{{ r.role }}</span></td>
 <td>
 <form class='inline user-edit' method='post' action='/web/users/comment'>
 <input type='hidden' name='user' value='{{ r.user }}'>
 <input name='comment' value='{{ r.comment }}' placeholder='—' class='inline-edit' style='width:14em' maxlength='500'>
 </form>
 </td>
+<td class='small' data-sort='{{ (r.created_at or 0)|int }}'>{{ ts(r.created_at) }}</td>
 <td>{% if r.is_self %}<span class='dim'>вы</span>{% else %}
 <form class='inline row' method='post' action='/web/users/role'>
 <input type='hidden' name='user' value='{{ r.user }}'>
@@ -47,7 +50,7 @@
 <button class='sm' type='submit'>OK</button>
 </form>
 {% endif %}</td>
-<td>{% if r.role in ('author', 'admin') %}
+<td data-sort='{{ ('1' if r.auto_approve else '0') if r.role in ('author', 'admin') else '' }}'>{% if r.role in ('author', 'admin') %}
 <form class='inline' method='post' action='/web/users/auto-approve'>
 <input type='hidden' name='user' value='{{ r.user }}'>
 <input type='hidden' name='on' value='{{ '0' if r.auto_approve else '1' }}'>
@@ -64,7 +67,8 @@
 </form>
 {% endif %}</td>
 </tr>
-{% endfor %}{% else %}<tr><td colspan=7 class=dim>нет пользователей</td></tr>{% endif %}
+{% endfor %}{% else %}<tr><td colspan=9 class=dim>нет пользователей</td></tr>{% endif %}
+</tbody>
 </table>
 <script src='/static/users.js'></script>
 {% endblock %}

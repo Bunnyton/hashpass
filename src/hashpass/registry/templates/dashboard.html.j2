@@ -6,17 +6,19 @@
 <p>Группы: <a class='pill' href='/web'>все</a>
 {% for g in groups %} <a class='pill' href='/web?group={{ g }}'>{{ g }}</a>{% endfor %}</p>
 {% endif %}
-<table><tr><th>Логин</th><th>Группа</th><th>Комментарий</th><th>Σ</th>
-{% for e in entries %}<th title='{{ e.ref }}'>{{ e.ref.split(':')[0].split('/')[-1] }}</th>{% endfor %}
-</tr>
+<table class='sortable'><thead><tr><th>Логин</th><th>Группа</th><th>Комментарий</th><th>Σ</th>
+{% for e in entries %}<th title='{{ e.ref }}'><a href='/web/image/{{ e.ref|ref_url }}'>{{ e.ref.split(':')[0].split('/')[-1] }}</a></th>{% endfor %}
+</tr></thead>
+<tbody>
 {% if rows %}{% for r in rows %}
-<tr><td class='mono'>{{ r.user }}</td><td>{{ r.group }}</td><td>{{ r.comment }}</td><td class='c'>{{ r.passed }}/{{ r.total }}</td>
+<tr><td class='mono'><a href='/web/user/{{ r.user_q }}'>{{ r.user }}</a></td><td>{{ r.group }}</td><td>{{ r.comment }}</td><td class='c' data-sort='{{ r.passed }}'>{{ r.passed }}/{{ r.total }}</td>
 {% for c in r.cells %}
-{% if c.mark %}<td class='{{ c.cls }}'><a href='{{ c.href }}' title='{{ c.title }}'>{{ c.mark }}</a></td>{% else %}<td class='c dim' title='{{ c.title }}'>·</td>{% endif %}
+{% if c.mark %}<td class='{{ c.cls }}' data-sort='{{ c.rank }}'><a href='{{ c.href }}' title='{{ c.title }}'>{{ c.mark }}</a></td>{% else %}<td class='c dim' data-sort='0' title='{{ c.title }}'>·</td>{% endif %}
 {% endfor %}
 </tr>
 {% endfor %}{% else %}
 <tr><td colspan=99>нет студентов</td></tr>
 {% endif %}
+</tbody>
 </table>
 {% endblock %}
