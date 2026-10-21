@@ -147,7 +147,7 @@ def test_download_digest_mismatch_leaves_store_untouched(registry, tmp_path):
     before = dest.get(ref)
     dest.set_pool_digest(ref, "0" * 64)          # bogus local digest -> refresh legitimately re-fetches
     # Corrupt the served body: make the server's blob file differ from its published digest.
-    registry.store.blob_path(ref).write_bytes(b"garbage")
+    registry.store.blob_path(f"{ref}_v1").write_bytes(b"garbage")   # the revision the pool serves
     with pytest.raises(ValueError, match="digest mismatch"):
         anon.pull_many([ref], dest, refresh=True)
     after = dest.get(ref)
@@ -191,7 +191,7 @@ def test_pull_refuses_blob_declaring_another_ref(registry, tmp_path, via):
     _seed(other, tmp_path, "other", (), "EVIL")
     blob = pack_image_to_file(other.get("other:1"), tmp_path / "other.tar.gz")
     digest = hashlib.sha256(blob.read_bytes()).hexdigest()
-    registry.store.publish_blob("app", "1", blob, parents=(), digest=digest)
+    registry.store.publish_blob("app", "1_v1", blob, parents=(), digest=digest)   # the served revision
     dest = ImageStore(tmp_path / "dest")
     anon = RemoteRegistry(registry.base_url)
     def do_pull() -> list[str]:

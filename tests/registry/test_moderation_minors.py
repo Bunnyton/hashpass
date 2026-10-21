@@ -19,9 +19,9 @@ def test_closure_and_images_do_not_reveal_unapproved_tasks(registry, tmp_path):
     assert _http("GET", f"{base}/closure/bob/lab/1")[0] == HTTPStatus.NOT_FOUND
     assert _http("GET", f"{base}/closure/bob/lab/1", token=pool.tok["bob"])[0] == HTTPStatus.OK
     rows = json.loads(_http("GET", f"{base}/images", token=pool.tok["kid"])[2])["images"]
-    assert "bob/lab:1" not in [r["ref"] for r in rows]
+    assert not [r for r in rows if r["repo"] == "bob/lab"]
     rows = json.loads(_http("GET", f"{base}/images", token=pool.tok["bob"])[2])["images"]
-    assert "bob/lab:1" in [r["ref"] for r in rows]
+    assert [r["ref"] for r in rows if r["repo"] == "bob/lab"]
 
 
 @pytest.mark.tier2
@@ -58,24 +58,6 @@ def test_an_image_others_build_on_cannot_be_deleted(registry, tmp_path):
     RemoteRegistry(registry.base_url).push(child, "bob/next:1", token=pool.tok["bob"])
     status, _, body = _http("DELETE", f"{registry.base_url}/task/bob/lab/1", token=pool.tok["bob"])
     assert status == HTTPStatus.CONFLICT and "bob/next:1" in json.loads(body)["error"]
-
-
-@pytest.mark.tier2
-def test_a_failing_copy_of_the_approved_version_is_a_readable_error(registry, tmp_path, monkeypatch):
-    from hashpass.registry import approved  # noqa: PLC0415
-    pool = _Pool(registry, tmp_path)
-    pool.push("bob/lab", "v1")
-    pool.post("/catalog/approve", "root", {"ref": "bob/lab:1"})
-
-    def boom(*_a: object, **_k: object) -> str:
-        msg = "No space left on device"
-        raise OSError(msg)
-
-    monkeypatch.setattr(approved.ApprovedStore, "take", boom)
-    with pytest.raises(urllib.error.HTTPError) as exc:
-        pool.push("bob/lab", "v2")
-    assert exc.value.code == HTTPStatus.INTERNAL_SERVER_ERROR
-    assert "одобренную версию" in json.loads(exc.value.read())["error"]
 
 
 @pytest.mark.tier1

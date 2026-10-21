@@ -160,7 +160,7 @@ def test_put_accepts_root_owned_blob(registry):
     status, _body = _http("PUT", f"{registry.base_url}/image/rooty/1", data=buf.getvalue(), headers=auth)
     assert status == HTTPStatus.CREATED
     # Verify the image was stored (even without root ownership preservation)
-    assert registry.store.exists("rooty:1")
+    assert registry.store.exists("rooty:1_v1")
 
 
 def _author_token(registry) -> dict[str, str]:
@@ -188,7 +188,7 @@ def test_put_stores_blob_verbatim_and_serves_digest(registry, tmp_path):
     url = f"{registry.base_url}/image/img/1"
     status, _ = _http("PUT", url, data=blob, headers=auth)
     assert status == HTTPStatus.CREATED
-    assert registry.store.blob_path("img:1").read_bytes() == blob          # verbatim, not repacked
+    assert registry.store.blob_path("img:1_v1").read_bytes() == blob          # verbatim, not repacked
     assert not (registry.store.dir("img", "1") / "layer").exists()         # never unpacked
     status, headers = _head(url)
     assert status == HTTPStatus.OK and headers["X-Image-Digest"] == digest
@@ -219,7 +219,7 @@ def test_put_malformed_blob_keeps_previous_generation(registry, tmp_path):
     wrong = pack_image_to_file(local.get("img:1"), tmp_path / "wrong.tar.gz").read_bytes()
     assert _http("PUT", f"{registry.base_url}/image/other/1", data=wrong, headers=auth)[0] == HTTPStatus.BAD_REQUEST
     assert _head(url)[1]["X-Image-Digest"] == old_digest
-    assert registry.store.blob_path("img:1").read_bytes() == good
+    assert registry.store.blob_path("img:1_v1").read_bytes() == good
     assert not list(registry.store.dir("img", "1").glob("incoming-*.tmp"))  # temp files cleaned
     assert not list((registry.store.root / ".incoming").glob("*"))
     # a rejected PUT to a brand-new ref leaves no directory behind for it
@@ -254,7 +254,7 @@ def test_images_rows_carry_digest(registry, tmp_path):
     _seed(registry.store, tmp_path, "old", ())
     _status, body = _http("GET", f"{registry.base_url}/images", headers=auth)
     rows = {r["ref"]: r for r in json.loads(body)["images"]}
-    assert rows["img:1"]["digest"] == hashlib.sha256(blob).hexdigest()
+    assert rows["img:1_v1"]["digest"] == hashlib.sha256(blob).hexdigest()
     assert rows["old:1"]["digest"] is None
 
 
@@ -284,7 +284,7 @@ def test_receive_image_sweeps_tmp_on_client_disconnect(tmp_path):
             "/image/img/1", method="PUT", input_stream=io.BytesIO(partial),
             environ_overrides={"CONTENT_LENGTH": str(len(good) * 2)},
         ), pytest.raises(ClientDisconnected):
-            pool._receive_image("img", "1")  # noqa: SLF001  (exercising the private method directly)
+            pool._receive_image("img", "1", store)  # noqa: SLF001  (exercising the private method directly)
 
         assert not list(store.dir("img", "1").glob("incoming-*.tmp"))   # swept, not leaked
         assert not list((store.root / ".incoming").glob("*"))
@@ -330,7 +330,7 @@ def test_get_whose_blob_file_vanished_is_404(registry, tmp_path):
     url = f"{registry.base_url}/image/img/1"
     blob = pack_image_to_file(local.get("img:1"), tmp_path / "img.tar.gz").read_bytes()
     assert _http("PUT", url, data=blob, headers=auth)[0] == HTTPStatus.CREATED
-    registry.store.blob_path("img:1").unlink()              # meta still names it
+    registry.store.blob_path("img:1_v1").unlink()              # meta still names it
     status, headers, _body = _get(url)
     assert status == HTTPStatus.NOT_FOUND
     assert "X-Image-Digest" not in headers

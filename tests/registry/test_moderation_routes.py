@@ -183,8 +183,8 @@ def test_a_rejected_update_falls_back_to_the_approved_version_after_a_week(regis
     assert [r["ref"] for r in pool.catalog("kid")] == [ref]               # the purge keeps it
     row = next(r for r in pool.catalog("bob") if r["ref"] == ref)
     assert (row["state"], row.get("rejected", False)) == ("approved", False)
-    assert pool.task_marker(ref, "kid") == "v1"
-    assert pool.task_marker(ref, "bob") == "v1"                           # back to the approved
+    assert pool.task_marker(ref, "kid") == "v1"                           # students: the approved
+    assert pool.task_marker(ref, "bob") == "v2"     # revisions are immutable: the author keeps v2
 
 
 @pytest.mark.tier2

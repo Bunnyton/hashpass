@@ -151,8 +151,8 @@ def test_pool_images_lists_stored_refs(registry, tmp_path):
     _seed(local, tmp_path, "img", (), "I")
     c.push(local, "img:1", token=tok)
     rows = c.pool_images(token=tok)
-    assert {r["ref"] for r in rows} == {"img:1"}
-    assert rows[0]["kind"] == "image"
+    assert {r["ref"] for r in rows} == {"img:1_v1"}          # one row per revision
+    assert (rows[0]["kind"], rows[0]["tag"], rows[0]["latest"]) == ("image", "1", True)
 
 
 @pytest.mark.tier1

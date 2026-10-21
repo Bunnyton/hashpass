@@ -33,7 +33,6 @@ from werkzeug.wsgi import ClosingIterator
 
 from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
-from hashpass.registry.approved import ApprovedStore
 from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.attempt_store import AttemptStore, SeqMismatch
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
@@ -185,6 +184,12 @@ _LAYOUT_ADMIN_ONLY = ("раскладку каталога меняет толь
                      "добавляет/убирает через карточку")
 
 
+def _tag_ref(ref: str) -> str:
+    """Return a revision ref as its tag (`x:1_v3` -> `x:1`), for clients that predate revisions."""
+    name, _, version = ref.partition(":")
+    return f"{name}:{parse_version(version)[0]}"
+
+
 def _tree_digest(path: Path) -> str | None:
     """Content digest of a directory (paths + bytes), None if there is none."""
     return task_digest(path) if path.is_dir() else None
@@ -237,117 +242,105 @@ class PoolServer:
         return PoolSettings((self.catalog_path or (Path(self.store.root) / "catalog.json")).parent
                             / "pool-settings.json")
 
-    def approved(self) -> ApprovedStore:
-        """Open the copies of approved versions, served to students while an update waits."""
-        return ApprovedStore(Path(self.store.root) / "approved")
-
     def _fresh_for(self, user: str | None, name: str) -> bool:
         """Whether `user` gets a task's latest push: its author or an admin (others get the approved one)."""
         return user is not None and (self.users.role(user) == "admin" or _owner_of(name) == user)
 
-    def _approved_view(self, ref: str) -> str | None:
-        """
-        Which version of `ref` a non-author gets: "current", "copy" (the approved copy) or None.
-
-        A ref outside the catalog (a base image) is not moderated: current.
-        """
-        entry = self.catalog().find(ref)
-        if entry is None:                             # a base image: not moderated; a task -- not listed
-            try:
-                return None if (self.store.get(ref).layer.parent / "task").exists() else "current"
-            except KeyError:
-                return "current"
-        if not entry.approved_digest:
-            return None
-        if self._current_is_approved(entry):
-            return "current"
-        return "copy" if self._copy_is_approved(entry) else None
-
     def _image_digest(self, ref: str) -> str:
+        """Return the image digest of `ref` (a tag means its newest revision); '' if there is none."""
+        name, _, version = ref.partition(":")
+        live = self.resolve(name, version or "latest")
         try:
-            return self.store.get(ref).digest or ""
+            return (self.store.get(live).digest or "") if live else ""
         except KeyError:
             return ""
 
-    def _current_is_approved(self, entry: CatalogEntry) -> bool:
-        """Tell whether the version on the pool is the approved one: task AND image (review 2026-10-14)."""
-        return (bool(entry.approved_digest) and entry.approved_digest == entry.digest
-                and (not entry.approved_image or entry.approved_image == self._image_digest(entry.ref)))
+    def _approved_rev(self, entry: CatalogEntry) -> str | None:
+        """
+        Return the revision students get for a catalogued tag.
 
-    def _copy_is_approved(self, entry: CatalogEntry) -> bool:
-        approved = self.approved()
-        return (approved.task_digest(entry.ref) == entry.approved_digest
-                and (not entry.approved_image or approved.digest(entry.ref) == entry.approved_image))
-
-    def _keep_approved(self, ref: str) -> None:
-        """Copy the approved version aside before a push overwrites it (students keep it)."""
-        entry = self.catalog().find(ref)
-        if (entry is None or not self.store.exists(ref) or not self._current_is_approved(entry)
-                or self._copy_is_approved(entry)):
-            return
-        img = self.store.get(ref)
-        image = self.approved().take(ref, img, img.layer.parent / "task", self.store,
-                                     task_digest=entry.approved_digest)
-        if not entry.approved_image:                     # a legacy entry learns its approved image
-            self.catalog().set_approved_image(ref, image)
-
-    def _keep_approved_or_error(self, ref: str) -> Response | None:
-        """Copy the approved version aside, or refuse the push with a readable reason (no bare 500)."""
-        try:
-            self._keep_approved(ref)
-        except (OSError, ValueError, tarfile.TarError) as exc:
-            return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {
-                "error": f"не удалось сохранить одобренную версию {ref}: {exc} — push не принят"})
+        The newest one holding the approved task (and the approved image, when one is pinned);
+        None if nothing was ever approved.
+        """
+        if not entry.approved_digest:
+            return None
+        name, _, tag = entry.ref.partition(":")
+        for rev in reversed(self.repo(name).revisions(tag)):
+            if rev.task_digest == entry.approved_digest and (
+                    not entry.approved_image or rev.image_digest == entry.approved_image):
+                ref = f"{name}:{revision_version(tag, rev.n)}"
+                return ref if self.store.exists(ref) else None
+        if self.store.exists(entry.ref) and entry.approved_digest == entry.digest:
+            return entry.ref                          # a pool not yet migrated to revisions
         return None
 
-    def _delete_task(self, ref: str) -> None:
-        """Remove a task from the pool entirely: image, task/, approved copy, sources, files, entry."""
+    def _view_revision(self, user: str | None, name: str, version: str) -> str | None:
+        """
+        Which stored revision `user` gets for `name:version`, or None (not found / not for them).
+
+        Its author and admins get what they ask for (a tag -> its newest revision); everyone else
+        gets the approved revision of a catalogued tag, any revision of a plain image (a base),
+        and nothing of a task outside the catalog.
+        """
+        resolved = self.resolve(name, version)
+        if resolved is None:
+            return None
+        if self._fresh_for(user, name):
+            return resolved
+        tag, n, _latest = parse_version(version)
+        entry = self.catalog().find(f"{name}:{tag}")
+        if entry is None:
+            return None if (self.store.get(resolved).layer.parent / "task").exists() else resolved
+        approved = self._approved_rev(entry)
+        if n is not None:
+            return resolved if resolved == approved else None
+        return approved
+
+    def _live_ref(self, ref: str) -> str:
+        """Return a ref as stored: a tag -> its newest revision; anything unresolvable -> itself."""
         name, _, version = ref.partition(":")
+        return (self.resolve(name, version) if name and version else None) or ref
+
+    def _tag_revisions(self, ref_tag: str) -> list[str]:
+        """Every stored revision of a tag (plus an unmigrated record under the tag itself)."""
+        name, _, tag = ref_tag.partition(":")
+        refs = [f"{name}:{revision_version(tag, r.n)}" for r in self.repo(name).revisions(tag)]
+        if self.store.exists(ref_tag):
+            refs.append(ref_tag)
+        return refs
+
+    def _delete_task(self, ref: str) -> None:
+        """Remove a tag from the pool entirely: every revision (blob, task/, sources, files) + entry."""
+        name, _, tag = ref.partition(":")
         self.catalog().remove_task(ref)
-        self.approved().remove(ref)
-        self.sources().remove(ref)
-        with contextlib.suppress(ValueError, OSError):
-            shutil.rmtree(self.attachments().ref_path(ref), ignore_errors=True)
-        with contextlib.suppress(ValueError, OSError):
-            shutil.rmtree(self.store.dir(name, version), ignore_errors=True)
+        revisions = self._tag_revisions(ref)
+        with self.repo(name).locked() as idx:
+            for rev in idx.revisions(tag):
+                idx.remove(tag, rev.n)
+        for rev_ref in revisions:
+            r_name, _, r_version = rev_ref.partition(":")
+            self.sources().remove(rev_ref)
+            with contextlib.suppress(ValueError, OSError):
+                shutil.rmtree(self.attachments().ref_path(rev_ref), ignore_errors=True)
+            with contextlib.suppress(ValueError, OSError):
+                shutil.rmtree(self.store.dir(r_name, r_version), ignore_errors=True)
 
     def _purge_rejected(self) -> None:
         """
-        Settle rejections a week old: a never-approved task is deleted, an approved one goes back.
+        Settle rejections a week old: a never-approved task leaves the catalog, an approved one goes back.
 
         Spec: «хранятся неделю, потом удаляются»; review 2026-10-14: a rejected UPDATE of a course
         task must not take the task away from students -- the task returns to its approved version.
+        The revisions themselves stay (immutable); only the catalog changes.
         """
         now = time.time()
         for ref in self.catalog().expired_rejected(now):
-            self._restore_approved(ref)
+            entry = self.catalog().find(ref)
+            approved = self._approved_rev(entry) if entry else None
+            image = (self.store.get(approved).digest or "") if approved else ""
+            self.catalog().restore_approved(ref, entry.approved_image if entry and entry.approved_image else image)
         for ref in self.catalog().purge_rejected(now):
-            self._delete_task(ref)
-
-    def _restore_approved(self, ref: str) -> None:
-        """Put the approved copy back as the task's current version (image + task/)."""
-        entry = self.catalog().find(ref)
-        if entry is None:
-            return
-        approved = self.approved()
-        image = entry.approved_image or self._image_digest(ref)
-        if not self._current_is_approved(entry) and self._copy_is_approved(entry):
-            name, _, version = ref.partition(":")
-            blob, copy_task = approved.blob(ref), approved.task_dir(ref)
-            if blob is not None:
-                incoming = Path(self.store.root) / ".incoming"
-                incoming.mkdir(parents=True, exist_ok=True)
-                tmp = incoming / f"{uuid.uuid4().hex}.tmp"
-                shutil.copyfile(blob, tmp)
-                image = approved.digest(ref) or image
-                self.store.publish_blob(name, version, tmp, parents=approved.parents(ref), digest=image)
-                tmp.unlink(missing_ok=True)
-            if copy_task is not None:
-                task_dir = self.store.get(ref).layer.parent / "task"
-                shutil.rmtree(task_dir, ignore_errors=True)
-                shutil.copytree(copy_task, task_dir, symlinks=True)
-            approved.remove(ref)
-        self.catalog().restore_approved(ref, image)
+            self.catalog().remove_task(ref)
 
     def _auto_approved(self, name: str) -> bool:
         """Whether a push of `name` approves itself: the pool's switch or its author's flag."""
@@ -810,7 +803,6 @@ class PoolServer:
                 "error": f"{ref} перезалили, пока вы его смотрели — обновите каталог и проверьте снова"})
         if self.catalog().approve(ref, image=self._image_digest(ref)) is None:
             return self._not_found(ref)
-        self.approved().remove(ref)                       # the current version IS the approved one
         return self._json(HTTPStatus.OK, {"ref": ref, "state": "approved"})
 
     def _route_catalog_reject(self) -> Response:
@@ -1043,21 +1035,29 @@ class PoolServer:
         return self._json(HTTPStatus.OK, {"progress": payload})
 
     def _pool_image_rows(self) -> list[dict[str, object]]:
+        """One row per stored revision: its tag's catalog place, description, digest, newest-or-not."""
         entries = {e.ref: e for e in self.catalog().entries()}
         att = self.attachments()
+        newest: dict[str, str] = {}
         rows: list[dict[str, object]] = []
         for ref in self.store.list():
             img = self.store.get(ref)
+            name, _, version = ref.partition(":")
+            tag, n, _latest = parse_version(version)
             is_task = (img.layer.parent / "task").exists()
-            entry = entries.get(ref)
+            entry = entries.get(f"{name}:{tag}")
             info = att.describe(ref)
-            rows.append({"ref": ref, "kind": "task" if is_task else "image",
+            newest.setdefault(f"{name}:{tag}", self.resolve(name, tag) or ref)
+            rows.append({"ref": ref, "repo": name, "tag": tag, "n": n,
+                         "kind": "task" if is_task else "image",
                          "number": entry.number if entry else None,
                          "block_id": entry.block_id if entry else None,
                          "block_name": entry.block_name if entry else "",
                          "available": entry.available if entry else None,
                          "description": info["description"], "files": info["files"],
                          "digest": img.digest})
+        for row in rows:
+            row["latest"] = newest.get(f"{row['repo']}:{row['tag']}") == row["ref"]
         return rows
 
     def _route_images(self) -> Response:
@@ -1065,8 +1065,14 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         rows = self._pool_image_rows()
-        if self.users.role(user) not in _AUTHOR_ROLES:    # a student: images + open tasks only
-            rows = [r for r in rows if r["kind"] != "task" or r.get("available")]
+        if self.users.role(user) not in _AUTHOR_ROLES:
+            # a student: a catalogued tag only as its approved revision of an open task; other
+            # tags only as plain images (bases) -- never a task outside the catalog
+            entries = self.catalog().entries()
+            catalogued = {e.ref for e in entries}
+            served = {self._approved_rev(e) for e in entries if e.available}
+            rows = [r for r in rows if r["ref"] in served
+                    or (f"{r['repo']}:{r['tag']}" not in catalogued and r["kind"] != "task")]
         return self._json(HTTPStatus.OK, {"images": rows})
 
     # -- routes: blobs (image / task / closure / attachment) ----------------
@@ -1078,7 +1084,6 @@ class PoolServer:
         if parts is None:
             return self._empty(HTTPStatus.NOT_FOUND)
         name, version = parts
-        ref = f"{name}:{version}"
         if request.method == "PUT":
             user, err = self._authorize_write(name, version)
             if err is not None:
@@ -1090,41 +1095,22 @@ class PoolServer:
             if resp.status_code != HTTPStatus.CREATED or request.args.get("staging"):
                 return resp
             return self._legacy_commit(user, name, version, st)   # an old client: commit at once
-        return self._serve_image_for(name, ref)
+        return self._serve_image_for(name, version)
 
-    def _serve_image_for(self, name: str, ref: str) -> Response:
-        """HEAD/GET an image: the author/admin get the latest push, others the approved version."""
-        view = "current" if self._fresh_for(self._token_user(), name) else self._approved_view(ref)
-        if view is None:                             # never approved: not for others yet
+    def _serve_image_for(self, name: str, version: str) -> Response:
+        """HEAD/GET an image: the revision this caller gets (`_view_revision`), named in `X-Image-Ref`."""
+        ref = f"{name}:{version}"
+        served = self._view_revision(self._token_user(), name, version)
+        if served is None:
             return self._not_found_head(ref) if request.method == "HEAD" else self._not_found(ref)
-        if view == "copy":
-            return self._serve_approved_blob(ref)
         if request.method == "HEAD":
-            try:
-                img = self.store.get(ref)
-            except KeyError:
-                return self._not_found_head(ref)
+            img = self.store.get(served)
             resp = self._empty(HTTPStatus.OK)
             if img.digest:
                 resp.headers["X-Image-Digest"] = img.digest
-            return resp
-        return self._serve_image_blob(ref)
-
-    def _serve_approved_blob(self, ref: str) -> Response:
-        """HEAD/GET the approved copy's blob, with its own digest."""
-        approved = self.approved()
-        path, digest = approved.blob(ref), approved.digest(ref)
-        if path is None:
-            return self._empty(HTTPStatus.NOT_FOUND)
-        if request.method == "HEAD":
-            resp = self._empty(HTTPStatus.OK)
         else:
-            f = path.open("rb")
-            size = os.fstat(f.fileno()).st_size
-            resp = send_file(f, mimetype="application/octet-stream", conditional=False)
-            resp.content_length = size
-        if digest:
-            resp.headers["X-Image-Digest"] = digest
+            resp = self._serve_image_blob(served)
+        resp.headers["X-Image-Ref"] = served
         return resp
 
     def _serve_image_blob(self, ref: str) -> Response:
@@ -1215,10 +1201,11 @@ class PoolServer:
         _user, err = self._authorize_write(name, version)
         if err is not None:
             return err
-        if not self.store.exists(ref) and self.catalog().find(ref) is None:
+        revisions = self._tag_revisions(ref)
+        if not revisions and self.catalog().find(ref) is None:
             return self._not_found(ref)
-        dependents = [r for r in self.store.list()
-                      if r != ref and ref in self.store.get(r).parents]
+        dependents = [r for r in self.store.list() if r not in revisions
+                      and set(self.store.get(r).parents) & {*revisions, ref}]
         if dependents:
             return self._json(HTTPStatus.CONFLICT, {
                 "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их"})
@@ -1246,21 +1233,20 @@ class PoolServer:
         return self._empty(HTTPStatus.CREATED) if resp.status_code < HTTPStatus.BAD_REQUEST else resp
 
     def _task_get(self, name: str, version: str) -> Response:
-        """Send a task's grader (never public): the latest to its author/admin, the approved one to others."""
+        """Send a task's grader (never public) of the revision this caller gets."""
         ref = f"{name}:{version}"
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
-        if not self.store.exists(ref):
+        served = self._view_revision(user, name, version)
+        if served is None:
             return self._not_found(ref)
-        view = "current" if self._fresh_for(user, name) else self._approved_view(ref)
-        if view is None:
-            return self._not_found(ref)
-        task_dir = (self.approved().task_dir(ref) if view == "copy"
-                    else self.store.get(ref).layer.parent / "task")
-        if task_dir is None or not task_dir.exists():
+        task_dir = self.store.get(served).layer.parent / "task"
+        if not task_dir.exists():
             return self._empty(HTTPStatus.NOT_FOUND)
-        return self._blob(HTTPStatus.OK, pack_task(task_dir))
+        resp = self._blob(HTTPStatus.OK, pack_task(task_dir))
+        resp.headers["X-Image-Ref"] = served
+        return resp
 
     # -- revisions: staging, commit (spec 2026-10-21 §2.3) -----------------
 
@@ -1366,8 +1352,10 @@ class PoolServer:
             latest = idx.latest(tag)
             latest_ref = f"{name}:{revision_version(tag, latest.n)}" if latest else None
             if not has_image and latest_ref is None:
+                if self.store.exists(ref_tag) and staged_task.is_dir():
+                    return self._commit_unmigrated(name, tag, st)
                 st.remove()
-                return self._json(HTTPStatus.BAD_REQUEST, {"error": f"нечего фиксировать: у {ref_tag} нет образа"})
+                return self._json(HTTPStatus.NOT_FOUND, {"error": f"нечего фиксировать: у {ref_tag} нет образа на пуле"})
             staged = st.images.get(ref_tag) if has_image else None
             image_digest = staged.digest if staged else latest.image_digest
             raw_parents = staged.parents if staged else latest.parents
@@ -1409,6 +1397,17 @@ class PoolServer:
         st.remove()
         self._catalog_on_commit(name, tag, t_digest, image_digest, intent)
         return self._json(HTTPStatus.CREATED, {"ref": ref, "n": n})
+
+    def _commit_unmigrated(self, name: str, tag: str, st: Staging) -> Response:
+        """Update a record stored before revisions (`name:tag` itself) with its task, in place."""
+        ref_tag = f"{name}:{tag}"
+        task_dir = self.store.get(ref_tag).layer.parent / "task"
+        shutil.rmtree(task_dir, ignore_errors=True)
+        shutil.move(st.images.dir(name, tag) / "task", task_dir)
+        intent = st.intent
+        st.remove()
+        self._catalog_on_commit(name, tag, task_digest(task_dir), self._image_digest(ref_tag), intent)
+        return self._json(HTTPStatus.CREATED, {"ref": ref_tag, "n": 0})
 
     def _assemble(self, st: Staging, name: str, tag: str, version: str,  # noqa: PLR0913, PLR0917
                   latest_ref: str | None, pinned: list[str], *, has_image: bool) -> None:
@@ -1453,26 +1452,30 @@ class PoolServer:
                                 block_name=(intent.get("block") or None) if intent.get("publish") else None)
 
     def _route_closure(self, tail: str) -> Response:
+        """
+        Return the `from` chain of the revision this caller gets, ancestors first.
+
+        `?revisions=1` (a revision-aware client): pinned revision refs + each one's parents. An old
+        client gets tag names (`x:1`), which it fetches one by one as before.
+        """
         parts = self._split_ref(tail)
         if parts is None:
             return self._empty(HTTPStatus.NOT_FOUND)
         name, version = parts
         ref = f"{name}:{version}"
-        view = "current" if self._fresh_for(self._token_user(), name) else self._approved_view(ref)
-        if view is None:
+        served = self._view_revision(self._token_user(), name, version)
+        if served is None:
             return self._not_found(ref)
-        if view == "copy":                            # the approved copy's own `from` chain
-            try:
-                refs = [r for p in self.approved().parents(ref) for r in closure_refs(p, self.store)]
-            except KeyError as exc:
-                return self._not_found(str(exc.args[0]) if exc.args else ref)
-            return self._json(HTTPStatus.OK, {"refs": [*dict.fromkeys(refs), ref]})
         try:
-            refs = closure_refs(f"{name}:{version}", self.store)
-        except KeyError as exc:                 # the ref itself OR one of its parents is missing
-            missing = str(exc.args[0]) if exc.args else f"{name}:{version}"
+            refs = closure_refs(served, self.store)
+        except KeyError as exc:                 # one of its parents is missing
+            missing = str(exc.args[0]) if exc.args else ref
             return self._not_found(missing)
-        return self._json(HTTPStatus.OK, {"refs": refs})
+        if request.args.get("revisions") == "1":
+            return self._json(HTTPStatus.OK, {"refs": refs, "parents": {
+                r: list(self.store.get(r).parents) for r in refs}})
+        legacy = [_tag_ref(r) for r in refs[:-1]] + [ref]
+        return self._json(HTTPStatus.OK, {"refs": list(dict.fromkeys(legacy))})
 
     def _route_attachment_put(self, tail: str) -> Response:
         parts = self._split_ref(tail)
@@ -1511,7 +1514,8 @@ class PoolServer:
             return self._empty(err)
         name, version = parts
         try:
-            blob = self.attachments().read_file(f"{name}:{version}", request.args.get("name", ""))
+            blob = self.attachments().read_file(self._live_ref(f"{name}:{version}"),
+                                                request.args.get("name", ""))
         except (ValueError, FileNotFoundError, OSError):
             return self._empty(HTTPStatus.NOT_FOUND)
         return Response(blob, status=HTTPStatus.OK, mimetype="application/octet-stream")
@@ -1543,7 +1547,7 @@ class PoolServer:
             except (ValueError, OSError, tarfile.TarError):
                 return self._empty(HTTPStatus.BAD_REQUEST)
             return self._empty(HTTPStatus.CREATED)
-        return self._source_get(ref)
+        return self._source_get(self._live_ref(ref))
 
     def _source_get(self, ref: str) -> Response:
         """GET a task's sources: listing, one file (`?path=`) or the archive (`?archive=1`)."""
@@ -1611,12 +1615,13 @@ class PoolServer:
     def _web_image_card(self, ref: str) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
+        ref = self._live_ref(ref)
         if not self.store.exists(ref):
             return self._web_not_found(ref)
         row = next((r for r in self._pool_image_rows() if r["ref"] == ref), None)
         if row is None:
             return self._empty(HTTPStatus.NOT_FOUND)
-        entry = self.catalog().find(ref)
+        entry = self.catalog().find(_tag_ref(ref))
         row = {**row, "hidden": entry.hidden if entry else False,
                "sources": self.sources().listing(ref) if self._sources_ready(ref) else [],
                **({"state": entry.state, "reason": entry.reason,
@@ -1631,7 +1636,7 @@ class PoolServer:
         """
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
-        ref, path = request.args.get("ref", ""), request.args.get("path", "").strip("/")
+        ref, path = self._live_ref(request.args.get("ref", "")), request.args.get("path", "").strip("/")
         if not self._sources_ready(ref):
             return self._empty(HTTPStatus.NOT_FOUND)
         listing = self.sources().listing(ref)
@@ -1660,7 +1665,7 @@ class PoolServer:
         """Send the task's sources as one tar.gz download -- authors/admins."""
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
-        ref = request.args.get("ref", "")
+        ref = self._live_ref(request.args.get("ref", ""))
         try:
             blob = self.sources().archive(ref)
         except (ValueError, FileNotFoundError, OSError):
@@ -1920,7 +1925,7 @@ class PoolServer:
         user = self._session_role(_AUTHOR_ROLES)
         if user is None:
             return self._redirect("/web/login")
-        ref = request.form.get("ref", "")
+        ref = self._live_ref(request.form.get("ref", ""))
         name = ref.partition(":")[0]
         if ref and not self._may_write(user, name):
             return self._web_forbidden(name)
@@ -1936,7 +1941,7 @@ class PoolServer:
         user = self._session_role(_AUTHOR_ROLES)
         if user is None:
             return self._redirect("/web/login")
-        ref = request.form.get("ref", "")
+        ref = self._live_ref(request.form.get("ref", ""))
         if not ref or not self.store.exists(ref):
             return self._redirect("/web/images")
         name = ref.partition(":")[0]
@@ -1949,7 +1954,7 @@ class PoolServer:
     def _web_image_file(self) -> Response:
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
-        ref, name = request.args.get("ref", ""), request.args.get("name", "")
+        ref, name = self._live_ref(request.args.get("ref", "")), request.args.get("name", "")
         try:
             blob = self.attachments().read_file(ref, name)
             safe = safe_filename(name)
@@ -1963,7 +1968,7 @@ class PoolServer:
         user = self._session_role(_AUTHOR_ROLES)
         if user is None:
             return self._redirect("/web/login")
-        ref = request.form.get("ref", "")
+        ref = self._live_ref(request.form.get("ref", ""))
         if not ref or not self.store.exists(ref):
             return self._redirect("/web/images")
         name = ref.partition(":")[0]
@@ -1972,7 +1977,8 @@ class PoolServer:
         task_dir = self.store.get(ref).layer.parent / "task"
         if not task_dir.exists():   # only a task image (with a grader) can join the catalog
             return self._redirect("/web/images")
-        self.catalog().add_task(ref, task_digest(task_dir), auto=self._auto_approved(name),
+        self.catalog().add_task(_tag_ref(ref), task_digest(task_dir), auto=self._auto_approved(name),
+                                image=self.store.get(ref).digest or "",
                                 block_id=request.form.get("block_id") or None)
         return self._redirect("/web/images")
 
@@ -1980,12 +1986,12 @@ class PoolServer:
         user = self._session_role(_AUTHOR_ROLES)
         if user is None:
             return self._redirect("/web/login")
-        ref = request.form.get("ref", "")
-        if not ref or not self.store.exists(ref):
-            return self._redirect("/web/images")
+        ref = _tag_ref(request.form.get("ref", ""))
         name = ref.partition(":")[0]
-        if not self._may_write(user, name):
+        if ref and not self._may_write(user, name):
             return self._web_forbidden(name)
+        if not ref or self.catalog().find(ref) is None:
+            return self._redirect("/web/images")
         self.catalog().remove_task(ref)
         return self._redirect("/web/images")
 
@@ -1999,7 +2005,7 @@ class PoolServer:
         name = ref.partition(":")[0]
         if not self._may_write(user, name):
             return self._web_forbidden(name)
-        self.catalog().set_task_hidden(ref, hidden=request.form.get("hidden", "") == "1")
+        self.catalog().set_task_hidden(_tag_ref(ref), hidden=request.form.get("hidden", "") == "1")
         return self._redirect("/web/images")
 
     def _web_catalog_layout(self) -> Response:

@@ -165,9 +165,9 @@ def test_commit_by_another_user_is_403(pool: _Pool) -> None:
 
 
 @pytest.mark.tier1
-def test_empty_first_commit_is_400(pool: _Pool) -> None:
+def test_empty_first_commit_is_404(pool: _Pool) -> None:
     sid = pool.begin("bob/lab", "1")[1]["staging"]
-    assert pool.commit("bob/lab", "1", sid)[0] == 400  # noqa: PLR2004
+    assert pool.commit("bob/lab", "1", sid)[0] == 404  # noqa: PLR2004
 
 
 @pytest.mark.tier1
