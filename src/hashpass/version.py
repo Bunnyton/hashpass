@@ -20,6 +20,7 @@ _LS_REMOTE_TIMEOUT = 15.0   # measured up to 5.7 s on a slow link; a timeout rea
 # The second try trusts exactly these hosts (the repo tarball + PyPI for the build backend).
 TRUSTED_HOSTS = ("github.com", "codeload.github.com", "pypi.org", "files.pythonhosted.org")
 _ARCHIVE_SHA = re.compile(r"/archive/([0-9a-f]{40})\.tar\.gz$")
+_ARCHIVE_ANY = re.compile(r"/archive/(?:refs/heads/)?([^/]+)\.tar\.gz$")
 
 
 def archive_url(commit: str) -> str:
@@ -34,7 +35,9 @@ def installed_commit() -> str | None:
     pip records the source in the dist-info's `direct_url.json`: the commit tarball URL
     (`…/archive/<sha>.tar.gz`, current installer) or `vcs_info` (older `git+…@main` installs).
     An editable/local install (a developer checkout) has neither -> None, so it is never
-    replaced behind the developer's back.
+    replaced behind the developer's back. A hand install from a branch tarball
+    (`…/archive/main.tar.gz`) names no commit: its branch name is returned, which never equals a
+    sha, so the next check reinstalls it by commit and from then on updates by commit.
     """
     try:
         info = json.loads(metadata.distribution("hashpass").read_text("direct_url.json") or "")
@@ -43,7 +46,7 @@ def installed_commit() -> str | None:
     url = str(info.get("url", ""))
     if _REPO.lower() not in url.lower():
         return None
-    if m := _ARCHIVE_SHA.search(url):
+    if m := _ARCHIVE_SHA.search(url) or _ARCHIVE_ANY.search(url):
         return m.group(1)
     vcs = info.get("vcs_info") or {}
     return str(vcs.get("commit_id") or "") or None

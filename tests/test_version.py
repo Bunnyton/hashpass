@@ -94,6 +94,22 @@ def test_installed_commit_reads_archive_url(monkeypatch):
     assert version.installed_commit() == OLD
 
 
+@pytest.mark.tier1
+def test_branch_tarball_install_still_updates(monkeypatch):
+    """A hand install from `archive/main.tar.gz` names no commit: it is ours, so it must update."""
+    class _Dist:
+        def read_text(self, _name: str) -> str:
+            return ('{"url": "https://github.com/Bunnyton/hashpass/archive/main.tar.gz", '
+                    '"archive_info": {}}')
+
+    monkeypatch.setattr(version.metadata, "distribution", lambda _n: _Dist())
+    installed = []
+    monkeypatch.setattr(version, "_pip_install", lambda c: installed.append(c) or True)
+    assert check_and_update("hashengine", [], fetch=lambda: NEW, write=lambda _s: None,
+                            reexec=False) is True
+    assert installed == [NEW]                    # reinstalled by sha -> later checks compare commits
+
+
 class _Run:
     """Fake subprocess.run: fail the first `fail` pip installs with an SSL error, record the rest."""
 
