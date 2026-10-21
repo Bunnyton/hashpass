@@ -27,10 +27,10 @@ def test_full_login_push_pull_roundtrip(registry, tmp_path):
     cache = CredentialCache(tmp_path / "creds.json")
     client = RemoteRegistry(registry.base_url, cache=cache)
     client.login("dev", "s3cr3t")
-    assert client.push(local, "lab:1") == ["base:1", "tool:1", "lab:1"]
+    assert client.push(local, "lab:1") == ["base:1_v1", "tool:1_v1", "lab:1_v1"]   # revisions
 
     dest = ImageStore(tmp_path / "dest")
     pulled = RemoteRegistry(registry.base_url).pull("lab:1", dest)
-    assert pulled == ["base:1", "tool:1", "lab:1"]
+    assert pulled == ["base:1_v1", "tool:1_v1", "lab:1_v1"]
     assert (dest.get("lab:1").layer / "lab.txt").read_text(encoding="utf-8") == "L"
-    assert dest.get("tool:1").parents == ("base:1",)
+    assert dest.get("tool:1_v1").parents == ("base:1_v1",)              # pinned by the pool

@@ -94,3 +94,49 @@ def test_set_pool_digest_records_per_registry_and_write_meta_keeps_it(tmp_path):
     assert store.get(ref).pool_digests == {"a:1": "d1", "b:2": "d2"}
     store.save("bunnyton/debian", "trixie", src, ())               # a rebuild forgets them all
     assert store.get(ref).pool_digests == {} and store.get(ref).pool_digest is None
+
+
+@pytest.mark.tier1
+def test_alias_points_a_tag_at_a_pulled_revision(tmp_path):
+    """`pull x:1` stores `x:1_v2` and points `x:1` at it, like `docker pull` tags the image."""
+    store = ImageStore(tmp_path / "images")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "f").write_text("rev", encoding="utf-8")
+    store.save("bob/lab", "1_v2", src, ("bunnyton/debian:trixie_v1",))
+    store.set_alias("bob/lab:1", "bob/lab:1_v2")
+    assert store.exists("bob/lab:1")
+    img = store.get("bob/lab:1")
+    assert (img.version, img.parents) == ("1_v2", ("bunnyton/debian:trixie_v1",))
+    assert store.list() == ["bob/lab:1_v2"]                     # an alias is not an image
+    assert store.alias_of("bob/lab:1") == "bob/lab:1_v2"
+
+
+@pytest.mark.tier1
+def test_a_local_build_takes_the_tag_back_from_the_alias(tmp_path):
+    store = ImageStore(tmp_path / "images")
+    src = tmp_path / "src"
+    src.mkdir()
+    store.save("bob/lab", "1_v2", src, ())
+    store.set_alias("bob/lab:1", "bob/lab:1_v2")
+    store.save("bob/lab", "1", src, ())                          # hashengine build
+    assert store.get("bob/lab:1").version == "1"
+    assert store.alias_of("bob/lab:1") is None
+
+
+@pytest.mark.tier1
+def test_an_alias_to_a_missing_revision_is_ignored(tmp_path):
+    store = ImageStore(tmp_path / "images")
+    store.set_alias("bob/lab:1", "bob/lab:1_v9")
+    assert not store.exists("bob/lab:1")
+
+
+@pytest.mark.tier1
+def test_a_pull_after_a_build_wins_the_tag(tmp_path):
+    store = ImageStore(tmp_path / "images")
+    src = tmp_path / "src"
+    src.mkdir()
+    store.save("bob/lab", "1", src, ())                          # the author's build
+    store.save("bob/lab", "1_v2", src, ())
+    store.set_alias("bob/lab:1", "bob/lab:1_v2")                 # then a pull
+    assert store.get("bob/lab:1").version == "1_v2"

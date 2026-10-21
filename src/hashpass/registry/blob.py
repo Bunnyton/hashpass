@@ -202,14 +202,21 @@ def _pack_via_sudo_tar(layer: Path, meta: bytes, dest: Path) -> None:
             )
 
 
-def unpack_image_file(path: Path, dest: ImageStore, *, sudo: bool | None = None) -> str:
+def unpack_image_file(path: Path, dest: ImageStore, *, sudo: bool | None = None,
+                      as_ref: str | None = None, parents: tuple[str, ...] | None = None) -> str:
     """
     Unpack a blob FILE into the store; return the stored `name:version` ref.
 
     `sudo=None` decides by the archive: root-owned/setuid members are extracted with
     `sudo tar` so ownership survives (Task 5); otherwise plain tarfile extraction as today.
+    `as_ref` / `parents` store it under the pool revision it was served as (`x:1_v3`) with the
+    pool's pinned parents, instead of what the blob itself declares (`x:1`, unpinned).
     """
     info = inspect_image_blob(path)
+    if as_ref is not None or parents is not None:
+        name, _, version = (as_ref or f"{info.name}:{info.version}").partition(":")
+        info = ImageBlobInfo(name, version, info.parents if parents is None else tuple(parents),
+                             info.needs_root)
     use_sudo = info.needs_root if sudo is None else sudo
     if use_sudo:
         return _unpack_root_owned(path, dest, info)

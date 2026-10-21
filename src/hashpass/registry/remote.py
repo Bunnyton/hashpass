@@ -33,6 +33,7 @@ from hashpass.registry.blob import (
 )
 from hashpass.registry.creds import CredentialCache
 from hashpass.registry.refs import closure_refs, normalize_ref, split_ref
+from hashpass.registry.revisions import parse_version
 from hashpass.registry.token import token_expiry
 
 _TIMEOUT = 30
@@ -99,6 +100,12 @@ class RemoteRegistry:
     # Downloads run in parallel (pull_many); the local unpack+meta write is serialized.
     _unpack_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False,
                                          compare=False)
+    # pinned parents of the revisions the last `/closure` named (a pool with revisions)
+    _closure_parents: dict[str, tuple[str, ...]] = field(default_factory=dict, init=False,
+                                                         repr=False, compare=False)
+    # what the last `push` did per ref: {"ref": "x:1_v3", "n": 3, "unchanged": bool}
+    last_push: list[dict[str, object]] = field(default_factory=list, init=False, repr=False,
+                                               compare=False)
 
     def _bases(self) -> list[str]:
         """
@@ -350,13 +357,19 @@ class RemoteRegistry:
             digest = self.download_image(item, path, on_bytes=on_bytes)   # network (parallel)
             info = inspect_image_blob(path)                   # structure only, no extraction
             declared, requested = f"{info.name}:{info.version}", normalize_ref(item)
-            if declared != requested:
+            req_name, _, req_version = requested.partition(":")
+            is_revision = parse_version(req_version)[1] is not None
+            # a revision's blob declares its repository and the tag it was pushed as (a `tag` or
+            # a fork may name another one); anything else must declare exactly what was asked
+            if (info.name != req_name) if is_revision else (declared != requested):
                 msg = f"pool served {declared} for {requested}"
                 raise ValueError(msg)
             with self._unpack_lock:                           # local unpack, serialized
                 if not refresh and store.exists(item):
                     return False
-                unpack_image_file(path, store, sudo=(True if self.sudo else None))
+                unpack_image_file(path, store, sudo=(True if self.sudo else None),
+                                  as_ref=requested if is_revision else None,
+                                  parents=self._closure_parents.get(requested))
                 if digest:
                     store.set_pool_digest(item, digest, registry=self.base_url)
             return True
@@ -364,11 +377,26 @@ class RemoteRegistry:
             path.unlink(missing_ok=True)
 
     def pull(self, ref: str, store: ImageStore, *, refresh: bool = False) -> list[str]:
-        """Pull ref + its `from` closure (bottom-up), skipping refs already local (unless stale)."""
+        """
+        Pull ref + its `from` closure (bottom-up), skipping refs already local (unless stale).
+
+        A pool with revisions serves `x:1` as `x:1_v3`: it is stored under that name, and `x:1`
+        becomes a local alias of it (like `docker pull` tags the image it fetched).
+        """
+        closure = self._closure(normalize_ref(ref))
         # sequential and in closure order: each item is checked and fetched before the next
-        return [item for item in self._closure(normalize_ref(ref))
-                if self._wants(item, store, refresh=refresh)
-                and self._pull_one(item, store, refresh=True)]
+        got = [item for item in closure
+               if self._wants(item, store, refresh=refresh)
+               and self._pull_one(item, store, refresh=True)]
+        self._alias(store, ref, closure)
+        return got
+
+    @staticmethod
+    def _alias(store: ImageStore, ref: str, closure: list[str]) -> None:
+        """Point the requested tag at the revision the pool served for it."""
+        asked = normalize_ref(ref)
+        if closure and closure[-1] != asked and store.exists(closure[-1]):
+            store.set_alias(asked, closure[-1])
 
     def pull_many(self, refs: list[str], store: ImageStore, *, workers: int = 8,
                   refresh: bool = False, progress: Progress | None = None) -> list[str]:
@@ -380,13 +408,17 @@ class RemoteRegistry:
         """
         needed: list[str] = []
         seen: set[str] = set()
+        closures: dict[str, list[str]] = {}
         for ref in refs:
-            for item in self._closure(normalize_ref(ref)):
+            closures[ref] = self._closure(normalize_ref(ref))
+            for item in closures[ref]:
                 if item not in seen:
                     seen.add(item)
                     needed.append(item)
         to_fetch = [item for item in needed if self._wants(item, store, refresh=refresh)]
         if not to_fetch:
+            for ref, closure in closures.items():
+                self._alias(store, ref, closure)
             return []
         if progress is not None:
             for item in to_fetch:
@@ -395,6 +427,8 @@ class RemoteRegistry:
             stored = list(pool.map(
                 lambda item: self._pull_one(item, store, refresh=refresh, progress=progress),
                 to_fetch))
+        for ref, closure in closures.items():
+            self._alias(store, ref, closure)
         return [item for item, ok in zip(to_fetch, stored, strict=True) if ok]
 
     def _already_there(self, store: ImageStore, item: str) -> bool:
@@ -412,12 +446,67 @@ class RemoteRegistry:
         local = store.get(item).pool_digests.get(registry_key(self.base_url))
         return bool(local) and local == remote
 
-    def push(self, store: ImageStore, ref: str, *, token: str | None = None,
-             force: bool = False) -> list[str]:
-        # `force=True` uploads every layer regardless (e.g. to overwrite a generation pushed from
-        # another machine); otherwise only what the pool does not hold in THIS local generation.
-        """Push ref + its `from` closure (bottom-up); each blob is packed to disk and streamed."""
+    def begin(self, name: str, tag: str, *, token: str | None = None) -> str:
+        """Open a staging area on the pool for one revision of `name:tag`; return its id."""
+        return str(self._post_json(f"/revisions/{name}/{tag}", {}, token=self._auth_token(token))["staging"])
+
+    def commit(self, name: str, tag: str, staging: str, *, token: str | None = None) -> dict[str, object]:
+        """Commit a staging area: {"ref": "name:tag_vN", "n": N} (+ "unchanged": True)."""
+        return self._post_json(f"/revisions/{name}/{tag}/commit", {"staging": staging},
+                               token=self._auth_token(token))
+
+    def push(self, store: ImageStore, ref: str, *, token: str | None = None,  # noqa: PLR0913
+             force: bool = False, task_dir: Path | None = None, publish: bool = False,
+             block: str | None = None, extras: Callable[[str], None] | None = None) -> list[str]:
+        """
+        Push ref + its own `from` closure, bottom-up, each as one revision (spec 2026-10-21 §2.3).
+
+        Per own ref: open a staging area, upload the image (unless the pool already holds this
+        generation, or `force`), its `task/` (the target: `task_dir`; a parent: its own), and --
+        for the target -- `extras(staging)` (Taskfile, README, sources); then commit. Pool
+        revisions in the closure (`x:1_v2`, pulled) are not sent: the pool has them. Returns the
+        new revisions; `last_push` says what each ref became (`unchanged` when nothing differed).
+        A pool without revisions gets the old one-request-per-part push.
+        """
         auth = self._push_token(token)
+        self.last_push = []
+        made: list[str] = []
+        for item in closure_refs(ref, store):
+            name, version = split_ref(item)
+            if parse_version(version)[1] is not None:
+                continue                                   # a pool revision: already there
+            is_target = item == normalize_ref(ref)
+            try:
+                sid = self.begin(name, version, token=auth)
+            except urllib.error.HTTPError as exc:
+                if exc.code not in (HTTPStatus.NOT_FOUND, HTTPStatus.METHOD_NOT_ALLOWED):
+                    raise
+                return self._push_legacy(store, ref, auth, force=force, task_dir=task_dir,
+                                         publish=publish, block=block, extras=extras)
+            digest = None
+            if force or not self._already_there(store, item):
+                with tempfile.TemporaryDirectory() as td:
+                    blob = pack_image_to_file(store.get(item), Path(td) / "image.tar.gz")
+                    digest = self._put_image_file(name, version, blob, auth, staging=sid)
+            tdir = task_dir if is_target else store.get(item).layer.parent / "task"
+            if tdir is not None and tdir.is_dir():
+                self.push_task(tdir, name, version, publish=publish and is_target,
+                               block=block if is_target else None, token=auth, staging=sid)
+            if is_target and extras is not None:
+                extras(sid)
+            result = self.commit(name, version, sid, token=auth)
+            if digest:                    # remember what THIS pool now holds for this ref
+                store.set_pool_digest(item, digest, registry=self.base_url)
+            self.last_push.append({"ref": str(result.get("ref", item)), "n": result.get("n"),
+                                   "unchanged": bool(result.get("unchanged"))})
+            if not result.get("unchanged"):
+                made.append(str(result.get("ref", item)))
+        return made
+
+    def _push_legacy(self, store: ImageStore, ref: str, auth: str, *, force: bool,  # noqa: PLR0913
+                     task_dir: Path | None, publish: bool, block: str | None,
+                     extras: Callable[[str], None] | None) -> list[str]:
+        """Push to a pool that predates revisions: one PUT per image, then the task and files."""
         copied: list[str] = []
         for item in closure_refs(ref, store):
             if not force and self._already_there(store, item):
@@ -426,16 +515,24 @@ class RemoteRegistry:
             with tempfile.TemporaryDirectory() as td:
                 blob = pack_image_to_file(store.get(item), Path(td) / "image.tar.gz")
                 digest = self._put_image_file(name, version, blob, auth)
-            if digest:                      # remember what THIS pool now holds for this ref
+            if digest:
                 store.set_pool_digest(item, digest, registry=self.base_url)
             copied.append(item)
+        if extras is not None:
+            extras("")
+        if task_dir is not None and task_dir.is_dir() and publish:
+            name, version = split_ref(normalize_ref(ref))
+            self.push_task(task_dir, name, version, publish=True, block=block, token=auth)
+        self.last_push = [{"ref": item, "n": None, "unchanged": False} for item in copied]
         return copied
 
-    def _put_image_file(self, name: str, version: str, blob: Path, token: str) -> str | None:
+    def _put_image_file(self, name: str, version: str, blob: Path, token: str, *,
+                        staging: str = "") -> str | None:
         """PUT one packed blob; return the digest the pool assigned to it (None on old pools)."""
+        query = f"?staging={staging}" if staging else ""
         with blob.open("rb") as f:
             _body, headers = self._request(
-                "PUT", f"/image/{name}/{version}", data=f,
+                "PUT", f"/image/{name}/{version}{query}", data=f,
                 headers={"Authorization": f"Bearer {token}",
                          "Content-Type": "application/octet-stream",
                          "Content-Length": str(blob.stat().st_size)})
@@ -448,23 +545,31 @@ class RemoteRegistry:
 
     def push_task(self, task_dir: Path, name: str, version: str, *,  # noqa: PLR0913
                   publish: bool = False, block: str | None = None,
-                  token: str | None = None) -> None:
+                  token: str | None = None, staging: str = "") -> None:
         """
         Push a task's artifacts; with `publish`, also add it to the catalog -- hidden until shown.
 
-        `block` names the catalog block to publish into (created if missing).
+        `block` names the catalog block to publish into (created if missing); `staging` puts
+        them into an open staging area (committed by `commit`).
         """
-        query = ""
+        params: dict[str, str] = {}
+        if staging:
+            params["staging"] = staging
         if publish:
-            query = "?publish=1" + (f"&block={urllib.parse.quote(block)}" if block else "")
+            params["publish"] = "1"
+            if block:
+                params["block"] = block
+        query = ("?" + urllib.parse.urlencode(params)) if params else ""
         self._put_task(name, version, query, pack_task(task_dir), self._auth_token(token))
 
     def push_attachment(self, name: str, version: str, filename: str, blob: bytes, *,  # noqa: PLR0913
-                        taskfile: bool = False, token: str | None = None) -> None:
+                        taskfile: bool = False, token: str | None = None, staging: str = "") -> None:
         """Attach a file (e.g. the Taskfile) to an image's pool card (author-only)."""
         params = {"name": filename}
         if taskfile:
             params["taskfile"] = "1"
+        if staging:
+            params["staging"] = staging
         query = "?" + urllib.parse.urlencode(params)
         self._send("PUT", f"/attachment/{name}/{version}{query}", data=blob,
                    headers={"Authorization": f"Bearer {self._auth_token(token)}",
@@ -489,9 +594,11 @@ class RemoteRegistry:
         self._send("DELETE", f"/task/{name}/{version}",
                    headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}"})
 
-    def push_source(self, name: str, version: str, blob: bytes, *, token: str | None = None) -> None:
+    def push_source(self, name: str, version: str, blob: bytes, *, token: str | None = None,
+                    staging: str = "") -> None:
         """Send a task's sources (tar.gz of its directory); the pool keeps them as files."""
-        self._send("PUT", f"/source/{name}/{version}", data=blob,
+        query = f"?staging={staging}" if staging else ""
+        self._send("PUT", f"/source/{name}/{version}{query}", data=blob,
                    headers={"Authorization": f"Bearer {self._auth_token(token)}",
                             "Content-Type": "application/octet-stream"})
 
@@ -629,10 +736,14 @@ class RemoteRegistry:
     def _closure(self, ref: str) -> list[str]:
         name, version = split_ref(ref)
         try:
-            body = self._send("GET", f"/closure/{name}/{version}", headers=self._reader_headers())
+            body = self._send("GET", f"/closure/{name}/{version}?revisions=1",
+                              headers=self._reader_headers())
         except urllib.error.HTTPError as exc:
             err = _not_found_error(exc, ref)
             if err is None:
                 raise
             raise err from exc
-        return json.loads(body.decode("utf-8"))["refs"]
+        data = json.loads(body.decode("utf-8"))
+        for item, parents in (data.get("parents") or {}).items():
+            self._closure_parents[str(item)] = tuple(str(p) for p in parents)
+        return data["refs"]

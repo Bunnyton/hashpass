@@ -55,7 +55,7 @@ def test_ensure_base_pulls_from_pool_and_only_repulls_when_digest_changes(regist
     assert downloads == []
     _push_fake_base(registry, tmp_path, "v2")                             # author re-pushed the base
     assert (cli.ensure_base_image(env, store, pool=pool) / "marker.txt").read_text(encoding="utf-8") == "v2"
-    assert downloads == [ref]
+    assert downloads == [f"{ref}_v2"]                                     # the new revision
 
 
 @pytest.mark.tier2

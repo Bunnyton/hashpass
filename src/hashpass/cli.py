@@ -66,6 +66,7 @@ from hashpass.registry.passwords import (
 )
 from hashpass.registry.refs import split_ref
 from hashpass.registry.remote import RemoteRegistry
+from hashpass.registry.revisions import check_tag
 from hashpass.registry.server import make_server
 from hashpass.registry.token import token_user
 from hashpass.taskbuild import build_task
@@ -1603,7 +1604,7 @@ def unpack_task_source(blob: bytes, dest: Path) -> None:
         tar.extractall(dest, filter="data")
 
 
-def _attach_about(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> None:
+def _attach_about(client: RemoteRegistry, ref: str, task_dir: Path, io: Io, staging: str = "") -> None:
     """On push, attach the task's about.md: the pool shows it as the task's description."""
     about = task_dir / "about.md"
     if not about.is_file():
@@ -1611,14 +1612,14 @@ def _attach_about(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> N
         return
     name, version = split_ref(ref)
     try:
-        client.push_attachment(name, version, about.name, about.read_bytes())
+        client.push_attachment(name, version, about.name, about.read_bytes(), staging=staging)
     except (urllib.error.URLError, OSError, RuntimeError, ValueError) as exc:
         io.write(f"\x1b[33m⚠ не удалось приложить about.md: {exc}\x1b[0m\n")
         return
     io.write("\x1b[36m↑ описание\x1b[0m: about.md\n")
 
 
-def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> None:
+def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io, staging: str = "") -> None:
     """On push, upload the whole task dir so authors/admins can read the task as it was written."""
     name, version = split_ref(ref)
     try:
@@ -1628,11 +1629,11 @@ def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> 
                      f"больше {_SOURCE_MAX // 1024 // 1024} МиБ\x1b[0m\n")
             return
         try:
-            client.push_source(name, version, blob)            # kept as files on the pool
+            client.push_source(name, version, blob, staging=staging)   # kept as files on the pool
         except urllib.error.HTTPError as exc:
             if exc.code not in (HTTPStatus.NOT_FOUND, HTTPStatus.METHOD_NOT_ALLOWED):
                 raise
-            client.push_attachment(name, version, _SOURCE_NAME, blob)   # a pool before /source
+            client.push_attachment(name, version, _SOURCE_NAME, blob, staging=staging)   # a pool before /source
     except (urllib.error.URLError, OSError, RuntimeError, ValueError, tarfile.TarError) as exc:
         io.write(f"\x1b[33m⚠ не удалось приложить исходники задания: {exc}\x1b[0m\n")
         return
@@ -1640,7 +1641,8 @@ def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io) -> 
              f"(скачать: hashengine source {ref})\n")
 
 
-def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io) -> None:
+def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io,
+                     staging: str = "") -> None:
     """On push, upload the Taskfile the image remembers (so its solutions/interactivity are on the pool)."""
     if ref == base_ref():
         return   # the base has no Taskfile -- stay silent instead of "Taskfile не найден"
@@ -1654,13 +1656,14 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
         return
     name, version = split_ref(ref)
     try:
-        client.push_attachment(name, version, path.name, path.read_bytes(), taskfile=True)
+        client.push_attachment(name, version, path.name, path.read_bytes(), taskfile=True,
+                               staging=staging)
     except (urllib.error.URLError, OSError, RuntimeError, ValueError) as exc:
         io.write(f"\x1b[33m⚠ не удалось прикрепить Taskfile: {exc}\x1b[0m\n")
         return
     io.write(f"\x1b[36m↑ прикреплён Taskfile\x1b[0m: {path.name}\n")
-    _attach_about(client, ref, path.parent, io)
-    _attach_source(client, ref, path.parent, io)
+    _attach_about(client, ref, path.parent, io, staging)
+    _attach_source(client, ref, path.parent, io, staging)
 
 
 def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0913
@@ -1680,18 +1683,22 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
     store = ImageStore(env.images)
     if not store.exists(ref):                 # before any login prompt: nothing to push
         raise RuntimeError(_no_such_image(store, ref))
+    check_tag(split_ref(ref)[1])
+    tdir = task_dir(ref, store)
+    if publish and not tdir.exists():
+        msg = f"{ref} — не задание (нет артефактов task/); публиковать нечего"
+        raise ValueError(msg)
     url = _ensure_registry_login(env, registry, io)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
-    copied = _push_call(client.push, store, ref, force=force)
-    sys.stdout.write(f"отправлено {ref} (слоёв: {len(copied)})\n")
-    _attach_taskfile(client, store, ref, io)
+    _push_call(client.push, store, ref, force=force, task_dir=tdir if tdir.exists() else None,
+               publish=publish, block=block,
+               extras=lambda staging: _attach_taskfile(client, store, ref, io, staging))
+    for done in client.last_push:
+        if done["unchanged"]:
+            sys.stdout.write(f"без изменений: {done['ref']} уже на пуле\n")
+        else:
+            sys.stdout.write(f"отправлено {done['ref']}\n")
     if publish:
-        tdir = task_dir(ref, store)
-        if not tdir.exists():
-            msg = f"{ref} — не задание (нет артефактов task/); публиковать нечего"
-            raise ValueError(msg)
-        name, version = split_ref(ref)
-        _push_call(client.push_task, tdir, name, version, publish=True, block=block)
         where = f" (блок «{block}»)" if block else ""
         sys.stdout.write(f"опубликовано в каталог{where}: {ref} — студенты увидят эту версию, когда "
                          "её одобрит администратор (новое задание ещё и скрыто, пока вы его не "

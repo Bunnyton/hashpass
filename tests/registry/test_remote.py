@@ -58,15 +58,15 @@ def test_push_and_pull_closure_via_client(registry, tmp_path):
     cache = CredentialCache(tmp_path / "creds.json")
     pusher = RemoteRegistry(registry.base_url, cache=cache)
     pusher.login("alice", "pw-correct")
-    assert pusher.push(local, "app:1") == ["base:1", "app:1"]  # cached token reused
+    assert pusher.push(local, "app:1") == ["base:1_v1", "app:1_v1"]  # cached token reused
     assert pusher.push(local, "app:1") == []  # idempotent
 
     dest = ImageStore(tmp_path / "dest")
     anon = RemoteRegistry(registry.base_url)  # anonymous pull
-    assert anon.pull("app:1", dest) == ["base:1", "app:1"]
+    assert anon.pull("app:1", dest) == ["base:1_v1", "app:1_v1"]
     assert anon.pull("app:1", dest) == []  # idempotent
     assert (dest.get("app:1").layer / "marker.txt").read_text(encoding="utf-8") == "APP"
-    assert dest.get("app:1").parents == ("base:1",)
+    assert dest.get("app:1").parents == ("base:1_v1",)              # pinned by the pool
 
 
 @pytest.mark.tier2
@@ -80,11 +80,12 @@ def test_push_pull_namespaced_name(registry, tmp_path):
     cache = CredentialCache(tmp_path / "creds.json")
     pusher = RemoteRegistry(registry.base_url, cache=cache)
     pusher.login("alice", "pw-correct")
-    assert pusher.push(local, "alice/app:1") == ["base:1", "alice/app:1"]
+    assert pusher.push(local, "alice/app:1") == ["base:1_v1", "alice/app:1_v1"]
 
     dest = ImageStore(tmp_path / "dest")
-    assert RemoteRegistry(registry.base_url).pull("alice/app:1", dest) == ["base:1", "alice/app:1"]
-    assert dest.list() == ["alice/app:1", "base:1"]
+    assert RemoteRegistry(registry.base_url).pull("alice/app:1", dest) == ["base:1_v1", "alice/app:1_v1"]
+    assert dest.list() == ["alice/app:1_v1", "base:1_v1"]
+    assert dest.get("alice/app:1").version == "1_v1"                  # the tag aliases the revision
 
 
 @pytest.mark.tier2
@@ -116,7 +117,7 @@ def test_pull_records_pool_digest_and_refresh_repulls_only_when_changed(registry
     _pusher, ref = _push_seeded(registry, tmp_path, "app", "v1")
     anon = RemoteRegistry(registry.base_url)
     dest = ImageStore(tmp_path / "dest")
-    assert anon.pull_many([ref], dest) == [ref]
+    assert anon.pull_many([ref], dest) == [f"{ref}_v1"]
     d1 = anon.image_digest(ref)
     assert d1 and dest.get(ref).pool_digest == d1
     assert (dest.get(ref).layer / "marker.txt").read_text(encoding="utf-8") == "v1"
@@ -132,8 +133,7 @@ def test_pull_records_pool_digest_and_refresh_repulls_only_when_changed(registry
     assert calls == []                                                # no GET for an unchanged digest
     monkeypatch.setattr(RemoteRegistry, "download_image", original_download)
     _push_seeded(registry, tmp_path, "app", "v2")                      # author re-pushes :1
-    assert anon.pull_many([ref], dest) == []                          # legacy rule: present -> skip
-    assert anon.pull_many([ref], dest, refresh=True) == [ref]         # digest changed -> re-pull
+    assert anon.pull_many([ref], dest) == [f"{ref}_v2"]               # a new revision: fetched
     assert (dest.get(ref).layer / "marker.txt").read_text(encoding="utf-8") == "v2"
     assert dest.get(ref).pool_digest == anon.image_digest(ref) != d1
 
@@ -240,10 +240,10 @@ def test_push_skips_only_the_generation_this_pool_already_has(registry, tmp_path
     client = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / "creds.json"))
     client.login("alice", "pw-correct")
     ref = _seed(local, tmp_path, "task", (), "OLD")
-    assert client.push(local, ref) == [ref]
+    assert client.push(local, ref) == [f"{ref}_v1"]
     assert client.push(local, ref) == []                      # unchanged -> skipped
     _seed(local, tmp_path, "task", (), "NEW")                 # rebuilt, same version
-    assert client.push(local, ref) == [ref]                   # must go out without --force
+    assert client.push(local, ref) == [f"{ref}_v2"]           # must go out without --force
     dest = ImageStore(tmp_path / "dest")
     RemoteRegistry(registry.base_url).pull_many([ref], dest)
     assert (dest.get(ref).layer / "marker.txt").read_text(encoding="utf-8") == "NEW"
@@ -259,4 +259,25 @@ def test_push_replaces_a_legacy_record_without_a_digest(registry, tmp_path):
     client.push(local, ref)
     local.set_pool_digest(ref, "", registry=registry.base_url)   # as if pushed by an old client
     client.image_digest = lambda _r: None                         # the pool lists no digest
-    assert client.push(local, ref) == [ref]
+    client.push(local, ref)                                       # re-sent; same content
+    assert client.last_push == [{"ref": f"{ref}_v1", "n": 1, "unchanged": True}]
+
+
+@pytest.mark.tier2
+def test_push_to_a_pool_without_revisions_uses_the_old_requests(registry, tmp_path, monkeypatch):
+    """Prod before its upgrade has no /revisions: a new hashengine must still push there."""
+    import urllib.error  # noqa: PLC0415
+    registry.users.add("alice", "pw-correct", role="admin")
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "base", (), "BASE")
+    ref = _seed(local, tmp_path, "app", ("base:1",), "APP")
+    client = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / "creds.json"))
+    client.login("alice", "pw-correct")
+
+    def no_revisions(*_a: object, **_k: object) -> str:
+        url = "/revisions"
+        raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+
+    monkeypatch.setattr(RemoteRegistry, "begin", no_revisions)
+    assert client.push(local, ref) == ["base:1", "app:1"]      # one PUT per image, as before
+    assert RemoteRegistry(registry.base_url).has_image(ref)

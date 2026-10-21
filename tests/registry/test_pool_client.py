@@ -138,6 +138,6 @@ def test_pull_new_refreshes_a_re_pushed_task_image(registry, tmp_path):
     local.save("lab", "1", tmp_path / "src-lab", ())
     ac.push(local, "lab:1", token=atok, force=True)
     layers, tasks = cli.pull_new(env, registry.base_url, stok)
-    assert layers == 1 and tasks == 0                                     # image re-pulled by digest
+    assert layers == 1 and tasks == 1          # a new revision: its image and its task/ come down
     got = ImageStore(env.images).get("lab:1")
     assert (got.layer / "f").read_text(encoding="utf-8") == "changed"

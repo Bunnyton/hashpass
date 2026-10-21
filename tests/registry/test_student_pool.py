@@ -53,17 +53,17 @@ class _FakeClient:
     def __init__(self) -> None:
         self.calls: list = []
 
-    def push_attachment(self, name, version, filename, blob, *, taskfile=False, token=None) -> None:  # noqa: PLR0913, ARG002
+    def push_attachment(self, name, version, filename, blob, *, taskfile=False, token=None, staging="") -> None:  # noqa: PLR0913, ARG002
         self.calls.append((name, version, filename, blob, taskfile))
 
-    def push_source(self, name, version, blob, *, token=None) -> None:  # noqa: ARG002
+    def push_source(self, name, version, blob, *, token=None, staging="") -> None:  # noqa: ARG002
         self.calls.append((name, version, "<source>", blob, False))
 
 
 class _OldPoolClient(_FakeClient):
     """A pool without `/source` (before 2026-10-14): sources fall back to an attachment."""
 
-    def push_source(self, name, version, blob, *, token=None) -> None:  # noqa: ARG002
+    def push_source(self, name, version, blob, *, token=None, staging="") -> None:  # noqa: ARG002
         url = "/source"
         raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
 

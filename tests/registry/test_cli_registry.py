@@ -72,7 +72,7 @@ def test_login_push_pull_through_localhost(registry, tmp_path, monkeypatch):
     dest_home = tmp_path / "dest"
     dest_env = cli.build_env({"HASHPASS_HOME": str(dest_home)}, default_home=tmp_path)
     assert cli.cmd_pull(dest_env, "lab:1", registry.base_url) == 0
-    assert ImageStore(dest_env.images).list() == ["base:1", "lab:1"]
+    assert ImageStore(dest_env.images).list() == ["base:1_v1", "lab:1_v1"]
 
 
 @pytest.mark.tier1

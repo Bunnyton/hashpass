@@ -157,6 +157,51 @@ class ImageStore:
     def _dir(self, name: str, version: str) -> Path:
         return self._root / name / version
 
+    # -- aliases: a tag pointing at a pulled revision (`x:1` -> `x:1_v2`), like `docker pull` ----
+
+    def _aliases_path(self) -> Path:
+        return self._root / ".aliases.json"
+
+    def _aliases(self) -> dict[str, str]:
+        try:
+            data = json.loads(self._aliases_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+    def _write_aliases(self, data: dict[str, str]) -> None:
+        self._root.mkdir(parents=True, exist_ok=True)
+        _write_json_atomic(self._aliases_path(), data)
+
+    def set_alias(self, ref: str, target: str) -> None:
+        """Point `ref` at the stored `target` (a later build or save of `ref` takes it back)."""
+        data = self._aliases()
+        data[ref] = target
+        self._write_aliases(data)
+
+    def alias_of(self, ref: str) -> str | None:
+        """Return the revision `ref` points at, or None when it is not an alias."""
+        return self._aliases().get(ref)
+
+    def _drop_alias(self, name: str, version: str) -> None:
+        data = self._aliases()
+        if data.pop(f"{name}:{version}", None) is not None:
+            self._write_aliases(data)
+
+    def _resolve(self, name: str, version: str) -> tuple[str, str]:
+        """
+        Return the stored (name, version) a ref means: its alias target, else itself.
+
+        The last action wins: a pull sets the alias (over a local build of the same tag), a
+        build or save of the tag drops it again.
+        """
+        target = self._aliases().get(f"{name}:{version}")
+        if target:
+            t_name, t_version = _split_ref(target)
+            if (self._dir(t_name, t_version) / "meta.json").exists():
+                return t_name, t_version
+        return name, version
+
     def save(  # noqa: PLR0913
         self,
         name: str,
@@ -185,6 +230,7 @@ class ImageStore:
         """
         _check_name(name)
         _check_component("version", version)
+        self._drop_alias(name, version)
         dest = self._dir(name, version)
         layer = dest / "layer"
         dest.mkdir(parents=True, exist_ok=True)
@@ -236,7 +282,7 @@ class ImageStore:
             KeyError: If no image is stored under the reference.
 
         """
-        name, version = _split_ref(ref)
+        name, version = self._resolve(*_split_ref(ref))
         meta = self._read_meta(name, version)
         dest = self._dir(name, version)
         return StoredImage(name, version, dest / "layer", tuple(meta["parents"]),
@@ -247,7 +293,7 @@ class ImageStore:
 
     def set_taskfile_path(self, ref: str, taskfile_path: str) -> None:
         """Record (in meta.json) the Taskfile an image was built from, for push to attach later."""
-        name, version = _split_ref(ref)
+        name, version = self._resolve(*_split_ref(ref))
         meta_path = self._dir(name, version) / "meta.json"
         if not meta_path.exists():
             raise KeyError(ref)
@@ -260,8 +306,8 @@ class ImageStore:
         return similar_refs(self.list(), ref)
 
     def exists(self, ref: str) -> bool:
-        """Return whether an image is stored under the reference."""
-        name, version = _split_ref(ref)
+        """Return whether an image is stored under the reference (or under the revision it aliases)."""
+        name, version = self._resolve(*_split_ref(ref))
         return (self._dir(name, version) / "meta.json").exists()
 
     @staticmethod
@@ -375,6 +421,7 @@ class ImageStore:
                    build_key: str | None = None) -> None:
         """(Re)write a layer record's meta.json, keeping a previously recorded pool_digest."""
         self.validate_ref(name, version)
+        self._drop_alias(name, version)
         dest = self._dir(name, version)
         dest.mkdir(parents=True, exist_ok=True)
         old: dict = {}
@@ -397,7 +444,7 @@ class ImageStore:
         with `registry`, the digest is also remembered per pool under `registry_key(registry)`,
         so a push to the local registry never masquerades as the state of prod.
         """
-        name, version = _split_ref(ref)
+        name, version = self._resolve(*_split_ref(ref))
         meta = self._read_meta(name, version)          # KeyError if absent
         meta["pool_digest"] = digest
         if registry is not None:
