@@ -387,3 +387,24 @@ def test_apply_action_parse_and_meta_round_trip():
                      '  on enter apply rehide\n')
     assert r.stages[0].on_enter == (ApplyAction("rehide"),)
     assert _action_from_dict(_action_to_dict(ApplyAction("rehide"))) == ApplyAction("rehide")
+
+
+@pytest.mark.tier1
+def test_check_live_parses_a_shell_command_for_the_live_machine():
+    """`check live <cmd>`: the command runs in the student's LIVE machine (containers, services)."""
+    r = parse_recipe('image t:1\nstage\n  say "x"\n  solve docker run -d web\n'
+                     '  check live docker ps --format "{{.Image}}" | grep -qx web\n')
+    st = r.stages[0]
+    assert st.check is None
+    assert st.check_live == 'docker ps --format "{{.Image}}" | grep -qx web'
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("text", [
+    'image t:1\nstage\n  say "x"\n  solve true\n  check live true\n  check exec a.sh\n',
+    'image t:1\nstage\n  say "x"\n  solve true\n  check exec a.sh\n  check live true\n',
+    'image t:1\nstage\n  say "x"\n  solve true\n  check live\n',
+])
+def test_check_live_rejects_duplicates_and_empty(text):
+    with pytest.raises(ValueError, match="check"):
+        parse_recipe(text)

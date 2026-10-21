@@ -64,6 +64,7 @@ class _StageAcc:
     exclude: list[str] = field(default_factory=list)
     neutral: list[str] = field(default_factory=list)
     check: ExecAction | None = None
+    check_live: str | None = None
     on_enter: list[Action] = field(default_factory=list)
     on_pass: list[Action] = field(default_factory=list)
     hints: list[HintRule] = field(default_factory=list)
@@ -389,12 +390,19 @@ def _apply_on(value: str, sacc: _StageAcc) -> None:
 
 
 def _apply_check(value: str, sacc: _StageAcc) -> None:
-    if sacc.check is not None:
+    if sacc.check is not None or sacc.check_live is not None:
         msg = "duplicate 'check' directive"
         raise ValueError(msg)
     verb, _, rest = value.partition(" ")
+    if verb == "live":
+        if not rest.strip():
+            msg = "check live requires a shell command"
+            raise ValueError(msg)
+        sacc.check_live = rest.strip()
+        return
     if verb != "exec":
-        msg = f"check requires an 'exec' action, got: {value!r} (expected an 'exec' predicate)"
+        msg = (f"check requires an 'exec' or 'live' action, got: {value!r} "
+               "(expected an 'exec' predicate)")
         raise ValueError(msg)
     sacc.check = _parse_exec(rest.strip())
 
@@ -511,6 +519,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         exclude=tuple(sacc.exclude),
         neutral=tuple(sacc.neutral),
         check=sacc.check,
+        check_live=sacc.check_live,
         on_enter=tuple(sacc.on_enter),
         on_pass=tuple(sacc.on_pass),
         hints=tuple(sacc.hints),

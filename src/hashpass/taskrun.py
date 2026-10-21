@@ -570,12 +570,13 @@ class TaskSession:
             return False, None
         if sm.acceptance == "command":   # accepted ONLY by the command's own checks (no FS grading)
             return (True, local_key(self.task_id, stage, self.nonce)) if gates else (False, None)
-        if sm.acceptance == "handler":
-            ctx = self._ctx(command, self.tries[stage], stage, out)
-            res = run_handler(self.student, ExecAction(sm.check), ctx, hp_dir=self.hp_dir)
-            if res.exit_code == _ACCEPT_EXIT:
-                return True, local_key(self.task_id, stage, self.nonce)
-            return False, None
+        if sm.acceptance in ("handler", "live"):
+            if sm.acceptance == "live":      # `check live`: a command inside the running console
+                rc = self.student.check_live(sm.check)
+            else:
+                ctx = self._ctx(command, self.tries[stage], stage, out)
+                rc = run_handler(self.student, ExecAction(sm.check), ctx, hp_dir=self.hp_dir).exit_code
+            return (True, local_key(self.task_id, stage, self.nonce)) if rc == _ACCEPT_EXIT else (False, None)
         # Derived: FS observation and/or `observe output`. `out` is the student's CLEAN stdout
         # (extracted from the console's OSC-133 marks), so grade_stage compares it to the reference
         # by the derived `settings similarity` threshold -- strict at 100, fuzzy below.

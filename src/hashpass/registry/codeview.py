@@ -25,7 +25,7 @@ except ImportError:            # pragma: no cover - markdown-it ships with rich
 _DSL = ("stage", "say", "solve", "hint", "on", "neutral", "observe", "run", "block", "settings",
         "read", "pager", "image", "hidden", "exec", "copy", "accept", "sudo", "variant", "similarity",
         "allow", "deny", "check", "from", "exclude", "apply", "pass", "fail", "tries", "output",
-        "cmd", "bool", "ok", "root", "user", "env", "workdir", "expect", "grade", "meme")
+        "cmd", "bool", "ok", "root", "user", "env", "workdir", "expect", "grade", "meme", "live")
 
 if get_lexer_for_filename is not None:
     class TaskfileLexer(RegexLexer):

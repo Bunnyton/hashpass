@@ -1,11 +1,18 @@
 import base64
+import contextlib
 import subprocess
 import time
+import uuid
 from pathlib import Path
 
 from hashpass.overlay import overlay_mount, overlay_umount
 
 from .base import RunResult
+
+# `check live` status files inside the student's machine (root-written, read host-side)
+_LIVE_DIR = "var/lib/hp-live"
+_LIVE_TRIES = 3
+_LIVE_RETRY_PAUSE = 0.5
 
 
 class NspawnRunner:
@@ -124,6 +131,35 @@ class NspawnRunner:
             capture_output=True, text=True, encoding="utf-8", check=False,
         )
         return RunResult("", p.stderr, p.returncode)
+
+    def check_live(self, script: str) -> int:
+        """
+        Run a `check live` shell command (root) in the student's LIVE system; return its exit code.
+
+        `machinectl shell` always exits 0, so the wrapped script writes `$?` under the machine's
+        root and the host reads it back from the student mount -- the console boots that very
+        mount. No answer (the machine is gone or wedged) fails closed. Without a console
+        (build, tests) it is a plain `run` on the student mount.
+        """
+        if self.live_machine is None:
+            return self.run(["sh", "-c", script]).exit_code
+        token = uuid.uuid4().hex
+        rc_file = self._mnt / _LIVE_DIR / f"{token}.rc"
+        wrapped = (f"mkdir -p /{_LIVE_DIR}; ( {script}\n) >/dev/null 2>&1 </dev/null; "
+                   f"echo $? > /{_LIVE_DIR}/{token}.rc")
+        for _ in range(_LIVE_TRIES):
+            self.run_live(["sh", "-c", wrapped])
+            try:
+                rc = int(rc_file.read_text(encoding="utf-8").strip() or "1")
+            except (OSError, ValueError):
+                time.sleep(_LIVE_RETRY_PAUSE)     # a fresh machinectl session is flaky: retry
+                continue
+            with contextlib.suppress(OSError):
+                rc_file.unlink()
+            if rc_file.exists():                  # root-owned: the next check sweeps it
+                self.run_live(["sh", "-c", f"rm -f /{_LIVE_DIR}/{token}.rc"])
+            return rc
+        return 1
 
     def _run_bound(self, argv: list[str], binds: list[tuple[str, str]],
                    setenv: dict[str, str], *, user: str | None = None) -> RunResult:

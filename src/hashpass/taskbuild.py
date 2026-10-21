@@ -137,9 +137,11 @@ def _has_signal(canonical: Observation) -> bool:
 
 
 def _acceptance_of(stage: StageSpec) -> str:
-    """`check` -> handler; else observed -> derived; else `accept cmd` -> command; else error."""
+    """`check exec` -> handler; `check live` -> live; observed -> derived; `accept cmd` -> command."""
     if stage.check is not None:
         return "handler"
+    if stage.check_live is not None:
+        return "live"          # graded inside the running console: containers, services, ports
     if stage.observe or stage.observe_bool or stage.match_output:
         return "derived"       # FS paths and/or `observe output` (command stdout)
     if stage.accept_cmds or stage.accept_texts:
@@ -226,7 +228,7 @@ def _selective_derive(factory: Callable[[], NspawnRunner], recipe: Recipe, task:
     for i, stage in enumerate(recipe.stages):
         mode = _acceptance_of(stage)
         label = f"  stage {i + 1}/{total}: {stage.message[:56] or '(без текста)'}"
-        if mode in ("handler", "command"):
+        if mode in ("handler", "live", "command"):
             _report(progress, f"{label} ({mode})")
             checks.append(StageChecks(canonical={}))       # sentinel; runtime uses handler/accept_cmds
         elif cache is not None and (hit := _cache_get(cache, keys[i])) is not None:
@@ -253,7 +255,7 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
         StageMeta(
             message=s.message,
             neutral=s.neutral,
-            check=s.check.value if s.check is not None else None,
+            check=s.check.value if s.check is not None else s.check_live,
             on_enter=s.on_enter,
             on_pass=s.on_pass,
             acceptance=acceptance[i],

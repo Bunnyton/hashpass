@@ -95,3 +95,60 @@ def test_run_live_script_survives_systemd_expansion(tmp_path, monkeypatch):
     assert not any("$" in a or "{" in a for a in sent)
     real_run(sent, check=True)                             # what the machine's /bin/sh would do
     assert (tmp_path / "out").read_text() == "3a x y 4\n"
+
+
+@pytest.mark.tier1
+def test_check_live_returns_the_exit_code_the_live_machine_wrote(tmp_path, monkeypatch):
+    """
+    `machinectl shell` always exits 0, so a live check reports its status through a file.
+
+    The wrapped script writes `$?` under the machine's root; the host reads it back from the
+    student mount (the console boots that very mount).
+    """
+    import base64  # noqa: PLC0415
+    import re  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from hashpass.runner import nspawn  # noqa: PLC0415
+    r = NspawnRunner(tmp_path)
+    r.live_machine = "hp-abc"
+    sent: list[str] = []
+
+    def fake_run(argv: list[str], **_kw: object) -> subprocess.CompletedProcess:
+        script = base64.b64decode(argv[-1].split()[1]).decode()
+        sent.append(script)
+        token = re.search(r"/var/lib/hp-live/(\w+)\.rc", script).group(1)
+        rc = tmp_path / "mnt/var/lib/hp-live" / f"{token}.rc"
+        rc.parent.mkdir(parents=True, exist_ok=True)
+        rc.write_text("3\n")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(nspawn.subprocess, "run", fake_run)
+    assert r.check_live("docker ps | grep -q web") == 3  # noqa: PLR2004
+    assert "docker ps | grep -q web" in sent[0]
+    assert not list((tmp_path / "mnt/var/lib/hp-live").iterdir())   # read once, then gone
+
+
+@pytest.mark.tier1
+def test_check_live_fails_closed_when_the_machine_never_answers(tmp_path, monkeypatch):
+    import subprocess  # noqa: PLC0415
+
+    from hashpass.runner import nspawn  # noqa: PLC0415
+    monkeypatch.setattr(nspawn.subprocess, "run",
+                        lambda argv, **_kw: subprocess.CompletedProcess(argv, 0, "", ""))
+    monkeypatch.setattr(nspawn.time, "sleep", lambda _s: None)
+    r = NspawnRunner(tmp_path)
+    r.live_machine = "hp-abc"
+    assert r.check_live("true") != 0
+
+
+@pytest.mark.tier1
+def test_check_live_without_a_console_is_a_plain_run(tmp_path, monkeypatch):
+    import subprocess  # noqa: PLC0415
+
+    from hashpass.runner import nspawn  # noqa: PLC0415
+    calls: list[list[str]] = []
+    monkeypatch.setattr(nspawn.subprocess, "run",
+                        lambda argv, **_kw: calls.append(argv) or subprocess.CompletedProcess(argv, 4, "", ""))
+    assert NspawnRunner(tmp_path).check_live("false") == 4  # noqa: PLR2004
+    assert calls[-1][:2] == ["sudo", "systemd-nspawn"]

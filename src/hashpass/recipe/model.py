@@ -151,6 +151,9 @@ class StageSpec:
     exclude: tuple[str, ...] = ()
     neutral: tuple[str, ...] = ()
     check: ExecAction | None = None
+    # `check live <cmd>`: a shell command run as root INSIDE the student's live machine (running
+    # containers, services, open ports -- what a throwaway overlay cannot see); exit 0 = accepted.
+    check_live: str | None = None
     on_enter: tuple[Action, ...] = ()
     on_pass: tuple[Action, ...] = ()
     hints: tuple[HintRule, ...] = ()

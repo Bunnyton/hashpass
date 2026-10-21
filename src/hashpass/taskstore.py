@@ -29,10 +29,10 @@ class StageMeta:
 
     message: str
     neutral: tuple[str, ...]
-    check: str | None                 # ExecAction.value, or None
+    check: str | None                 # ExecAction.value / `check live` command, or None
     on_enter: tuple[Action, ...]      # exec/say/show actions
     on_pass: tuple[Action, ...]
-    acceptance: str                   # "derived" | "handler" | "command"
+    acceptance: str                   # "derived" | "handler" | "live" | "command"
     hints: tuple[HintRule, ...] = ()
     accept_cmds: tuple[str, ...] = ()  # command starts that pass the stage (`accept cmd`)
     accept_ok: bool = False            # `accept cmd "…" ok`: the command must also have exited 0
