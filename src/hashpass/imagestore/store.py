@@ -314,6 +314,8 @@ class ImageStore:
             return []
         refs: list[str] = []
         for dirpath, dirnames, filenames in os.walk(self._root):
+            # dot-dirs are the pool's own bookkeeping (`.staging/`, `.repos/`, `.commit-*`, `.incoming/`)
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
             has_blob = any(_is_blob_name(f) for f in filenames)
             if "meta.json" in filenames and ("layer" in dirnames or has_blob):
                 ver_dir = Path(dirpath)
@@ -337,6 +339,37 @@ class ImageStore:
         if not img.blob or not _is_blob_name(img.blob) or "/" in img.blob:
             return None
         return self._dir(img.name, img.version) / img.blob
+
+    def link_revision(self, src_ref: str, dst_name: str, dst_version: str, *,
+                      parents: tuple[str, ...]) -> StoredImage:
+        """
+        Publish `src_ref`'s blob + `task/` under another name/version, sharing the blob (server side).
+
+        The blob is hard-linked (same content, same digest, no copy); across filesystems it is
+        copied. `task/` is copied (small). The new record names its own pinned `parents`.
+        """
+        src = self.get(src_ref)
+        src_blob = self.blob_path_of(src)
+        if src_blob is None or not src.digest:
+            msg = f"{src_ref}: no blob to link"
+            raise ValueError(msg)
+        self.validate_ref(dst_name, dst_version)
+        dest = self._dir(dst_name, dst_version)
+        dest.mkdir(parents=True, exist_ok=True)
+        final = dest / src_blob.name
+        try:
+            os.link(src_blob, final)
+        except FileExistsError:
+            pass
+        except OSError:
+            shutil.copyfile(src_blob, final)
+        task = src.layer.parent / "task"
+        if task.is_dir():
+            shutil.copytree(task, dest / "task", symlinks=True, dirs_exist_ok=True)
+        meta = {"name": dst_name, "version": dst_version, "parents": list(parents),
+                "build_key": None, "digest": src.digest, "blob": final.name}
+        _write_json_atomic(dest / "meta.json", meta)
+        return self.get(f"{dst_name}:{dst_version}")
 
     def write_meta(self, name: str, version: str, *, parents: tuple[str, ...],
                    build_key: str | None = None) -> None:

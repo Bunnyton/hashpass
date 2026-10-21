@@ -51,6 +51,7 @@ from hashpass.registry.pool_settings import PoolSettings
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
+from hashpass.registry.revisions import RepoIndex, parse_version, revision_version
 from hashpass.registry.sources import SourceStore
 from hashpass.registry.token import issue_token, verify_token
 from hashpass.registry.web import (
@@ -203,6 +204,27 @@ class PoolServer:
 
     def catalog(self) -> Catalog:
         return Catalog(self.catalog_path or (Path(self.store.root) / "catalog.json"))
+
+    def repo(self, name: str) -> RepoIndex:
+        """Open the tags + revisions index of repository `name` (spec 2026-10-21 §2)."""
+        return RepoIndex(Path(self.store.root) / ".repos", name)
+
+    def resolve(self, name: str, version: str) -> str | None:
+        """
+        Resolve a requested version to the stored ref that serves it, or None.
+
+        `tag_vN` -> that revision; `tag` / `tag_latest` -> the tag's newest revision. A version
+        with no revisions but a stored record of its own (a pool not yet migrated) is itself.
+        """
+        tag, n, _latest = parse_version(version)
+        idx = self.repo(name)
+        rev = idx.get(tag, n) if n is not None else idx.latest(tag)
+        if rev is not None:
+            ref = f"{name}:{revision_version(tag, rev.n)}"
+            return ref if self.store.exists(ref) else None
+        if n is None and self.store.exists(f"{name}:{version}"):
+            return f"{name}:{version}"
+        return None
 
     def pool_settings(self) -> PoolSettings:
         """Pool-wide switches (auto-approval), next to the catalog."""
