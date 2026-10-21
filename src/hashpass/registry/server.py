@@ -435,7 +435,7 @@ class PoolServer:
                          self._route_user_auto_approve, methods=["PUT"])
         app.add_url_rule("/closure/<path:tail>", "closure", self._route_closure, methods=["GET"])
         app.add_url_rule("/revisions/<path:tail>", "revisions", self._route_revisions,
-                         methods=["GET", "POST"])
+                         methods=["GET", "POST", "DELETE"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_put",
                          self._route_attachment_put, methods=["PUT"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_get",
@@ -1287,25 +1287,52 @@ class PoolServer:
             return None, ""
         return (self.attachments() if kind == "attachments" else self.sources()), ref
 
-    def _route_revisions(self, tail: str) -> Response:  # noqa: PLR0911
-        """POST name/tag -> open a staging area; POST name/tag/commit -> commit it."""
-        commit = tail.endswith("/commit")
-        parts = self._split_ref(tail.removesuffix("/commit"))
+    def _route_revisions(self, tail: str) -> Response:
+        """
+        Revisions API (spec 2026-10-21 §2).
+
+        GET name -> tags + revisions; POST name/tag -> open a staging area; POST name/tag/commit;
+        POST name/tag/tag {from, to}; POST name/fork {from}; DELETE name/tag/N.
+        """
+        if request.method == "GET":
+            return self._revisions_get(tail)
+        if request.method == "DELETE":
+            return self._revision_delete(tail)
+        for suffix, handler in (("/commit", self._revision_commit), ("/tag", self._revision_tag)):
+            if tail.endswith(suffix):
+                return handler(tail.removesuffix(suffix))
+        if tail.endswith("/fork"):
+            return self._revision_fork(tail.removesuffix("/fork"))
+        return self._revision_begin(tail)
+
+    def _write_tag(self, tail: str) -> tuple[str, str, str, Response | None]:
+        """Parse `name/tag` of a write; check ownership and the tag itself."""
+        parts = self._split_ref(tail)
         if parts is None:
-            return self._empty(HTTPStatus.NOT_FOUND)
+            return "", "", "", self._empty(HTTPStatus.NOT_FOUND)
         name, tag = parts
         user, err = self._authorize_write(name, tag)
         if err is not None:
-            return err
+            return "", "", "", err
         try:
             check_tag(tag)
             self.store.dir(name, tag)
         except ValueError as exc:
-            return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-        if not commit:
-            sweep_stale(self.store.root)
-            st = new_staging(self.store.root, owner=user, name=name, tag=tag)
-            return self._json(HTTPStatus.CREATED, {"staging": st.sid})
+            return "", "", "", self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        return user, name, tag, None
+
+    def _revision_begin(self, tail: str) -> Response:
+        user, name, tag, err = self._write_tag(tail)
+        if err is not None:
+            return err
+        sweep_stale(self.store.root)
+        st = new_staging(self.store.root, owner=user, name=name, tag=tag)
+        return self._json(HTTPStatus.CREATED, {"staging": st.sid})
+
+    def _revision_commit(self, tail: str) -> Response:
+        user, name, tag, err = self._write_tag(tail)
+        if err is not None:
+            return err
         data = request.get_json(silent=True) or {}
         sid = str(data.get("staging", "")) if isinstance(data, dict) else ""
         try:
@@ -1318,6 +1345,128 @@ class PoolServer:
         if intent.get("owner") != user and self.users.role(user) != "admin":
             return self._empty(HTTPStatus.FORBIDDEN)
         return self._commit(user, name, tag, st)
+
+    def _revisions_get(self, name: str) -> Response:
+        if self._token_user() is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        try:
+            self.store.dir(name, "x")                 # validates the name
+        except ValueError:
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        idx = self.repo(name)
+        if not idx.exists:
+            return self._not_found(name)
+        return self._json(HTTPStatus.OK, idx.as_dict())
+
+    def _copy_revision(self, src_ref: str, name: str, tag: str, by: str,  # noqa: PLR0913
+                       idx: RepoIndex, *, merged_from: str = "") -> str:
+        """Add revision `name:tag_vN` with `src_ref`'s content (shared blob) + files; `idx` is locked."""
+        src_name, _, src_version = src_ref.partition(":")
+        src_tag, src_n, _ = parse_version(src_version)
+        src_rev = self.repo(src_name).get(src_tag, src_n) if src_n is not None else None
+        img = self.store.get(src_ref)
+        n = idx.peek_next(tag)
+        ref = f"{name}:{revision_version(tag, n)}"
+        made: list[Path] = []
+        try:
+            made.append(self.store.dir(name, revision_version(tag, n)))
+            self.store.link_revision(src_ref, name, revision_version(tag, n), parents=img.parents)
+            for live in (self.attachments(), self.sources()):
+                src_dir, out = live._dir(src_ref), live._dir(ref)            # noqa: SLF001
+                if src_dir.is_dir():
+                    made.append(out)
+                    shutil.copytree(src_dir, out, symlinks=True)
+            task = img.layer.parent / "task"
+            idx.add(tag, {"image_digest": img.digest or "",
+                          "task_digest": src_rev.task_digest if src_rev else (
+                              task_digest(task) if task.is_dir() else ""),
+                          "parents": list(img.parents), "by": by, "merged_from": merged_from})
+        except BaseException:
+            for d in made:
+                shutil.rmtree(d, ignore_errors=True)
+            raise
+        return ref
+
+    def _revision_tag(self, tail: str) -> Response:  # noqa: PLR0911
+        """Tag one of your revisions: a new revision of tag `to` with the same content."""
+        parts = self._split_ref(tail)                 # name/<the source's version>
+        if parts is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        name = parts[0]
+        user, err = self._authorize_write(name, parts[1])
+        if err is not None:
+            return err
+        data = request.get_json(silent=True) or {}
+        src, to = str(data.get("from", "")), str(data.get("to", ""))
+        src_name, _, src_version = src.partition(":")
+        if src_name != name:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": "навесить тег можно только внутри репозитория"})
+        try:
+            check_tag(to)
+            self.store.dir(name, to)
+        except ValueError as exc:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        resolved = self.resolve(src_name, src_version or "latest")
+        if resolved is None or not parse_version(resolved.partition(":")[2])[1]:
+            return self._not_found(src)
+        with self.repo(name).locked() as idx:
+            try:
+                ref = self._copy_revision(resolved, name, to, user, idx)
+            except (OSError, ValueError, KeyError) as exc:
+                return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"тег не навешен: {exc}"})
+        return self._json(HTTPStatus.CREATED, {"ref": ref, "n": parse_version(ref.partition(":")[2])[1]})
+
+    def _revision_fork(self, name: str) -> Response:
+        """Fork a revision you can see into your namespace (spec §2.8): `name` must be yours and new."""
+        user, err = self._authorize_write(name, "x")
+        if err is not None:
+            return err
+        data = request.get_json(silent=True) or {}
+        src = str(data.get("from", ""))
+        src_name, _, src_version = src.partition(":")
+        resolved = self.resolve(src_name, src_version or "latest") if src_name else None
+        if (resolved is None or not parse_version(resolved.partition(":")[2])[1]
+                or (self.repo(src_name).visibility != "public" and not self._may_write(user, src_name))):
+            return self._not_found(src or name)
+        idx = self.repo(name)
+        if idx.exists or any(r.partition(":")[0] == name for r in self.store.list()):
+            return self._json(HTTPStatus.CONFLICT, {"error": f"репозиторий {name} уже есть — выберите другое имя"})
+        tag = parse_version(resolved.partition(":")[2])[0]
+        with idx.locked() as w:
+            try:
+                ref = self._copy_revision(resolved, name, tag, user, w)
+            except (OSError, ValueError, KeyError) as exc:
+                return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"форк не создан: {exc}"})
+            w.set_meta(fork_of=resolved, visibility=self.repo(src_name).visibility)
+        return self._json(HTTPStatus.CREATED, {"ref": ref, "n": 1})
+
+    def _revision_delete(self, tail: str) -> Response:
+        """Remove one revision (§2.7): refused while other revisions stand on it (`from`)."""
+        head, _, n_raw = tail.rpartition("/")
+        parts = self._split_ref(head)
+        if parts is None or not n_raw.isdigit():
+            return self._empty(HTTPStatus.NOT_FOUND)
+        name, tag = parts
+        _user, err = self._authorize_write(name, tag)
+        if err is not None:
+            return err
+        ref = f"{name}:{revision_version(tag, int(n_raw))}"
+        with self.repo(name).locked() as idx:
+            if idx.get(tag, int(n_raw)) is None:
+                return self._not_found(ref)
+            dependents = sorted(r for r in self.store.list()
+                                if r != ref and ref in self.store.get(r).parents)
+            if dependents:
+                return self._json(HTTPStatus.CONFLICT, {
+                    "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их",
+                    "dependents": dependents})
+            idx.remove(tag, int(n_raw))
+            self.sources().remove(ref)
+            with contextlib.suppress(ValueError, OSError):
+                shutil.rmtree(self.attachments().ref_path(ref), ignore_errors=True)
+            with contextlib.suppress(ValueError, OSError):
+                shutil.rmtree(self.store.dir(name, revision_version(tag, int(n_raw))), ignore_errors=True)
+        return self._json(HTTPStatus.OK, {"removed": ref})
 
     def _legacy_commit(self, user: str, name: str, tag: str, st: Staging) -> Response:
         """Commit an old client's PUT (no staging) as a revision right away."""
