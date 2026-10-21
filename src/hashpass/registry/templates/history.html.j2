@@ -1,51 +1,9 @@
 {% extends 'base.html.j2' %}
-{% block head %}{% if live %}<meta http-equiv='refresh' content='5'>{% endif %}{% endblock %}
-{% macro commands(rows) %}
-<table class='cmds'><tr><th>Команда и вывод</th><th class='c'>Скорость</th><th class='c'>Пометки</th></tr>
-{% for h in rows %}
-<tr><td class='mono'><div class='cmd'>$ {{ h.command }}</div>{% if h.output %}<pre class='out'>{{ h.output }}</pre>{% endif %}</td>
-<td class='c'>{{ h.speed }}</td>
-<td class='c'>{% if h.pasted %}<span class='pill no sm'>вставка</span>{% endif %}
-{% if h.is_ref %}<span class='pill warn sm'>эталон</span>{% endif %}</td></tr>
-{% endfor %}
-</table>
-{% endmacro %}
 {% block main %}
 <p class='crumb'><a href='/web'>← Прогресс</a> · <a href='/web/user/{{ user_q }}'>← профиль {{ user }}</a></p>
-<h1>История: <a href='/web/user/{{ user_q }}'>{{ user }}</a></h1>
-<p class='sub'><a class='mono' href='/web/image/{{ ref_url }}'>{{ ref }}</a>{% if solution %} — <span class='ok'>зачтено</span>{% elif attempts or rows %} — <span class='run'>выполняется</span>{% endif %}
-{% if live %} <span class='pill warn live-dot'>● сейчас решает</span>{% endif %}</p>
-<div class='flags'>
-<span class='pill'>всего: {{ total }}</span>
-<span class='pill{% if pasted %} no{% endif %}'>вставок: {{ pasted }}</span>
-<span class='pill'>набрано: {{ typed }}</span>
-{% if has_ref %}<span class='pill{% if matches %} warn{% endif %}'>дословно эталон: {{ matches }}</span>{% endif %}
-{% if has_ref %}<span class='pill'>сверх эталона: {{ extras }}</span>{% endif %}
-{% if not has_ref %}<span class='pill dim'>эталон не найден в Taskfile</span>{% endif %}
+<h1>История: <a href='/web/user/{{ user_q }}'>{{ user }}</a> <span class='live-state sub small' aria-live='polite'></span></h1>
+<div id='history-live' data-live-src='/web/history/live?user={{ user_q }}&ref={{ ref_q }}' data-sig='{{ sig }}'>
+{% include '_history_live.html.j2' %}
 </div>
-<p class='sub small'>Пометки — на решение препода. «Вставка» — команду вставили (клиент отметил).
-«Дословно эталон» — команда совпадает с solve-командой из Taskfile.
-«Сверх эталона» — команды, которых нет в solve (шум или исследование).</p>
-{% if solution %}
-<section class='session solution'>
-<h2><span class='ok'>✓ решение</span> <span class='sub small'>{{ solution.when }} · {{ solution.duration }} · команд: {{ solution.rows|length }}</span></h2>
-{{ commands(solution.rows) }}
-{% if solution.truncated %}<p class='sub small'>дальше сессия обрезана (лимит размера)</p>{% endif %}
-</section>
-{% endif %}
-{% if attempts %}
-<h2>Попытки</h2>
-{% for a in attempts %}
-<details class='session'{% if a.live %} open{% endif %}>
-<summary>{{ a.when }} · {{ a.duration }} · команд: {{ a.rows|length }} · <span class='{% if a.live %}run{% else %}dim{% endif %}'>{{ a.outcome }}</span></summary>
-{% if a.rows %}{{ commands(a.rows) }}{% else %}<p class='sub small'>команд пока нет</p>{% endif %}
-{% if a.truncated %}<p class='sub small'>дальше сессия обрезана (лимит размера)</p>{% endif %}
-</details>
-{% endfor %}
-{% endif %}
-{% if rows %}
-{{ commands(rows) }}
-{% elif not solution and not attempts %}
-<p class='sub'>История команд не записана (старый рантайм или нет данных).</p>
-{% endif %}
+<script src='/static/history.js'></script>
 {% endblock %}

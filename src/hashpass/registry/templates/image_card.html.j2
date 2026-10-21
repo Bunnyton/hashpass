@@ -1,4 +1,5 @@
 {% extends 'base.html.j2' %}
+{% from '_files.html.j2' import filebox, icon %}
 {% block main %}
 <p class='crumb'><a href='/web/images'>← Каталог</a></p>
 <div class='card-hero'>
@@ -18,17 +19,12 @@
 {% if image.description %}<div class='about'>{% if image.about[0] %}<h3>{{ image.about[0] }}</h3>{% endif %}{% for p in image.about[1] %}<p>{{ p }}</p>{% endfor %}</div>{% else %}<p class='sub'>Описания нет.</p>{% endif %}
 <p class='sub'>Описание — это файл <code>about.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashengine push</code>.</p>
 </div>
-<div class='card'>
 <h2>Исходники</h2>
 {% if image.sources %}
-<ul class='tree mono'>
-{% for f in image.sources %}<li style='padding-left:{{ f.depth * 1.4 }}em'>{% if f.dir %}{{ f.name }}/{% else %}<a href='/web/images/source?ref={{ image.ref_q }}&path={{ f.path_q }}'>{{ f.name }}</a>{% endif %}</li>
-{% endfor %}</ul>
-<p><a class='btn sm ghost' href='/web/images/source-archive?ref={{ image.ref_q }}'>скачать архивом</a></p>
+{{ filebox(image.sources) }}
 {% else %}
-<p class='sub'>Исходников нет — они приходят на пул с <code>hashengine push</code>.</p>
+<div class='card'><p class='sub'>Исходников нет — они приходят на пул с <code>hashengine push</code>.</p></div>
 {% endif %}
-</div>
 <div class='card'>
 <h2>Файлы</h2>
 {% if image.files %}

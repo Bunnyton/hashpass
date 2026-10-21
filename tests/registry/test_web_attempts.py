@@ -50,7 +50,8 @@ def test_history_live_session_refreshes_and_escapes():
                                                    "</pre><script>x</script>\n")])]
     html = render_history("s1", "lab:1", {}, sessions=sessions, now=1100.0)
     assert "сейчас решает" in html
-    assert "http-equiv='refresh'" in html
+    assert "http-equiv='refresh'" not in html           # live: polled in place, no page reload
+    assert "data-live-src='/web/history/live?user=s1&ref=lab%3A1'" in html
     assert "<script>x</script>" not in html
     assert "&lt;script&gt;" in html
 
@@ -61,3 +62,24 @@ def test_history_old_record_without_sessions():
     html = render_history("s1", "lab:1", rec, sessions=[])
     assert "chmod +x a" in html
     assert "<details" not in html
+
+
+@pytest.mark.tier1
+def test_history_shows_every_attempt_open_and_marks_empty_output():
+    sessions = [_session("b" * 32, "abandoned", 200.0, [("true", "")]),
+                _session("a" * 32, "abandoned", 100.0, [("lss", "bash: lss\n")])]
+    html = render_history("s1", "lab:1", {}, sessions=sessions, now=10_000.0)
+    assert html.count("<details") == html.count("<details class='session' open")   # all open
+    assert "нет вывода" in html
+    assert "id='s-" + "b" * 32 + "'" in html                  # stable ids keep the state on refresh
+
+
+@pytest.mark.tier1
+def test_history_fragment_and_signature_change_with_new_commands():
+    from hashpass.registry.web import render_history_live  # noqa: PLC0415
+    one = [_session("c" * 32, None, 1000.0, [("ls", "a\n")])]
+    two = [_session("c" * 32, None, 1000.0, [("ls", "a\n"), ("pwd", "/home\n")])]
+    _, sig1 = render_history_live("s1", "lab:1", {}, sessions=one, now=1100.0)
+    frag2, sig2 = render_history_live("s1", "lab:1", {}, sessions=two, now=1100.0)
+    assert sig1 != sig2
+    assert "<html" not in frag2 and "/home" in frag2 and "pwd" in frag2

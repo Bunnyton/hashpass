@@ -1,0 +1,37 @@
+{# GitHub-like source browser pieces: icons, the folder box, breadcrumbs. #}
+{% macro icon(kind) -%}
+{% if kind == 'dir' -%}
+<svg class='ic ic-dir' viewBox='0 0 16 16' width='16' height='16' aria-hidden='true'><path d='M1.75 2.5h4.07c.46 0 .9.2 1.2.55l.94 1.07c.1.1.23.16.37.16h5.92c.97 0 1.75.78 1.75 1.75v7.22c0 .97-.78 1.75-1.75 1.75H1.75C.78 15 0 14.22 0 13.25V4.25C0 3.28.78 2.5 1.75 2.5Z'/></svg>
+{%- elif kind == 'up' -%}
+<svg class='ic' viewBox='0 0 16 16' width='16' height='16' aria-hidden='true'><path d='M3.22 9.78a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1-1.06 1.06L8 6.06 4.28 9.78a.75.75 0 0 1-1.06 0Z'/></svg>
+{%- elif kind == 'download' -%}
+<svg class='ic' viewBox='0 0 16 16' width='16' height='16' aria-hidden='true'><path d='M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .14.11.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.69V1.75a.75.75 0 0 1 1.5 0v5.94l1.97-1.97a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 6.78a.75.75 0 0 1 1.06-1.06Z'/></svg>
+{%- else -%}
+<svg class='ic ic-file' viewBox='0 0 16 16' width='16' height='16' aria-hidden='true'><path d='M2 1.75C2 .78 2.78 0 3.75 0h6.59c.46 0 .9.18 1.23.51l2.92 2.92c.33.33.51.77.51 1.23v9.59A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .14.11.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.06V4.25c0 .14.11.25.25.25h2.69Z'/></svg>
+{%- endif %}
+{%- endmacro %}
+
+{% macro crumbs(ref, ref_q, items) -%}
+<nav class='fcrumbs mono' aria-label='Путь'>
+<a href='/web/images/source?ref={{ ref_q }}'>{{ ref }}</a>
+{% for c in items %}<span class='sep'>/</span>{% if loop.last %}<b>{{ c.name }}</b>{% else %}<a href='/web/images/source?ref={{ ref_q }}&path={{ c.path_q }}'>{{ c.name }}</a>{% endif %}{% endfor %}
+</nav>
+{%- endmacro %}
+
+{% macro filebox(t) -%}
+<div class='filebox'>
+<div class='fb-head'>
+<span class='fb-title'>{{ icon('dir') }} {{ t.folder or 'Исходники' }}</span>
+<span class='fb-meta'>файлов: {{ t.files }}</span>
+<a class='btn sm ghost' href='/web/images/source-archive?ref={{ t.ref_q }}'>{{ icon('download') }} Скачать архивом</a>
+</div>
+<table class='fb-rows'>
+{% if t.up_q is not none %}<tr><td class='fb-name' colspan='2'><a href='/web/images/source?ref={{ t.ref_q }}{% if t.up_q %}&path={{ t.up_q }}{% endif %}'>{{ icon('up') }} ..</a></td></tr>{% endif %}
+{% for r in t.rows %}
+<tr><td class='fb-name'><a href='/web/images/source?ref={{ t.ref_q }}&path={{ r.path_q }}'>{{ icon('dir' if r.dir else 'file') }} <span>{{ r.name }}</span></a></td>
+<td class='fb-size'>{{ r.size_ru }}</td></tr>
+{% else %}<tr><td class='dim' colspan='2'>папка пуста</td></tr>
+{% endfor %}
+</table>
+</div>
+{%- endmacro %}

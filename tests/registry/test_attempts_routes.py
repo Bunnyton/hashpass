@@ -83,6 +83,17 @@ def test_teacher_sees_attempts_with_output_on_the_site(registry, tmp_path):
                       cookie=cookie)
     assert "cat: nofile: No such file or directory" in body
     assert "сейчас решает" in body
+    live = f"{registry.base_url}/web/history/live?user=stud&ref=lab%3A1"
+    status, headers, frag = _req(opener, "GET", live, cookie=cookie)
+    assert status == HTTPStatus.OK and "cat: nofile" in frag
+    sig = headers["X-History-Sig"]
+    status, _, _ = _req(opener, "GET", f"{live}&sig={sig}", cookie=cookie)
+    assert status == HTTPStatus.NO_CONTENT                       # nothing new -> nothing sent
+    sc.attempt("lab:1", SID, 1, [_e("ls", "notes.txt\n")], token=tok)
+    status, headers, frag = _req(opener, "GET", f"{live}&sig={sig}", cookie=cookie)
+    assert status == HTTPStatus.OK and "notes.txt" in frag and headers["X-History-Sig"] != sig
+    status, _, _ = _req(opener, "GET", live)                     # no session -> no data
+    assert status != HTTPStatus.OK
 
 
 @pytest.mark.tier2

@@ -1,6 +1,37 @@
 {% extends 'base.html.j2' %}
+{% from '_files.html.j2' import crumbs as fcrumbs, filebox, icon %}
 {% block main %}
-<p class='crumb'><a href='/web/image/{{ ref_url }}'>← {{ ref }}</a></p>
-<h1 class='mono'>{{ path }}</h1>
-{% if text is not none %}<pre class='source'>{{ text }}</pre>{% else %}<p class='sub'>Двоичный файл, {{ size }} байт.</p>{% endif %}
+<p class='crumb'><a href='/web/image/{{ ref_url }}'>← карточка {{ ref }}</a></p>
+{{ fcrumbs(ref, ref_q, crumbs) }}
+{% if tree %}
+{{ filebox(tree) }}
+{% else %}
+<div class='filebox codebox'>
+<div class='fb-head'>
+{% if preview is not none %}
+<div class='tabs' role='tablist' aria-label='Вид'>
+<button type='button' class='sm on' data-view='preview' aria-selected='true'>Просмотр</button>
+<button type='button' class='sm ghost' data-view='code' aria-selected='false'>Код</button>
+</div>
+{% endif %}
+<span class='fb-meta'>{% if text is not none %}{{ nlines }} · {% endif %}{{ size_ru }}</span>
+<span class='sp'></span>
+{% if text is not none %}<a class='btn sm ghost' href='/web/images/source?ref={{ ref_q }}&path={{ path_q }}&raw=1'>Raw</a>
+<button type='button' class='sm ghost copy-src' data-src='/web/images/source?ref={{ ref_q }}&path={{ path_q }}&raw=1'>Копировать</button>{% endif %}
+<a class='btn sm ghost' href='/web/images/source?ref={{ ref_q }}&path={{ path_q }}&dl=1' aria-label='Скачать файл'>{{ icon('download') }} Скачать</a>
+</div>
+{% if text is none %}
+<p class='fb-empty'>Двоичный файл ({{ size_ru }}) — показать нельзя, его можно скачать.</p>
+{% else %}
+{% if preview is not none %}<article class='md-body' data-pane='preview'>{{ preview }}</article>{% endif %}
+<div class='code-scroll' data-pane='code'{% if preview is not none %} hidden{% endif %}>
+<table class='code'>
+{% for line in lines %}<tr id='L{{ loop.index }}'><td class='ln'><a href='#L{{ loop.index }}' aria-label='строка {{ loop.index }}'>{{ loop.index }}</a></td><td class='lc'>{{ line }}</td></tr>
+{% endfor %}
+</table>
+</div>
+{% endif %}
+</div>
+{% endif %}
+<script src='/static/source.js'></script>
 {% endblock %}

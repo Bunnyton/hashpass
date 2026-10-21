@@ -1,6 +1,8 @@
 """Tier2: image cards over the live server — attachments, description, and catalog management."""
 import hashlib
+import html
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -500,9 +502,10 @@ def test_web_card_lists_sources_shows_a_file_and_gives_the_archive(registry, tmp
     opener, cookie = _author_cookie(registry)
     base = registry.base_url
     _, _, body = _req(opener, "GET", f"{base}/web/image/lab:1", cookie=cookie)
-    assert "Исходники" in body and "path=hp%2Fcheck" in body and "source-archive" in body
+    assert "Исходники" in body and "path=hp'" in body and "source-archive" in body
     _, _, page = _req(opener, "GET", f"{base}/web/images/source?ref=lab%3A1&path=Taskfile", cookie=cookie)
-    assert "say &#34;цель&#34;" in page or 'say "цель"' in page or "say &quot;цель&quot;" in page
+    text = html.unescape(re.sub(r"<[^>]+>", "", page))      # highlighted: tokens are spans
+    assert 'say "цель"' in text
     status, _, _ = _req(opener, "GET", f"{base}/web/images/source?ref=lab%3A1&path=..%2F..%2Fx", cookie=cookie)
     assert status == HTTPStatus.NOT_FOUND
     status, headers, _ = _req(opener, "GET", f"{base}/web/images/source-archive?ref=lab%3A1", cookie=cookie)
@@ -531,3 +534,41 @@ def test_web_admin_switches_auto_approval_and_the_card_shows_moderation(registry
     cat.reject("bob/lab:1", "нет финала", now=0.0)
     _, _, card = _req(opener, "GET", f"{base}/web/image/{urllib.parse.quote('bob/lab:1')}", cookie=cookie)
     assert "отклонено" in card and "нет финала" in card
+
+
+@pytest.mark.tier1
+def test_code_view_numbers_lines_and_highlights():
+    from hashpass.registry.codeview import highlight_lines  # noqa: PLC0415
+    lines = highlight_lines("check.sh", '#!/bin/sh\necho "a\nb"\n')
+    assert len(lines) == 3  # noqa: PLR2004                # a string spanning lines splits per line
+    assert "class='c" in str(lines[0])                       # comment / shebang
+    assert "&#34;a" in str(lines[1]) or "&quot;a" in str(lines[1]) or '"a' in str(lines[1])
+    assert "<script>" not in str(highlight_lines("x.txt", "<script>")[0])
+
+
+@pytest.mark.tier2
+def test_web_sources_browse_folders_raw_download_and_markdown(registry, tmp_path):
+    from hashpass import cli  # noqa: PLC0415
+    from hashpass.registry.sources import SourceStore  # noqa: PLC0415
+    _seed(registry, "lab:1", tmp_path, task=True)
+    tdir = tmp_path / "lab-src"
+    (tdir / "hp").mkdir(parents=True)
+    (tdir / "Taskfile").write_text("stage\n", encoding="utf-8")
+    (tdir / "brief.md").write_text("# Заголовок\n\n**жирно**\n", encoding="utf-8")
+    (tdir / "hp" / "check").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    SourceStore(Path(registry.store.root) / "sources").put_archive("lab:1", cli.pack_task_source(tdir))
+    opener, cookie = _author_cookie(registry)
+    src = f"{registry.base_url}/web/images/source?ref=lab%3A1"
+    _, _, card = _req(opener, "GET", f"{registry.base_url}/web/image/lab:1", cookie=cookie)
+    assert "class='filebox'" in card and "path=hp'" in card   # the root lists the folder, not its files
+    assert "path=hp%2Fcheck" not in card
+    status, _, folder = _req(opener, "GET", f"{src}&path=hp", cookie=cookie)
+    assert status == HTTPStatus.OK and "path=hp%2Fcheck" in folder
+    _, _, code = _req(opener, "GET", f"{src}&path=hp%2Fcheck", cookie=cookie)
+    assert "id='L2'" in code and "2 строки" in code and "raw=1" in code
+    status, headers, raw = _req(opener, "GET", f"{src}&path=hp%2Fcheck&raw=1", cookie=cookie)
+    assert raw == "#!/bin/sh\nexit 0\n" and headers["Content-Type"].startswith("text/plain")
+    _, headers, _ = _req(opener, "GET", f"{src}&path=hp%2Fcheck&dl=1", cookie=cookie)
+    assert 'filename="check"' in headers["Content-Disposition"]
+    _, _, md = _req(opener, "GET", f"{src}&path=brief.md", cookie=cookie)
+    assert "<strong>жирно</strong>" in md and "<h1>Заголовок</h1>" in md

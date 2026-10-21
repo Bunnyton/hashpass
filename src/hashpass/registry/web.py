@@ -1,5 +1,8 @@
 """Server-rendered web dashboard for the pool (Jinja2 templates): install scripts + render_* HTML."""
 import calendar
+import hashlib
+import json
+import re
 import time
 from pathlib import Path
 from urllib.parse import quote
@@ -9,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
 
 from hashpass.registry.attempt_store import is_live
+from hashpass.registry.codeview import highlight_lines, render_markdown_html
 from hashpass.registry.reference import normalise as _norm_cmd
 from hashpass.version import TRUSTED_HOSTS
 
@@ -24,6 +28,11 @@ _env.globals["viewer_is_admin"] = lambda: bool(getattr(g, "hp_admin", False)) if
 # The viewer's time zone from their settings ("" = the browser's): static/time.js renders every
 # <time class='ts'> in it.
 _env.globals["viewer_tz"] = lambda: str(getattr(g, "hp_tz", "")) if has_request_context() else ""
+
+
+def safe_id(text: str) -> str:
+    """Make an HTML id fragment from a session id (hex in practice; anything else is stripped)."""
+    return re.sub(r"[^A-Za-z0-9_-]", "", text)[:64]
 
 
 def _epoch(value: object) -> float | None:
@@ -377,23 +386,23 @@ def _session_view(rec: dict, ref_set: set[str], now: float | None) -> dict:
             if isinstance(started, (int, float)) and isinstance(updated, (int, float)) else 0)
     live = is_live(rec, now)
     final = str(rec.get("final") or "")
-    return {"when": when, "duration": f"{mins} мин" if mins else "< 1 мин",
+    return {"id": safe_id(str(rec.get("session_id") or "")),
+            "when": when, "duration": f"{mins} мин" if mins else "< 1 мин",
             "outcome": "идёт сейчас" if live else _OUTCOMES.get(final, "оборвалась"),
             "live": live, "truncated": bool(rec.get("truncated")),
             "rows": _history_rows(list(rec.get("entries") or []), ref_set)}
 
 
-def render_history(user: str, ref: str, record: dict,  # noqa: PLR0913
-                   *, ref_commands: list[str] | None = None,
-                   sessions: list[dict] | None = None, now: float | None = None) -> str:
+def _history_context(user: str, ref: str, record: dict,  # noqa: PLR0913
+                     *, ref_commands: list[str] | None = None,
+                     sessions: list[dict] | None = None, now: float | None = None) -> dict:
     """
-    Render one student's work on one task: the solution, then every attempt, with outputs.
+    Everything the history page shows about one student's work on one task.
 
-    Spec 2026-10-16: the passed session (the solution) is open on top, the other sessions
-    (newest first) fold under it, each command with its output -- the teacher sees what does not
-    work. A session being solved right now makes the page refresh itself. The anti-bot flags
-    (`вставка`, `эталон`) and the counts at the top stay; they describe the solution, else the
-    latest session, else -- a record from before sessions -- the submitted command history.
+    Spec 2026-10-16: the passed session (the solution) on top, the other sessions (newest
+    first) under it, each command with its output -- the teacher sees what does not work. The
+    anti-bot flags (`вставка`, `эталон`) and the counts describe the solution, else the latest
+    session, else -- a record from before sessions -- the submitted command history.
     """
     ref_set = {c for c in (ref_commands or []) if c}
     sessions = list(sessions or [])
@@ -408,15 +417,39 @@ def render_history(user: str, ref: str, record: dict,  # noqa: PLR0913
     pasted_n = int(auth.get("pasted", 0)) if not shown else sum(1 for r in rows if r["pasted"])
     total = len(rows) or (typed_n + pasted_n)
     views = [_session_view(s, ref_set, now) for s in others]
+    # What changes when the student types: the poll answers 204 while it stays the same.
+    sig = hashlib.sha256(json.dumps(
+        [[s.get("session_id"), len(s.get("entries") or []), s.get("final"), is_live(s, now)]
+         for s in sessions] + [record.get("status"), len(record.get("history") or [])],
+        default=str).encode()).hexdigest()[:16]
+    return {"user": user, "ref": ref, "status": str(record.get("status", "")),
+            "user_q": quote(user, safe=""), "ref_q": quote(ref, safe=""),
+            "ref_url": quote(ref, safe="/:"),
+            "total": total, "typed": typed_n, "pasted": pasted_n,
+            "matches": matches, "extras": max(0, total - matches), "has_ref": bool(ref_set),
+            "rows": [] if sessions else rows,
+            "solution": _session_view(solution, ref_set, now) if solution else None,
+            "attempts": views, "live": any(v["live"] for v in views), "sig": sig}
+
+
+def render_history(user: str, ref: str, record: dict,  # noqa: PLR0913
+                   *, ref_commands: list[str] | None = None,
+                   sessions: list[dict] | None = None, now: float | None = None) -> str:
+    """Render one student's work on one task; the page then polls `render_history_live`."""
+    ctx = _history_context(user, ref, record, ref_commands=ref_commands,
+                           sessions=sessions, now=now)
     return _env.get_template("history.html.j2").render(
-        title="История — hashpass", nav=True, active="/web",
-        user=user, ref=ref, status=str(record.get("status", "")),
-        user_q=quote(user, safe=""), ref_url=quote(ref, safe="/:"),
-        total=total, typed=typed_n, pasted=pasted_n,
-        matches=matches, extras=max(0, total - matches), has_ref=bool(ref_set),
-        rows=[] if sessions else rows,
-        solution=_session_view(solution, ref_set, now) if solution else None,
-        attempts=views, live=any(v["live"] for v in views))
+        title="История — hashpass", nav=True, active="/web", **ctx)
+
+
+def render_history_live(user: str, ref: str, record: dict,  # noqa: PLR0913
+                        *, ref_commands: list[str] | None = None,
+                        sessions: list[dict] | None = None,
+                        now: float | None = None) -> tuple[str, str]:
+    """Return the history page's live part (no page around it) and its change signature."""
+    ctx = _history_context(user, ref, record, ref_commands=ref_commands,
+                           sessions=sessions, now=now)
+    return _env.get_template("_history_live.html.j2").render(**ctx), str(ctx["sig"])
 
 
 def _fmt_size(n: object) -> str:
@@ -452,10 +485,8 @@ def _prepare_image(row: dict) -> dict:
             "hidden": hidden, "files": _prepare_files(files),
             "moderation": str(row.get("state") or ""), "reason": str(row.get("reason") or ""),
             "pending_update": bool(row.get("pending_update", False)),
-            "sources": [{**f, "path_q": quote(str(f["path"]), safe=""),
-                         "depth": str(f["path"]).count("/"),
-                         "name": str(f["path"]).rsplit("/", 1)[-1]}
-                        for f in row.get("sources") or []]}
+            "sources": source_tree(ref, list(row.get("sources") or []))
+            if row.get("sources") else None}
 
 
 def render_catalog(images: list[dict], blocks: list[dict]) -> str:
@@ -492,11 +523,59 @@ def render_image_card(image: dict) -> str:
         image=_prepare_image(image))
 
 
-def render_source_file(ref: str, path: str, text: str | None, size: int) -> str:
-    """One source file of a task: its text, or a note that it is binary."""
+def _children(sources: list[dict], folder: str) -> list[dict]:
+    """Direct entries of one folder of a task's sources: folders first, then files, by name."""
+    prefix = f"{folder}/" if folder else ""
+    rows = []
+    for f in sources:
+        path = str(f["path"])
+        if not path.startswith(prefix) or "/" in path[len(prefix):]:
+            continue
+        rows.append({"name": path[len(prefix):], "path_q": quote(path, safe=""),
+                     "dir": bool(f.get("dir")),
+                     "size_ru": "" if f.get("dir") else _fmt_size(f.get("size"))})
+    return sorted(rows, key=lambda r: (not r["dir"], r["name"].lower()))
+
+
+def _crumbs(path: str) -> list[dict]:
+    """Breadcrumbs of a source path: each folder links to its listing, the last part is plain."""
+    parts = [p for p in path.split("/") if p]
+    return [{"name": name, "path_q": quote("/".join(parts[:i + 1]), safe="")}
+            for i, name in enumerate(parts)]
+
+
+def source_tree(ref: str, sources: list[dict], folder: str = "") -> dict:
+    """Build the GitHub-like file box of one folder (used by the card and the folder page)."""
+    files = sum(1 for f in sources if not f.get("dir"))
+    return {"ref_q": quote(ref, safe=""), "folder": folder,
+            "up_q": quote(folder.rpartition("/")[0], safe="") if folder else None,
+            "rows": _children(sources, folder), "files": files}
+
+
+def render_source_file(ref: str, path: str, text: str | None, size: int,  # noqa: PLR0913
+                       *, sources: list[dict] | None = None, is_dir: bool = False) -> str:
+    """One source file (numbered, highlighted lines; Markdown also as a preview) or one folder."""
+    lines = highlight_lines(path, text) if text is not None else []
+    preview = (render_markdown_html(text)
+               if text is not None and path.lower().endswith((".md", ".markdown")) else None)
     return _env.get_template("source_file.html.j2").render(
         title=f"{path} — {ref}", nav=True, active="/web/images",
-        ref=ref, ref_url=quote(ref, safe="/:"), path=path, text=text, size=size)
+        ref=ref, ref_url=quote(ref, safe="/:"), ref_q=quote(ref, safe=""),
+        path=path, path_q=quote(path, safe=""), crumbs=_crumbs(path),
+        text=text, size=size, size_ru=_fmt_size(size), lines=lines, preview=preview,
+        nlines=_plural(len(lines), "строка", "строки", "строк"),
+        tree=source_tree(ref, sources or [], path) if is_dir else None)
+
+
+def _plural(n: int, one: str, few: str, many: str) -> str:
+    """`2 строки`, `5 строк`, `21 строка` -- Russian count agreement."""
+    if n % 10 == 1 and n % 100 != 11:  # noqa: PLR2004
+        word = one
+    elif 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:  # noqa: PLR2004
+        word = few
+    else:
+        word = many
+    return f"{n} {word}"
 
 
 _ROLES = ("student", "author", "admin")

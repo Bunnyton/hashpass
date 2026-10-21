@@ -11,12 +11,17 @@
       hour: '2-digit', minute: '2-digit'});
   }
   var zone = tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  document.querySelectorAll('time.ts').forEach(function (t) {
-    var d = new Date(t.getAttribute('datetime'));
-    if (isNaN(d)) return;
-    t.textContent = fmt.format(d).replace(',', '');
-    t.title = zone;
-  });
+  function localiseTimes(root) {
+    root.querySelectorAll('time.ts').forEach(function (t) {
+      var d = new Date(t.getAttribute('datetime'));
+      if (isNaN(d)) return;
+      t.textContent = fmt.format(d).replace(',', '');
+      t.title = zone;
+    });
+  }
+  window.HP = window.HP || {};
+  window.HP.localiseTimes = localiseTimes;   /* pages that swap HTML in (history.js) call it again */
+  localiseTimes(document);
   document.querySelectorAll('.browser-tz').forEach(function (o) {
     o.textContent = 'как в браузере (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
   });

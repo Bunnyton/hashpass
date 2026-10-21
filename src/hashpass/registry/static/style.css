@@ -187,8 +187,8 @@ body.drag-active,body.drag-active *{cursor:grabbing !important;user-select:none}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(max-width:640px){main{padding:20px 14px 56px}.nav{padding:10px 14px}h1{font-size:22px}.hero h1{font-size:30px}
   .add-panel{right:auto;left:0;min-width:min(90vw,340px)}}
-pre.source{white-space:pre;overflow:auto;padding:1em;background:var(--panel,#111);border-radius:6px}
-ul.tree{list-style:none;padding-left:0;margin:.4em 0}
+
+
 
 /* attempts & solutions (spec 2026-10-16) */
 .run{color:var(--warn);font-weight:700}td.run a{color:var(--warn)}td.run.live a{animation:hp-pulse 1.6s ease-in-out infinite}
@@ -212,3 +212,85 @@ th a{color:inherit;text-decoration:none}th a:hover{color:var(--accent)}
 .inline-edit.saving{opacity:.6}
 .inline-edit.saved{box-shadow:0 0 0 2px var(--ok-soft)}
 .inline-edit.failed{box-shadow:0 0 0 2px var(--danger)}
+/* -- GitHub-like source browser (templates/_files.html.j2, source_file.html.j2) -- */
+:root{--code-bg:#ffffff;--code-ln:#8c959f;--code-hl:#fff8c5;
+  --sx-c:#59636e;--sx-k:#cf222e;--sx-s:#0a3069;--sx-m:#0550ae;--sx-f:#8250df;--sx-v:#953800;--sx-t:#116329}
+@media(prefers-color-scheme:dark){:root{--code-bg:#0d1117;--code-ln:#6e7681;--code-hl:rgba(187,128,9,.18);
+  --sx-c:#9198a1;--sx-k:#ff7b72;--sx-s:#a5d6ff;--sx-m:#79c0ff;--sx-f:#d2a8ff;--sx-v:#ffa657;--sx-t:#7ee787}}
+.ic{fill:currentColor;vertical-align:-3px;flex:none}
+.ic-dir{color:#54aeff}.ic-file{color:var(--faint)}
+.fcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:16px;margin:.2em 0 14px;word-break:break-all}
+.fcrumbs a{color:var(--accent);text-decoration:none;font-weight:600}
+.fcrumbs a:hover{text-decoration:underline}
+.fcrumbs .sep{color:var(--faint)}
+.fcrumbs b{color:var(--text)}
+.filebox{background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  box-shadow:var(--shadow);margin:0 0 16px;overflow:hidden}
+.fb-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);
+  border-bottom:1px solid var(--border-strong);min-height:48px}
+.fb-head .sp{flex:1}
+.fb-head .btn,.fb-head button{display:inline-flex;align-items:center;gap:6px}
+.fb-title{display:inline-flex;align-items:center;gap:8px;font-weight:700}
+.fb-meta{color:var(--muted);font-size:13px;margin-right:auto}
+.fb-head .sp+.btn{margin-left:0}
+table.fb-rows{border:0;border-radius:0;box-shadow:none;margin:0}
+table.fb-rows td{padding:0;border-bottom:1px solid var(--border)}
+table.fb-rows tr:last-child td{border-bottom:0}
+table.fb-rows tr:hover td{background:var(--surface2)}
+.fb-name a{display:flex;align-items:center;gap:10px;padding:9px 14px;min-height:40px;color:var(--text);
+  font-weight:500;text-decoration:none;transition:color .15s}
+.fb-name a:hover span{color:var(--accent);text-decoration:underline}
+.fb-name a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.fb-size{text-align:right;color:var(--muted);font-size:13px;padding:0 14px!important;white-space:nowrap;width:1%}
+.fb-empty{padding:28px 16px;margin:0;color:var(--muted);text-align:center}
+.tabs{display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:var(--surface);border:1px solid var(--border)}
+.tabs button{margin:0;border-color:transparent}
+.tabs button.ghost{color:var(--muted)}
+/* the code itself: numbered lines, scroll inside the box only */
+.code-scroll{overflow-x:auto;background:var(--code-bg)}
+table.code{border:0;border-radius:0;box-shadow:none;background:transparent;width:100%;margin:0;
+  font-family:var(--mono);font-size:13px;line-height:1.6;tab-size:4}
+table.code td{border:0;padding:0 16px 0 10px;vertical-align:top}
+table.code tr:first-child td{padding-top:10px}table.code tr:last-child td{padding-bottom:10px}
+table.code td.ln{width:1%;min-width:52px;text-align:right;user-select:none;padding-right:12px;padding-left:16px}
+table.code td.ln a{color:var(--code-ln);text-decoration:none;font-weight:400}
+table.code td.ln a:hover{color:var(--text)}
+table.code td.lc{white-space:pre;color:var(--text)}
+table.code tr:target td{background:var(--code-hl)}
+table.code tr:target td.ln a{color:var(--text);font-weight:600}
+.lc .c,.lc .c1,.lc .cm,.lc .ch,.lc .cs,.lc .cpf{color:var(--sx-c);font-style:italic}
+.lc .k,.lc .kd,.lc .kn,.lc .kr,.lc .kp,.lc .ow,.lc .cp{color:var(--sx-k)}
+.lc .kt,.lc .kc,.lc .m,.lc .mi,.lc .mf,.lc .mh,.lc .mo,.lc .nb,.lc .bp,.lc .no{color:var(--sx-m)}
+.lc .s,.lc .s1,.lc .s2,.lc .sb,.lc .sd,.lc .sh,.lc .sx,.lc .sr,.lc .ss,.lc .sc,.lc .sa{color:var(--sx-s)}
+.lc .se,.lc .si{color:var(--sx-m)}
+.lc .nf,.lc .fm,.lc .nc,.lc .nd{color:var(--sx-f)}
+.lc .nv,.lc .vg,.lc .vi,.lc .vc,.lc .na{color:var(--sx-v)}
+.lc .nt,.lc .gi{color:var(--sx-t)}.lc .gd{color:var(--sx-k)}
+.lc .gh,.lc .gu{color:var(--sx-m);font-weight:700}.lc .gs{font-weight:700}.lc .ge{font-style:italic}
+/* Markdown preview, GitHub's .markdown-body proportions */
+.md-body{padding:24px 32px;line-height:1.6;font-size:15px;max-width:none}
+.md-body>:first-child{margin-top:0}
+.md-body h1,.md-body h2,.md-body h3{color:var(--text);text-transform:none;letter-spacing:-.01em;font-weight:700;
+  margin:1.4em 0 .6em;line-height:1.25}
+.md-body h1{font-size:2em;padding-bottom:.3em;border-bottom:1px solid var(--border)}
+.md-body h2{font-size:1.5em;padding-bottom:.3em;border-bottom:1px solid var(--border)}
+.md-body h3{font-size:1.25em}
+.md-body code{font-family:var(--mono);font-size:85%;padding:.2em .4em;border-radius:6px;background:var(--surface2)}
+.md-body pre{background:var(--surface2);padding:14px 16px;border-radius:8px;overflow:auto;line-height:1.45}
+.md-body pre code{padding:0;background:none;font-size:13px}
+.md-body blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--border-strong)}
+.md-body table{width:auto}
+.md-body hr{border:0;height:2px;background:var(--border)}
+@media(max-width:640px){.md-body{padding:16px}.fb-head{gap:8px}.fcrumbs{font-size:15px}}
+@media(prefers-reduced-motion:reduce){.fb-name a{transition:none}}
+table.code tr{scroll-margin-top:72px}   /* a #L line link lands below the sticky nav */
+@media(max-width:700px){
+  .nav{flex-wrap:wrap;row-gap:2px;padding:8px 12px}.nav .brand{margin-right:6px}
+  .nav a{padding:6px 8px;font-size:13px}.nav .sp{flex-basis:100%;height:0}
+  table.wide,table.sortable{display:block;overflow-x:auto;max-width:100%}
+  table.code td.ln{min-width:40px;padding-left:8px}}
+/* history page: live commands (static/history.js) */
+.out-none{color:var(--faint);font-size:12px;font-style:italic;margin-top:2px}
+table.cmds tr.fresh td{animation:hp-fresh 2.4s ease-out}
+@keyframes hp-fresh{from{background:var(--accent-soft)}to{background:transparent}}
+@media(prefers-reduced-motion:reduce){table.cmds tr.fresh td{animation:none;background:var(--accent-soft)}}

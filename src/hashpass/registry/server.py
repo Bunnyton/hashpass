@@ -59,6 +59,7 @@ from hashpass.registry.web import (
     render_engine_install_script,
     render_front,
     render_history,
+    render_history_live,
     render_image_card,
     render_install_script,
     render_login,
@@ -467,6 +468,8 @@ class PoolServer:
         app.add_url_rule("/web/images/attach-delete", "web_image_attach_delete",
                          self._web_image_attach_delete, methods=["POST"])
         app.add_url_rule("/web/history", "web_history", self._web_history, methods=["GET"])
+        app.add_url_rule("/web/history/live", "web_history_live", self._web_history_live,
+                         methods=["GET"])
         app.add_url_rule("/web/catalog/add", "web_catalog_add",
                          self._web_catalog_add, methods=["POST"])
         app.add_url_rule("/web/catalog/remove", "web_catalog_remove",
@@ -1402,19 +1405,37 @@ class PoolServer:
                    "pending_update": entry.as_dict()["pending_update"]} if entry else {})}
         return self._html(render_image_card(row))
 
-    def _web_source_file(self) -> Response:
-        """Show one source file of a task as a page (text) -- authors/admins."""
+    def _web_source_file(self) -> Response:  # noqa: PLR0911  (page / folder / raw / download)
+        """
+        Show a task's source folder or file as a page -- authors/admins.
+
+        `raw=1` sends the file as plain text, `dl=1` as a download (GitHub's Raw / Download).
+        """
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
-        ref, path = request.args.get("ref", ""), request.args.get("path", "")
+        ref, path = request.args.get("ref", ""), request.args.get("path", "").strip("/")
+        if not self._sources_ready(ref):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        listing = self.sources().listing(ref)
+        if not path or any(f["dir"] and f["path"] == path for f in listing):
+            return self._html(render_source_file(ref, path, None, 0, sources=listing, is_dir=True))
         try:
             blob = self.sources().read(ref, path)
         except (ValueError, FileNotFoundError, OSError):
             return self._empty(HTTPStatus.NOT_FOUND)
+        if request.args.get("dl") == "1":
+            resp = Response(blob, status=200, mimetype="application/octet-stream")
+            name = re.sub(r"[^\w.-]+", "-", path.rsplit("/", 1)[-1]) or "file"
+            resp.headers["Content-Disposition"] = f'attachment; filename="{name}"'
+            return resp
         try:
             text: str | None = blob.decode("utf-8")
         except UnicodeDecodeError:
             text = None
+        if request.args.get("raw") == "1":
+            if text is None:
+                return Response(blob, status=200, mimetype="application/octet-stream")
+            return Response(text, status=200, mimetype="text/plain; charset=utf-8")
         return self._html(render_source_file(ref, path, text, len(blob)))
 
     def _web_source_archive(self) -> Response:
@@ -1440,6 +1461,27 @@ class PoolServer:
         return self._html(render_history(user, ref, record,
                                          ref_commands=self._reference_commands(ref),
                                          sessions=sessions))
+
+    def _web_history_live(self) -> Response:
+        """
+        Answer the history page's poll: its live part as HTML + `X-History-Sig`, 204 when unchanged.
+
+        The page asks every few seconds with the signature it has; a student typing changes it.
+        """
+        if self._session_role(_AUTHOR_ROLES) is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        user, ref = request.args.get("user", ""), request.args.get("ref", "")
+        record = self.progress().get(user).get(ref, {}) if user else {}
+        sessions = self.attempts().sessions(user, ref) if user and ref else []
+        body, sig = render_history_live(user, ref, record,
+                                        ref_commands=self._reference_commands(ref),
+                                        sessions=sessions)
+        if request.args.get("sig") == sig:
+            return self._empty(HTTPStatus.NO_CONTENT)
+        resp = self._html(body)
+        resp.headers["X-History-Sig"] = sig
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
     def _reference_commands(self, ref: str) -> list[str]:
         """Return the task's `solve` commands parsed from its Taskfile attachment, or []."""
