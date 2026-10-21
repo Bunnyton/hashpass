@@ -380,3 +380,21 @@ def test_failing_sudo_tar_leaves_no_incoming_and_reports_stderr(tmp_path, monkey
     assert not list(image_dir.glob("layer.incoming-*"))                 # partial tree swept
     assert not list(image_dir.glob(".empty-*"))
     assert not (image_dir / "layer").exists() and not store.exists("app:1")
+
+
+@pytest.mark.tier1
+def test_packing_the_same_image_twice_gives_the_same_bytes(tmp_path):
+    """Same content -> same blob -> same digest: an unchanged re-push is not a new revision."""
+    import time  # noqa: PLC0415
+
+    from hashpass.imagestore.store import ImageStore  # noqa: PLC0415
+    from hashpass.registry.blob import pack_image_to_file  # noqa: PLC0415
+    store = ImageStore(tmp_path / "s")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "f").write_text("x", encoding="utf-8")
+    store.save("a", "1", src, ())
+    first = pack_image_to_file(store.get("a:1"), tmp_path / "1.tar.gz").read_bytes()
+    time.sleep(1.1)
+    second = pack_image_to_file(store.get("a:1"), tmp_path / "2.tar.gz").read_bytes()
+    assert first == second

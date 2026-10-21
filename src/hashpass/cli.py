@@ -231,7 +231,7 @@ def _legacy_base_from_pool(store: ImageStore, pool: RemoteRegistry) -> Path | No
 
 
 def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | None = None,
-                      io: Io | None = None) -> Path:
+                      io: Io | None = None, for_ref: str | None = None) -> Path:
     """
     Ensure the base image exists locally; return its layer directory.
 
@@ -240,6 +240,9 @@ def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | No
     `_base_from_pool`). Without a pool (author machines, tests) -- or when the pool has no
     base at all -- it is built once from the out-of-band rootfs tarball, exactly as before.
     """
+    pinned = _pinned_base(store, for_ref)
+    if pinned is not None:                 # a pool revision runs on the base it was built on
+        return pinned
     ref = base_ref()
     if pool is not None:
         layer = _base_from_pool(store, pool, ref, io or _default_io())
@@ -255,6 +258,16 @@ def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | No
     name, version = ref.split(":", 1)
     store.save(name, version, built, (), sudo=True)     # root-owned rootfs -> sudo rsync
     return store.get(ref).layer
+
+
+def _pinned_base(store: ImageStore, ref: str | None) -> Path | None:
+    """Return the layer of the base revision `ref` was pinned to on the pool, if stored here."""
+    if not ref or not store.exists(ref):
+        return None
+    base = store.get(ref).base
+    if not base or not store.exists(base):
+        return None
+    return store.get(base).layer
 
 
 def _base_intact(layer: Path) -> bool:
@@ -988,7 +1001,8 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
     workdir = env.work / "run" / uuid.uuid4().hex
     router = _Router(io.write)                         # narrative + announces start on host stdout
     task_io = Io(read=io.read, write=router.write, clock=io.clock)
-    session = run_task(ref, store, workdir, base=ensure_base_image(env, store, pool=pool, io=io),
+    session = run_task(ref, store, workdir,
+                       base=ensure_base_image(env, store, pool=pool, io=io, for_ref=ref),
                        student_id=student_id, nonce=uuid.uuid4().hex,
                        sink=router.write, sleep=time.sleep)
     stop = threading.Event()
@@ -1088,7 +1102,7 @@ def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, 
 def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
     """Edit a bare image live: open a root console, then commit any changes back to the image."""
     workdir = env.work / "run" / uuid.uuid4().hex     # unique per run
-    runner = run_image(ref, store, workdir, base=ensure_base_image(env, store))
+    runner = run_image(ref, store, workdir, base=ensure_base_image(env, store, for_ref=ref))
     try:
         _interactive_console(runner, user="root")   # a raw root console -- edit the image freely
         _commit_image_edits(env, runner, store, ref, io)

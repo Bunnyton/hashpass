@@ -1,5 +1,6 @@
 """Blob (tar) pack/unpack for HTTP transfer: images (meta + layer/) and tasks (bundle/hp/meta)."""
 import contextlib
+import gzip
 import io
 import json
 import shutil
@@ -167,7 +168,10 @@ def pack_image_to_file(img: StoredImage, dest: Path) -> Path:
     if _layer_has_unreadable(img.layer):
         _pack_via_sudo_tar(img.layer, meta, dest)
         return dest
-    with tarfile.open(dest, mode="w:gz") as tar:
+    # mtime=0 in the gzip header: the same content packs to the same bytes (and digest), so a
+    # re-sent unchanged image is recognised by the pool instead of becoming a new revision
+    with dest.open("wb") as raw, gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as gz, \
+            tarfile.open(fileobj=gz, mode="w") as tar:
         info = tarfile.TarInfo("meta.json")
         info.size = len(meta)
         tar.addfile(info, io.BytesIO(meta))

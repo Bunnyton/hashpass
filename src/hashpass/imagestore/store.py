@@ -399,6 +399,13 @@ class ImageStore:
         if dest.is_dir():
             _remove_tree(dest)
 
+    def set_meta_field(self, ref: str, key: str, value: str) -> None:
+        """Record one extra field in a stored image's meta.json (e.g. the base it was built on)."""
+        name, version = self._resolve(*_split_ref(ref))
+        meta = self._read_meta(name, version)
+        meta[key] = value
+        _write_json_atomic(self._dir(name, version) / "meta.json", meta)
+
     def link_revision(self, src_ref: str, dst_name: str, dst_version: str, *,
                       parents: tuple[str, ...]) -> StoredImage:
         """

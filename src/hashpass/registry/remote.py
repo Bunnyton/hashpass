@@ -103,6 +103,8 @@ class RemoteRegistry:
     # pinned parents of the revisions the last `/closure` named (a pool with revisions)
     _closure_parents: dict[str, tuple[str, ...]] = field(default_factory=dict, init=False,
                                                          repr=False, compare=False)
+    _closure_bases: dict[str, str] = field(default_factory=dict, init=False, repr=False,
+                                           compare=False)
     # what the last `push` did per ref: {"ref": "x:1_v3", "n": 3, "unchanged": bool}
     last_push: list[dict[str, object]] = field(default_factory=list, init=False, repr=False,
                                                compare=False)
@@ -370,6 +372,8 @@ class RemoteRegistry:
                 unpack_image_file(path, store, sudo=(True if self.sudo else None),
                                   as_ref=requested if is_revision else None,
                                   parents=self._closure_parents.get(requested))
+                if requested in self._closure_bases:      # the base it was built on (pinned)
+                    store.set_meta_field(requested, "base", self._closure_bases[requested])
                 if digest:
                     store.set_pool_digest(item, digest, registry=self.base_url)
             return True
@@ -775,4 +779,6 @@ class RemoteRegistry:
         data = json.loads(body.decode("utf-8"))
         for item, parents in (data.get("parents") or {}).items():
             self._closure_parents[str(item)] = tuple(str(p) for p in parents)
+        for item, base in (data.get("bases") or {}).items():
+            self._closure_bases[str(item)] = str(base)
         return data["refs"]

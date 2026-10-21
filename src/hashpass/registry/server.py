@@ -1643,7 +1643,13 @@ class PoolServer:
             missing = str(exc.args[0]) if exc.args else ref
             return self._not_found(missing)
         if request.args.get("revisions") == "1":
-            return self._json(HTTPStatus.OK, {"refs": refs, "parents": {
+            bases = {r: b for r in refs if (b := self.store.get(r).base) and self.store.exists(b)}
+            try:                                      # the pinned bases come first, with their chains
+                below = [x for b in dict.fromkeys(bases.values()) for x in closure_refs(b, self.store)]
+            except KeyError:
+                below = []
+            refs = list(dict.fromkeys([*below, *refs]))
+            return self._json(HTTPStatus.OK, {"refs": refs, "bases": bases, "parents": {
                 r: list(self.store.get(r).parents) for r in refs}})
         legacy = [_tag_ref(r) for r in refs[:-1]] + [ref]
         return self._json(HTTPStatus.OK, {"refs": list(dict.fromkeys(legacy))})

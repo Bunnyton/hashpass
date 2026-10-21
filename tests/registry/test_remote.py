@@ -281,3 +281,24 @@ def test_push_to_a_pool_without_revisions_uses_the_old_requests(registry, tmp_pa
     monkeypatch.setattr(RemoteRegistry, "begin", no_revisions)
     assert client.push(local, ref) == ["base:1", "app:1"]      # one PUT per image, as before
     assert RemoteRegistry(registry.base_url).has_image(ref)
+
+
+@pytest.mark.tier2
+def test_a_pulled_revision_runs_on_its_pinned_base(registry, tmp_path):
+    """Live check 2026-10-22: `hashengine run` looked for a local base instead of the pinned one."""
+    from hashpass import cli  # noqa: PLC0415
+    registry.users.add("bunnyton", "pw-correct", role="admin")
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "bunnyton/debian", (), "BASE")
+    local.save("bunnyton/debian", "trixie", tmp_path / "src-bunnyton_debian", ())
+    ref = _seed(local, tmp_path, "bunnyton/lab", (), "LAB")
+    client = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / "creds.json"))
+    client.login("bunnyton", "pw-correct")
+    client.push(local, "bunnyton/debian:trixie")
+    client.push(local, ref, base="bunnyton/debian:trixie")
+    dest = ImageStore(tmp_path / "dest")
+    RemoteRegistry(registry.base_url).pull(ref, dest)
+    assert dest.get(ref).base == "bunnyton/debian:trixie_v1"
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "h")}, default_home=tmp_path)
+    layer = cli.ensure_base_image(env, dest, for_ref=ref)          # no rootfs.tar, no build
+    assert layer == dest.get("bunnyton/debian:trixie_v1").layer

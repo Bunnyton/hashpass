@@ -308,7 +308,7 @@ def test_run_image_ensures_base_image(tmp_path, monkeypatch):
     env = cli.build_env({"HASHPASS_HOME": str(home)}, default_home=tmp_path)
     seen = {}
     monkeypatch.setattr(cli, "ensure_base_image",
-                        lambda _e, _s: seen.setdefault("ensured", True) or tmp_path)
+                        lambda _e, _s, **_k: seen.setdefault("ensured", True) or tmp_path)
     empty_upper = tmp_path / "empty-upper"
     empty_upper.mkdir()
     monkeypatch.setattr(cli, "run_image",

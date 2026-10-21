@@ -76,3 +76,15 @@ def test_images_mark_the_newest_revision(pool: _Pool) -> None:
     rows = json.loads(_get(f"{pool.url}/images", pool.tok["bob"])[2])["images"]
     mine = {r["ref"]: r["latest"] for r in rows if r["repo"] == "bob/lab"}
     assert mine == {"bob/lab:1_v1": False, "bob/lab:1_v2": True}
+
+
+@pytest.mark.tier1
+def test_closure_brings_the_pinned_base_first(pool: _Pool) -> None:
+    sid = _http("POST", f"{pool.url}/revisions/bob/lab/1", token=pool.tok["bob"],
+                body={"base": "bunnyton/debian:trixie"})[1]["staging"]
+    pool.put("image", "bob/lab", "1", sid, pool.blob("bob/lab", "1", "one"))
+    pool.commit("bob/lab", "1", sid)
+    pool.push("bunnyton/debian", "trixie", image="base2", user="bunnyton")   # a newer base
+    body = _http("GET", f"{pool.url}/closure/bob/lab/1?revisions=1", token=pool.tok["bob"])[1]
+    assert body["refs"] == ["bunnyton/debian:trixie_v1", "bob/lab:1_v1"]
+    assert body["bases"] == {"bob/lab:1_v1": "bunnyton/debian:trixie_v1"}
