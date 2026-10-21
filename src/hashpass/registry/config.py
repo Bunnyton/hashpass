@@ -9,6 +9,7 @@ class ServerConfig:
     """Runtime-adjustable pool settings; the admin toggles these from the web UI."""
 
     registration_open: bool = True
+    default_course: str = ""      # `owner/name` old clients (no course) work in (spec §9)
 
 
 def load_config(path: Path) -> ServerConfig:
@@ -17,12 +18,14 @@ def load_config(path: Path) -> ServerConfig:
     if not p.exists():
         return ServerConfig()
     data = json.loads(p.read_text(encoding="utf-8"))
-    return ServerConfig(registration_open=bool(data.get("registration_open", True)))
+    return ServerConfig(registration_open=bool(data.get("registration_open", True)),
+                        default_course=str(data.get("default_course", "")))
 
 
 def save_config(path: Path, config: ServerConfig) -> None:
     """Persist the config to `path` (creating parent dirs)."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"registration_open": config.registration_open}, indent=2),
+    p.write_text(json.dumps({"registration_open": config.registration_open,
+                             "default_course": config.default_course}, indent=2),
                  encoding="utf-8")

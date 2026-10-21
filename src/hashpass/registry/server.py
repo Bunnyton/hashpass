@@ -35,6 +35,7 @@ from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
 from hashpass.registry import courses as course_model
 from hashpass.registry.access import can
+from hashpass.registry.approved import ApprovedStore
 from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.attempt_store import AttemptStore, SeqMismatch
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
@@ -224,6 +225,9 @@ class DeletionRequests:
         return row
 
 
+_COPY = "approved-copy:"      # `_view_revision` result: the pre-revision approved copy of a ref
+
+
 def _tag_ref(ref: str) -> str:
     """Return a revision ref as its tag (`x:1_v3` -> `x:1`), for clients that predate revisions."""
     name, _, version = ref.partition(":")
@@ -310,8 +314,15 @@ class PoolServer:
                     not entry.approved_image or rev.image_digest == entry.approved_image):
                 ref = f"{name}:{revision_version(tag, rev.n)}"
                 return ref if self.store.exists(ref) else None
-        if self.store.exists(entry.ref) and entry.approved_digest == entry.digest:
-            return entry.ref                          # a pool not yet migrated to revisions
+        if self.store.exists(entry.ref):              # a pool not yet moved to revisions
+            img = self.store.get(entry.ref)
+            task = img.layer.parent / "task"
+            if (task.is_dir() and task_digest(task) == entry.approved_digest
+                    and (not entry.approved_image or img.digest == entry.approved_image)):
+                return entry.ref
+            copies = ApprovedStore(Path(self.store.root) / "approved")
+            if copies.task_digest(entry.ref) == entry.approved_digest and copies.blob(entry.ref):
+                return _COPY + entry.ref              # an update waits: students keep the copy
         return None
 
     def _view_revision(self, user: str | None, name: str, version: str) -> str | None:  # noqa: PLR0911
@@ -334,6 +345,9 @@ class PoolServer:
             return ref if self.store.exists(ref) else None
         if self.repo(name).visibility == "private":
             return resolved if self._reachable_in_course(user, resolved) else None
+        if self.default_course() is not None:      # moved to courses: no catalog any more
+            is_task = (self.store.get(resolved).layer.parent / "task").exists()
+            return None if is_task else resolved
         entry = self.catalog().find(f"{name}:{tag}")
         if entry is None:
             return None if (self.store.get(resolved).layer.parent / "task").exists() else resolved
@@ -422,7 +436,7 @@ class PoolServer:
         for ref in self.catalog().expired_rejected(now):
             entry = self.catalog().find(ref)
             approved = self._approved_rev(entry) if entry else None
-            image = (self.store.get(approved).digest or "") if approved else ""
+            image = (self.store.get(approved).digest or "") if approved and not approved.startswith(_COPY) else ""
             self.catalog().restore_approved(ref, entry.approved_image if entry and entry.approved_image else image)
         for ref in self.catalog().purge_rejected(now):
             self.catalog().remove_task(ref)
@@ -475,6 +489,7 @@ class PoolServer:
         self._register_routes(app)
         self.course_api = CourseApi(self)
         self.course_api.register(app)
+        app.before_request(self._legacy_catalog_gone)
         return app
 
     def _register_routes(self, app: Flask) -> None:  # noqa: PLR0915  (one line per route)
@@ -855,8 +870,52 @@ class PoolServer:
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
+        course = self.default_course()
+        if course is not None:                        # after the move to courses (spec §9)
+            return self._json(HTTPStatus.OK, {"catalog": self._course_rows(course, user)})
         self._purge_rejected()
         return self._json(HTTPStatus.OK, {"catalog": self._catalog_rows(user)})
+
+    _LEGACY_WRITES = ("/catalog/layout", "/catalog/hidden", "/catalog/move", "/catalog/block",
+                      "/catalog/approve", "/catalog/reject", "/web/catalog/add", "/web/catalog/remove",
+                      "/web/catalog/layout", "/web/tasks/toggle", "/web/blocks/add",
+                      "/web/blocks/rename", "/web/blocks/remove", "/web/blocks/toggle",
+                      "/web/blocks/hide-tasks")
+
+    def _legacy_catalog_gone(self) -> Response | None:
+        """After the move to courses the old catalog editing answers 410 with where to go."""
+        if request.path not in self._LEGACY_WRITES or self.default_course() is None:
+            return None
+        return self._json(HTTPStatus.GONE, {
+            "error": f"раскладка и модерация теперь в курсах: курс {self.config.default_course}"})
+
+    def default_course(self) -> "course_model.Course | None":
+        """Return the course old clients (no `course`) work in, once the pool moved to courses."""
+        ref = self.config.default_course
+        return self.course_api.courses.get(ref) if ref else None
+
+    def _course_rows(self, course: "course_model.Course", user: str) -> list[dict[str, object]]:
+        """Return the default course in the old `/catalog` row shape, as `user` may see it."""
+        role = self.users.role(user)
+        if not can(user, role, course, "view"):
+            return []
+        staff = can(user, role, course, "moderate")
+        rows: list[dict[str, object]] = []
+        for block in course.blocks:
+            for task in block["tasks"]:
+                visible = block.get("open", True) and not task.get("hidden")
+                if not visible and not staff:
+                    continue
+                latest = self.repo(task["repo"]).latest(task["tag"])
+                n = course_model.effective_n(course, task, latest=latest.n if latest else None)
+                rev = self.repo(task["repo"]).get(task["tag"], n)
+                rows.append({"number": len(rows) + 1, "name": task["repo"], "version": task["tag"],
+                             "ref": f"{task['repo']}:{task['tag']}", "digest": rev.task_digest if rev else "",
+                             "block_id": block["id"], "block_name": block["name"],
+                             "available": visible, "hidden": task.get("hidden", False),
+                             "block_open": block.get("open", True), "course": course.ref}
+                            | ({"preview": True} if staff and not visible else {}))
+        return rows
 
     def _catalog_rows(self, user: str) -> list[dict[str, object]]:
         """
@@ -1037,7 +1096,7 @@ class PoolServer:
         moved = self.catalog().move_task(ref, step)
         return self._json(HTTPStatus.OK, {"ref": ref, "moved": moved})
 
-    def _route_submit(self) -> Response:   # noqa: PLR0911
+    def _route_submit(self) -> Response:   # noqa: PLR0911, C901
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
@@ -1049,6 +1108,8 @@ class PoolServer:
         passed = bool(data.get("passed", False))
         history = _sanitize_history(data.get("history"))
         authenticity = _sanitize_authenticity(data.get("authenticity"))
+        if not data.get("course") and self.default_course() is not None:
+            data = data | {"course": self.config.default_course}
         if data.get("course"):
             return self._course_submit(user, data, task_ref, digest, passed, history, authenticity)
         entry = self.catalog().find(task_ref)
@@ -1123,6 +1184,8 @@ class PoolServer:
             return self._empty(HTTPStatus.BAD_REQUEST)
         task_ref = str(data.get("task_ref", ""))
         meta: dict[str, object] | None = None
+        if not data.get("course") and self.default_course() is not None:
+            data = data | {"course": self.config.default_course}
         if data.get("course"):
             course = self.course_api.courses.get(str(data["course"]))
             repo, _, tag = task_ref.partition(":")
@@ -1237,7 +1300,8 @@ class PoolServer:
             # tags only as plain images (bases) -- never a task outside the catalog
             entries = self.catalog().entries()
             catalogued = {e.ref for e in entries}
-            served = {self._approved_rev(e) for e in entries if e.available}
+            served = {(r or "").removeprefix(_COPY) for e in entries if e.available
+                      for r in (self._approved_rev(e),)}
             rows = [r for r in rows if r["ref"] in served
                     or (f"{r['repo']}:{r['tag']}" not in catalogued and r["kind"] != "task")]
         return self._json(HTTPStatus.OK, {"images": rows})
@@ -1270,6 +1334,8 @@ class PoolServer:
         served = self._view_revision(self._token_user(), name, version)
         if served is None:
             return self._not_found_head(ref) if request.method == "HEAD" else self._not_found(ref)
+        if served.startswith(_COPY):
+            return self._serve_copy_blob(served.removeprefix(_COPY))
         if request.method == "HEAD":
             img = self.store.get(served)
             resp = self._empty(HTTPStatus.OK)
@@ -1278,6 +1344,24 @@ class PoolServer:
         else:
             resp = self._serve_image_blob(served)
         resp.headers["X-Image-Ref"] = served
+        return resp
+
+    def _serve_copy_blob(self, ref: str) -> Response:
+        """HEAD/GET the approved copy of a not-yet-moved ref (an update waits for approval)."""
+        copies = ApprovedStore(Path(self.store.root) / "approved")
+        path, digest = copies.blob(ref), copies.digest(ref)
+        if path is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        if request.method == "HEAD":
+            resp = self._empty(HTTPStatus.OK)
+        else:
+            f = path.open("rb")
+            size = os.fstat(f.fileno()).st_size
+            resp = send_file(f, mimetype="application/octet-stream", conditional=False)
+            resp.content_length = size
+        if digest:
+            resp.headers["X-Image-Digest"] = digest
+        resp.headers["X-Image-Ref"] = ref
         return resp
 
     def _serve_image_blob(self, ref: str) -> Response:
@@ -1408,6 +1492,11 @@ class PoolServer:
         served = self._view_revision(user, name, version)
         if served is None:
             return self._not_found(ref)
+        if served.startswith(_COPY):
+            copy_task = ApprovedStore(Path(self.store.root) / "approved").task_dir(ref)
+            if copy_task is None:
+                return self._empty(HTTPStatus.NOT_FOUND)
+            return self._blob(HTTPStatus.OK, pack_task(copy_task))
         task_dir = self.store.get(served).layer.parent / "task"
         if not task_dir.exists():
             return self._empty(HTTPStatus.NOT_FOUND)
@@ -2023,7 +2112,7 @@ class PoolServer:
         self.catalog().add_task(ref_tag, t_digest, auto=self._auto_approved(name), image=image,
                                 block_name=(intent.get("block") or None) if intent.get("publish") else None)
 
-    def _route_closure(self, tail: str) -> Response:
+    def _route_closure(self, tail: str) -> Response:  # noqa: PLR0911
         """
         Return the `from` chain of the revision this caller gets, ancestors first.
 
@@ -2038,6 +2127,13 @@ class PoolServer:
         served = self._view_revision(self._token_user(), name, version)
         if served is None:
             return self._not_found(ref)
+        if served.startswith(_COPY):                  # the copy's own `from` chain, then the ref
+            try:
+                refs = [r for p in ApprovedStore(Path(self.store.root) / "approved").parents(ref)
+                        for r in closure_refs(p, self.store)]
+            except KeyError as exc:
+                return self._not_found(str(exc.args[0]) if exc.args else ref)
+            return self._json(HTTPStatus.OK, {"refs": [*dict.fromkeys(refs), ref]})
         try:
             refs = closure_refs(served, self.store)
         except KeyError as exc:                 # one of its parents is missing
