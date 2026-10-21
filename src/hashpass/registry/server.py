@@ -38,6 +38,7 @@ from hashpass.registry.attempt_store import AttemptStore, SeqMismatch
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
+from hashpass.registry.course_api import CourseApi
 from hashpass.registry.passwords import (
     LOGIN_RE,
     LOGIN_RULE,
@@ -388,6 +389,7 @@ class PoolServer:
         app.config["MAX_CONTENT_LENGTH"] = _MAX_BODY
         app.url_map.strict_slashes = False
         self._register_routes(app)
+        CourseApi(self).register(app)
         return app
 
     def _register_routes(self, app: Flask) -> None:  # noqa: PLR0915  (one line per route)
