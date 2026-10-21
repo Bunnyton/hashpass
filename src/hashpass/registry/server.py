@@ -187,6 +187,42 @@ _LAYOUT_ADMIN_ONLY = ("раскладку каталога меняет толь
                      "добавляет/убирает через карточку")
 
 
+class DeletionRequests:
+    """Owners' requests to delete a revision someone else's course uses (spec §2.7): admin decides."""
+
+    def __init__(self, path: Path) -> None:
+        """Open the request list at `path`."""
+        self._path = Path(path)
+
+    def all(self) -> list[dict]:
+        try:
+            return list(json.loads(self._path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            return []
+
+    def _save(self, rows: list[dict]) -> None:
+        self._path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def open(self, ref: str, *, by: str, courses: list[str]) -> dict:
+        rows = self.all()
+        mine = next((r for r in rows if r["ref"] == ref and r["state"] == "open"), None)
+        if mine is not None:
+            return mine
+        row = {"id": f"d-{uuid.uuid4().hex[:8]}", "ref": ref, "by": by, "courses": courses,
+               "state": "open", "at": time.time(), "decided_by": ""}
+        self._save([*rows, row])
+        return row
+
+    def set_state(self, rid: str, state: str, by: str) -> dict | None:
+        rows = self.all()
+        row = next((r for r in rows if r["id"] == rid and r["state"] == "open"), None)
+        if row is None:
+            return None
+        row.update({"state": state, "decided_by": by})
+        self._save(rows)
+        return row
+
+
 def _tag_ref(ref: str) -> str:
     """Return a revision ref as its tag (`x:1_v3` -> `x:1`), for clients that predate revisions."""
     name, _, version = ref.partition(":")
@@ -485,6 +521,10 @@ class PoolServer:
         app.add_url_rule("/users/<user>/auto-approve", "user_auto_approve",
                          self._route_user_auto_approve, methods=["PUT"])
         app.add_url_rule("/closure/<path:tail>", "closure", self._route_closure, methods=["GET"])
+        app.add_url_rule("/deletion-requests", "deletion_requests", self._route_deletions,
+                         methods=["GET"])
+        app.add_url_rule("/deletion-requests/<rid>", "deletion_request", self._route_deletion,
+                         methods=["POST"])
         app.add_url_rule("/revisions/<path:tail>", "revisions", self._route_revisions,
                          methods=["GET", "POST", "PUT", "DELETE"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_put",
@@ -1622,32 +1662,127 @@ class PoolServer:
         return self._json(HTTPStatus.CREATED, {"ref": ref, "n": 1})
 
     def _revision_delete(self, tail: str) -> Response:
-        """Remove one revision (§2.7): refused while other revisions stand on it (`from`)."""
+        """
+        Remove one revision (§2.7).
+
+        Refused while other images stand on it (`from`, base). Used by someone else's course ->
+        a request the admin decides (the owner may withdraw it); the admin deletes at once.
+        """
         head, _, n_raw = tail.rpartition("/")
         parts = self._split_ref(head)
         if parts is None or not n_raw.isdigit():
             return self._empty(HTTPStatus.NOT_FOUND)
         name, tag = parts
-        _user, err = self._authorize_write(name, tag)
+        user, err = self._authorize_write(name, tag)
         if err is not None:
             return err
-        ref = f"{name}:{revision_version(tag, int(n_raw))}"
-        with self.repo(name).locked() as idx:
-            if idx.get(tag, int(n_raw)) is None:
-                return self._not_found(ref)
-            dependents = sorted(r for r in self.store.list() if r != ref and (
-                ref in self.store.get(r).parents or self.store.get(r).base == ref))
-            if dependents:
-                return self._json(HTTPStatus.CONFLICT, {
-                    "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их",
-                    "dependents": dependents})
-            idx.remove(tag, int(n_raw))
-            self.sources().remove(ref)
-            with contextlib.suppress(ValueError, OSError):
-                shutil.rmtree(self.attachments().ref_path(ref), ignore_errors=True)
-            with contextlib.suppress(ValueError, OSError):
-                shutil.rmtree(self.store.dir(name, revision_version(tag, int(n_raw))), ignore_errors=True)
+        n = int(n_raw)
+        ref = f"{name}:{revision_version(tag, n)}"
+        if self.repo(name).get(tag, n) is None:
+            return self._not_found(ref)
+        dependents = self._dependents(ref)
+        if dependents:
+            return self._json(HTTPStatus.CONFLICT, {
+                "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их",
+                "dependents": dependents})
+        foreign = self._foreign_courses(name, tag, n)
+        if foreign and self.users.role(user) != "admin":
+            req = self.deletions().open(ref, by=user, courses=[c.ref for c in foreign])
+            return self._json(HTTPStatus.ACCEPTED, {
+                "request": req["id"], "courses": self._course_names(foreign, user),
+                "message": "ревизия стоит в чужих курсах — удаление ждёт решения администратора"})
+        self._delete_revision(name, tag, n)
         return self._json(HTTPStatus.OK, {"removed": ref})
+
+    def _route_deletions(self) -> Response:
+        """List open deletion requests: all for the admin, their own for an owner."""
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        rows = [r for r in self.deletions().all() if r["state"] == "open"
+                and (self.users.role(user) == "admin" or r["by"] == user)]
+        return self._json(HTTPStatus.OK, {"requests": rows})
+
+    def _route_deletion(self, rid: str) -> Response:
+        """POST {action: approve|reject} (admin) or {action: withdraw} (its owner)."""
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        action = str((request.get_json(silent=True) or {}).get("action", ""))
+        row = next((r for r in self.deletions().all() if r["id"] == rid and r["state"] == "open"), None)
+        if row is None:
+            return self._json(HTTPStatus.NOT_FOUND, {"error": "такого открытого запроса нет"})
+        admin = self.users.role(user) == "admin"
+        if (action == "withdraw" and row["by"] != user) or (action in ("approve", "reject") and not admin) \
+                or action not in ("approve", "reject", "withdraw"):
+            return self._empty(HTTPStatus.FORBIDDEN)
+        if action == "approve":
+            name, _, version = row["ref"].partition(":")
+            tag, n, _latest = parse_version(version)
+            if n is not None and self.repo(name).get(tag, n) is not None:
+                if self._dependents(row["ref"]):
+                    return self._json(HTTPStatus.CONFLICT, {"error": "на ревизии уже строятся другие образы"})
+                self._delete_revision(name, tag, n)
+        state = {"approve": "approved", "reject": "rejected", "withdraw": "withdrawn"}[action]
+        self.deletions().set_state(rid, state, user)
+        return self._json(HTTPStatus.OK, {"id": rid, "state": state})
+
+    def _dependents(self, ref: str) -> list[str]:
+        return sorted(r for r in self.store.list() if r != ref and (
+            ref in self.store.get(r).parents or self.store.get(r).base == ref))
+
+    def _foreign_courses(self, name: str, tag: str, n: int) -> list["course_model.Course"]:
+        """Courses of someone other than the repository's owner showing revision n of name:tag."""
+        owner = _owner_of(name)
+        latest = self.repo(name).latest(tag)
+        return [c for c in self.course_api.courses.courses_with(name, tag) if c.owner != owner
+                and course_model.effective_n(c, c.find_task(name, tag),
+                                             latest=latest.n if latest else None) == n]
+
+    def _course_names(self, found: list["course_model.Course"], user: str) -> list[str]:
+        """Course names for `user`: private courses they are not in stay unnamed."""
+        role = self.users.role(user)
+        named = [c.ref for c in found if can(user, role, c, "view")]
+        hidden = len(found) - len(named)
+        return named + ([f"ещё приватных курсов: {hidden}"] if hidden else [])
+
+    def deletions(self) -> "DeletionRequests":
+        return DeletionRequests(Path(self.store.root) / ".deletion-requests.json")
+
+    def _delete_revision(self, name: str, tag: str, n: int) -> None:
+        """Delete revision n and settle every course that showed it (spec §2.7)."""
+        ref = f"{name}:{revision_version(tag, n)}"
+        with self.repo(name).locked() as idx:
+            idx.remove(tag, n)
+            remaining = [r.n for r in idx.revisions(tag) if r.n < n]
+            newest = idx.latest(tag)
+        self.sources().remove(ref)
+        with contextlib.suppress(ValueError, OSError):
+            shutil.rmtree(self.attachments().ref_path(ref), ignore_errors=True)
+        with contextlib.suppress(ValueError, OSError):
+            shutil.rmtree(self.store.dir(name, revision_version(tag, n)), ignore_errors=True)
+        for course in self.course_api.courses.courses_with(name, tag):
+            self._settle_course(course.ref, name, tag, n, remaining, newest.n if newest else None)
+
+    def _settle_course(self, course_ref: str, name: str, tag: str, n: int,  # noqa: PLR0913, PLR0917
+                       remaining: list[int], newest: int | None) -> None:
+        """Settle one course: following the newest -> falls back; pinned to n -> task removed + `restore`."""
+        with self.course_api.courses.edit(course_ref) as course:
+            task = course.find_task(name, tag)
+            if task is None or int(task["n"]) != n:
+                if task is not None and newest is None:
+                    course_model.remove_task(course, name, tag)
+                return
+            following = course.auto_update and not task.get("pinned")
+            if following and newest is not None:
+                task["n"] = newest
+                return
+            block_id = next(b["id"] for b, t in course.tasks() if t is task)
+            course_model.remove_task(course, name, tag)
+            if remaining:
+                course_model.propose(course, "restore", name, tag, max(remaining), block_id,
+                                     by=_owner_of(name) or "", now=time.time(),
+                                     comment=f"ревизия _v{n} удалена владельцем — вернуть _v{max(remaining)}?")
 
     def _legacy_commit(self, user: str, name: str, tag: str, st: Staging) -> Response:
         """Commit an old client's PUT (no staging) as a revision right away."""
