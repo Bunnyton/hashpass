@@ -23,7 +23,8 @@ class ProgressStore:
     def record(self, user: str, task_ref: str, *, status: str,  # noqa: PLR0913
                ts: str, global_key: str | None = None, digest: str = "",
                history: list[dict[str, object]] | None = None,
-               authenticity: dict[str, object] | None = None) -> None:
+               authenticity: dict[str, object] | None = None,
+               extra: dict[str, object] | None = None) -> None:
         """Record (overwrite) a user's result for one task, with optional history + anti-bot signal."""
         data = self.get(user)
         rec: dict[str, object] = {"status": status, "ts": ts, "global_key": global_key,
@@ -32,6 +33,8 @@ class ProgressStore:
             rec["history"] = history
         if authenticity is not None:
             rec["authenticity"] = authenticity
+        if extra:                                  # the course + revision it was solved in
+            rec.update(extra)
         data[task_ref] = rec
         self._root.mkdir(parents=True, exist_ok=True)
         self._path(user).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -33,6 +33,8 @@ from werkzeug.wsgi import ClosingIterator
 
 from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
+from hashpass.registry import courses as course_model
+from hashpass.registry.access import can
 from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.attempt_store import AttemptStore, SeqMismatch
 from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, unpack_task
@@ -275,7 +277,7 @@ class PoolServer:
             return entry.ref                          # a pool not yet migrated to revisions
         return None
 
-    def _view_revision(self, user: str | None, name: str, version: str) -> str | None:
+    def _view_revision(self, user: str | None, name: str, version: str) -> str | None:  # noqa: PLR0911
         """
         Which stored revision `user` gets for `name:version`, or None (not found / not for them).
 
@@ -289,6 +291,12 @@ class PoolServer:
         if self._fresh_for(user, name):
             return resolved
         tag, n, _latest = parse_version(version)
+        hit = self._course_revision(user, name, tag, n)
+        if hit is not None:                       # a course the caller may play holds it
+            ref = f"{name}:{revision_version(tag, hit[1])}"
+            return ref if self.store.exists(ref) else None
+        if self.repo(name).visibility == "private":
+            return resolved if self._reachable_in_course(user, resolved) else None
         entry = self.catalog().find(f"{name}:{tag}")
         if entry is None:
             return None if (self.store.get(resolved).layer.parent / "task").exists() else resolved
@@ -301,6 +309,45 @@ class PoolServer:
         """Return a ref as stored: a tag -> its newest revision; anything unresolvable -> itself."""
         name, _, version = ref.partition(":")
         return (self.resolve(name, version) if name and version else None) or ref
+
+    def _course_revision(self, user: str | None, repo: str, tag: str, n: int | None,
+                         course_ref: str | None = None) -> tuple["course_model.Course", int] | None:
+        """
+        Return (course, revision) through which `user` gets `repo:tag` (spec §9), or None.
+
+        The course is `?course=owner/name` when given, else the first course the caller may play
+        holding the tag. A requested `_vN` must be the course's current revision of it.
+        """
+        role = self.users.role(user) if user else None
+        wanted = course_ref or (request.args.get("course") if request else None)
+        store = self.course_api.courses
+        candidates = [c for c in ([store.get(wanted)] if wanted else store.courses_with(repo, tag)) if c]
+        for course in candidates:
+            task = course.find_task(repo, tag)
+            if task is None or not can(user, role, course, "play"):
+                continue
+            latest = self.repo(repo).latest(tag)
+            eff = course_model.effective_n(course, task, latest=latest.n if latest else None)
+            if n is None or n == eff:
+                return course, eff
+        return None
+
+    def _reachable_in_course(self, user: str | None, ref: str) -> bool:
+        """Whether a private image `ref` is a parent/base of a task `user` gets through a course."""
+        role = self.users.role(user) if user else None
+        for course in self.course_api.courses.all():
+            if not can(user, role, course, "play"):
+                continue
+            for _block, task in course.tasks():
+                latest = self.repo(task["repo"]).latest(task["tag"])
+                eff = course_model.effective_n(course, task, latest=latest.n if latest else None)
+                top = f"{task['repo']}:{revision_version(task['tag'], eff)}"
+                with contextlib.suppress(KeyError):
+                    chain = closure_refs(top, self.store)
+                    bases = [b for r in chain if (b := self.store.get(r).base)]
+                    if ref in chain or ref in bases:
+                        return True
+        return False
 
     def _tag_revisions(self, ref_tag: str) -> list[str]:
         """Every stored revision of a tag (plus an unmigrated record under the tag itself)."""
@@ -389,7 +436,8 @@ class PoolServer:
         app.config["MAX_CONTENT_LENGTH"] = _MAX_BODY
         app.url_map.strict_slashes = False
         self._register_routes(app)
-        CourseApi(self).register(app)
+        self.course_api = CourseApi(self)
+        self.course_api.register(app)
         return app
 
     def _register_routes(self, app: Flask) -> None:  # noqa: PLR0915  (one line per route)
@@ -960,6 +1008,8 @@ class PoolServer:
         passed = bool(data.get("passed", False))
         history = _sanitize_history(data.get("history"))
         authenticity = _sanitize_authenticity(data.get("authenticity"))
+        if data.get("course"):
+            return self._course_submit(user, data, task_ref, digest, passed, history, authenticity)
         entry = self.catalog().find(task_ref)
         if entry is None:
             return self._empty(HTTPStatus.NOT_FOUND)
@@ -987,6 +1037,41 @@ class PoolServer:
                     history=history, authenticity=authenticity)
         return self._json(HTTPStatus.OK, {"status": "passed", "global_key": gkey})
 
+    def _course_submit(self, user: str, data: dict, task_ref: str, digest: str,  # noqa: PLR0913, PLR0917
+                       passed: bool, history: list | None, authenticity: dict | None) -> Response:  # noqa: FBT001
+        """Credit a task solved in a course (spec §8): the course's revision, recorded with it."""
+        repo, _, tag = task_ref.partition(":")
+        course = self.course_api.courses.get(str(data["course"]))
+        if course is None or course.find_task(repo, tag) is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        hit = self._course_revision(user, repo, tag, None, course.ref)
+        if hit is None:
+            return self._json(HTTPStatus.OK, {"status": "unavailable"})
+        n = hit[1]
+        rev = self.repo(repo).get(tag, n)
+        self.course_api.enrollments.enroll(user, course.id)
+        extra = {"course": course.ref, "n": n}
+        if self._credited(user, task_ref):
+            return self._json(HTTPStatus.OK, {"status": "passed",
+                                              "global_key": global_key(self.secret, user, task_ref)})
+        prog = self.progress()
+        if rev is None or digest != rev.task_digest:
+            prog.record(user, task_ref, status="failed", ts=_now(), digest=digest, history=history,
+                        authenticity=authenticity, extra=extra)
+            return self._json(HTTPStatus.OK, {"status": "failed", "reason": "digest-mismatch"})
+        if not passed:
+            prog.record(user, task_ref, status="failed", ts=_now(), digest=digest, history=history,
+                        authenticity=authenticity, extra=extra)
+            return self._json(HTTPStatus.OK, {"status": "failed"})
+        session_id = str(data.get("session_id", ""))
+        if session_id:
+            with contextlib.suppress(ValueError):
+                self.attempts().finish(user, task_ref, session_id, "passed")
+        gkey = global_key(self.secret, user, task_ref)
+        prog.record(user, task_ref, status="passed", ts=_now(), global_key=gkey, digest=digest,
+                    history=history, authenticity=authenticity, extra=extra)
+        return self._json(HTTPStatus.OK, {"status": "passed", "global_key": gkey})
+
     def _route_attempt(self) -> Response:  # noqa: PLR0911
         """Append a console session's new commands (+ output); 409 says where to resume."""
         user = self._token_user()
@@ -996,7 +1081,16 @@ class PoolServer:
         if not isinstance(data, dict) or not isinstance(data.get("seq"), int):
             return self._empty(HTTPStatus.BAD_REQUEST)
         task_ref = str(data.get("task_ref", ""))
-        if self.catalog().find(task_ref) is None:
+        meta: dict[str, object] | None = None
+        if data.get("course"):
+            course = self.course_api.courses.get(str(data["course"]))
+            repo, _, tag = task_ref.partition(":")
+            if course is None or course.find_task(repo, tag) is None or not can(
+                    user, self.users.role(user), course, "play"):
+                return self._empty(HTTPStatus.NOT_FOUND)
+            self.course_api.enrollments.enroll(user, course.id)
+            meta = {"course": course.ref}
+        elif self.catalog().find(task_ref) is None:
             return self._empty(HTTPStatus.NOT_FOUND)
         if self._credited(user, task_ref):
             # a re-run of a credited task is not kept (user, 2026-10-16): the first solution stays
@@ -1008,7 +1102,8 @@ class PoolServer:
             length = self.attempts().append(
                 user, task_ref, str(data.get("session_id", "")), int(data["seq"]),
                 data.get("entries") or [],
-                final=str(final) if isinstance(final, str) and final != "passed" else None)
+                final=str(final) if isinstance(final, str) and final != "passed" else None,
+                meta=meta)
         except SeqMismatch as exc:
             return self._json(HTTPStatus.CONFLICT, {"length": exc.have})
         except ValueError:
@@ -1032,7 +1127,8 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         target = request.args.get("user") or user
-        if target != user and self.users.role(user) not in _AUTHOR_ROLES:
+        if (target != user and self.users.role(user) not in _AUTHOR_ROLES
+                and ref not in self._course_students(user).get(target, set())):
             return self._empty(HTTPStatus.FORBIDDEN)
         sol = self.attempts().solution(target, ref)
         if sol is None:
@@ -1044,8 +1140,25 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         store = self.progress()
-        payload = store.all() if self.users.role(user) in _AUTHOR_ROLES else {user: store.get(user)}
+        if self.users.role(user) in _AUTHOR_ROLES:     # admins (and legacy authors): everyone
+            return self._json(HTTPStatus.OK, {"progress": store.all()})
+        payload = {user: store.get(user)}
+        for student, refs in self._course_students(user).items():
+            mine = store.get(student)
+            payload.setdefault(student, {}).update({r: v for r, v in mine.items() if r in refs})
         return self._json(HTTPStatus.OK, {"progress": payload})
+
+    def _course_students(self, staff: str) -> dict[str, set[str]]:
+        """Students who started a course `staff` authors or runs -> that course's task refs (spec §7)."""
+        role = self.users.role(staff)
+        out: dict[str, set[str]] = {}
+        for course in self.course_api.courses.all():
+            if not can(staff, role, course, "add"):
+                continue
+            refs = {f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()}
+            for student in self.course_api.enrollments.users_of(course.id):
+                out.setdefault(student, set()).update(refs)
+        return out
 
     def _pool_image_rows(self) -> list[dict[str, object]]:
         """One row per stored revision: its tag's catalog place, description, digest, newest-or-not."""

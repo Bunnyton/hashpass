@@ -101,13 +101,13 @@ class AttemptStore:
 
     def append(self, user: str, ref: str, session_id: str, seq: int,  # noqa: PLR0913
                entries: list[dict[str, object]], *, final: str | None = None,
-               now: float | None = None) -> int:
+               now: float | None = None, meta: dict[str, object] | None = None) -> int:
         """Add `entries` at position `seq`; return the new length. Wrong seq -> SeqMismatch."""
         now = time.time() if now is None else now
         path = self._path(user, ref, session_id)
         rec = self._read(path) or {"ref": ref, "session_id": session_id, "started": now,
                                    "updated": now, "final": None, "truncated": False,
-                                   "entries": []}
+                                   "entries": [], **(meta or {})}
         have: list[dict[str, object]] = rec["entries"]  # type: ignore[assignment]
         if seq != len(have):
             raise SeqMismatch(len(have))
