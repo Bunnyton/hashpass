@@ -1,0 +1,63 @@
+# git-branch — ветки: ветка menu → коммит в ней → слияние в main. На входе в слияние коллега
+# (hp/colleague, apply) добавляет в main пункт меню в ту же строку — слияние выходит с
+# конфликтом, и доза conflict.md приходит на «CONFLICT». Проверки — hp/branch (хеши и время
+# у каждого свои).
+
+image git-branch:1
+from git-log:1
+
+# от git-log наследуются git и имя студента; его репозиторий здесь не нужен
+run rm -rf /home/student/shop /home/student/culprit.txt
+# data: data/site + data/mkrepo.sh — руками; историю собирает mkrepo.sh
+copy data /var/tmp/hp-site
+run sh /var/tmp/hp-site/mkrepo.sh /var/tmp/hp-site/site /home/student/site
+run rm -rf /var/tmp/hp-site
+run chown -R student:student /home/student/site
+
+hidden hp
+
+settings
+  pager on
+
+say "Сайту кофейни в ~/site нужен пункт меню «Контакты». Править main напрямую в команде не принято."
+read brief.md
+
+stage
+  say "Создай ветку menu и перейди в неё"
+  solve git -C /home/student/site switch -c menu
+  check exec branch on-menu
+  neutral ls cat pwd cd
+  on pass say "Ветка — просто подвижная метка на коммите. Создаётся мгновенно, сколько бы файлов ни было."
+  hint output "not a git repository" say "git не видит здесь репозитория. Где лежит сайт?"
+  hint output "invalid reference" say "Такой ветки ещё нет — её сначала создают. Посмотри в брифе, каким ключом."
+  hint tries 5 say "git branch покажет, какие ветки есть и в какой ты сейчас (она со звёздочкой)."
+
+stage
+  say "Добавь в меню на index.html пункт «Контакты» и сохрани это коммитом в ветке menu"
+  solve:
+    cd /home/student/site
+    sed -i 's|<li><a href="/menu">Меню</a></li>|&\n<li><a href="/contacts">Контакты</a></li>|' index.html
+    git commit -q -am "Меню: пункт «Контакты»"
+  check exec branch menu-done
+  neutral ls cat pwd cd
+  on pass say "В main «Контактов» нет: git switch main — и пункт пропадёт из файла, git switch menu — вернётся."
+  hint output "Changes not staged for commit" say "Правка есть, а в коммит её не добавили."
+  hint tries 5 say "Пункты меню — строки <li> внутри <nav>. Повтори соседний и поменяй текст."
+
+stage
+  say "Влей ветку menu в main"
+  solve:
+    cd /home/student/site
+    git switch -q main
+    git merge menu
+  check exec branch merged
+  neutral ls cat pwd cd
+  on enter apply colleague
+  on enter read merge.md
+  on pass say "Конфликт — не ошибка, а вопрос: git не угадывает, чья правка важнее, и спрашивает человека."
+  hint output "CONFLICT" read conflict.md
+  hint output "not something we can merge" say "git не знает ветки с таким именем. Список веток — git branch."
+  hint output "Already up to date" say "Вливают в ту ветку, в которой стоишь. В какой ты сейчас?"
+  hint tries 5 say "git status во время слияния говорит, какие файлы ждут тебя и что делать дальше."
+
+exec finale

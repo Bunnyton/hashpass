@@ -1,0 +1,20 @@
+# Подготовка машины к Docker без root (до входа student):
+# 1) полностью видимый procfs. Консоль перекрывает части /proc (kcore, sysrq-trigger…), и с такими
+#    перекрытиями ядро не даёт контейнерам в пространстве имён пользователей смонтировать свой
+#    /proc. Ядру хватает одного неперекрытого экземпляра где угодно — каталог закрыт для всех, кроме root.
+# 2) сокет демона student по стандартному адресу /var/run/docker.sock: docker и sudo docker
+#    работают без DOCKER_HOST.
+[Unit]
+Description=Prepare the machine for rootless Docker
+Before=user@1000.service
+After=systemd-tmpfiles-setup.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p -m 0700 /run/hp-docker/proc
+ExecStart=/bin/mount -t proc -o nosuid,nodev,noexec proc /run/hp-docker/proc
+ExecStart=/bin/ln -sfn /run/user/1000/docker.sock /run/docker.sock
+
+[Install]
+WantedBy=multi-user.target

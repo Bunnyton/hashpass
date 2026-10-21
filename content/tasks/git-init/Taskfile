@@ -1,0 +1,75 @@
+# git-init — первый репозиторий: git init → (кто ты?) → git add → первый коммит → второй коммит
+# с исправлением → посмотреть, что изменилось. Дозы приходят на ошибки git: «Please tell me who
+# you are» → identity.md, «nothing added to commit» → add.md.
+# Коммиты проверяет hp/committed: хеши и время у каждого свои, с эталоном их не сравнить.
+
+image git-init:1
+
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y git >/dev/null 2>&1
+# ветка по умолчанию — main, без многострочного совета об этом при каждом git init
+run git config --system init.defaultBranch main
+# сообщения коммитов и слияний git открывает в редакторе — пусть это будет vim из курса, а не nano
+run git config --system core.editor vim
+# data: data/scripts — руками
+copy data/scripts /home/student/scripts
+run chown -R student:student /home/student/scripts
+
+hidden hp
+
+settings
+  pager on
+
+say "Скрипты в ~/scripts ты правишь давно. А что в них было неделю назад — уже не вспомнить."
+read brief.md
+
+stage
+  say "Заведи для ~/scripts историю изменений — git-репозиторий"
+  solve git init /home/student/scripts
+  observe bool /home/student/scripts/.git/HEAD
+  neutral ls cat pwd cd
+  on pass say "Вся история живёт в скрытом каталоге .git. Удалишь его — останутся файлы, но не история."
+  hint output "Initialized empty Git repository in /home/student/.git" say "Репозиторий появился в домашнем каталоге: git init заводит его там, где ты стоишь."
+  hint tries 5 say "Где ты сейчас (pwd) и где должна появиться история?"
+
+stage
+  say "Сохрани в истории первую версию всех файлов из ~/scripts"
+  solve:
+    cd /home/student/scripts
+    git config --global user.name student
+    git config --global user.email student@hashpass.local
+    git add .
+    git commit -q -m "Первая версия"
+  check exec committed
+  neutral ls cat pwd cd
+  on pass say "git log покажет этот коммит: автор, время и сообщение. Сообщение пишут для себя через полгода."
+  hint output "Please tell me who you are" read identity.md
+  hint output "nothing added to commit" read add.md
+  hint output "not a git repository" say "Здесь git не видит репозитория. Где ты его заводил?"
+  hint tries 5 say "Что говорит git status? Он обычно сам подсказывает следующий шаг."
+
+stage
+  say "Исправь опечатку в report.sh и сохрани исправление вторым коммитом"
+  solve:
+    cd /home/student/scripts
+    sed -i 's/Отчот/Отчёт/' report.sh
+    git commit -q -am "report.sh: опечатка"
+  check exec committed 2 report.sh Отчёт
+  neutral ls cat pwd cd
+  on pass say "git commit -a сам добавляет изменённые файлы, которые git уже знает. Новые — всё равно через add."
+  hint output "Changes not staged for commit" say "Исправление есть, но в коммит его не добавили — как и в первый раз."
+  hint tries 5 say "Перечитай отчёт, который печатает report.sh: в одном слове ошибка."
+
+stage
+  say "Посмотри, что именно изменилось во втором коммите"
+  solve git -C /home/student/scripts show
+  accept cmd "git show"
+  accept cmd "git log"
+  accept cmd "git diff"
+  accept output "(?m)^\+.*Отчёт"
+  neutral ls cat pwd cd
+  on pass say "Минус — строка, какой она была, плюс — какой стала. Такой формат зовут diff, и читают его все программисты."
+  hint tries 5 say "git log перечисляет коммиты. А как показать содержимое одного — спроси у git help."
+  hint tries 10 say "git show показывает последний коммит целиком, с изменениями."
+
+exec finale

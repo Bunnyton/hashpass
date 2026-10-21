@@ -1,0 +1,22 @@
+#!/bin/sh
+# Ветки и слияние: хеши и время у каждого свои — проверяем состояние репозитория ~/site.
+# branch on-menu | menu-done | merged
+repo=/home/student/site
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+clean() { [ -z "$(g status --porcelain)" ]; }
+case "$2" in
+on-menu)
+    [ "$(g symbolic-ref --short HEAD 2>/dev/null)" = menu ] ;;
+menu-done)
+    g show menu:index.html 2>/dev/null | grep -q 'Контакты' &&
+    ! g show main:index.html | grep -q 'Контакты' && clean ;;
+merged)
+    [ "$(g symbolic-ref --short HEAD 2>/dev/null)" = main ] &&
+    g merge-base --is-ancestor menu main &&
+    g log main --format=%s | grep -q 'Меню: пункт «Цены»' &&
+    g show main:index.html | grep -q 'Контакты' &&
+    g show main:index.html | grep -q 'Цены' &&
+    ! g show main:index.html | grep -qE '^(<<<<<<<|=======|>>>>>>>)' && clean ;;
+*)
+    exit 1 ;;
+esac

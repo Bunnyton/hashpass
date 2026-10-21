@@ -1,0 +1,56 @@
+# docker-build — свой образ из Dockerfile: собрать, запустить, поменять программу и пересобрать.
+# Главная мысль — образ это снимок: правка greet.sh не видна, пока образ не пересобран
+# (доза rebuild.md приходит, когда контейнер снова здоровается с миром).
+# Продолжает docker-volume; FROM busybox собирается без сети — образ уже в машине.
+
+image docker-build:1
+from docker-volume:1
+
+# data: data/greeter — руками (Dockerfile + greet.sh)
+copy data/greeter /home/student/greeter
+run chown -R student:student /home/student/greeter
+
+hidden hp
+
+settings
+  pager on
+
+say "Чужие образы ты запускать умеешь. Пора собрать свой — рецепт уже лежит в ~/greeter."
+read brief.md
+
+stage
+  say "Собери из ~/greeter образ с именем greeter"
+  solve docker build -t greeter /home/student/greeter
+  check live docker image inspect greeter
+  neutral ls cat pwd cd
+  on pass say "Каждая инструкция Dockerfile — слой образа. Собери ещё раз: ничего не поменялось — слои возьмутся из кэша."
+  hint output "requires 1 argument" say "docker build ждёт последним аргументом каталог, в котором лежит Dockerfile."
+  hint output "requires exactly 1 argument" say "docker build ждёт последним аргументом каталог, в котором лежит Dockerfile."
+  hint output "Dockerfile: no such file" say "В каталоге, который ты дал docker build, нет Dockerfile. А где он лежит?"
+  hint output "invalid reference format" say "Имя образа — строчными буквами, без пробелов."
+  hint tries 5 say "Загляни в ~/greeter: что там лежит и что написано в Dockerfile?"
+
+stage
+  say "Запусти контейнер из своего образа"
+  solve docker run greeter
+  accept cmd "docker run" ok
+  accept output "Hello, world"
+  neutral ls cat pwd cd
+  on pass say "CMD из Dockerfile — команда по умолчанию. Напиши свою после имени образа, и она её заменит."
+  hint tries 5 say "Запускают образ так же, как alpine и wiki, — по имени."
+
+stage
+  say "Пусть greeter здоровается не с миром, а с hashpass"
+  solve:
+    sed -i 's/name="world"/name="hashpass"/' /home/student/greeter/greet.sh
+    docker build -t greeter /home/student/greeter
+    docker run greeter
+  accept cmd "docker run" ok
+  accept output "Hello, hashpass"
+  check live docker run --rm greeter | grep -q "Hello, hashpass"
+  neutral ls cat pwd cd
+  on pass say "Тот же Dockerfile на любой машине соберёт тот же образ — поэтому его и кладут в репозиторий рядом с кодом."
+  hint output "Hello, world" read rebuild.md
+  hint tries 5 say "Кто именно здоровается — написано в greet.sh."
+
+exec finale

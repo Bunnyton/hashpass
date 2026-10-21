@@ -17,6 +17,8 @@ __pycache__
 
 *~
 *.tar.gz
+# task data ships archives on purpose (docker images for the docker labs)
+!content/tasks/*/data/**/*.tar.gz
 docs/.obsidian/*
 docs/.trash/*
 

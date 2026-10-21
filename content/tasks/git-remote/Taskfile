@@ -1,0 +1,54 @@
+# git-remote — работа с сервером: clone → коммит → push отклонён, потому что напарник успел
+# первым (hp/teammate, apply на входе во второй шаг) → git pull → push. «Сервер» — голый
+# репозиторий /srv/git/team.git в той же машине; протокол другой, команды те же, что с GitHub.
+# git pull сливает (pull.rebase false): без этой настройки git 2.47 останавливается на вопросе
+# «merge или rebase», а это уже другая тема.
+
+image git-remote:1
+from git-branch:1
+
+# от git-branch наследуются git и имя студента; его репозиторий здесь не нужен
+run rm -rf /home/student/site
+run git config --system pull.rebase false
+# data: data/team + data/mkrepo.sh — руками; «сервер» собирает mkrepo.sh
+copy data /var/tmp/hp-team
+run mkdir -p /srv/git
+run sh /var/tmp/hp-team/mkrepo.sh /var/tmp/hp-team/team /srv/git/team.git
+run rm -rf /var/tmp/hp-team
+run chown -R student:student /srv/git
+
+hidden hp
+
+settings
+  pager on
+
+say "Команда пишет бота дежурств. Код живёт на сервере, а работать с ним придётся у себя."
+read brief.md
+
+stage
+  say "Склонируй проект с сервера /srv/git/team.git к себе в ~/team"
+  solve git clone /srv/git/team.git /home/student/team
+  observe bool /home/student/team/.git/HEAD /home/student/team/AUTHORS
+  neutral ls cat pwd cd
+  on pass say "Клон — полная копия с историей: git log работает и без сервера. А git remote -v покажет, откуда он."
+  hint output "does not appear to be a git repository" say "По этому пути репозитория нет. Сверь путь с заданием — до буквы."
+  hint tries 5 say "Скачивают репозиторий целиком одной командой — она в брифе."
+
+stage
+  say "Впиши себя последней строкой в ~/team/AUTHORS и отправь изменение на сервер"
+  solve:
+    cd /home/student/team
+    echo "Студент" >> AUTHORS
+    git commit -q -am "AUTHORS: + студент"
+    git pull -q --no-edit
+    git push -q
+  check exec pushed
+  neutral ls cat pwd cd
+  on enter apply teammate
+  on pass say "git pull — это git fetch (скачать) + git merge (влить). Можно и по отдельности, если хочешь сначала посмотреть."
+  hint output "fetch first" read pull.md
+  hint output "Everything up-to-date" say "Отправлять нечего: на сервер уходят коммиты, а изменение ещё не закоммичено."
+  hint output "Changes not staged for commit" say "Правка есть, а в коммит её не добавили."
+  hint tries 5 say "Что ответил сервер на git push? Прочитай его ответ целиком."
+
+exec finale

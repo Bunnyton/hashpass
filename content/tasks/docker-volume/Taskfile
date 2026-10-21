@@ -1,0 +1,50 @@
+# docker-volume — каталог машины внутри контейнера (-v): сайт из ~/blog, правка без перезапуска,
+# данные переживают удаление контейнера. Продолжает docker-web: образ wiki — сервер, который
+# отдаёт файлы из /www. Блог подключается поверх /www.
+
+image docker-volume:1
+from docker-web:1
+
+# data: data/blog/index.html — руками
+copy data/blog /home/student/blog
+run chown -R student:student /home/student/blog
+
+hidden hp
+
+settings
+  pager on
+
+say "Свой блог ты пишешь в ~/blog. Сервер для него уже есть — в образе wiki."
+read brief.md
+
+stage
+  say "Покажи на сайте свой блог из ~/blog вместо вики"
+  solve docker run -d -p 8080:80 -v /home/student/blog:/www wiki
+  check live docker ps -q --filter ancestor=wiki | while read c; do docker port "$c" 80/tcp; done | sed 's/.*://' | while read p; do curl -fs "http://127.0.0.1:$p/"; done | grep -q "Блог студента"
+  neutral ls cat pwd cd
+  on pass say "Каталог не скопирован в контейнер, а подключён: контейнер видит тот же файл, что и ты."
+  hint output "must be absolute" say "Слева от двоеточия — путь на машине, справа — внутри контейнера. Оба пути — от корня."
+  hint tries 5 say "Что отдаёт сервер — вики или пусто? Проверь, какой путь слева от двоеточия: docker понимает только абсолютный."
+  hint tries 10 say "Имя без / в начале docker считает именем тома, а не каталогом. Нужен путь от корня — или ~."
+
+stage
+  say "Добавь в блог пост с заголовком «Я запустил Docker» — пусть он сразу появится на сайте"
+  solve sed -i 's|<!-- новые|<h2>Я запустил Docker</h2>\n<!-- новые|' /home/student/blog/index.html
+  check live docker ps -q --filter ancestor=wiki | while read c; do docker port "$c" 80/tcp; done | sed 's/.*://' | while read p; do curl -fs "http://127.0.0.1:$p/"; done | grep -q "Я запустил Docker"
+  neutral ls cat pwd cd
+  on pass say "Ни пересборки, ни перезапуска: так и работают с кодом в контейнере — правят на машине, смотрят сразу."
+  hint tries 5 say "Пост пишут в файл блога на машине. Каким редактором ты правишь файлы?"
+
+stage
+  say "Удали контейнер с блогом совсем — а посты должны уцелеть"
+  solve docker rm -f $(docker ps -aq --filter ancestor=wiki)
+  accept cmd "docker rm"
+  accept cmd "docker container rm"
+  accept cmd "docker container prune"
+  check live test -z "$(docker ps -aq --filter ancestor=wiki)" && grep -q "Я запустил Docker" /home/student/blog/index.html
+  neutral ls cat pwd cd
+  on pass say "Всё, что контейнер пишет к себе, исчезает вместе с ним. Данные, которые жалко, держат в подключённых каталогах."
+  hint output "container is running" say "Работающий контейнер docker rm не трогает. Сначала останови — или спроси у docker rm --help, как удалить силой."
+  hint tries 5 say "Список контейнеров — docker ps -a. Удаляет их команда, похожая на ту, что удаляет файлы."
+
+exec finale

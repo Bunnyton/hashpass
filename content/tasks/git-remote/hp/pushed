@@ -1,0 +1,7 @@
+#!/bin/sh
+# Отправка на сервер: на сервере в main есть и коммит напарника, и новая строка в AUTHORS.
+srv=/srv/git/team.git
+g() { git --git-dir="$srv" -c safe.directory='*' "$@"; }
+g log main --format=%s | grep -q 'README: как запускать' || exit 1
+[ "$(g show main:AUTHORS | grep -c .)" -ge 4 ] || exit 1
+exit 0

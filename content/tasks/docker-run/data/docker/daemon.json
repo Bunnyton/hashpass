@@ -1,0 +1,9 @@
+{
+  "default-runtime": "hp-runc",
+  "runtimes": {
+    "hp-runc": {
+      "runtimeType": "io.containerd.runc.v2",
+      "options": { "NoNewKeyring": true }
+    }
+  }
+}

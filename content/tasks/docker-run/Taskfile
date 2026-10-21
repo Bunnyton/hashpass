@@ -1,0 +1,59 @@
+# docker-run — первое знакомство с Docker: образ → контейнер → список контейнеров → уборка.
+# Docker здесь без root (rootless): демон — служба пользователя student, ставит его
+# data/docker/install.sh. Образы busybox и alpine лежат в машине готовыми: Docker Hub из
+# России доступен не всегда. Порты контейнеров (-p) открываются прямо в сети машины.
+# Контейнеры живут только в работающей консоли, поэтому шаги про них принимает `check live`.
+
+image docker-run:1
+
+# data: data/docker — руками; образы с машины автора:
+#   docker save busybox:latest | gzip -9 > data/docker/images/busybox.tar.gz   (busybox:1.36)
+#   docker save alpine:latest | gzip -9 > data/docker/images/alpine.tar.gz     (alpine 3.24)
+copy data/docker /var/tmp/hp-docker
+run sh /var/tmp/hp-docker/install.sh
+
+hidden hp
+
+settings
+  pager on
+
+say "Docker запускает программы в контейнерах: своя система, свои файлы — и поднимается за секунду."
+read brief.md
+
+stage
+  say "Узнай, какая система стоит внутри контейнера из образа alpine"
+  solve docker run alpine cat /etc/os-release
+  accept cmd "docker run" ok
+  accept output "Alpine Linux"
+  neutral ls cat pwd cd
+  on pass say "А снаружи — Debian. Ядро у них одно, а файлы, программы и пакеты — свои."
+  hint output "registry-1.docker.io" say "Скачать образ из интернета не вышло. Что уже лежит на машине, покажет docker images."
+  hint tries 5 say "Название и версия системы лежат в файле, который ты уже читал в /etc."
+  hint tries 10 say "Сначала образ, потом команда — она выполнится внутри контейнера. Какой файл в /etc описывает систему?"
+
+stage
+  say "Найди контейнеры, которые ты уже запускал"
+  solve docker ps -a
+  accept cmd "docker ps"
+  accept cmd "docker container ls"
+  accept output "Exited \("
+  neutral ls cat pwd cd
+  on pass say "Exited (0) — программа внутри завершилась без ошибок, а контейнер остался лежать на диске."
+  hint cmd docker has ps missing -a say "Пусто? docker ps показывает только работающие. Как увидеть все — спроси у docker ps --help."
+  hint tries 5 say "Контейнер не исчезает, когда команда в нём заканчивается. Как их перечислить?"
+
+stage
+  say "Убери за собой: на машине не должно остаться ни одного контейнера"
+  solve docker container prune -f
+  accept cmd "docker rm"
+  accept cmd "docker container rm"
+  accept cmd "docker container prune"
+  accept cmd "docker system prune"
+  check live test -z "$(docker ps -aq)"
+  neutral ls cat pwd cd
+  on pass say "docker run --rm удаляет контейнер сам, как только команда в нём закончится, — мусора не остаётся."
+  hint output "No such container" say "Контейнер называют по ID или имени — оба есть в списке, который ты только что видел."
+  hint tries 5 say "Файлы удаляет rm. Угадай, как называется команда docker, которая удаляет контейнеры."
+  hint tries 10 say "docker --help перечислит все команды; docker container --help — всё, что умеют с контейнерами."
+
+exec finale

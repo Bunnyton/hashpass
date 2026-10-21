@@ -38,6 +38,8 @@ BLOCKS=(
     'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit top'
     'Редактор и текст: vim-intro vim-more fruit-store'
     'Скрипты: my-command'
+    'Git: git-init git-log git-branch git-remote'
+    'Docker: docker-run docker-web docker-volume docker-build'
     'Призы: star-wars moria'
     'Архив: first-steps showcase'
 )

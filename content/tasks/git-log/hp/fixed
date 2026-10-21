@@ -1,0 +1,8 @@
+#!/bin/sh
+# Отмена коммита: новый коммит, хеш и время у каждого свои — проверяем результат в истории.
+repo=/home/student/shop
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+g show HEAD:app.conf | cmp -s - "$(dirname "$0")/app.conf.good" || exit 1
+g merge-base --is-ancestor 12cb370 HEAD || exit 1
+[ -z "$(g status --porcelain)" ] || exit 1
+exit 0

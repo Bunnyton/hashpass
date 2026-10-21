@@ -1,0 +1,16 @@
+#!/bin/sh
+# Образы для заданий лежат в машине готовыми: Docker Hub может быть недоступен.
+# Ждём сокет демона и загружаем то, чего ещё нет.
+sock="$XDG_RUNTIME_DIR/docker.sock"
+i=0
+while ! docker -H "unix://$sock" info >/dev/null 2>&1; do
+    i=$((i + 1)); [ "$i" -gt 100 ] && exit 1
+    sleep 0.2
+done
+for tar in /usr/local/share/hp-docker/images/*.tar.gz; do
+    [ -e "$tar" ] || continue
+    name=$(basename "$tar" .tar.gz)
+    docker -H "unix://$sock" image inspect "$name" >/dev/null 2>&1 && continue
+    docker -H "unix://$sock" load -q -i "$tar" >/dev/null
+done
+exit 0

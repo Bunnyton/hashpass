@@ -1,0 +1,15 @@
+#!/bin/sh
+# Напарник успел первым: дописал README и отправил на сервер, пока студент правил AUTHORS.
+# Его коммит трогает другой файл — после git pull слияние пройдёт без конфликта.
+set -e
+tmp=$(mktemp -d)
+chown student:student "$tmp"
+runuser -u student -- sh -c "
+  cd '$tmp' &&
+  git clone -q /srv/git/team.git c &&
+  cd c &&
+  printf '\nЗапуск: ./bot.sh Имя\n' >> README.md &&
+  git -c user.name='Олег Кузнецов' -c user.email=oleg@duty.bot commit -q -am 'README: как запускать' &&
+  git push -q origin main
+"
+rm -rf "$tmp"

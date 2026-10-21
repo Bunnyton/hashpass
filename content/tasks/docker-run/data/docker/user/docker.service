@@ -1,0 +1,25 @@
+# Docker без root для student (rootless): dockerd живёт в своём пространстве имён пользователей,
+# а -p пробрасывает порты в сеть машины — сайт из контейнера открывается на http://localhost:<порт>.
+[Unit]
+Description=Docker Application Container Engine (rootless)
+
+[Service]
+Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
+# /proc/sys в консоли только для чтения: выключить IPv6 на интерфейсе контейнера нельзя — и не нужно
+Environment=DOCKER_ALLOW_IPV6_ON_IPV4_INTERFACE=1
+ExecStart=/usr/share/docker.io/contrib/dockerd-rootless.sh
+ExecStartPost=/usr/local/lib/hp-docker/load-images
+TimeoutStartSec=120
+Restart=on-failure
+StartLimitBurst=3
+StartLimitInterval=60s
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+Delegate=yes
+Type=simple
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

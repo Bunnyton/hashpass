@@ -1,0 +1,50 @@
+# git-log — поиск по истории: какой коммит сломал порт в app.conf, и отмена только его.
+# Репозиторий ~/shop собирает data/mkrepo.sh: 14 коммитов трёх авторов с фиксированными датами,
+# поэтому хеши одинаковы на любой машине. Виновник — ae46b85 «Обновил настройки» (port 80800);
+# после него app.conf правили ещё трижды — откат всего файла или reset эти правки теряет.
+# Отмену проверяет hp/fixed: app.conf в последнем коммите = hp/app.conf.good, прежняя вершина
+# ветки (12cb370) осталась в истории, рабочий каталог чист.
+
+image git-log:1
+from git-init:1
+
+# от git-init наследуются git и настройки; его каталог здесь не нужен
+run rm -rf /home/student/scripts
+# имя и почту студент уже указывал git в прошлом задании
+run runuser -u student -- git config --global user.name "Студент"
+run runuser -u student -- git config --global user.email student@hashpass.local
+# data: data/shop + data/mkrepo.sh — руками; историю собирает mkrepo.sh
+copy data /var/tmp/hp-shop
+run sh /var/tmp/hp-shop/mkrepo.sh /var/tmp/hp-shop/shop /home/student/shop
+run rm -rf /var/tmp/hp-shop
+run chown -R student:student /home/student/shop
+
+hidden hp
+
+settings
+  pager on
+
+say "Магазин «Пельмень» второй день не запускается. В ~/shop — его настройки и вся история правок."
+read brief.md
+
+stage
+  say "Найди коммит, который сломал порт в app.conf, и запиши его хеш в ~/culprit.txt"
+  solve git -C /home/student/shop log --format=%h -S80800 > /home/student/culprit.txt
+  accept file /home/student/culprit.txt "^\s*ae46b85[0-9a-f]{0,33}\s*$"
+  neutral ls cat pwd cd
+  on pass say "git log -S80800 нашёл бы его сразу: показывает только коммиты, где эта строка появилась или исчезла."
+  hint tries 5 say "Сообщение «Обновил настройки» ничего не говорит. Что именно поменялось в каждом коммите?"
+  hint tries 10 say "git log умеет показывать вместе с коммитами и сами изменения — ищи в git help log слово patch."
+  hint tries 15 say "Хеш — первая строка коммита в git log, хватит первых семи символов."
+
+stage
+  say "Отмени этот коммит — но правки, сделанные после него, должны остаться"
+  solve git -C /home/student/shop revert --no-edit ae46b85
+  check exec fixed
+  neutral ls cat pwd cd
+  on pass say "История не переписана: отмена — такой же коммит, его видно в git log. Так и чинят общие репозитории."
+  hint output "HEAD is now at" say "reset передвинул ветку назад — и все коммиты после того места из неё пропали. git reflog помнит, где она была."
+  hint tries 5 say "Сравни app.conf с последней версией: всё ли, кроме порта, осталось как было?"
+  hint tries 10 say "Отменить коммит в git — сделать новый коммит с обратной правкой. Команда так и называется: «вернуть» по-английски."
+
+exec finale

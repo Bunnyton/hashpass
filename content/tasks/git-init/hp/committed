@@ -1,0 +1,14 @@
+#!/bin/sh
+# Коммиты: у каждого свои хеш и время, с эталоном их не сравнить — проверяем состояние истории.
+# committed [N [файл строка]] — в ~/scripts не меньше N коммитов (по умолчанию 1), рабочий
+# каталог чист, и в последнем коммите файл содержит строку.
+repo=/home/student/scripts
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+need=${2:-1}
+count=$(g rev-list --count HEAD 2>/dev/null) || exit 1
+[ "$count" -ge "$need" ] || exit 1
+[ -z "$(g status --porcelain)" ] || exit 1
+if [ -n "$3" ]; then
+    g show "HEAD:$3" | grep -q "$4" || exit 1
+fi
+exit 0

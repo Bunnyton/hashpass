@@ -1,0 +1,56 @@
+# docker-web — сайт в контейнере: запустить в фоне, пробросить порт, открыть в браузере.
+# Продолжает docker-run (Docker и образы уже в машине). Консоль делит сеть с компьютером студента,
+# поэтому проброшенный порт открывается и в carbonyl внутри консоли, и в обычном браузере снаружи.
+# Пароль на странице дорисовывает JavaScript: curl его не покажет — нужен браузер.
+# Приёмка первого шага — по любому проброшенному порту, который отдаёт вики.
+
+image docker-web:1
+from docker-run:1
+
+# data: data/wiki.tar.gz — образ wiki с машины автора:
+#   cd data/wiki-src && docker build -t wiki . && docker save wiki:latest | gzip -9 > ../wiki.tar.gz
+copy data/wiki.tar.gz /usr/local/share/hp-docker/images/wiki.tar.gz
+
+hidden hp
+
+settings
+  pager on
+
+say "Коллега собрал внутреннюю вики отдела в образ wiki. Там, говорят, есть всё — даже пароль от Wi-Fi."
+read brief.md
+
+stage
+  say "Запусти вики в фоне и открой её в браузере"
+  solve docker run -d -p 8080:80 wiki
+  check live docker ps -q --filter ancestor=wiki | while read c; do docker port "$c" 80/tcp; done | sed 's/.*://' | while read p; do curl -fs "http://127.0.0.1:$p/"; done | grep -q "Вики отдела"
+  neutral ls cat pwd cd
+  on pass say "Порт машины слева, порт контейнера справа: так на одной машине уживаются десяток сайтов, и каждый уверен, что он на 80-м."
+  hint output "Failed to connect" read ports.md
+  hint output "address already in use" say "Этот порт на твоём компьютере уже кем-то занят. Возьми другой — любой свободный подойдёт."
+  hint tries 5 say "Контейнер работает (docker ps)? А какой порт ты открываешь в браузере и откуда он должен взяться?"
+  hint tries 10 say "docker run --help — найди ключ, который публикует порт контейнера на машине."
+
+stage
+  say "Найди в вики пароль от гостевого Wi-Fi и запиши его в ~/wifi.txt"
+  solve echo pelmeni-2026 > /home/student/wifi.txt
+  accept file /home/student/wifi.txt "^\s*pelmeni-2026\s*$"
+  neutral ls cat pwd cd
+  on pass say "atob — это base64. Пароль, который виден в исходнике страницы, только притворяется спрятанным."
+  hint output "откройте страницу в браузере" say "curl отдаёт страницу как есть, а пароль дорисовывает JavaScript. Его выполняет только браузер."
+  hint tries 5 say "Пароль на странице? Тогда осталось записать его в файл — как ты сохранял вывод в файл раньше."
+
+stage
+  say "Останови вики: контейнеров из образа wiki работать не должно"
+  solve docker stop $(docker ps -q --filter ancestor=wiki)
+  accept cmd "docker stop"
+  accept cmd "docker kill"
+  accept cmd "docker rm"
+  accept cmd "docker container stop"
+  accept cmd "docker container rm"
+  check live test -z "$(docker ps -q --filter ancestor=wiki)"
+  neutral ls cat pwd cd
+  on pass say "Остановленный контейнер не пропал: docker start поднимет его снова — с теми же портами и именем."
+  hint output "No such container" say "Имя или ID контейнера — в списке работающих контейнеров."
+  hint tries 5 say "Запустить — run. А как остановить? docker --help знает."
+
+exec finale

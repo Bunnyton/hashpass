@@ -1,0 +1,15 @@
+#!/bin/sh
+# Пока студент работал в ветке menu, коллега добавил в меню на main свой пункт — сразу после
+# «Меню», там же, где студент добавляет «Контакты». Слияние выйдет с конфликтом.
+set -e
+tmp=$(mktemp -d)
+chown student:student "$tmp"
+runuser -u student -- sh -c "
+  cd '$tmp' &&
+  git clone -q --branch main /home/student/site c &&
+  cd c &&
+  sed -i 's|<li><a href=\"/menu\">Меню</a></li>|&\n<li><a href=\"/prices\">Цены</a></li>|' index.html &&
+  git -c user.name='Олег Кузнецов' -c user.email=oleg@byte.cafe commit -q -am 'Меню: пункт «Цены»' &&
+  git push -q origin main
+"
+rm -rf "$tmp"
