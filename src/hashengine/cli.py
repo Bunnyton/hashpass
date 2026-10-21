@@ -19,6 +19,25 @@ def _engine_enabled() -> bool:
     return (home / "engine.enabled").exists()
 
 
+def _add_revision_commands(sub: argparse._SubParsersAction) -> None:
+    """`run`, `tag`, `rm`, `fork`: work with revisions (spec 2026-10-21 §2, §10)."""
+    p_run = sub.add_parser("run", help="запустить образ/задание как автор (без зачёта)")
+    p_run.add_argument("ref", help="локальный образ, ревизия x:1_v3 или тег x:1 (= последняя ревизия)")
+    p_run.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
+    p_tag = sub.add_parser("tag", help="навесить тег на свою ревизию на пуле")
+    p_tag.add_argument("src", help="ревизия x:1_v3 или тег x:1 (= последняя)")
+    p_tag.add_argument("to", help="новый тег, например stable")
+    p_tag.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
+    p_rm = sub.add_parser("rm", help="удалить ревизию с пула (x:1_v3) или локальную копию (--local)")
+    p_rm.add_argument("ref")
+    p_rm.add_argument("--local", action="store_true", help="удалить только с этой машины")
+    p_rm.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
+    p_fork = sub.add_parser("fork", help="форкнуть чужое задание в своё пространство имён")
+    p_fork.add_argument("src", help="ревизия или тег, например alice/lab:1")
+    p_fork.add_argument("name", nargs="?", help="имя форка (по умолчанию — как у исходного)")
+    p_fork.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Construct the author/server parser: build, push, serve, login, images."""
     parser = argparse.ArgumentParser(
@@ -63,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_source.add_argument("ref", help="задание на пуле, например 4istBorw/root-tour:1")
     p_source.add_argument("dest", nargs="?", help="куда распаковать (по умолчанию ./<имя задания>)")
     p_source.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
+    _add_revision_commands(sub)
     sub.add_parser("images", help="список локально собранных образов и заданий")
     p_cat = sub.add_parser("catalog", help="каталог пула: раскладка по блокам (администратор)")
     p_cat.add_argument("action", choices=["layout"], help="layout — задать блоки и порядок")
@@ -103,7 +123,18 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911,
         return cli.cmd_remote_images(env, args.registry)
     if command == "catalog":
         return cli.cmd_catalog_layout(env, args.specs, args.registry)
+    revision_cmd = _REVISION_COMMANDS.get(command)
+    if revision_cmd is not None:
+        return revision_cmd(env, args)
     return cli.cmd_images(env)
+
+
+_REVISION_COMMANDS = {
+    "run": lambda env, a: cli.cmd_engine_run(env, a.ref, a.registry),
+    "tag": lambda env, a: cli.cmd_tag(env, a.src, a.to, a.registry),
+    "rm": lambda env, a: cli.cmd_rm(env, a.ref, a.registry, local=a.local),
+    "fork": lambda env, a: cli.cmd_fork(env, a.src, a.name, a.registry),
+}
 
 
 def main(argv: Sequence[str] | None = None) -> int:

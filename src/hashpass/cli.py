@@ -419,6 +419,7 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     recipe = load_recipe(taskfile_path)
     recipe = _rebase_paths(recipe, taskfile_path.resolve().parent)   # paths relative to the Taskfile
     name, version = resolve_ref(recipe, tag, taskfile_path)
+    check_tag(version)                                   # `_vN` / `_latest` name pool revisions
     user = _author_identity(env, io)                     # images are namespaced by their owner
     # A bare `from apt-update:1` means the owner's own build of that task (a course chains its
     # tasks); an explicit `alice/lib:2` is left alone.
@@ -1792,6 +1793,65 @@ def cmd_pull(env: Home, ref: str, registry: str | None = None, io: Io | None = N
     # with the cached token: an author pulls own latest push, not the approved copy (review 2026-10-14)
     copied = RemoteRegistry(url, cache=CredentialCache(env.creds)).pull(ref, store)
     sys.stdout.write(f"подтянуто {ref} (слоёв: {len(copied)})\n")
+    return 0
+
+
+def cmd_engine_run(env: Home, ref: str, registry: str | None = None, io: Io | None = None) -> int:
+    """
+    Run an image or task as the author sees it -- no credit (spec 2026-10-21 §8).
+
+    A local build or pulled revision runs as is; otherwise it is pulled first (a tag -> its
+    newest revision, which the author/admin gets) together with its task/.
+    """
+    io = io or _default_io()
+    store = ImageStore(env.images)
+    if not store.exists(ref):
+        url = _prompt_registry(env, registry, io)
+        client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+        client.pull(ref, store)
+        tdir = store.get(ref).layer.parent / "task"
+        if not tdir.exists():
+            with contextlib.suppress(urllib.error.HTTPError, RuntimeError):   # a plain image
+                client.pull_task(ref, tdir)
+    return cmd_run(env, ref, io)
+
+
+def cmd_tag(env: Home, src: str, to: str, registry: str | None = None, io: Io | None = None) -> int:
+    """Tag one of your revisions on the pool (`hashengine tag x:1_v3 stable`)."""
+    io = io or _default_io()
+    check_tag(to)
+    url = _ensure_registry_login(env, registry, io)
+    made = _push_call(RemoteRegistry(url, cache=CredentialCache(env.creds)).tag, src, to)
+    sys.stdout.write(f"тег навешен: {made}\n")
+    return 0
+
+
+def cmd_rm(env: Home, ref: str, registry: str | None = None, *, local: bool = False,
+           io: Io | None = None) -> int:
+    """Remove a revision from the pool (`x:1_v3`), or with `local` the local copy of a ref."""
+    io = io or _default_io()
+    if local:
+        store = ImageStore(env.images)
+        if not store.exists(ref):
+            raise RuntimeError(_no_such_image(store, ref))
+        store.remove(ref)
+        sys.stdout.write(f"удалено локально: {ref}\n")
+        return 0
+    url = _ensure_registry_login(env, registry, io)
+    _push_call(RemoteRegistry(url, cache=CredentialCache(env.creds)).remove_revision, ref)
+    sys.stdout.write(f"удалено с пула: {ref}\n")
+    return 0
+
+
+def cmd_fork(env: Home, src: str, name: str | None = None, registry: str | None = None,
+             io: Io | None = None) -> int:
+    """Fork a revision into your namespace (`hashengine fork alice/lab:1 [lab2]`)."""
+    io = io or _default_io()
+    url = _ensure_registry_login(env, registry, io)
+    user = _author_identity(env, io)
+    short = name or split_ref(src)[0].rpartition("/")[2]
+    made = _push_call(RemoteRegistry(url, cache=CredentialCache(env.creds)).fork, src, f"{user}/{short}")
+    sys.stdout.write(f"форк создан: {made} (исходники: hashengine source {made})\n")
     return 0
 
 

@@ -386,6 +386,17 @@ class ImageStore:
             return None
         return self._dir(img.name, img.version) / img.blob
 
+    def remove(self, ref: str) -> None:
+        """Delete a stored image (an alias: just the alias), root-owned layers included."""
+        name, version = _split_ref(ref)
+        target = self._aliases().get(f"{name}:{version}")
+        if target is not None:
+            self._drop_alias(name, version)
+            return
+        dest = self.dir(name, version)
+        if dest.is_dir():
+            _remove_tree(dest)
+
     def link_revision(self, src_ref: str, dst_name: str, dst_version: str, *,
                       parents: tuple[str, ...]) -> StoredImage:
         """

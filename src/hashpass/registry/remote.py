@@ -503,6 +503,31 @@ class RemoteRegistry:
                 made.append(str(result.get("ref", item)))
         return made
 
+    def revisions(self, name: str, *, token: str | None = None) -> dict[str, object]:
+        """Return a repository's settings and tags with their revisions (oldest first)."""
+        return self._get_json(f"/revisions/{name}", token=self._auth_token(token))
+
+    def tag(self, src: str, to: str, *, token: str | None = None) -> str:
+        """Tag your revision `src` (`x:1_v3`, or `x:1` = its newest) as `to`; return the new revision."""
+        name, version = split_ref(src)
+        return str(self._post_json(f"/revisions/{name}/{version}/tag", {"from": f"{name}:{version}", "to": to},
+                                   token=self._auth_token(token))["ref"])
+
+    def remove_revision(self, ref: str, *, token: str | None = None) -> None:
+        """Remove one of your revisions (`x:1_v3`) from the pool."""
+        name, version = split_ref(ref)
+        tag, n, _latest = parse_version(version)
+        if n is None:
+            msg = f"укажите ревизию: {name}:{version}_vN (список — hashengine remote)"
+            raise ValueError(msg)
+        self._send("DELETE", f"/revisions/{name}/{tag}/{n}",
+                   headers={"Authorization": f"Bearer {self._auth_token(token)}"})
+
+    def fork(self, src: str, name: str, *, token: str | None = None) -> str:
+        """Fork revision `src` into your repository `name` (`you/x`); return its first revision."""
+        return str(self._post_json(f"/revisions/{name}/fork", {"from": normalize_ref(src)},
+                                   token=self._auth_token(token))["ref"])
+
     def _push_legacy(self, store: ImageStore, ref: str, auth: str, *, force: bool,  # noqa: PLR0913
                      task_dir: Path | None, publish: bool, block: str | None,
                      extras: Callable[[str], None] | None) -> list[str]:

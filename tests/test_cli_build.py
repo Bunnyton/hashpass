@@ -127,3 +127,15 @@ def test_cmd_build_namespaces_bare_from_parents_like_the_image_itself(tmp_path, 
     assert cli.cmd_build(env, str(imf), io=cli.Io(read=lambda _p: None, write=lambda _s: None,
                                                    clock=lambda: "")) == 0
     assert seen == [("bunnyton/apt-update:1", "alice/lib:2")]   # bare -> owner; explicit ns kept
+
+
+@pytest.mark.tier1
+def test_build_refuses_a_reserved_tag_before_anything_else(tmp_path, monkeypatch):
+    """`image lab:1_v2` would collide with pool revision names: refused before login or build."""
+    from hashpass import cli  # noqa: PLC0415
+    taskfile = tmp_path / "Taskfile"
+    taskfile.write_text("image lab:1_v2\nrun true\n", encoding="utf-8")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    monkeypatch.setattr(cli, "_author_identity", lambda *_a: pytest.fail("asked for a login"))
+    with pytest.raises(ValueError, match="зарезервирован"):
+        cli.cmd_build(env, str(taskfile))
