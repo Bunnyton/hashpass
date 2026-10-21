@@ -64,7 +64,7 @@ from hashpass.registry.passwords import (
     validate_login,
     validate_password,
 )
-from hashpass.registry.refs import split_ref
+from hashpass.registry.refs import normalize_ref, split_ref
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.revisions import check_tag
 from hashpass.registry.server import make_server
@@ -1667,6 +1667,17 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
     _attach_source(client, ref, path.parent, io, staging)
 
 
+def _built_on_base(store: ImageStore, ref: str) -> str | None:
+    """
+    Return the base image `ref` was built on (an implicit FROM the pool pins).
+
+    None for the base itself or for an image not built from a Taskfile.
+    """
+    if normalize_ref(ref) == base_ref() or store.get(ref).build_key is None:
+        return None
+    return base_ref()
+
+
 def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0913
              publish: bool = False, force: bool = False, block: str | None = None,
              io: Io | None = None) -> int:
@@ -1693,13 +1704,14 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     _push_call(client.push, store, ref, force=force, task_dir=tdir if tdir.exists() else None,
                publish=publish, block=block,
-               extras=lambda staging: _attach_taskfile(client, store, ref, io, staging))
+               extras=lambda staging: _attach_taskfile(client, store, ref, io, staging),
+               base=_built_on_base(store, ref))
     for done in client.last_push:
         if done["unchanged"]:
             sys.stdout.write(f"без изменений: {done['ref']} уже на пуле\n")
         else:
             sys.stdout.write(f"отправлено {done['ref']}\n")
-    if publish:
+    if publish and not all(done["unchanged"] for done in client.last_push):
         where = f" (блок «{block}»)" if block else ""
         sys.stdout.write(f"опубликовано в каталог{where}: {ref} — студенты увидят эту версию, когда "
                          "её одобрит администратор (новое задание ещё и скрыто, пока вы его не "

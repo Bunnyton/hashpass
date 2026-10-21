@@ -70,6 +70,7 @@ class StoredImage:
     blob: str | None = None            # server: file name of that blob inside the image dir
     pool_digest: str | None = None     # client: digest of the blob this copy was pulled from
     pool_digests: dict[str, str] = field(default_factory=dict)   # client: per registry_key(url)
+    base: str | None = None            # server: the pinned base revision it was built on
 
 
 def _split_ref(ref: str) -> tuple[str, str]:
@@ -289,7 +290,8 @@ class ImageStore:
                            meta.get("build_key"), meta.get("taskfile_path"),
                            digest=meta.get("digest"), blob=meta.get("blob"),
                            pool_digest=meta.get("pool_digest"),
-                           pool_digests=dict(meta.get("pool_digests") or {}))
+                           pool_digests=dict(meta.get("pool_digests") or {}),
+                           base=meta.get("base"))
 
     def set_taskfile_path(self, ref: str, taskfile_path: str) -> None:
         """Record (in meta.json) the Taskfile an image was built from, for push to attach later."""

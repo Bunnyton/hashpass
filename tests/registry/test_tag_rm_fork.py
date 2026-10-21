@@ -103,3 +103,27 @@ def test_revisions_listing(pool: _Pool) -> None:
     assert code == 200  # noqa: PLR2004
     assert body["visibility"] == "public"
     assert [r["n"] for r in body["tags"]["1"]] == [1, 2]
+
+
+@pytest.mark.tier1
+def test_the_base_a_revision_was_built_on_cannot_be_removed(pool: _Pool) -> None:
+    """Live check 2026-10-22: the base was deleted from under every task (it is not a `from`)."""
+    sid = _http("POST", f"{pool.url}/revisions/bob/lab/1", token=pool.tok["bob"],
+                body={"base": "bunnyton/debian:trixie"})[1]["staging"]
+    pool.put("image", "bob/lab", "1", sid, pool.blob("bob/lab", "1", "one"))
+    assert pool.commit("bob/lab", "1", sid)[1]["ref"] == "bob/lab:1_v1"
+    assert pool.r.store.get("bob/lab:1_v1").base == "bunnyton/debian:trixie_v1"
+    code, body = _http("DELETE", f"{pool.url}/revisions/bunnyton/debian/trixie/1",
+                       token=pool.tok["bunnyton"])
+    assert code == 409  # noqa: PLR2004
+    assert body["dependents"] == ["bob/lab:1_v1"]
+
+
+@pytest.mark.tier1
+def test_an_unknown_base_is_refused(pool: _Pool) -> None:
+    sid = _http("POST", f"{pool.url}/revisions/bob/lab/1", token=pool.tok["bob"],
+                body={"base": "bunnyton/nothere:1"})[1]["staging"]
+    pool.put("image", "bob/lab", "1", sid, pool.blob("bob/lab", "1", "one"))
+    code, body = pool.commit("bob/lab", "1", sid)
+    assert code == 409  # noqa: PLR2004
+    assert "bunnyton/nothere:1" in body["error"]

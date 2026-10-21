@@ -1205,7 +1205,7 @@ class PoolServer:
         if not revisions and self.catalog().find(ref) is None:
             return self._not_found(ref)
         dependents = [r for r in self.store.list() if r not in revisions
-                      and set(self.store.get(r).parents) & {*revisions, ref}]
+                      and ({*self.store.get(r).parents, self.store.get(r).base} & {*revisions, ref})]
         if dependents:
             return self._json(HTTPStatus.CONFLICT, {
                 "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их"})
@@ -1327,6 +1327,10 @@ class PoolServer:
             return err
         sweep_stale(self.store.root)
         st = new_staging(self.store.root, owner=user, name=name, tag=tag)
+        data = request.get_json(silent=True) or {}
+        base = str(data.get("base", "")) if isinstance(data, dict) else ""
+        if base:                                       # the base it was built on (an implicit FROM)
+            st.save_intent(st.intent | {"base": base})
         return self._json(HTTPStatus.CREATED, {"staging": st.sid})
 
     def _revision_commit(self, tail: str) -> Response:
@@ -1454,8 +1458,8 @@ class PoolServer:
         with self.repo(name).locked() as idx:
             if idx.get(tag, int(n_raw)) is None:
                 return self._not_found(ref)
-            dependents = sorted(r for r in self.store.list()
-                                if r != ref and ref in self.store.get(r).parents)
+            dependents = sorted(r for r in self.store.list() if r != ref and (
+                ref in self.store.get(r).parents or self.store.get(r).base == ref))
             if dependents:
                 return self._json(HTTPStatus.CONFLICT, {
                     "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их",
@@ -1484,7 +1488,7 @@ class PoolServer:
         p_name, _, p_version = parent.partition(":")
         return self.resolve(p_name, p_version or "latest")
 
-    def _commit(self, user: str, name: str, tag: str, st: Staging) -> Response:
+    def _commit(self, user: str, name: str, tag: str, st: Staging) -> Response:  # noqa: PLR0911
         """
         Turn a staging area into revision `tag_vN` (spec §2.3), atomically under the repo lock.
 
@@ -1517,6 +1521,13 @@ class PoolServer:
                 pinned.append(pin)
             t_digest = (task_digest(staged_task) if staged_task.is_dir()
                         else (latest.task_digest if latest else ""))
+            raw_base = str(st.intent.get("base") or "")
+            base = self._pin(raw_base) if raw_base else (
+                self.store.get(latest_ref).base if latest_ref else None)
+            if raw_base and base is None:
+                st.remove()
+                return self._json(HTTPStatus.CONFLICT, {"error": f"базовый образ {raw_base} не найден на пуле — отправьте его первым (hashengine push base)"})
+            prev_base = self.store.get(latest_ref).base if latest_ref else None
             # attachments: compare the files only (their index records upload times)
             changed_files = any(
                 _tree_digest(getattr(st, kind)._dir(ref_tag) / sub) not in (  # noqa: SLF001
@@ -1525,7 +1536,8 @@ class PoolServer:
                                         ("sources", self.sources(), "."))
             ) if latest_ref else False
             if (latest is not None and not changed_files
-                    and (image_digest, t_digest, tuple(pinned)) == (latest.image_digest, latest.task_digest, latest.parents)):
+                    and (image_digest, t_digest, tuple(pinned), base)
+                    == (latest.image_digest, latest.task_digest, latest.parents, prev_base)):
                 st.remove()
                 return self._json(HTTPStatus.OK, {"ref": latest_ref, "n": latest.n, "unchanged": True})
             n = idx.peek_next(tag)
@@ -1536,6 +1548,8 @@ class PoolServer:
             src_dest = self.sources()._dir(ref)            # noqa: SLF001  (same package)
             try:
                 self._assemble(st, name, tag, version, latest_ref, pinned, has_image=has_image)
+                if base:
+                    self._set_meta_field(dest, "base", base)
                 idx.add(tag, {"image_digest": image_digest, "task_digest": t_digest,
                               "parents": pinned, "by": user})
             except (OSError, ValueError, KeyError, tarfile.TarError) as exc:
@@ -1591,6 +1605,12 @@ class PoolServer:
                 shutil.move(src, out)                        # may cross filesystems (attachments_path)
             elif latest_ref is not None and live._dir(latest_ref).is_dir():  # noqa: SLF001
                 shutil.copytree(live._dir(latest_ref), out, symlinks=True)  # noqa: SLF001
+
+    @staticmethod
+    def _set_meta_field(image_dir: Path, key: str, value: str) -> None:
+        meta = json.loads((image_dir / "meta.json").read_text(encoding="utf-8"))
+        meta[key] = value
+        (image_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     def _catalog_on_commit(self, name: str, tag: str, t_digest: str, image: str, intent: dict) -> None:
         """Put a new revision of a catalogued tag up for moderation; `publish` adds it first."""

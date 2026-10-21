@@ -446,9 +446,10 @@ class RemoteRegistry:
         local = store.get(item).pool_digests.get(registry_key(self.base_url))
         return bool(local) and local == remote
 
-    def begin(self, name: str, tag: str, *, token: str | None = None) -> str:
-        """Open a staging area on the pool for one revision of `name:tag`; return its id."""
-        return str(self._post_json(f"/revisions/{name}/{tag}", {}, token=self._auth_token(token))["staging"])
+    def begin(self, name: str, tag: str, *, token: str | None = None, base: str | None = None) -> str:
+        """Open a staging area for one revision of `name:tag` (built on `base`); return its id."""
+        return str(self._post_json(f"/revisions/{name}/{tag}", {"base": base} if base else {},
+                                   token=self._auth_token(token))["staging"])
 
     def commit(self, name: str, tag: str, staging: str, *, token: str | None = None) -> dict[str, object]:
         """Commit a staging area: {"ref": "name:tag_vN", "n": N} (+ "unchanged": True)."""
@@ -457,7 +458,8 @@ class RemoteRegistry:
 
     def push(self, store: ImageStore, ref: str, *, token: str | None = None,  # noqa: PLR0913
              force: bool = False, task_dir: Path | None = None, publish: bool = False,
-             block: str | None = None, extras: Callable[[str], None] | None = None) -> list[str]:
+             block: str | None = None, extras: Callable[[str], None] | None = None,
+             base: str | None = None) -> list[str]:
         """
         Push ref + its own `from` closure, bottom-up, each as one revision (spec 2026-10-21 §2.3).
 
@@ -466,6 +468,7 @@ class RemoteRegistry:
         for the target -- `extras(staging)` (Taskfile, README, sources); then commit. Pool
         revisions in the closure (`x:1_v2`, pulled) are not sent: the pool has them. Returns the
         new revisions; `last_push` says what each ref became (`unchanged` when nothing differed).
+        `base` names the base image the refs were built on: the pool pins it like a parent.
         A pool without revisions gets the old one-request-per-part push.
         """
         auth = self._push_token(token)
@@ -477,7 +480,8 @@ class RemoteRegistry:
                 continue                                   # a pool revision: already there
             is_target = item == normalize_ref(ref)
             try:
-                sid = self.begin(name, version, token=auth)
+                sid = self.begin(name, version, token=auth,
+                                 base=base if base and normalize_ref(base) != item else None)
             except urllib.error.HTTPError as exc:
                 if exc.code not in (HTTPStatus.NOT_FOUND, HTTPStatus.METHOD_NOT_ALLOWED):
                     raise
