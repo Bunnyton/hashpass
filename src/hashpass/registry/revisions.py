@@ -167,6 +167,10 @@ class RepoIndex:
     def get(self, tag: str, n: int) -> Revision | None:
         return next((r for r in self.revisions(tag) if r.n == n), None)
 
+    def peek_next(self, tag: str) -> int:
+        """Return the number the next `add` to `tag` will get (stable while the lock is held)."""
+        return int(self._data["tags"].get(tag, {}).get("next", 1))
+
     def add(self, tag: str, fields: dict) -> Revision:
         """Append the next revision of `tag` (number = the tag's counter, never reused)."""
         self._need_lock()

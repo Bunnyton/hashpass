@@ -98,3 +98,12 @@ def test_roundtrip_reload(tmp_path: Path) -> None:
 def test_set_meta_rejects_unknown_visibility(tmp_path: Path) -> None:
     with RepoIndex(tmp_path, "bob/lab").locked() as w, pytest.raises(ValueError, match="видимость"):
         w.set_meta(visibility="secret")
+
+
+@pytest.mark.tier1
+def test_peek_next_names_the_next_add(tmp_path: Path) -> None:
+    with RepoIndex(tmp_path, "bob/lab").locked() as w:
+        first = w.peek_next("1")
+        assert w.add("1", _rev()).n == first
+        w.remove("1", first)
+        assert w.peek_next("1") == first + 1
