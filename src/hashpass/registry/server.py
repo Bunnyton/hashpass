@@ -41,6 +41,7 @@ from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, un
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.course_api import CourseApi
+from hashpass.registry.merges import MergeRequests, tree_diff
 from hashpass.registry.passwords import (
     LOGIN_RE,
     LOGIN_RULE,
@@ -1453,13 +1454,16 @@ class PoolServer:
             return None, ""
         return (self.attachments() if kind == "attachments" else self.sources()), ref
 
-    def _route_revisions(self, tail: str) -> Response:
+    def _route_revisions(self, tail: str) -> Response:  # noqa: PLR0911
         """
         Revisions API (spec 2026-10-21 §2).
 
         GET name -> tags + revisions; POST name/tag -> open a staging area; POST name/tag/commit;
         POST name/tag/tag {from, to}; POST name/fork {from}; DELETE name/tag/N.
         """
+        if "/merges" in tail:
+            target, _, rest = tail.partition("/merges")
+            return self._route_merges(target, rest.strip("/"))
         if request.method == "GET":
             return self._revisions_get(tail)
         if request.method == "PUT":
@@ -1693,6 +1697,84 @@ class PoolServer:
                 "message": "ревизия стоит в чужих курсах — удаление ждёт решения администратора"})
         self._delete_revision(name, tag, n)
         return self._json(HTTPStatus.OK, {"removed": ref})
+
+    def merges(self, name: str) -> MergeRequests:
+        return MergeRequests(Path(self.store.root) / ".repos" / name)
+
+    def _route_merges(self, target: str, rest: str) -> Response:  # noqa: PLR0911, C901
+        """
+        Merge requests into `target` (spec §2.8).
+
+        GET -> the list (owner/admin: all; others: their own); GET <id>/diff -> the source diff;
+        POST {from, to_tag, comment} -> offer a fork revision; POST <id> {action: merge|reject|withdraw}.
+        """
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        try:
+            self.store.dir(target, "x")
+        except ValueError:
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        if not self.repo(target).exists or not self._may_see_repo(user, target):
+            return self._not_found(target)
+        owner = self._may_write(user, target)
+        store = self.merges(target)
+        if request.method == "GET":
+            mid, _, what = rest.partition("/")
+            if mid and what == "diff":
+                return self._merge_diff(target, store.get(mid), user, owner=owner)
+            rows = [r for r in store.all() if owner or r["by"] == user]
+            return self._json(HTTPStatus.OK, {"merges": rows})
+        data = request.get_json(silent=True) or {}
+        if not rest:
+            return self._merge_offer(target, user, data)
+        row = store.get(rest)
+        if row is None or row["state"] != "open":
+            return self._json(HTTPStatus.NOT_FOUND, {"error": "такого открытого запроса нет"})
+        action = str(data.get("action", ""))
+        if action == "withdraw":
+            if row["by"] != user:
+                return self._empty(HTTPStatus.FORBIDDEN)
+            return self._json(HTTPStatus.OK, store.close(rest, "withdrawn", by=user))
+        if action not in ("merge", "reject") or not owner:
+            return self._empty(HTTPStatus.FORBIDDEN)
+        if action == "reject":
+            return self._json(HTTPStatus.OK, store.close(rest, "rejected", by=user,
+                                                         reason=str(data.get("reason", ""))))
+        if not self.store.exists(row["from"]):
+            return self._json(HTTPStatus.CONFLICT, {"error": f"ревизии {row['from']} больше нет"})
+        with self.repo(target).locked() as idx:
+            ref = self._copy_revision(row["from"], target, row["to_tag"], user, idx,
+                                      merged_from=row["from"])
+        return self._json(HTTPStatus.OK, store.close(rest, "merged", by=user, result=ref))
+
+    def _merge_offer(self, target: str, user: str, data: dict) -> Response:
+        src = str(data.get("from", ""))
+        src_name, _, src_version = src.partition(":")
+        to_tag = str(data.get("to_tag", "")) or parse_version(src_version)[0]
+        try:
+            check_tag(to_tag)
+        except ValueError as exc:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        if not src_name or not self._may_write(user, src_name):
+            return self._empty(HTTPStatus.FORBIDDEN)
+        if not self.repo(src_name).fork_of.startswith(f"{target}:"):
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": f"{src_name} — не форк {target}"})
+        resolved = self.resolve(src_name, src_version or "latest")
+        if resolved is None or parse_version(resolved.partition(":")[2])[1] is None:
+            return self._not_found(src)
+        row = self.merges(target).offer(src=resolved, to_tag=to_tag, by=user,
+                                        comment=str(data.get("comment", "")))
+        return self._json(HTTPStatus.CREATED, row)
+
+    def _merge_diff(self, target: str, row: dict | None, user: str, *, owner: bool) -> Response:
+        if row is None or not (owner or row["by"] == user):
+            return self._json(HTTPStatus.NOT_FOUND, {"error": "такого запроса нет"})
+        base = self.resolve(target, row["to_tag"])
+        old = self.sources()._dir(base) if base else None             # noqa: SLF001
+        new = self.sources()._dir(row["from"])                        # noqa: SLF001
+        return self._json(HTTPStatus.OK, {"from": row["from"], "to": base or f"{target}:{row['to_tag']}",
+                                          "files": tree_diff(old, new)})
 
     def _route_deletions(self) -> Response:
         """List open deletion requests: all for the admin, their own for an owner."""
