@@ -15,6 +15,7 @@ from werkzeug.exceptions import ClientDisconnected
 from hashpass.imagestore.store import ImageStore
 from hashpass.registry.blob import pack_image, pack_image_to_file, unpack_image
 from hashpass.registry.passwords import UserStore
+from hashpass.registry.revisions import RepoIndex
 from hashpass.registry.server import make_server
 
 _TIMEOUT = 10
@@ -476,8 +477,8 @@ def test_in_flight_counts_a_request_until_its_body_is_sent():
 
 
 @pytest.mark.tier2
-def test_attachment_get_is_for_authors_and_admins_only(registry, tmp_path):
-    """Task sources (Taskfile, source.tar.gz) carry the solutions: any author/admin reads, students never."""
+def test_attachment_get_follows_the_repositorys_source_setting(registry, tmp_path):
+    """Spec 2026-10-21 §2.6: sources are open by default; «hide service files» -> owner/admin only."""
     _seed_ns(registry.store, tmp_path, "bob/app")
     for user, role in (("bob", "author"), ("alice", "author"), ("root", "admin"), ("kid", "student")):
         registry.users.add(user, "pw-correct", role=role)
@@ -489,8 +490,12 @@ def test_attachment_get_is_for_authors_and_admins_only(registry, tmp_path):
     url = f"{registry.base_url}/attachment/bob/app/1?name=source.tar.gz"
     assert _http("PUT", url, data=b"tgz-bytes", headers=auth("bob"))[0] == HTTPStatus.CREATED
     assert _http("GET", url)[0] == HTTPStatus.UNAUTHORIZED
+    for reader in ("kid", "alice", "root"):                 # open by default; only the owner writes
+        assert _http("GET", url, headers=auth(reader)) == (HTTPStatus.OK, b"tgz-bytes")
+    with RepoIndex(registry.store.root / ".repos", "bob/app").locked() as idx:
+        idx.set_meta(hide_sources=True)
     assert _http("GET", url, headers=auth("kid"))[0] == HTTPStatus.FORBIDDEN
-    for reader in ("bob", "alice", "root"):                 # another author may read, not write
+    for reader in ("bob", "root"):
         assert _http("GET", url, headers=auth(reader)) == (HTTPStatus.OK, b"tgz-bytes")
     missing = f"{registry.base_url}/attachment/bob/app/1?name=nope.txt"
-    assert _http("GET", missing, headers=auth("alice"))[0] == HTTPStatus.NOT_FOUND
+    assert _http("GET", missing, headers=auth("root"))[0] == HTTPStatus.NOT_FOUND

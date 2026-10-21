@@ -486,7 +486,7 @@ class PoolServer:
                          self._route_user_auto_approve, methods=["PUT"])
         app.add_url_rule("/closure/<path:tail>", "closure", self._route_closure, methods=["GET"])
         app.add_url_rule("/revisions/<path:tail>", "revisions", self._route_revisions,
-                         methods=["GET", "POST", "DELETE"])
+                         methods=["GET", "POST", "PUT", "DELETE"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_put",
                          self._route_attachment_put, methods=["PUT"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_get",
@@ -1190,7 +1190,7 @@ class PoolServer:
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
-        rows = self._pool_image_rows()
+        rows = [r for r in self._pool_image_rows() if self._may_see_repo(user, str(r["repo"]))]
         if self.users.role(user) not in _AUTHOR_ROLES:
             # a student: a catalogued tag only as its approved revision of an open task; other
             # tags only as plain images (bases) -- never a task outside the catalog
@@ -1422,6 +1422,8 @@ class PoolServer:
         """
         if request.method == "GET":
             return self._revisions_get(tail)
+        if request.method == "PUT":
+            return self._repo_settings(tail)
         if request.method == "DELETE":
             return self._revision_delete(tail)
         for suffix, handler in (("/commit", self._revision_commit), ("/tag", self._revision_tag)):
@@ -1484,9 +1486,56 @@ class PoolServer:
         except ValueError:
             return self._empty(HTTPStatus.BAD_REQUEST)
         idx = self.repo(name)
-        if not idx.exists:
+        if not idx.exists or not self._may_see_repo(self._token_user(), name):
             return self._not_found(name)
         return self._json(HTTPStatus.OK, idx.as_dict())
+
+    def _may_see_repo(self, user: str | None, name: str) -> bool:
+        """Tell whether `user` sees repository `name`: public -- anyone; private -- owner and admins."""
+        return self.repo(name).visibility == "public" or (user is not None and self._may_write(user, name))
+
+    def _may_read_sources(self, user: str | None, name: str, filename: str = "") -> bool:
+        """
+        Whether `user` may read a task's sources (spec §2.6).
+
+        README/about.md: whoever sees the image; the rest: signed in and the repository not
+        hiding its service files -- else only its owner and admins.
+        """
+        if user is None or not self._may_see_repo(user, name):
+            return False
+        if filename.rsplit("/", 1)[-1] in ("README.md", "about.md"):
+            return True
+        return not self.repo(name).hide_sources or self._may_write(user, name)
+
+    def _repo_settings(self, name: str) -> Response:
+        """PUT name {visibility?, hide_sources?}: the owner's repository settings (spec §2.5, §2.6)."""
+        _user, err = self._authorize_write(name, "x")
+        if err is not None:
+            return err
+        if not self.repo(name).exists:
+            return self._not_found(name)
+        data = request.get_json(silent=True) or {}
+        visibility = data.get("visibility")
+        if visibility == "private":
+            blockers = [c.ref for c in self.course_api.courses.all() if c.visibility == "public"
+                        and any(t["repo"] == name for _b, t in c.tasks())]
+            blockers += sorted({r for r in self.store.list()
+                                if r.partition(":")[0] != name and self.repo(r.partition(":")[0]).visibility == "public"
+                                and any(p.partition(":")[0] == name
+                                        for p in (*self.store.get(r).parents, self.store.get(r).base or ""))})
+            if blockers:
+                return self._json(HTTPStatus.CONFLICT, {
+                    "error": f"{name} нельзя сделать приватным: его используют {', '.join(blockers)}",
+                    "blockers": blockers})
+        try:
+            with self.repo(name).locked() as idx:
+                fields = {k: data[k] for k in ("visibility", "hide_sources") if k in data}
+                if "hide_sources" in fields:
+                    fields["hide_sources"] = bool(fields["hide_sources"])
+                idx.set_meta(**fields)
+        except ValueError as exc:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        return self._json(HTTPStatus.OK, self.repo(name).as_dict())
 
     def _copy_revision(self, src_ref: str, name: str, tag: str, by: str,  # noqa: PLR0913
                        idx: RepoIndex, *, merged_from: str = "") -> str:
@@ -1616,7 +1665,7 @@ class PoolServer:
         p_name, _, p_version = parent.partition(":")
         return self.resolve(p_name, p_version or "latest")
 
-    def _commit(self, user: str, name: str, tag: str, st: Staging) -> Response:  # noqa: PLR0911
+    def _commit(self, user: str, name: str, tag: str, st: Staging) -> Response:  # noqa: PLR0911, C901
         """
         Turn a staging area into revision `tag_vN` (spec §2.3), atomically under the repo lock.
 
@@ -1647,11 +1696,20 @@ class PoolServer:
                     st.remove()
                     return self._json(HTTPStatus.CONFLICT, {"error": f"родитель {parent} не найден на пуле — отправьте его первым"})
                 pinned.append(pin)
+            if idx.visibility == "public":
+                private = [p for p in pinned if self.repo(p.partition(":")[0]).visibility == "private"]
+                if private:
+                    st.remove()
+                    return self._json(HTTPStatus.CONFLICT, {
+                        "error": f"публичный образ нельзя строить на приватном ({', '.join(private)})"})
             t_digest = (task_digest(staged_task) if staged_task.is_dir()
                         else (latest.task_digest if latest else ""))
             raw_base = str(st.intent.get("base") or "")
             base = self._pin(raw_base) if raw_base else (
                 self.store.get(latest_ref).base if latest_ref else None)
+            if base and idx.visibility == "public" and self.repo(base.partition(":")[0]).visibility == "private":
+                st.remove()
+                return self._json(HTTPStatus.CONFLICT, {"error": f"публичный образ нельзя строить на приватной базе {base}"})
             if raw_base and base is None:
                 st.remove()
                 return self._json(HTTPStatus.CONFLICT, {"error": f"базовый образ {raw_base} не найден на пуле — отправьте его первым (hashengine push base)"})
@@ -1812,10 +1870,12 @@ class PoolServer:
         parts = self._split_ref(tail)
         if parts is None:
             return self._empty(HTTPStatus.NOT_FOUND)
-        _user, err = self._auth_role(_AUTHOR_ROLES)
-        if err is not None:
-            return self._empty(err)
         name, version = parts
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        if not self._may_read_sources(user, name, request.args.get("name", "")):
+            return self._empty(HTTPStatus.FORBIDDEN)
         try:
             blob = self.attachments().read_file(self._live_ref(f"{name}:{version}"),
                                                 request.args.get("name", ""))
@@ -1852,11 +1912,13 @@ class PoolServer:
             return self._empty(HTTPStatus.CREATED)
         return self._source_get(self._live_ref(ref))
 
-    def _source_get(self, ref: str) -> Response:
+    def _source_get(self, ref: str) -> Response:  # noqa: PLR0911
         """GET a task's sources: listing, one file (`?path=`) or the archive (`?archive=1`)."""
-        _user, err = self._auth_role(_AUTHOR_ROLES)
-        if err is not None:
-            return self._empty(err)
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        if not self._may_read_sources(user, ref.partition(":")[0], request.args.get("path", "")):
+            return self._empty(HTTPStatus.FORBIDDEN)
         if not self._sources_ready(ref):
             return self._not_found(ref)               # an old pool push: the viewer shows the Taskfile
         src = self.sources()

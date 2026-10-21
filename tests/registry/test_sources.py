@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from hashpass import cli
+from hashpass.registry.revisions import RepoIndex
 from hashpass.registry.sources import SourceStore
 
 
@@ -110,9 +111,14 @@ def test_source_routes_store_files_and_serve_the_archive(registry, tmp_path):
     out = tmp_path / "out"
     cli.unpack_task_source(bob.source_archive("bob/lab:1"), out)
     assert (out / "Taskfile").is_file()
-    with pytest.raises(urllib.error.HTTPError) as exc:                       # a student never
+    assert kid.source_listing("bob/lab:1")                                   # open by default (§2.6)
+    with RepoIndex(registry.store.root / ".repos", "bob/lab").locked() as idx:
+        idx.set_meta(hide_sources=True)
+    with pytest.raises(urllib.error.HTTPError) as exc:                       # hidden service files
         kid.source_listing("bob/lab:1")
     assert exc.value.code == HTTPStatus.FORBIDDEN
+    with RepoIndex(registry.store.root / ".repos", "bob/lab").locked() as idx:
+        idx.set_meta(hide_sources=False)
     with pytest.raises(urllib.error.HTTPError) as exc:                       # write: own namespace
         alice.push_source("bob/lab", "1", blob)
     assert exc.value.code == HTTPStatus.FORBIDDEN
