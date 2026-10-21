@@ -51,8 +51,9 @@ from hashpass.registry.pool_settings import PoolSettings
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
-from hashpass.registry.revisions import RepoIndex, parse_version, revision_version
+from hashpass.registry.revisions import RepoIndex, check_tag, parse_version, revision_version
 from hashpass.registry.sources import SourceStore
+from hashpass.registry.staging import Staging, new_staging, sweep_stale
 from hashpass.registry.token import issue_token, verify_token
 from hashpass.registry.web import (
     render_catalog,
@@ -182,6 +183,11 @@ def _ownership_message(name: str) -> str:
 
 _LAYOUT_ADMIN_ONLY = ("раскладку каталога меняет только администратор; своё задание автор "
                      "добавляет/убирает через карточку")
+
+
+def _tree_digest(path: Path) -> str | None:
+    """Content digest of a directory (paths + bytes), None if there is none."""
+    return task_digest(path) if path.is_dir() else None
 
 
 class PoolServer:
@@ -435,6 +441,8 @@ class PoolServer:
         app.add_url_rule("/users/<user>/auto-approve", "user_auto_approve",
                          self._route_user_auto_approve, methods=["PUT"])
         app.add_url_rule("/closure/<path:tail>", "closure", self._route_closure, methods=["GET"])
+        app.add_url_rule("/revisions/<path:tail>", "revisions", self._route_revisions,
+                         methods=["GET", "POST"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_put",
                          self._route_attachment_put, methods=["PUT"])
         app.add_url_rule("/attachment/<path:tail>", "attachment_get",
@@ -1072,19 +1080,16 @@ class PoolServer:
         name, version = parts
         ref = f"{name}:{version}"
         if request.method == "PUT":
-            _user, err = self._authorize_write(name, version)
+            user, err = self._authorize_write(name, version)
             if err is not None:
                 return err
-            kept = self._keep_approved_or_error(ref)  # students keep the approved version
-            if kept is not None:
-                return kept
-            resp = self._receive_image(name, version)
-            if resp.status_code == HTTPStatus.CREATED and self.catalog().find(ref) is not None:
-                if self._auto_approved(name):
-                    self.catalog().approve(ref, image=self._image_digest(ref))
-                else:
-                    self.catalog().mark_pending(ref)  # a new image is a new version too
-            return resp
+            st, err = self._staging_for(user, name, version)
+            if err is not None:
+                return err
+            resp = self._receive_image(name, version, st.images)
+            if resp.status_code != HTTPStatus.CREATED or request.args.get("staging"):
+                return resp
+            return self._legacy_commit(user, name, version, st)   # an old client: commit at once
         return self._serve_image_for(name, ref)
 
     def _serve_image_for(self, name: str, ref: str) -> Response:
@@ -1149,7 +1154,7 @@ class PoolServer:
             resp.headers["X-Image-Digest"] = img.digest
         return resp
 
-    def _receive_image(self, name: str, version: str) -> Response:
+    def _receive_image(self, name: str, version: str, store: ImageStore) -> Response:
         """
         Stream an uploaded image blob to disk, validate it, publish it as the new generation.
 
@@ -1159,7 +1164,7 @@ class PoolServer:
         stays published untouched.
         """
         try:
-            self.store.dir(name, version)                 # validates name/version only
+            store.dir(name, version)                      # validates name/version only
         except ValueError:
             return self._empty(HTTPStatus.BAD_REQUEST)
         # Stream into the store root's `.incoming/`, not the image dir: a rejected PUT to a
@@ -1182,8 +1187,8 @@ class PoolServer:
                     out.write(chunk)
             info = inspect_image_blob(tmp)
             _check_image_ref(info, name, version)
-            img = self.store.publish_blob(name, version, tmp, parents=info.parents,
-                                          digest=digest.hexdigest())
+            img = store.publish_blob(name, version, tmp, parents=info.parents,
+                                     digest=digest.hexdigest())
         except (ValueError, OSError, tarfile.TarError):
             return self._empty(HTTPStatus.BAD_REQUEST)
         finally:
@@ -1221,26 +1226,24 @@ class PoolServer:
         return self._empty(HTTPStatus.OK)
 
     def _task_put(self, name: str, version: str) -> Response:
-        """`push --task [--block B]`: the task's grader; with `publish`, into the catalog to moderate."""
-        ref = f"{name}:{version}"
-        _user, err = self._authorize_write(name, version)
+        """`push --task [--block B]`: the task's grader into the staging area (+ publish intent)."""
+        user, err = self._authorize_write(name, version)
         if err is not None:
             return err
-        if not self.store.exists(ref):
-            return self._empty(HTTPStatus.NOT_FOUND)
-        kept = self._keep_approved_or_error(ref)
-        if kept is not None:
-            return kept
-        task_dir = self.store.get(ref).layer.parent / "task"
+        st, err = self._staging_for(user, name, version)
+        if err is not None:
+            return err
         try:
+            task_dir = st.images.dir(name, version) / "task"
             unpack_task(request.get_data(cache=False, as_text=False), task_dir)
         except (ValueError, OSError, tarfile.TarError):
             return self._empty(HTTPStatus.BAD_REQUEST)
         if request.args.get("publish", "") == "1":
-            self.catalog().add_task(ref, task_digest(task_dir), auto=self._auto_approved(name),
-                                    image=self._image_digest(ref),
-                                    block_name=request.args.get("block") or None)
-        return self._empty(HTTPStatus.CREATED)
+            st.save_intent(st.intent | {"publish": True, "block": request.args.get("block") or ""})
+        if request.args.get("staging"):
+            return self._empty(HTTPStatus.CREATED)
+        resp = self._legacy_commit(user, name, version, st)
+        return self._empty(HTTPStatus.CREATED) if resp.status_code < HTTPStatus.BAD_REQUEST else resp
 
     def _task_get(self, name: str, version: str) -> Response:
         """Send a task's grader (never public): the latest to its author/admin, the approved one to others."""
@@ -1258,6 +1261,196 @@ class PoolServer:
         if task_dir is None or not task_dir.exists():
             return self._empty(HTTPStatus.NOT_FOUND)
         return self._blob(HTTPStatus.OK, pack_task(task_dir))
+
+    # -- revisions: staging, commit (spec 2026-10-21 §2.3) -----------------
+
+    def _staging_for(self, user: str, name: str, tag: str) -> tuple[Staging | None, Response | None]:
+        """Open the staging area named by `?staging=` (checked against user + ref); an old client gets a fresh one."""
+        sid = request.args.get("staging", "")
+        if not sid:
+            try:
+                check_tag(tag)
+            except ValueError as exc:
+                return None, self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return new_staging(self.store.root, owner=user, name=name, tag=tag), None
+        try:
+            st = Staging(self.store.root, sid)
+        except ValueError:
+            return None, self._empty(HTTPStatus.BAD_REQUEST)
+        intent = st.intent
+        if not st.exists() or (intent.get("name"), intent.get("tag")) != (name, tag):
+            return None, self._json(HTTPStatus.NOT_FOUND, {"error": "черновик отправки не найден — начните push заново"})
+        if intent.get("owner") != user and self.users.role(user) != "admin":
+            return None, self._empty(HTTPStatus.FORBIDDEN)
+        return st, None
+
+    def _ref_target(self, user: str, name: str, version: str, kind: str) -> tuple[object | None, str]:
+        """
+        Pick where an attachment/source PUT lands.
+
+        The staging area (`?staging=`) or, for an old client, the tag's newest revision (it
+        already committed on PUT image/task).
+        """
+        if request.args.get("staging"):
+            st, err = self._staging_for(user, name, version)
+            if err is not None or st is None:
+                return None, ""
+            return getattr(st, kind), f"{name}:{version}"
+        ref = self.resolve(name, version)
+        if ref is None:
+            return None, ""
+        return (self.attachments() if kind == "attachments" else self.sources()), ref
+
+    def _route_revisions(self, tail: str) -> Response:  # noqa: PLR0911
+        """POST name/tag -> open a staging area; POST name/tag/commit -> commit it."""
+        commit = tail.endswith("/commit")
+        parts = self._split_ref(tail.removesuffix("/commit"))
+        if parts is None:
+            return self._empty(HTTPStatus.NOT_FOUND)
+        name, tag = parts
+        user, err = self._authorize_write(name, tag)
+        if err is not None:
+            return err
+        try:
+            check_tag(tag)
+            self.store.dir(name, tag)
+        except ValueError as exc:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        if not commit:
+            sweep_stale(self.store.root)
+            st = new_staging(self.store.root, owner=user, name=name, tag=tag)
+            return self._json(HTTPStatus.CREATED, {"staging": st.sid})
+        data = request.get_json(silent=True) or {}
+        sid = str(data.get("staging", "")) if isinstance(data, dict) else ""
+        try:
+            st = Staging(self.store.root, sid)
+        except ValueError:
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        intent = st.intent
+        if not st.exists() or (intent.get("name"), intent.get("tag")) != (name, tag):
+            return self._json(HTTPStatus.NOT_FOUND, {"error": "черновик отправки не найден — начните push заново"})
+        if intent.get("owner") != user and self.users.role(user) != "admin":
+            return self._empty(HTTPStatus.FORBIDDEN)
+        return self._commit(user, name, tag, st)
+
+    def _legacy_commit(self, user: str, name: str, tag: str, st: Staging) -> Response:
+        """Commit an old client's PUT (no staging) as a revision right away."""
+        resp = self._commit(user, name, tag, st)
+        if resp.status_code in (HTTPStatus.OK, HTTPStatus.CREATED):
+            out = self._empty(HTTPStatus.CREATED)
+            img = self.store.get(json.loads(resp.get_data())["ref"])
+            if img.digest:
+                out.headers["X-Image-Digest"] = img.digest
+            return out
+        return resp
+
+    def _pin(self, parent: str) -> str | None:
+        """Pin a `from` parent to a revision ref: an explicit `_vN` as is, a tag -> its newest."""
+        p_name, _, p_version = parent.partition(":")
+        return self.resolve(p_name, p_version or "latest")
+
+    def _commit(self, user: str, name: str, tag: str, st: Staging) -> Response:
+        """
+        Turn a staging area into revision `tag_vN` (spec §2.3), atomically under the repo lock.
+
+        What the area lacks (image, task/, attachments, sources) is taken from the newest revision.
+        Same content as the newest revision -> nothing is created (200, `unchanged`). The new
+        revision is assembled at its final paths and only then entered into the index; a failure
+        in between removes what was moved, so the index never names a half-made revision.
+        """
+        ref_tag = f"{name}:{tag}"
+        staged_dir = st.images.dir(name, tag)
+        has_image = (staged_dir / "meta.json").is_file()
+        staged_task = staged_dir / "task"
+        with self.repo(name).locked() as idx:
+            latest = idx.latest(tag)
+            latest_ref = f"{name}:{revision_version(tag, latest.n)}" if latest else None
+            if not has_image and latest_ref is None:
+                st.remove()
+                return self._json(HTTPStatus.BAD_REQUEST, {"error": f"нечего фиксировать: у {ref_tag} нет образа"})
+            staged = st.images.get(ref_tag) if has_image else None
+            image_digest = staged.digest if staged else latest.image_digest
+            raw_parents = staged.parents if staged else latest.parents
+            pinned: list[str] = []
+            for parent in raw_parents:
+                pin = self._pin(parent)
+                if pin is None:
+                    st.remove()
+                    return self._json(HTTPStatus.CONFLICT, {"error": f"родитель {parent} не найден на пуле — отправьте его первым"})
+                pinned.append(pin)
+            t_digest = (task_digest(staged_task) if staged_task.is_dir()
+                        else (latest.task_digest if latest else ""))
+            # attachments: compare the files only (their index records upload times)
+            changed_files = any(
+                _tree_digest(getattr(st, kind)._dir(ref_tag) / sub) not in (  # noqa: SLF001
+                    None, _tree_digest(live._dir(latest_ref) / sub))           # noqa: SLF001
+                for kind, live, sub in (("attachments", self.attachments(), "files"),
+                                        ("sources", self.sources(), "."))
+            ) if latest_ref else False
+            if (latest is not None and not changed_files
+                    and (image_digest, t_digest, tuple(pinned)) == (latest.image_digest, latest.task_digest, latest.parents)):
+                st.remove()
+                return self._json(HTTPStatus.OK, {"ref": latest_ref, "n": latest.n, "unchanged": True})
+            n = idx.peek_next(tag)
+            version = revision_version(tag, n)
+            ref = f"{name}:{version}"
+            dest = self.store.dir(name, version)
+            att_dest = self.attachments().ref_path(ref)
+            src_dest = self.sources()._dir(ref)            # noqa: SLF001  (same package)
+            try:
+                self._assemble(st, name, tag, version, latest_ref, pinned, has_image=has_image)
+                idx.add(tag, {"image_digest": image_digest, "task_digest": t_digest,
+                              "parents": pinned, "by": user})
+            except (OSError, ValueError, KeyError, tarfile.TarError) as exc:
+                for d in (dest, att_dest, src_dest):
+                    shutil.rmtree(d, ignore_errors=True)
+                return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"ревизия {ref} не создана: {exc}"})
+        intent = st.intent
+        st.remove()
+        self._catalog_on_commit(name, tag, t_digest, image_digest, intent)
+        return self._json(HTTPStatus.CREATED, {"ref": ref, "n": n})
+
+    def _assemble(self, st: Staging, name: str, tag: str, version: str,  # noqa: PLR0913, PLR0917
+                  latest_ref: str | None, pinned: list[str], *, has_image: bool) -> None:
+        """Move/copy the area's parts to revision `version`'s final paths."""
+        ref_tag, ref = f"{name}:{tag}", f"{name}:{version}"
+        staged_dir = st.images.dir(name, tag)
+        dest = self.store.dir(name, version)
+        if dest.exists():
+            msg = f"{ref} уже существует"
+            raise ValueError(msg)
+        if has_image:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            staged_dir.rename(dest)
+            meta = json.loads((dest / "meta.json").read_text(encoding="utf-8"))
+            meta.update({"name": name, "version": version, "parents": pinned})
+            (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+            if not (dest / "task").is_dir() and latest_ref is not None:
+                prev_task = self.store.get(latest_ref).layer.parent / "task"
+                if prev_task.is_dir():
+                    shutil.copytree(prev_task, dest / "task", symlinks=True)
+        else:
+            self.store.link_revision(latest_ref, name, version, parents=tuple(pinned))
+            if (staged_dir / "task").is_dir():
+                shutil.rmtree(dest / "task", ignore_errors=True)
+                (staged_dir / "task").rename(dest / "task")
+        for kind, live in (("attachments", self.attachments()), ("sources", self.sources())):
+            staged_store = getattr(st, kind)
+            src = staged_store._dir(ref_tag)                 # noqa: SLF001
+            out = live._dir(ref)                             # noqa: SLF001
+            out.parent.mkdir(parents=True, exist_ok=True)
+            if src.is_dir():
+                shutil.move(src, out)                        # may cross filesystems (attachments_path)
+            elif latest_ref is not None and live._dir(latest_ref).is_dir():  # noqa: SLF001
+                shutil.copytree(live._dir(latest_ref), out, symlinks=True)  # noqa: SLF001
+
+    def _catalog_on_commit(self, name: str, tag: str, t_digest: str, image: str, intent: dict) -> None:
+        """Put a new revision of a catalogued tag up for moderation; `publish` adds it first."""
+        ref_tag = f"{name}:{tag}"
+        if not (intent.get("publish") or self.catalog().find(ref_tag) is not None):
+            return
+        self.catalog().add_task(ref_tag, t_digest, auto=self._auto_approved(name), image=image,
+                                block_name=(intent.get("block") or None) if intent.get("publish") else None)
 
     def _route_closure(self, tail: str) -> Response:
         parts = self._split_ref(tail)
@@ -1286,11 +1479,11 @@ class PoolServer:
         if parts is None:
             return self._empty(HTTPStatus.NOT_FOUND)
         name, version = parts
-        ref = f"{name}:{version}"
-        _user, err = self._authorize_write(name, version)
+        user, err = self._authorize_write(name, version)
         if err is not None:
             return err
-        if not self.store.exists(ref):
+        target, ref = self._ref_target(user, name, version, "attachments")
+        if target is None:
             return self._empty(HTTPStatus.NOT_FOUND)
         filename = request.args.get("name", "")
         body = request.get_data(cache=False, as_text=False)
@@ -1298,7 +1491,7 @@ class PoolServer:
             return self._empty(HTTPStatus.BAD_REQUEST)
         taskfile = request.args.get("taskfile", "") == "1"
         try:
-            self.attachments().put_file(ref, filename, body, taskfile=taskfile)
+            target.put_file(ref, filename, body, taskfile=taskfile)
         except (ValueError, OSError):
             return self._empty(HTTPStatus.BAD_REQUEST)
         return self._empty(HTTPStatus.CREATED)
@@ -1323,7 +1516,7 @@ class PoolServer:
             return self._empty(HTTPStatus.NOT_FOUND)
         return Response(blob, status=HTTPStatus.OK, mimetype="application/octet-stream")
 
-    def _route_source(self, tail: str) -> Response:
+    def _route_source(self, tail: str) -> Response:  # noqa: PLR0911
         """
         Serve a task's sources as files.
 
@@ -1336,14 +1529,17 @@ class PoolServer:
         name, version = parts
         ref = f"{name}:{version}"
         if request.method == "PUT":
-            _user, err = self._authorize_write(name, version)
+            user, err = self._authorize_write(name, version)
             if err is not None:
                 return err
+            target, put_ref = self._ref_target(user, name, version, "sources")
+            if target is None:
+                return self._empty(HTTPStatus.NOT_FOUND)
             body = request.get_data(cache=False, as_text=False)
             if not body or len(body) > _MAX_ATTACH:
                 return self._empty(HTTPStatus.BAD_REQUEST)
             try:
-                self.sources().put_archive(ref, body)
+                target.put_archive(put_ref, body)
             except (ValueError, OSError, tarfile.TarError):
                 return self._empty(HTTPStatus.BAD_REQUEST)
             return self._empty(HTTPStatus.CREATED)
