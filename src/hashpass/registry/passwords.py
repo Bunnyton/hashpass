@@ -14,7 +14,7 @@ _PW_ITERATIONS = 600_000
 _SALT_BYTES = 16
 _PW_FIELDS = 4
 
-ROLES = ("student", "author", "admin")
+ROLES = ("student", "author", "admin", "user")   # "user": the course-era role (spec 2026-10-21 §3)
 
 MIN_PASSWORD_LEN = 8
 # safe as a login AND as a per-user progress filename
@@ -145,9 +145,29 @@ class UserStore:
         if role not in ROLES:
             msg = f"unknown role: {role!r}"
             raise ValueError(msg)
+        if self.reserved(user):
+            msg = f"логин {user} занят"
+            raise ValueError(msg)
         users = self._load()
         users[user] = _record(hash_password(password), role, group, comment, time.time())
         self._save(users)
+
+    def _reserved_path(self) -> Path:
+        return self._path.with_name(self._path.stem + "-reserved.json")
+
+    def reserved(self, user: str) -> bool:
+        """Whether `user` is the login of a deleted account: it owned a namespace, never reused."""
+        try:
+            return user in json.loads(self._reserved_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+
+    def search(self, query: str) -> list[dict[str, object]]:
+        """Profiles whose login or comment contains `query` (case-insensitive), sorted by login."""
+        q = query.casefold()
+        return [p for p in self.all_users()
+                if q in str(p["user"]).casefold() or q in str(p["comment"]).casefold()
+                or q in str(p["group"]).casefold()]
 
     def has(self, user: str) -> bool:
         """Return whether a user is registered (regardless of password)."""
@@ -190,6 +210,12 @@ class UserStore:
             return False
         del users[user]
         self._save(users)
+        try:
+            reserved = json.loads(self._reserved_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            reserved = []
+        if user not in reserved:                      # its namespace must never pass to a newcomer
+            self._reserved_path().write_text(json.dumps([*reserved, user]), encoding="utf-8")
         return True
 
     def set_role(self, user: str, role: str) -> None:

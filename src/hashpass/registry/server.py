@@ -407,6 +407,7 @@ class PoolServer:
         app.add_url_rule("/solutions", "solutions", self._route_solutions, methods=["GET"])
         app.add_url_rule("/solution/<path:ref>", "solution", self._route_solution, methods=["GET"])
         app.add_url_rule("/me", "me", self._route_me, methods=["GET"])
+        app.add_url_rule("/users/search", "user_search", self._route_user_search, methods=["GET"])
         app.add_url_rule("/users/<user>/exists", "user_exists",
                          self._route_user_exists, methods=["GET"])
         app.add_url_rule("/catalog", "catalog_api", self._route_catalog, methods=["GET"])
@@ -585,9 +586,10 @@ class PoolServer:
         The 403 reason also names an existing twin of the ref under another namespace
         (`debian:trixie` refused -> «быть может, вы искали bunnyton/debian:trixie?»).
         """
-        user, err = self._auth_role(_AUTHOR_ROLES)
-        if err is not None:
-            return None, self._empty(err)
+        # any signed-in user writes into their own namespace (spec 2026-10-21 §3)
+        user = self._token_user()
+        if user is None:
+            return None, self._empty(HTTPStatus.UNAUTHORIZED)
         if self._may_write(user, name):
             return user, None
         suggestions = self.store.similar(f"{name}:{version}")
@@ -688,7 +690,7 @@ class PoolServer:
             validate_password(password)
         except WeakPasswordError as exc:
             return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-        if self.users.has(user):
+        if self.users.has(user) or self.users.reserved(user):
             return self._empty(HTTPStatus.CONFLICT)
         self.users.add(user, password, role="student", group=group, comment=comment)
         return self._json(HTTPStatus.CREATED,
@@ -735,6 +737,15 @@ class PoolServer:
         account clearly needs to be registered rather than logged into.
         """
         return self._json(HTTPStatus.OK, {"user": user, "exists": self.users.has(user)})
+
+    def _route_user_search(self) -> Response:
+        """Admin: find users by login or comment (where a group now lives) -- spec §3."""
+        _user, err = self._auth_role(("admin",))
+        if err is not None:
+            return self._empty(err)
+        rows = [{k: p[k] for k in ("user", "comment", "group", "role", "created_at")}
+                for p in self.users.search(request.args.get("q", ""))]
+        return self._json(HTTPStatus.OK, {"users": rows})
 
     def _route_me(self) -> Response:
         user = self._token_user()
