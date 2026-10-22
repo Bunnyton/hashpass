@@ -670,9 +670,14 @@ class PoolServer:
     def _token_user(self) -> str | None:
         auth = request.headers.get("Authorization", "")
         if not auth.startswith(_BEARER):
-            # the web pages call the JSON API with their cookie session; a cross-site page cannot
-            # (JSON bodies / PUT / DELETE need a CORS preflight this server never grants)
-            return self._session_user() if request.cookies.get("hp_session") else None
+            # the web pages call the JSON API with their cookie session. A cross-site page can send
+            # a plain form POST with that cookie, so a write counts the cookie only with a JSON body
+            # (which, like PUT / DELETE, needs a CORS preflight this server never grants).
+            if not request.cookies.get("hp_session"):
+                return None
+            if request.method not in ("GET", "HEAD") and not request.is_json:
+                return None
+            return self._session_user()
         user = verify_token(self.secret, auth[len(_BEARER):], now=time.time())
         # The HMAC token is valid till its expiry regardless of whether the account still
         # exists.  If an admin deleted the user, we treat the token as unauthenticated so
@@ -2082,8 +2087,13 @@ class PoolServer:
         """Update a record stored before revisions (`name:tag` itself) with its task, in place."""
         ref_tag = f"{name}:{tag}"
         task_dir = self.store.get(ref_tag).layer.parent / "task"
-        shutil.rmtree(task_dir, ignore_errors=True)
-        shutil.move(st.images.dir(name, tag) / "task", task_dir)
+        incoming = task_dir.with_name(f"task.incoming-{st.sid}")
+        old = task_dir.with_name(f"task.old-{st.sid}")
+        shutil.move(st.images.dir(name, tag) / "task", incoming)   # next to it: same filesystem
+        if task_dir.exists():
+            task_dir.rename(old)                       # the working grader stays until the swap
+        incoming.rename(task_dir)
+        shutil.rmtree(old, ignore_errors=True)
         intent = st.intent
         st.remove()
         self._catalog_on_commit(name, tag, task_digest(task_dir), self._image_digest(ref_tag), intent)

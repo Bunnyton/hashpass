@@ -177,3 +177,21 @@ def test_the_web_session_cookie_works_for_the_api(pool: _Courses) -> None:
     opener.open(req, timeout=10)
     with opener.open(f"{pool.url}{path}", timeout=10) as resp:
         assert b'"role": "owner"' in resp.read()
+
+
+@pytest.mark.tier1
+def test_a_cross_site_form_post_does_not_act_for_the_user(pool: _Courses) -> None:
+    """Codex 2026-10-22: a plain form POST carries the session cookie; it must not count."""
+    import urllib.parse  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+    _course(pool, "private")
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
+    opener.open(urllib.request.Request(f"{pool.url}/web/login",  # noqa: S310
+                                       data=b"user=kid&password=pw-correct1"), timeout=10)
+    form = urllib.parse.urlencode({"comment": "csrf"}).encode()
+    req = urllib.request.Request(f"{pool.url}/courses/bob/linux/requests", data=form,  # noqa: S310
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        opener.open(req, timeout=10)
+    assert exc.value.code == 401  # noqa: PLR2004
+    assert pool.call("GET", "/courses/bob/linux", "bob")[1]["requests"] == []

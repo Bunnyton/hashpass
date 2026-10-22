@@ -5,7 +5,9 @@ Every handler resolves the caller, the course and `access.can(...)` first; cours
 through `CourseStore.edit` (lock + rev). Tasks reference pool revisions, checked against the
 registry (`PoolServer.repo`) when added. Who joined which course is kept in `.enrollments/`.
 """
+import fcntl
 import json
+import os
 import time
 from collections.abc import Callable
 from http import HTTPStatus
@@ -39,12 +41,17 @@ class Enrollments:
             return {}
 
     def enroll(self, user: str, course_id: str) -> None:
-        data = self.of(user)
-        if course_id in data:
-            return
-        data[course_id] = time.time()
+        """Mark that `user` started `course_id` (locked, atomic: parallel joins keep each other)."""
         self._root.mkdir(parents=True, exist_ok=True)
-        (self._root / f"{user}.json").write_text(json.dumps(data), encoding="utf-8")
+        with (self._root / f".{user}.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            data = self.of(user)
+            if course_id in data:
+                return
+            data[course_id] = time.time()
+            tmp = self._root / f".{user}.{os.getpid()}.tmp"
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            tmp.replace(self._root / f"{user}.json")
 
     def users_of(self, course_id: str) -> list[str]:
         if not self._root.is_dir():

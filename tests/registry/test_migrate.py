@@ -163,3 +163,36 @@ def test_the_command_runs_once_on_the_pool_home(tmp_path: Path) -> None:
     assert "курс по умолчанию bunnyton/linux" in said[-1]
     assert cli.cmd_migrate_courses(env, "bunnyton", io) == 0
     assert "уже переведён" in said[-1]
+
+
+@pytest.mark.tier1
+def test_a_tag_collision_stops_before_any_change(legacy: PoolServer, tmp_path: Path) -> None:
+    _image(tmp_path / "c1", legacy.store, "bob/x", "1_v1", "a")
+    _image(tmp_path / "c2", legacy.store, "bob/x", "1-v1", "b")
+    before = sorted(legacy.store.list())
+    with pytest.raises(RuntimeError, match="один тег"):
+        migrate_to_courses(legacy, owner="bunnyton", base_ref="bunnyton/debian:trixie")
+    assert sorted(legacy.store.list()) == before
+    assert not (Path(legacy.store.root) / ".migrated-courses").exists()
+
+
+@pytest.mark.tier1
+def test_an_interrupted_move_finishes_on_the_next_run(legacy: PoolServer, monkeypatch: pytest.MonkeyPatch) -> None:
+    from hashpass.registry import migrate  # noqa: PLC0415
+    real = migrate.cm.add_block
+
+    def crash(*_a: object, **_k: object) -> str:
+        msg = "disk full"
+        raise OSError(msg)
+
+    monkeypatch.setattr(migrate.cm, "add_block", crash)
+    with pytest.raises(OSError, match="disk full"):
+        migrate_to_courses(legacy, owner="bunnyton", base_ref="bunnyton/debian:trixie")
+    monkeypatch.setattr(migrate.cm, "add_block", real)
+    report = migrate_to_courses(legacy, owner="bunnyton", base_ref="bunnyton/debian:trixie")
+    assert report["images"] == 4  # noqa: PLR2004
+    assert sorted(legacy.store.list()) == ["bob/lab:1_v1", "bob/lab:1_v2", "bob/new:1_v1", "bob/ok:1_v1",
+                                           "bunnyton/debian:trixie_v1"]
+    course = legacy.course_api.courses.get("bunnyton/linux")
+    assert [b["name"] for b in course.blocks] == ["Git", "Docker"]
+    assert [r.n for r in legacy.repo("bob/lab").revisions("1")] == [1, 2]
