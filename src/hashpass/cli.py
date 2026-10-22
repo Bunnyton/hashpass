@@ -2308,6 +2308,12 @@ def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
     """
     from hashpass import my_courses  # noqa: PLC0415
     io = io or _default_io()
+    if _COURSE_NAME.match(link.strip()):            # `owner/name`: a course on the current pool
+        current = _pool_url(env)
+        if not current:
+            msg = "пул не задан — дайте полную ссылку на курс или: hashpass login --pool <адрес>"
+            raise RuntimeError(msg)
+        link = f"{current.rstrip('/')}/c/{link.strip()}"
     pool, ref, invite = my_courses.parse_link(link)
     saved = _pool_url(env)
     if saved and registry_key(saved) != registry_key(pool):
@@ -2341,6 +2347,32 @@ def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
         return 0
     my_courses.choose(env.root, url, ref)
     io.write(f"курс {ref} добавлен и выбран — запустите hashpass\n")
+    return 0
+
+
+_COURSE_NAME = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+
+
+def cmd_course_search(env: Home, query: str = "", io: Io | None = None) -> int:
+    """`hashpass search [запрос]`: find courses on the pool (title, owner, description)."""
+    io = io or _default_io()
+    url = _pool_url(env)
+    if not url:
+        msg = "пул не задан — hashpass login --pool <адрес>"
+        raise RuntimeError(msg)
+    token = _pool_token(env, url) or ""
+    rows = RemoteRegistry(url, cache=CredentialCache(env.creds)).courses(query, token=token)
+    if rows is None:
+        io.write("на этом пуле курсов нет (они ещё не включены)\n")
+        return 1
+    if not rows:
+        io.write(f"курсов по запросу «{query}» нет\n" if query else "курсов пока нет\n")
+        return 0
+    for r in rows:
+        lock = "  \x1b[33m(приватный — по заявке или приглашению)\x1b[0m" if r.get("visibility") == "private" else ""
+        role = f"  \x1b[36m[{r['role']}]\x1b[0m" if r.get("role") else ""
+        io.write(f"\x1b[1m{r.get('title') or r['ref']}\x1b[0m  \x1b[2m{r['ref']}\x1b[0m{lock}{role}\n"
+                 f"   hashpass add {r['ref']}\n")
     return 0
 
 

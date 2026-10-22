@@ -100,3 +100,19 @@ def test_a_newcomer_registers_right_from_the_course_link(pool: _Courses, tmp_pat
     assert pool.r.users.has("newbie")
     assert my_courses.current(env.root, pool.url) == "bob/linux"
     assert "регистр" in "".join(said).lower()
+
+
+@pytest.mark.tier2
+def test_search_courses_from_the_terminal_and_add_by_name(pool: _Courses, tmp_path: Path) -> None:
+    """User 2026-10-23: «хочу прямо из hashpass искать курсы»."""
+    env = _env(tmp_path, pool)
+    pool.call("POST", "/courses", "bob", {"name": "git-basics", "title": "Основы Git"})
+    said: list[str] = []
+    io = cli.Io(read=lambda _p: "", write=said.append, clock=lambda: "")
+    assert cli.cmd_course_search(env, "git", io) == 0
+    text = "".join(said)
+    assert "bob/git-basics" in text and "Основы Git" in text and "hashpass add bob/git-basics" in text
+    assert "bob/linux" not in text                                    # not matching «git»
+    said.clear()
+    assert cli.cmd_course_add(env, "bob/git-basics", io) == 0         # a name is enough on this pool
+    assert my_courses.current(env.root, pool.url) == "bob/git-basics"

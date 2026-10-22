@@ -254,7 +254,7 @@ class PoolTUI(App):
         # the common keys: the staff keys below overflow the footer (user: «В футере нет»)
         Binding("p,P,з,З", "solution", "Решение"),
         Binding("L,Д", "relogin", "Сменить аккаунт"),
-        Binding("c,C,с,С", "courses", "Курсы"),     # a pool with courses (spec 2026-10-21 §9)
+        Binding("c,C,с,С", "courses", "Курсы и поиск"),     # a pool with courses (spec 2026-10-21 §9)
         # Catalog editing for staff (shown only to them, see check_action): the same rights as
         # the web catalog -- an author hides/shows its own tasks, the admin also moves them.
         Binding("x,X,ч,Ч", "toggle_hidden", "Скрыть/показать"),
