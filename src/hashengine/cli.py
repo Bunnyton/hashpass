@@ -97,10 +97,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911, C901
+def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911, PLR0912, C901
     """Route a parsed engine sub-command (no sub-command prints help)."""
     command = args.command
     if command is None:
+        if sys.stdin.isatty() and sys.stdout.isatty():      # the work screen (spec 2026-10-21 §10)
+            from hashengine.tui import run_engine_tui  # noqa: PLC0415
+            return run_engine_tui(env)
         build_parser().print_help()
         return 0
     if command == "build":

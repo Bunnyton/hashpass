@@ -538,6 +538,13 @@ class RemoteRegistry:
         """Return a repository's settings and tags with their revisions (oldest first)."""
         return self._get_json(f"/revisions/{name}", token=self._auth_token(token))
 
+    def repo_settings(self, name: str, *, token: str | None = None, **fields: object) -> dict[str, object]:
+        """Change your repository's settings: visibility (public/private), hide_sources."""
+        raw = self._send("PUT", f"/revisions/{name}", data=json.dumps(fields).encode("utf-8"),
+                         headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}",
+                                  "Content-Type": "application/json"})
+        return json.loads(raw.decode("utf-8")) if raw else {}
+
     def tag(self, src: str, to: str, *, token: str | None = None) -> str:
         """Tag your revision `src` (`x:1_v3`, or `x:1` = its newest) as `to`; return the new revision."""
         name, version = split_ref(src)
