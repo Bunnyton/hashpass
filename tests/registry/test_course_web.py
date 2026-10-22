@@ -108,3 +108,11 @@ def test_admin_users_page_searches_and_lists_deletion_requests(pool: _Courses) -
     html = _page(_browser(pool, "bunnyton"), f"{pool.url}/web/users?q=%D0%98%D0%A2-21")[1]
     assert ">kid<" in html and ">max<" not in html
     assert "Запросы на удаление ревизий" in html and "eve/regex:1_v1" in html
+
+
+@pytest.mark.tier1
+def test_staff_are_not_listed_as_students(pool: _Courses) -> None:
+    pool.call("POST", "/courses/bob/linux/join", "kid", {})
+    html = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
+    students = html.split("id='students'", 1)[1].split("</table>", 1)[0]
+    assert ">kid<" in students and ">bob<" not in students

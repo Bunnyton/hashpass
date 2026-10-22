@@ -88,6 +88,8 @@ class CourseWeb:
         refs = [f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()]
         rows = []
         for student in api.enrollments.users_of(course.id):
+            if course.role_of(student) in ("owner", "maintainer", "author"):
+                continue                                  # staff are not students of their course
             progress = self.server.progress().get(student)
             done = [r for r in refs if (progress.get(r) or {}).get("status") == "passed"]
             profile = self.server.users.get(student) or {}
