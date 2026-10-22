@@ -101,7 +101,7 @@ def migrate_to_courses(server: "PoolServer", *, owner: str, base_ref: str,  # no
                 if idx.get(tag, n) is not None:
                     continue
                 if idx.peek_next(tag) != n:
-                    msg = f"миграция: у {name}:{tag} уже есть ревизии, ожидалась _v{n} — остановлено"
+                    msg = f"миграция: у {name}:{tag} уже есть версии, ожидалась _v{n} — остановлено"
                     raise RuntimeError(msg)
                 task = rev_dir / "task"
                 idx.add(tag, {"image_digest": meta.get("digest") or "",
@@ -179,7 +179,7 @@ def _plan(server: "PoolServer", entries: dict, approved: ApprovedStore) -> dict[
             msg = f"миграция: {ref} и {taken[(name, tag)]} получили бы один тег {name}:{tag} — переименуйте один"
             raise RuntimeError(msg)
         if server.repo(name).revisions(tag):
-            msg = f"миграция: у {name}:{tag} уже есть ревизии — {ref} некуда положить"
+            msg = f"миграция: у {name}:{tag} уже есть версии — {ref} некуда положить"
             raise RuntimeError(msg)
         taken[(name, tag)] = ref
         entry = entries.get(ref)

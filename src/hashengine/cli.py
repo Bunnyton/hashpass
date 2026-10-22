@@ -22,18 +22,18 @@ def _engine_enabled() -> bool:
 def _add_revision_commands(sub: argparse._SubParsersAction) -> None:
     """`run`, `tag`, `rm`, `fork`: work with revisions (spec 2026-10-21 §2, §10)."""
     p_run = sub.add_parser("run", help="запустить образ/задание как автор (без зачёта)")
-    p_run.add_argument("ref", help="локальный образ, ревизия x:1_v3 или тег x:1 (= последняя ревизия)")
+    p_run.add_argument("ref", help="локальный образ, версия x:1_v3 или тег x:1 (= последняя версия)")
     p_run.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
-    p_tag = sub.add_parser("tag", help="навесить тег на свою ревизию на пуле")
-    p_tag.add_argument("src", help="ревизия x:1_v3 или тег x:1 (= последняя)")
+    p_tag = sub.add_parser("tag", help="навесить тег на свою версию на пуле")
+    p_tag.add_argument("src", help="версия x:1_v3 или тег x:1 (= последняя)")
     p_tag.add_argument("to", help="новый тег, например stable")
     p_tag.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
-    p_rm = sub.add_parser("rm", help="удалить ревизию с пула (x:1_v3) или локальную копию (--local)")
+    p_rm = sub.add_parser("rm", help="удалить версию с пула (x:1_v3) или локальную копию (--local)")
     p_rm.add_argument("ref")
     p_rm.add_argument("--local", action="store_true", help="удалить только с этой машины")
     p_rm.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
     p_fork = sub.add_parser("fork", help="форкнуть чужое задание в своё пространство имён")
-    p_fork.add_argument("src", help="ревизия или тег, например alice/lab:1")
+    p_fork.add_argument("src", help="версия или тег, например alice/lab:1")
     p_fork.add_argument("name", nargs="?", help="имя форка (по умолчанию — как у исходного)")
     p_fork.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
 
@@ -83,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_source.add_argument("dest", nargs="?", help="куда распаковать (по умолчанию ./<имя задания>)")
     p_source.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
     _add_revision_commands(sub)
-    p_mig = sub.add_parser("migrate-courses", help="перевести этот пул на ревизии и курсы "
+    p_mig = sub.add_parser("migrate-courses", help="перевести этот пул на версии и курсы "
                            "(один раз, на машине пула; администратор)")
     p_mig.add_argument("--owner", default="bunnyton", help="владелец курса по умолчанию (администратор)")
     sub.add_parser("images", help="список локально собранных образов и заданий")

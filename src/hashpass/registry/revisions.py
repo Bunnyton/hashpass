@@ -23,11 +23,18 @@ _RESERVED = re.compile(r"(_v[0-9]+|_latest)$")
 VISIBILITIES = ("public", "private")
 
 
+
+def human_ref(ref: str) -> str:
+    """`repo:tag_vN` -> `repo:tag, версия N` (people see versions; `_vN` is the tag underneath)."""
+    name, _, version = ref.rpartition(":")
+    m = REVISION_RE.match(version)
+    return f"{name}:{m['tag']}, версия {m['n']}" if name and m else ref
+
 def check_tag(tag: str) -> None:
     """Refuse a tag ending in a system suffix (`_vN`, `_latest`): those name revisions, not tags."""
     if _RESERVED.search(tag):
         msg = (f"тег «{tag}» оканчивается на зарезервированный суффикс (_vN или _latest) — "
-               "так система называет ревизии; выберите другой тег")
+               "так система называет версии; выберите другой тег")
         raise ValueError(msg)
 
 

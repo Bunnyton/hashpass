@@ -107,3 +107,10 @@ def test_peek_next_names_the_next_add(tmp_path: Path) -> None:
         assert w.add("1", _rev()).n == first
         w.remove("1", first)
         assert w.peek_next("1") == first + 1
+
+
+@pytest.mark.tier1
+def test_people_see_a_version_beside_the_tag() -> None:
+    from hashpass.registry.revisions import human_ref  # noqa: PLC0415
+    assert human_ref("bob/lab:1_v3") == "bob/lab:1, версия 3"
+    assert human_ref("bob/lab:stable") == "bob/lab:stable"

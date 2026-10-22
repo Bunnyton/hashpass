@@ -24,7 +24,7 @@ from textual.widgets import Footer, Header, Input, Label, TabbedContent, TabPane
 
 from hashpass.course_screen import AskScreen
 from hashpass.imagestore.store import ImageStore
-from hashpass.registry.revisions import parse_version
+from hashpass.registry.revisions import human_ref, parse_version
 from hashpass.viewer import SourceViewer, listing_or_taskfile
 
 if TYPE_CHECKING:
@@ -165,7 +165,7 @@ class EngineTUI(App):
                 task = (img.layer.parent / "task").exists()
                 _tag, n, _ = parse_version(img.version)
                 kind = "задание" if task else "образ"
-                where = f"ревизия пула v{n}" if n else "своя сборка"
+                where = f"с пула, версия {n}" if n else "своя сборка"
                 node.add_leaf(f"{escape(ref)}  [dim]{kind} · {where}[/]", data={"ref": ref, "local": True})
         if not repos:
             tree.root.add_leaf("[dim]локальных образов нет — hashengine build <Taskfile>[/]")
@@ -199,7 +199,7 @@ class EngineTUI(App):
             for row in sorted(items, key=lambda r: (str(r.get("tag")), -(int(r.get("n") or 0)))):
                 latest = "  [cyan]последняя[/]" if row.get("latest") else ""
                 kind = "задание" if row.get("kind") == "task" else "образ"
-                node.add_leaf(f"{escape(str(row['ref']))}  [dim]{kind}[/]{latest}",
+                node.add_leaf(f"{escape(human_ref(str(row['ref'])))}  [dim]{kind}[/]{latest}",
                               data={"ref": str(row["ref"]), "local": False})
 
     def _cursor(self) -> dict[str, object] | None:
@@ -254,7 +254,7 @@ class EngineTUI(App):
             return
         ref = str(row["ref"])
         if parse_version(ref.partition(":")[2])[1] is not None:
-            self.notify("это ревизия, скачанная с пула — отправлять нечего", timeout=4)
+            self.notify("это версия, скачанная с пула — отправлять нечего", timeout=4)
             return
         self.notify(f"отправляю {ref}…", timeout=3)
         self._push(ref)

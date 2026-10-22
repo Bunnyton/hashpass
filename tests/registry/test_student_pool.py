@@ -157,7 +157,7 @@ def test_attach_taskfile_reports_absence(tmp_path):
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
     cli._attach_taskfile(client, store, "u/lab:1", io)   # noqa: SLF001
     assert client.calls == []
-    assert "можете приложить файлы" in "".join(out)
+    assert "исходники на пул не приложены" in "".join(out)
 
 
 @pytest.mark.tier2

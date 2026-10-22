@@ -1818,7 +1818,7 @@ class PoolServer:
             req = self.deletions().open(ref, by=user, courses=[c.ref for c in foreign])
             return self._json(HTTPStatus.ACCEPTED, {
                 "request": req["id"], "courses": self._course_names(foreign, user),
-                "message": "ревизия стоит в чужих курсах — удаление ждёт решения администратора"})
+                "message": "версия стоит в чужих курсах — удаление ждёт решения администратора"})
         self._delete_revision(name, tag, n)
         return self._json(HTTPStatus.OK, {"removed": ref})
 
@@ -1866,7 +1866,7 @@ class PoolServer:
             return self._json(HTTPStatus.OK, store.close(rest, "rejected", by=user,
                                                          reason=str(data.get("reason", ""))))
         if not self.store.exists(row["from"]):
-            return self._json(HTTPStatus.CONFLICT, {"error": f"ревизии {row['from']} больше нет"})
+            return self._json(HTTPStatus.CONFLICT, {"error": f"версии {row['from']} больше нет"})
         with self.repo(target).locked() as idx:
             ref = self._copy_revision(row["from"], target, row["to_tag"], user, idx,
                                       merged_from=row["from"])
@@ -1927,7 +1927,7 @@ class PoolServer:
             tag, n, _latest = parse_version(version)
             if n is not None and self.repo(name).get(tag, n) is not None:
                 if self._dependents(row["ref"]):
-                    return self._json(HTTPStatus.CONFLICT, {"error": "на ревизии уже строятся другие образы"})
+                    return self._json(HTTPStatus.CONFLICT, {"error": "на этой версии уже строятся другие образы"})
                 self._delete_revision(name, tag, n)
         state = {"approve": "approved", "reject": "rejected", "withdraw": "withdrawn"}[action]
         self.deletions().set_state(rid, state, user)
@@ -1988,7 +1988,7 @@ class PoolServer:
             if remaining:
                 course_model.propose(course, "restore", name, tag, max(remaining), block_id,
                                      by=_owner_of(name) or "", now=time.time(),
-                                     comment=f"ревизия _v{n} удалена владельцем — вернуть _v{max(remaining)}?")
+                                     comment=f"версия {n} удалена владельцем — вернуть версию {max(remaining)}?")
 
     def _legacy_commit(self, user: str, name: str, tag: str, st: Staging) -> Response:
         """Commit an old client's PUT (no staging) as a revision right away."""
@@ -2082,7 +2082,7 @@ class PoolServer:
             except (OSError, ValueError, KeyError, tarfile.TarError) as exc:
                 for d in (dest, att_dest, src_dest):
                     shutil.rmtree(d, ignore_errors=True)
-                return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"ревизия {ref} не создана: {exc}"})
+                return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"версия {ref} не создана: {exc}"})
         intent = st.intent
         st.remove()
         self._catalog_on_commit(name, tag, t_digest, image_digest, intent)

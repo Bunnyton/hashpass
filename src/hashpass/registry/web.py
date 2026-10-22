@@ -72,6 +72,22 @@ def ts_html(value: object) -> Markup | str:
 _env.globals["ts"] = ts_html
 _env.filters["q"] = lambda v: quote(str(v), safe="")
 _env.filters["ref_url"] = lambda v: quote(str(v), safe="/:")
+_VERSION_REF = re.compile(r"^(?P<base>.+:.+)_v(?P<n>[1-9][0-9]*)$")
+
+
+def version_ref(ref: object) -> Markup:
+    """
+    Show `repo:tag_vN` as `repo:tag` + «версия N» (user 2026-10-22: «не ревизия, а версия»).
+
+    The `_vN` tag stays under the hood (URLs, API); people see a version beside the tag.
+    """
+    m = _VERSION_REF.match(str(ref))
+    if m is None:
+        return Markup.escape(str(ref))
+    return Markup("{} <span class='pill sm ver'>версия {}</span>").format(m["base"], m["n"])
+
+
+_env.filters["ver"] = version_ref
 
 
 _INSTALL_TEMPLATE = """\

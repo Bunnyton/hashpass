@@ -22,13 +22,13 @@
 <button class='sm ghost' type='submit'>Удалить группу</button>
 </form></div>
 {% if deletions %}
-<h2>Запросы на удаление ревизий</h2>
+<h2>Запросы на удаление версий</h2>
 <div class='card'><table>
-<tr><th>Ревизия</th><th>Кто просит</th><th>Курсы</th><th>Когда</th><th></th></tr>
+<tr><th>Версия</th><th>Кто просит</th><th>Курсы</th><th>Когда</th><th></th></tr>
 {% for d in deletions %}
-<tr><td class='mono'><a href='/web/image/{{ d.ref | ref_url }}'>{{ d.ref }}</a></td><td>{{ d.by }}</td>
+<tr><td class='mono'><a href='/web/image/{{ d.ref | ref_url }}'>{{ d.ref | ver }}</a></td><td>{{ d.by }}</td>
 <td>{% for c in d.courses %}<a href='/c/{{ c }}'>{{ c }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td><td>{{ ts(d.at) }}</td>
-<td class='row'><form class='inline' data-api='POST /deletion-requests/{{ d.id }}' data-confirm='Удалить {{ d.ref }}? Курсы, где она стоит, получат предложение вернуть предыдущую ревизию.'><input type='hidden' name='action' value='approve'><button class='sm danger' type='submit'>Удалить</button></form>
+<td class='row'><form class='inline' data-api='POST /deletion-requests/{{ d.id }}' data-confirm='Удалить {{ d.ref }}? Курсы, где она стоит, получат предложение вернуть предыдущую версию.'><input type='hidden' name='action' value='approve'><button class='sm danger' type='submit'>Удалить</button></form>
 <form class='inline' data-api='POST /deletion-requests/{{ d.id }}'><input type='hidden' name='action' value='reject'><button class='sm ghost' type='submit'>Оставить</button></form></td></tr>
 {% endfor %}
 </table></div>

@@ -3,7 +3,7 @@
 {% block main %}
 <p class='crumb'>{% if courses_era %}<a href='/c'>← Курсы</a>{% else %}<a href='/web/images'>← Каталог</a>{% endif %}</p>
 <div class='card-hero'>
-<h1 class='mono ref-title'>{{ image.ref }}</h1>
+<h1 class='mono ref-title'>{{ image.ref | ver }}</h1>
 <div class='row'>
 {% if image.kind == 'task' %}<span class='pill author'>задание</span>{% else %}<span class='pill'>образ</span>{% endif %}
 {% if image.block_name %}<span class='pill'>блок «{{ image.block_name }}»</span>{% endif %}
@@ -22,37 +22,20 @@
 <h2>Исходники</h2>
 {% if image.sources %}
 {{ filebox(image.sources) }}
+{% elif image.files %}
+<div class='filebox'>
+<div class='fb-head'><span class='fb-title'>{{ icon('dir') }} Исходники</span><span class='fb-meta'>файлов: {{ image.files | length }}</span></div>
+<table class='fb-rows'>
+{% for f in image.files %}<tr><td class='fb-name'><a href='/web/images/file?ref={{ image.ref_q }}&name={{ f.name_q }}'>{{ icon('file') }} <span>{{ f.name }}</span></a></td>
+<td class='fb-size'>{{ f.size_ru }}</td></tr>{% endfor %}
+</table>
+</div>
 {% else %}
 <div class='card'><p class='sub'>Исходников нет — они приходят на пул с <code>hashengine push</code>.</p></div>
 {% endif %}
-<div class='card'>
-<h2>Файлы</h2>
-{% if image.files %}
-<table>
-<tr><th>Файл</th><th class='c'>Размер</th><th></th><th></th></tr>
-{% for f in image.files %}
-<tr><td class='mono'>{{ f.name }}{% if f.taskfile %} <span class='pill author sm'>Taskfile</span>{% endif %}</td>
-<td class='c'>{{ f.size_ru }}</td>
-<td><a class='btn sm ghost' href='/web/images/file?ref={{ image.ref_q }}&name={{ f.name_q }}'>скачать</a></td>
-<td><form class='inline' method='post' action='/web/images/attach-delete'>
-<input type='hidden' name='ref' value='{{ image.ref }}'>
-<input type='hidden' name='name' value='{{ f.name }}'>
-<button class='sm ghost' type='submit'>удалить</button>
-</form></td></tr>
-{% endfor %}
-</table>
-{% else %}
-<p class='sub'>Файлов нет. Taskfile прикрепляется автоматически при <code>push</code>.</p>
-{% endif %}
-<form class='inline row upload' method='post' action='/web/images/attach' enctype='multipart/form-data'>
-<input type='hidden' name='ref' value='{{ image.ref }}'>
-<input type='file' name='file' required>
-<button class='sm' type='submit'>Прикрепить</button>
-</form>
-</div>
 
 {% if repo_info %}
-<h2 id='revisions'>Ревизии</h2>
+<h2 id='revisions'>Версии</h2>
 <div class='card'>
 <div class='row'>
 {% if repo_info.visibility == 'private' %}<span class='pill closed'>приватный</span>{% else %}<span class='pill open'>публичный</span>{% endif %}
@@ -60,13 +43,13 @@
 {% if repo_info.fork_of %}<span class='pill sm'>форк <a href='/web/image/{{ repo_info.fork_of | ref_url }}'>{{ repo_info.fork_of }}</a></span>{% endif %}
 </div>
 <table>
-<tr><th>Тег</th><th>Ревизия</th><th>Когда</th><th>Кто</th><th></th></tr>
+<tr><th>Тег</th><th>Версия</th><th>Когда</th><th>Кто</th><th></th></tr>
 {% for t, revs in repo_info.tags.items() %}{% for r in revs | reverse %}
 <tr{% if t == tag and r.n == n %} class='on'{% endif %}><td class='mono'>{{ t }}</td>
-<td class='mono'><a href='/web/image/{{ (repo ~ ":" ~ t ~ "_v" ~ r.n) | ref_url }}'>{{ t }}_v{{ r.n }}</a>{% if loop.first %} <span class='pill sm'>последняя</span>{% endif %}
+<td class='mono'><a href='/web/image/{{ (repo ~ ":" ~ t ~ "_v" ~ r.n) | ref_url }}'>версия {{ r.n }}</a>{% if loop.first %} <span class='pill sm'>последняя</span>{% endif %}
 {% if r.merged_from %}<span class='sub small'>слияние из {{ r.merged_from }}</span>{% endif %}</td>
 <td>{{ ts(r.at) }}</td><td>{{ r.by }}</td>
-<td>{% if owner %}<form class='inline' data-api='DELETE /revisions/{{ repo }}/{{ t }}/{{ r.n }}' data-confirm='Удалить ревизию {{ t }}_v{{ r.n }}? Если она стоит в чужих курсах, удаление подождёт решения администратора.'><button class='sm ghost' type='submit'>удалить</button></form>{% endif %}</td></tr>
+<td>{% if owner %}<form class='inline' data-api='DELETE /revisions/{{ repo }}/{{ t }}/{{ r.n }}' data-confirm='Удалить версию {{ r.n }} тега {{ t }}? Если она стоит в чужих курсах, удаление подождёт решения администратора.'><button class='sm ghost' type='submit'>удалить</button></form>{% endif %}</td></tr>
 {% endfor %}{% endfor %}
 </table>
 {% if owner %}

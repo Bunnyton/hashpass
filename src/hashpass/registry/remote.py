@@ -556,7 +556,7 @@ class RemoteRegistry:
         name, version = split_ref(ref)
         tag, n, _latest = parse_version(version)
         if n is None:
-            msg = f"укажите ревизию: {name}:{version}_vN (список — hashengine remote)"
+            msg = f"укажите версию: {name}:{version}_vN (список — hashengine remote)"
             raise ValueError(msg)
         self._send("DELETE", f"/revisions/{name}/{tag}/{n}",
                    headers={"Authorization": f"Bearer {self._auth_token(token)}"})

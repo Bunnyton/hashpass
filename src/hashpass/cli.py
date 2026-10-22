@@ -66,7 +66,7 @@ from hashpass.registry.passwords import (
 )
 from hashpass.registry.refs import normalize_ref, split_ref
 from hashpass.registry.remote import RemoteRegistry
-from hashpass.registry.revisions import check_tag
+from hashpass.registry.revisions import check_tag, human_ref
 from hashpass.registry.server import PoolServer, make_server
 from hashpass.registry.token import token_user
 from hashpass.taskbuild import build_task
@@ -1697,7 +1697,7 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
         return
     path = Path(taskfile) if taskfile else None
     if path is None or not path.is_file():
-        io.write("\x1b[2mTaskfile не найден — можете приложить файлы вручную в карточке образа\x1b[0m\n")
+        io.write("\x1b[2mTaskfile не найден — исходники на пул не приложены\x1b[0m\n")
         return
     name, version = split_ref(ref)
     try:
@@ -1752,9 +1752,9 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
                base=_built_on_base(store, ref))
     for done in client.last_push:
         if done["unchanged"]:
-            sys.stdout.write(f"без изменений: {done['ref']} уже на пуле\n")
+            sys.stdout.write(f"без изменений: {human_ref(done['ref'])} уже на пуле\n")
         else:
-            sys.stdout.write(f"отправлено {done['ref']}\n")
+            sys.stdout.write(f"отправлено {human_ref(done['ref'])}\n")
     if publish and not all(done["unchanged"] for done in client.last_push):
         where = f" (блок «{block}»)" if block else ""
         sys.stdout.write(f"опубликовано в каталог{where}: {ref} — студенты увидят эту версию, когда "

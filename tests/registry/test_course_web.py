@@ -89,6 +89,11 @@ def test_course_pages_are_off_without_the_switch(pool: _Courses, monkeypatch: py
 def test_image_card_for_its_owner_and_for_others(pool: _Courses) -> None:
     owner = _page(_browser(pool, "bob"), f"{pool.url}/web/image/bob/git-init:1")[1]
     assert "id='revisions'" in owner and "1_v1" in owner
+    # user 2026-10-22: «не ревизия, а версия» (the `_vN` tag stays under the hood, shown as a
+    # version beside the tag); «файлы и исходники одно и то же» -- one sources box
+    assert "версия 1" in owner and "Версии" in owner
+    assert "евизи" not in owner
+    assert "<h2>Файлы</h2>" not in owner and "Прикрепить" not in owner
     assert "data-api='PUT /revisions/bob/git-init'" in owner             # visibility (owner)
     assert "Используется в" in owner and "/c/bob/linux" in owner
     other = _page(_browser(pool, "eve"), f"{pool.url}/web/image/bob/git-init:1")[1]
@@ -107,7 +112,8 @@ def test_admin_users_page_searches_and_lists_deletion_requests(pool: _Courses) -
     assert pool.call("DELETE", "/revisions/eve/regex/1/1", "eve")[0] == 202  # noqa: PLR2004
     html = _page(_browser(pool, "bunnyton"), f"{pool.url}/web/users?q=%D0%98%D0%A2-21")[1]
     assert ">kid<" in html and ">max<" not in html
-    assert "Запросы на удаление ревизий" in html and "eve/regex:1_v1" in html
+    assert "Запросы на удаление версий" in html and "eve/regex:1" in html and "версия 1" in html
+    assert "евизи" not in html
 
 
 @pytest.mark.tier1

@@ -31,7 +31,7 @@ def test_tag_then_remove_a_revision(registry, tmp_path, monkeypatch, capsys):
     assert cli.cmd_push(env, "bob/lab:1", registry.base_url) == 0
     _seed(local, tmp_path, "bob/lab", "two")
     assert cli.cmd_push(env, "bob/lab:1", registry.base_url) == 0
-    assert "отправлено bob/lab:1_v2" in capsys.readouterr().out
+    assert "отправлено bob/lab:1, версия 2" in capsys.readouterr().out
     assert cli.cmd_tag(env, "bob/lab:1_v1", "stable", registry.base_url) == 0
     assert registry.store.exists("bob/lab:stable_v1")
     assert cli.cmd_rm(env, "bob/lab:1_v2", registry.base_url) == 0
@@ -47,7 +47,7 @@ def test_unchanged_push_says_so(registry, tmp_path, monkeypatch, capsys):
     cli.cmd_push(env, "bob/lab:1", registry.base_url)
     capsys.readouterr()
     cli.cmd_push(env, "bob/lab:1", registry.base_url)
-    assert "без изменений: bob/lab:1_v1" in capsys.readouterr().out
+    assert "без изменений: bob/lab:1, версия 1" in capsys.readouterr().out
 
 
 @pytest.mark.tier2
