@@ -1,5 +1,6 @@
 {% extends 'base.html.j2' %}
 {% from '_files.html.j2' import filebox, icon %}
+{% from '_cards.html.j2' import avatar %}
 {% block main %}
 <p class='crumb'>{% if courses_era %}<a href='/c'>← Курсы</a>{% else %}<a href='/web/images'>← Каталог</a>{% endif %}</p>
 <div class='card-hero'>
@@ -26,6 +27,7 @@
 <a href='#sources-tab' data-tab>{{ icon('dir') }} Исходники</a>
 {% if repo_info %}<a href='#revisions' data-tab>Версии <span class='count'>{{ repo_info.tags.values() | map('length') | sum }}</span></a>{% endif %}
 {% if courses_era %}<a href='#courses' data-tab>{{ icon('course') }} Используется в курсах <span class='count'>{{ used_in | length }}</span></a>{% endif %}
+{% if people %}<a href='#people' data-tab>{{ icon('user') }} Участники <span class='count'>{{ people | length }}</span></a>{% endif %}
 {% if merges or may_fork or (fork_origin and n) %}<a href='#changes-tab' data-tab>Предложения{% if merges %} <span class='count'>{{ merges | selectattr('state', 'equalto', 'open') | list | length }}</span>{% endif %}</a>{% endif %}
 </nav>
 <section id='about-tab' class='tab-panel' aria-label='Описание'>
@@ -110,6 +112,37 @@
 <button class='sm' type='submit'>Предложить в курс</button>
 </form>
 {% endif %}
+</div>
+</section>
+{% endif %}
+{% if people %}
+<section id='people' class='tab-panel' aria-label='Участники'>
+<h2>Участники</h2>
+<div class='card'>
+<ul class='people'>
+{% for p in people %}
+<li><a class='person' href='/u/{{ p.user | q }}'>{{ avatar(p.user, 'sm') }}<span class='mono'>{{ p.user }}</span></a>
+{% if may_people and p.role != 'owner' %}
+<form class='inline row' data-api='PUT /repo-members/{{ repo }}/{{ p.user | q }}'>
+<label class='visually-hidden' for='role-{{ loop.index }}'>Роль {{ p.user }}</label>
+<select id='role-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'maintainer'] %}<option value='{{ r }}'{% if r == p.role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
+<button class='sm ghost' type='submit'>Сохранить</button></form>
+<form class='inline' data-api='DELETE /repo-members/{{ repo }}/{{ p.user | q }}' data-confirm='Убрать {{ p.user }} из участников?'><button class='sm danger' type='submit'>Убрать</button></form>
+{% else %}<span class='pill sm{% if p.role == "owner" %} author{% endif %}'>{{ role_ru[p.role] }}</span>{% endif %}
+</li>
+{% endfor %}
+</ul>
+{% if may_people %}
+<hr class='divider'>
+<form class='row' data-api='PUT /repo-members/{{ repo }}/__LOGIN__'>
+<label class='visually-hidden' for='new-member'>Логин</label>
+<input id='new-member' name='__login' placeholder='логин пользователя' required>
+<label class='visually-hidden' for='new-role'>Роль</label>
+<select id='new-role' name='role'><option value='member'>участник — видит приватный образ</option><option value='author' selected>автор — публикует версии</option><option value='maintainer'>сопровождающий — принимает предложения, теги</option></select>
+<button class='sm' type='submit'>Добавить</button>
+</form>
+{% endif %}
+<p class='sub small'>Участник видит приватный образ; автор публикует новые версии; сопровождающий ещё принимает предложения, ставит теги и удаляет версии; владелец — настройки и роли.</p>
 </div>
 </section>
 {% endif %}

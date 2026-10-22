@@ -55,7 +55,13 @@ from hashpass.registry.pool_settings import PoolSettings
 from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
-from hashpass.registry.revisions import RepoIndex, check_tag, parse_version, revision_version
+from hashpass.registry.revisions import (
+    REPO_ROLES,
+    RepoIndex,
+    check_tag,
+    parse_version,
+    revision_version,
+)
 from hashpass.registry.search_web import SearchWeb
 from hashpass.registry.sources import SourceStore
 from hashpass.registry.staging import Staging, new_staging, sweep_stale
@@ -91,6 +97,7 @@ def _time_zones() -> list[str]:
     return sorted(z for z in zoneinfo.available_timezones() if "/" in z and not z.startswith("Etc/"))
 _MAX_COMMENT = 500
 _MAX_MESSAGE = 2000          # a version's «what changed» (spec 2026-10-23 §3)
+AUTHOR, MAINTAINER, OWNER = 1, 2, 3   # levels in an image (spec 2026-10-23 §2); 0 member, -1 nobody
 _MAX_REASON = 500                # a rejection reason, shown to the author
 _REJECTED_BLOCK = "rejected"     # the virtual block of rejected tasks (author + admin)
 _STUDENT_FIELDS = frozenset(("number", "name", "version", "digest", "ref", "block_id",
@@ -295,8 +302,8 @@ class PoolServer:
                             / "pool-settings.json")
 
     def _fresh_for(self, user: str | None, name: str) -> bool:
-        """Whether `user` gets a task's latest push: its author or an admin (others get the approved one)."""
-        return user is not None and (self.users.role(user) == "admin" or _owner_of(name) == user)
+        """Whether `user` gets a task's latest push: its people (spec 2026-10-23 §2) or an admin."""
+        return self._repo_level(user, name) >= 0
 
     def _image_digest(self, ref: str) -> str:
         """Return the image digest of `ref` (a tag means its newest revision); '' if there is none."""
@@ -551,6 +558,8 @@ class PoolServer:
         app.add_url_rule("/users/<user>/auto-approve", "user_auto_approve",
                          self._route_user_auto_approve, methods=["PUT"])
         app.add_url_rule("/closure/<path:tail>", "closure", self._route_closure, methods=["GET"])
+        app.add_url_rule("/repo-members/<path:tail>", "repo_members", self._route_repo_members,
+                         methods=["PUT", "DELETE"])
         app.add_url_rule("/deletion-requests", "deletion_requests", self._route_deletions,
                          methods=["GET"])
         app.add_url_rule("/deletion-requests/<rid>", "deletion_request", self._route_deletion,
@@ -702,9 +711,22 @@ class PoolServer:
             return None, HTTPStatus.FORBIDDEN
         return user, None
 
+    def _repo_level(self, user: str | None, name: str) -> int:
+        """
+        Return `user`'s level in image `name` (spec 2026-10-23 §2).
+
+        3 owner (its namespace, or the admin), 2 maintainer, 1 author, 0 member, -1 nobody.
+        """
+        if user is None:
+            return -1
+        if self.users.role(user) == "admin" or _owner_of(name) == user:
+            return 3
+        role = self.repo(name).members.get(user)
+        return REPO_ROLES.index(role) if role in REPO_ROLES else -1
+
     def _may_write(self, user: str, name: str) -> bool:
-        """Whether `user` may write image `name`: admin -> always; author -> owns its namespace."""
-        return self.users.role(user) == "admin" or _owner_of(name) == user
+        """Whether `user` may publish versions of image `name`: its author and up."""
+        return self._repo_level(user, name) >= AUTHOR
 
     def _authorize_write(self, name: str, version: str) -> tuple[str | None, Response | None]:
         """
@@ -1668,7 +1690,7 @@ class PoolServer:
 
     def _may_see_repo(self, user: str | None, name: str) -> bool:
         """Tell whether `user` sees repository `name`: public -- anyone; private -- owner and admins."""
-        return self.repo(name).visibility == "public" or (user is not None and self._may_write(user, name))
+        return self.repo(name).visibility == "public" or self._repo_level(user, name) >= 0
 
     def _may_read_sources(self, user: str | None, name: str, filename: str = "") -> bool:
         """
@@ -1683,11 +1705,43 @@ class PoolServer:
             return True
         return not self.repo(name).hide_sources or self._may_write(user, name)
 
+    def _route_repo_members(self, tail: str) -> Response:  # noqa: PLR0911
+        """
+        Set or take a role in an image: PUT/DELETE /repo-members/<owner>/<name>/<login> {role}.
+
+        Spec 2026-10-23 §2: the owner gives member / author / maintainer, or takes it away.
+        """
+        name, _, login = tail.rpartition("/")
+        user = self._token_user()
+        if user is None:
+            return self._empty(HTTPStatus.UNAUTHORIZED)
+        if not name or not self.repo(name).exists or not self._may_see_repo(user, name):
+            return self._not_found(name or tail)
+        if self._repo_level(user, name) < OWNER:
+            return self._empty(HTTPStatus.FORBIDDEN)
+        if not self.users.has(login):
+            return self._json(HTTPStatus.NOT_FOUND, {"error": f"нет пользователя {login}"})
+        if login == _owner_of(name):
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": "это владелец образа"})
+        role = None
+        if request.method == "PUT":
+            data = request.get_json(silent=True) or {}
+            role = str(data.get("role", "")) if isinstance(data, dict) else ""
+        try:
+            with self.repo(name).locked() as idx:
+                idx.set_member(login, role)
+                members = idx.members
+        except ValueError as exc:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        return self._json(HTTPStatus.OK, {"members": members})
+
     def _repo_settings(self, name: str) -> Response:
         """PUT name {visibility?, hide_sources?}: the owner's repository settings (spec §2.5, §2.6)."""
-        _user, err = self._authorize_write(name, "x")
+        user, err = self._authorize_write(name, "x")
         if err is not None:
             return err
+        if self._repo_level(user, name) < OWNER:                  # spec 2026-10-23 §2: the owner only
+            return self._empty(HTTPStatus.FORBIDDEN)
         if not self.repo(name).exists:
             return self._not_found(name)
         data = request.get_json(silent=True) or {}
@@ -1753,6 +1807,8 @@ class PoolServer:
         user, err = self._authorize_write(name, parts[1])
         if err is not None:
             return err
+        if self._repo_level(user, name) < MAINTAINER:                  # tags: a maintainer and up
+            return self._empty(HTTPStatus.FORBIDDEN)
         data = request.get_json(silent=True) or {}
         src, to = str(data.get("from", "")), str(data.get("to", ""))
         src_name, _, src_version = src.partition(":")
@@ -1797,7 +1853,7 @@ class PoolServer:
             w.set_meta(fork_of=resolved, visibility=self.repo(src_name).visibility)
         return self._json(HTTPStatus.CREATED, {"ref": ref, "n": 1})
 
-    def _revision_delete(self, tail: str) -> Response:
+    def _revision_delete(self, tail: str) -> Response:  # noqa: PLR0911
         """
         Remove one revision (§2.7).
 
@@ -1812,6 +1868,8 @@ class PoolServer:
         user, err = self._authorize_write(name, tag)
         if err is not None:
             return err
+        if self._repo_level(user, name) < MAINTAINER:                  # deleting versions: a maintainer and up
+            return self._empty(HTTPStatus.FORBIDDEN)
         n = int(n_raw)
         ref = f"{name}:{revision_version(tag, n)}"
         if self.repo(name).get(tag, n) is None:
@@ -1849,7 +1907,7 @@ class PoolServer:
             return self._empty(HTTPStatus.BAD_REQUEST)
         if not self.repo(target).exists or not self._may_see_repo(user, target):
             return self._not_found(target)
-        owner = self._may_write(user, target)
+        owner = self._repo_level(user, target) >= MAINTAINER          # decide proposals: a maintainer and up
         store = self.merges(target)
         if request.method == "GET":
             mid, _, what = rest.partition("/")
@@ -2390,6 +2448,10 @@ class PoolServer:
             "may_fork": self._may_read_sources(viewer, name) and not owner and n is not None,
             "fork_origin": origin if origin and owner else "",
             "merges": open_merges, "viewer": viewer,
+            "people": [{"user": _owner_of(name), "role": "owner"}] + [
+                {"user": u, "role": r} for u, r in sorted(idx.members.items())] if _owner_of(name) else [],
+            "may_people": self._repo_level(viewer, name) >= OWNER,
+            "role_ru": {"owner": "владелец", "maintainer": "сопровождающий", "author": "автор", "member": "участник"},
         }
 
     def _web_source_file(self) -> Response:  # noqa: PLR0911  (page / folder / raw / download)

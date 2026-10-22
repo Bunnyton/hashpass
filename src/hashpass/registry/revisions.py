@@ -21,6 +21,7 @@ REVISION_RE = re.compile(r"^(?P<tag>.+)_v(?P<n>[1-9][0-9]*)$")
 _LATEST = "_latest"
 _RESERVED = re.compile(r"(_v[0-9]+|_latest)$")
 VISIBILITIES = ("public", "private")
+REPO_ROLES = ("member", "author", "maintainer", "owner")   # as in a course (spec 2026-10-23 §2)
 
 
 
@@ -104,6 +105,7 @@ class RepoIndex:
         data.setdefault("hide_sources", False)
         data.setdefault("fork_of", "")
         data.setdefault("tags", {})
+        data.setdefault("members", {})
         return data
 
     def _save(self) -> None:
@@ -152,6 +154,25 @@ class RepoIndex:
     @property
     def fork_of(self) -> str:
         return str(self._data["fork_of"])
+
+    @property
+    def members(self) -> dict[str, str]:
+        """People in this image and their roles (spec 2026-10-23 §2); the owner is not listed."""
+        return {str(k): str(v) for k, v in (self._data.get("members") or {}).items()}
+
+    def set_member(self, user: str, role: str | None) -> None:
+        """Give `user` a role here (member / author / maintainer), or None -- take it away."""
+        self._need_lock()
+        if role is not None and role not in REPO_ROLES[:-1]:
+            msg = f"роль — {', '.join(REPO_ROLES[:-1])}"
+            raise ValueError(msg)
+        members = dict(self._data.get("members") or {})
+        if role is None:
+            members.pop(user, None)
+        else:
+            members[user] = role
+        self._data["members"] = members
+        self._save()
 
     def set_meta(self, **fields: object) -> None:
         """Change repository settings: visibility, hide_sources, fork_of."""
@@ -205,5 +226,5 @@ class RepoIndex:
     def as_dict(self) -> dict[str, object]:
         """Return the public view: settings + every tag's revisions (oldest first)."""
         return {"visibility": self.visibility, "hide_sources": self.hide_sources,
-                "fork_of": self.fork_of,
+                "fork_of": self.fork_of, "members": self.members,
                 "tags": {t: [r.as_dict() for r in self.revisions(t)] for t in self.tags()}}

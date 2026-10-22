@@ -145,7 +145,7 @@ class SearchWeb:
         api = self.server.course_api
         viewable = [c for c in api.courses.all() if can(user, role, c, "view")]
         runs = [self._course_row(c, role_of=login) for c in viewable if c.role_of(login) in _STAFF_ROLES]
-        repos = self.repos(user, "", owner=login)
+        repos = self.repos(user, "", member=login)          # own + those one contributes to
         see_all = user == login or role == "admin"
         used: dict[str, dict] = {}
         for r in repos:
@@ -203,16 +203,26 @@ class SearchWeb:
                 and q.casefold() in f"{c.ref} {c.title} {c.description}".casefold()]
         return sorted(rows, key=lambda r: (r["role"] is None, r["ref"]))
 
-    def repos(self, user: str | None, q: str, *, owner: str = "*") -> list[dict]:
-        """Repositories `user` may see (name contains `q`): newest version per tag, task or image, README line."""
+    def repos(self, user: str | None, q: str, *, owner: str = "*", member: str = "") -> list[dict]:
+        """
+        Return the repositories `user` may see whose name contains `q`.
+
+        Each: the newest version per tag, task or image, a README line. With `member`: also the
+        images where that login has a role (its `role`).
+        """
         root = Path(self.server.store.root) / ".repos"
         att = self.server.attachments()
         rows = []
-        for index in sorted(root.glob(f"{owner}/*/repo.json")) if root.is_dir() else []:
+        pattern = "*/*/repo.json" if member else f"{owner}/*/repo.json"
+        for index in sorted(root.glob(pattern)) if root.is_dir() else []:
             name = f"{index.parent.parent.name}/{index.parent.name}"
             if q.casefold() not in name.casefold() or not self.server._may_see_repo(user, name):  # noqa: SLF001
                 continue
             repo = self.server.repo(name)
+            ns = name.split("/", 1)[0]
+            role = "" if not member or ns == member else repo.members.get(member, "")
+            if member and ns != member and not role:
+                continue
             tags, about = [], ""
             for tag in repo.tags():
                 latest = repo.latest(tag)
@@ -224,7 +234,8 @@ class SearchWeb:
                 about = about or self.about(ref, att)
             if tags:
                 rows.append({"name": name, "visibility": repo.visibility, "fork_of": repo.fork_of,
-                             "tags": tags, "task": any(t["task"] for t in tags), "about": about})
+                             "tags": tags, "task": any(t["task"] for t in tags), "about": about,
+                             "role": role, "role_ru": _ROLE_RU.get(role, "")})
         return rows
 
     def about(self, ref: str, att: object = None) -> str:
