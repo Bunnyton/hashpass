@@ -587,8 +587,8 @@ def _plural(n: int, one: str, few: str, many: str) -> str:
 _ROLES = ("student", "author", "admin")
 
 
-def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "",
-                 pool_auto: bool = False) -> str:
+def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "",  # noqa: PLR0913
+                 pool_auto: bool = False, q: str = "", deletions: list[dict] | None = None) -> str:
     """User management: per-user role change / reset link / delete, delete-group, registration toggle."""
     rows = [{"user": str(p["user"]), "user_q": quote(str(p["user"]), safe=""),
              "created_at": p.get("created_at") or None,
@@ -599,7 +599,7 @@ def render_users(profiles: list[dict], *, registration_open: bool, current_user:
              "is_self": str(p["user"]) == current_user} for p in profiles]
     return _env.get_template("users.html.j2").render(
         title="Пользователи — hashpass", nav=True, active="/web/users",
-        rows=rows, roles=_ROLES, pool_auto=pool_auto,
+        rows=rows, roles=_ROLES, pool_auto=pool_auto, q=q, deletions=deletions or [],
         reg_label="открыта" if registration_open else "закрыта",
         toggle_to="false" if registration_open else "true",
         toggle_label="Закрыть регистрацию" if registration_open else "Открыть регистрацию")

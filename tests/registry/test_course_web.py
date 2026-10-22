@@ -97,3 +97,14 @@ def test_image_card_for_its_owner_and_for_others(pool: _Courses) -> None:
     pool.push("bob/solo", "1", image="s")
     assert pool.call("PUT", "/revisions/bob/solo", "bob", {"visibility": "private"})[0] == 200  # noqa: PLR2004
     assert _page(_browser(pool, "eve"), f"{pool.url}/web/image/bob/solo:1")[0] == 404  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_admin_users_page_searches_and_lists_deletion_requests(pool: _Courses) -> None:
+    pool.r.users.set_comment("kid", "ИТ-21 староста")
+    pool.push("eve/regex", "1", image="r", task="t", user="eve")
+    pool.call("POST", "/courses/bob/linux/tasks", "bob", {"repo": "eve/regex", "tag": "1"})
+    assert pool.call("DELETE", "/revisions/eve/regex/1/1", "eve")[0] == 202  # noqa: PLR2004
+    html = _page(_browser(pool, "bunnyton"), f"{pool.url}/web/users?q=%D0%98%D0%A2-21")[1]
+    assert ">kid<" in html and ">max<" not in html
+    assert "Запросы на удаление ревизий" in html and "eve/regex:1_v1" in html

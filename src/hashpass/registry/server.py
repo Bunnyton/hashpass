@@ -2282,10 +2282,12 @@ class PoolServer:
         actor = self._session_role(("admin",))
         if actor is None:
             return self._redirect("/web/login")
+        q = request.args.get("q", "").strip()
         return self._html(render_users(
-            self.users.all_users(),
+            self.users.search(q) if q else self.users.all_users(),
             registration_open=self.config.registration_open, current_user=actor,
-            pool_auto=self.pool_settings().auto_approve))
+            pool_auto=self.pool_settings().auto_approve, q=q,
+            deletions=[r for r in self.deletions().all() if r["state"] == "open"]))
 
     def _web_users_auto_approve(self) -> Response:
         """Admin: switch one author's auto-approval (own included)."""
