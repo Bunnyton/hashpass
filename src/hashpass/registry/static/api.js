@@ -1,4 +1,5 @@
-/* Course/image pages: a <form data-api="METHOD /path"> sends its fields to the JSON API.
+/* Course/image pages: a <form data-api="METHOD /path"> sends its fields to the JSON API
+   (a path slot __NAME__ is filled from the field `__name`, which is not sent).
    Fields go as JSON (data-type="bool"|"int" converts; a checkbox is a bool); data-rev adds the
    page's revision of the course; data-confirm asks first; data-then="go:/c/{ref}" follows the
    answer, else the page reloads. Errors show the server's own `error` text. */
@@ -40,12 +41,19 @@
     var ask = form.getAttribute('data-confirm');
     if (ask && !window.confirm(ask)) return;
     var parts = spec.split(' '), method = parts[0], url = parts.slice(1).join(' ');
+    var body = fields(form);
+    // a path slot __NAME__ takes the value of the field `__name` (a course picked, a fork's name)
+    url = url.replace(/__([A-Z]+)__/g, function (_, key) {
+      var k = '__' + key.toLowerCase(), v = body[k];
+      delete body[k];
+      return encodeURIComponent(v || '').replace(/%2F/g, '/');
+    });
     var btn = form.querySelector('button[type=submit], button:not([type])');
     if (btn) btn.disabled = true;
     fetch(url, {
       method: method, credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: method === 'GET' ? undefined : JSON.stringify(fields(form))
+      body: method === 'GET' ? undefined : JSON.stringify(body)
     }).then(function (r) {
       return r.text().then(function (t) {
         var j = {};

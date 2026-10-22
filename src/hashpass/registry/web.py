@@ -522,11 +522,11 @@ def render_catalog(images: list[dict], blocks: list[dict]) -> str:
 render_images = render_catalog
 
 
-def render_image_card(image: dict) -> str:
-    """Render one image's dedicated page (description editor + files)."""
+def render_image_card(image: dict, **extra: object) -> str:
+    """Render one image's dedicated page (description, sources, files; revisions and courses)."""
     return _env.get_template("image_card.html.j2").render(
         title=f"{image.get('ref', '')} — hashpass", nav=True, active="/web/images",
-        image=_prepare_image(image))
+        image=_prepare_image(image), **extra)
 
 
 def _children(sources: list[dict], folder: str) -> list[dict]:

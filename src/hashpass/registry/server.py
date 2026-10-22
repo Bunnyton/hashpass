@@ -2310,10 +2310,12 @@ class PoolServer:
         return self._html(render_catalog(self._pool_image_rows(), blocks))
 
     def _web_image_card(self, ref: str) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._redirect("/web/login")
+        viewer = self._session_user()
+        courses_on = os.environ.get("HASHPASS_COURSES") == "1"
+        if viewer is None or (not courses_on and self.users.role(viewer) not in _AUTHOR_ROLES):
+            return self._redirect(f"/web/login?next={quote('/web/image/' + ref, safe='')}")
         ref = self._live_ref(ref)
-        if not self.store.exists(ref):
+        if not self.store.exists(ref) or not self._may_see_repo(viewer, ref.partition(":")[0]):
             return self._web_not_found(ref)
         row = next((r for r in self._pool_image_rows() if r["ref"] == ref), None)
         if row is None:
@@ -2323,7 +2325,36 @@ class PoolServer:
                "sources": self.sources().listing(ref) if self._sources_ready(ref) else [],
                **({"state": entry.state, "reason": entry.reason,
                    "pending_update": entry.as_dict()["pending_update"]} if entry else {})}
-        return self._html(render_image_card(row))
+        return self._html(render_image_card(row, **self._card_extra(viewer, ref)))
+
+    def _card_extra(self, viewer: str, ref: str) -> dict[str, object]:
+        """Revisions, settings, where used, proposals and merges for an image card (spec §11)."""
+        name, _, version = ref.partition(":")
+        tag, n, _latest = parse_version(version)
+        idx = self.repo(name)
+        role = self.users.role(viewer)
+        owner = self._may_write(viewer, name)
+        used = self.course_api.courses.courses_with(name, tag)
+        merges = self.merges(name).all() if owner else [m for m in self.merges(name).all() if m["by"] == viewer]
+        open_merges = []
+        for m in merges:
+            row = dict(m)
+            if m["state"] == "open" and owner:
+                base = self.resolve(name, m["to_tag"])
+                row["files"] = tree_diff(self.sources()._dir(base) if base else None,  # noqa: SLF001
+                                         self.sources()._dir(m["from"]))           # noqa: SLF001
+            open_merges.append(row)
+        origin = idx.fork_of.partition(":")[0]
+        return {
+            "repo": name, "tag": tag, "n": n, "repo_info": idx.as_dict() if idx.exists else None,
+            "owner": owner, "courses_era": os.environ.get("HASHPASS_COURSES") == "1",
+            "used_in": self._course_names(used, viewer) if used else [],
+            "propose_to": [c.ref for c in self.course_api.courses.all() if can(viewer, role, c, "propose")
+                           and c.find_task(name, tag) is None],
+            "may_fork": self._may_read_sources(viewer, name) and not owner and n is not None,
+            "fork_origin": origin if origin and owner else "",
+            "merges": open_merges, "viewer": viewer,
+        }
 
     def _web_source_file(self) -> Response:  # noqa: PLR0911  (page / folder / raw / download)
         """

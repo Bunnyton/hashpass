@@ -165,9 +165,13 @@ def test_footer_shows_solution_and_relogin_for_every_role(tmp_path, role):
         app = PoolTUI(Home(tmp_path / "h"), "http://pool", "u", "tok")
         app.client = _Pool()
         async with app.run_test(size=(100, 30)) as pilot:
-            await pilot.pause(0.3)
-            text = html.unescape(re.sub(r"<[^>]+>", "", app.export_screenshot())).replace("\xa0", " ")
-            footer = next(line for line in text.splitlines() if "Выход" in line)
+            footer = ""
+            for _ in range(30):                      # the role arrives from me(): wait, don't guess
+                await pilot.pause(0.1)
+                text = html.unescape(re.sub(r"<[^>]+>", "", app.export_screenshot())).replace("\xa0", " ")
+                footer = next((line for line in text.splitlines() if "Выход" in line), "")
+                if "Решение" in footer and "Сменить аккаунт" in footer:
+                    break
             assert "Решение" in footer
             assert "Сменить аккаунт" in footer
     asyncio.run(drive())

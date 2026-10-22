@@ -1,7 +1,7 @@
 {% extends 'base.html.j2' %}
 {% from '_files.html.j2' import filebox, icon %}
 {% block main %}
-<p class='crumb'><a href='/web/images'>← Каталог</a></p>
+<p class='crumb'>{% if courses_era %}<a href='/c'>← Курсы</a>{% else %}<a href='/web/images'>← Каталог</a>{% endif %}</p>
 <div class='card-hero'>
 <h1 class='mono ref-title'>{{ image.ref }}</h1>
 <div class='row'>
@@ -50,4 +50,98 @@
 <button class='sm' type='submit'>Прикрепить</button>
 </form>
 </div>
+
+{% if repo_info %}
+<h2 id='revisions'>Ревизии</h2>
+<div class='card'>
+<div class='row'>
+{% if repo_info.visibility == 'private' %}<span class='pill closed'>приватный</span>{% else %}<span class='pill open'>публичный</span>{% endif %}
+{% if repo_info.hide_sources %}<span class='pill sm'>служебные файлы скрыты</span>{% endif %}
+{% if repo_info.fork_of %}<span class='pill sm'>форк <a href='/web/image/{{ repo_info.fork_of | ref_url }}'>{{ repo_info.fork_of }}</a></span>{% endif %}
+</div>
+<table>
+<tr><th>Тег</th><th>Ревизия</th><th>Когда</th><th>Кто</th><th></th></tr>
+{% for t, revs in repo_info.tags.items() %}{% for r in revs | reverse %}
+<tr{% if t == tag and r.n == n %} class='on'{% endif %}><td class='mono'>{{ t }}</td>
+<td class='mono'><a href='/web/image/{{ (repo ~ ":" ~ t ~ "_v" ~ r.n) | ref_url }}'>{{ t }}_v{{ r.n }}</a>{% if loop.first %} <span class='pill sm'>последняя</span>{% endif %}
+{% if r.merged_from %}<span class='sub small'>слияние из {{ r.merged_from }}</span>{% endif %}</td>
+<td>{{ ts(r.at) }}</td><td>{{ r.by }}</td>
+<td>{% if owner %}<form class='inline' data-api='DELETE /revisions/{{ repo }}/{{ t }}/{{ r.n }}' data-confirm='Удалить ревизию {{ t }}_v{{ r.n }}? Если она стоит в чужих курсах, удаление подождёт решения администратора.'><button class='sm ghost' type='submit'>удалить</button></form>{% endif %}</td></tr>
+{% endfor %}{% endfor %}
+</table>
+{% if owner %}
+<hr class='divider'>
+<form class='row' data-api='PUT /revisions/{{ repo }}'>
+<label>Видимость <select name='visibility'>
+<option value='public'{% if repo_info.visibility == 'public' %} selected{% endif %}>публичный</option>
+<option value='private'{% if repo_info.visibility == 'private' %} selected{% endif %}>приватный</option></select></label>
+<label class='check'><input type='checkbox' name='hide_sources' data-type='bool'{% if repo_info.hide_sources %} checked{% endif %}> скрыть служебные файлы (README виден всегда)</label>
+<button class='sm' type='submit'>Сохранить</button>
+</form>
+{% if n %}<form class='row' data-api='POST /revisions/{{ repo }}/{{ tag }}_v{{ n }}/tag'>
+<input type='hidden' name='from' value='{{ repo }}:{{ tag }}_v{{ n }}'>
+<input name='to' placeholder='новый тег, например stable' required><button class='sm ghost' type='submit'>Навесить тег</button></form>{% endif %}
+{% endif %}
+</div>
+{% endif %}
+
+{% if courses_era %}
+<h2 id='courses'>Курсы</h2>
+<div class='card'>
+{% if used_in %}<p class='sub'>Используется в: {% for c in used_in %}{% if '/' in c %}<a href='/c/{{ c }}'>{{ c }}</a>{% else %}{{ c }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% else %}<p class='sub'>Пока ни в одном курсе.</p>{% endif %}
+{% if propose_to and n %}
+<form class='row' data-api='POST /courses/__COURSE__/tasks' data-course-select>
+<select name='__course'>{% for c in propose_to %}<option value='{{ c }}'>{{ c }}</option>{% endfor %}</select>
+<input type='hidden' name='repo' value='{{ repo }}'><input type='hidden' name='tag' value='{{ tag }}'>
+<input type='hidden' name='n' value='{{ n }}' data-type='int'>
+<input name='comment' placeholder='комментарий (для предложения)'>
+<button class='sm' type='submit'>Предложить в курс</button>
+</form>
+{% endif %}
+</div>
+{% endif %}
+
+{% if may_fork %}
+<h2 id='fork'>Форк</h2>
+<div class='card'>
+<p class='sub'>Форк — копия задания в вашем пространстве имён: доработайте её (<code>hashengine source</code> → правка → <code>build</code> → <code>push</code>) и предложите автору.</p>
+<form class='row' data-api='POST /revisions/{{ viewer }}/__FORKNAME__/fork' data-fork-name data-then='go:/web/image/{ref}'>
+<input type='hidden' name='from' value='{{ image.ref }}'>
+<input name='__forkname' value='{{ repo.rpartition("/")[2] }}' required>
+<button class='sm' type='submit'>Форкнуть</button>
+</form>
+</div>
+{% endif %}
+
+{% if fork_origin and n %}
+<h2>Предложить автору</h2>
+<div class='card'>
+<form class='row' data-api='POST /revisions/{{ fork_origin }}/merges'>
+<input type='hidden' name='from' value='{{ image.ref }}'>
+<input name='comment' placeholder='что изменено'>
+<button class='sm' type='submit'>Предложить {{ fork_origin }}</button>
+</form>
+</div>
+{% endif %}
+
+{% if merges %}
+<h2 id='merges'>Запросы на слияние</h2>
+{% for m in merges | reverse %}
+<div class='card'>
+<div class='row'><span class='mono'>{{ m['from'] }} → {{ repo }}:{{ m.to_tag }}</span><span class='sp'></span>
+{% if m.state == 'open' %}<span class='pill warn sm'>открыт</span>{% elif m.state == 'merged' %}<span class='pill open sm'>принят → {{ m.result }}</span>{% elif m.state == 'rejected' %}<span class='pill no sm'>отклонён{% if m.reason %}: {{ m.reason }}{% endif %}</span>{% else %}<span class='pill sm'>отозван</span>{% endif %}</div>
+<p class='sub small'>{{ m.by }}{% if m.comment %}: {{ m.comment }}{% endif %}</p>
+{% if m.files %}<details><summary>Изменения ({{ m.files | length }})</summary>
+{% for f in m.files %}<p class='mono small'>{{ {'added': '+', 'removed': '−', 'changed': '±'}[f.change] }} {{ f.path }}</p>
+{% if f.diff %}<pre class='diff'>{{ f.diff }}</pre>{% endif %}{% endfor %}</details>{% endif %}
+{% if m.state == 'open' %}<div class='row'>
+{% if owner %}<form class='inline' data-api='POST /revisions/{{ repo }}/merges/{{ m.id }}'><input type='hidden' name='action' value='merge'><button class='sm' type='submit'>Принять</button></form>
+<form class='inline row' data-api='POST /revisions/{{ repo }}/merges/{{ m.id }}'><input type='hidden' name='action' value='reject'><input name='reason' placeholder='причина'><button class='sm ghost' type='submit'>Отклонить</button></form>{% endif %}
+{% if m.by == viewer %}<form class='inline' data-api='POST /revisions/{{ repo }}/merges/{{ m.id }}'><input type='hidden' name='action' value='withdraw'><button class='sm ghost' type='submit'>Отозвать</button></form>{% endif %}
+</div>{% endif %}
+</div>
+{% endfor %}
+{% endif %}
+<script src='/static/api.js'></script>
 {% endblock %}

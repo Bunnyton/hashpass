@@ -83,3 +83,17 @@ def test_login_returns_to_the_invite_link(pool: _Courses) -> None:
 def test_course_pages_are_off_without_the_switch(pool: _Courses, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HASHPASS_COURSES")
     assert _page(_browser(pool, None), f"{pool.url}/c")[0] == 404  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_image_card_for_its_owner_and_for_others(pool: _Courses) -> None:
+    owner = _page(_browser(pool, "bob"), f"{pool.url}/web/image/bob/git-init:1")[1]
+    assert "id='revisions'" in owner and "1_v1" in owner
+    assert "data-api='PUT /revisions/bob/git-init'" in owner             # visibility (owner)
+    assert "Используется в" in owner and "/c/bob/linux" in owner
+    other = _page(_browser(pool, "eve"), f"{pool.url}/web/image/bob/git-init:1")[1]
+    assert "Форкнуть" in other
+    assert "data-api='PUT /revisions/bob/git-init'" not in other
+    pool.push("bob/solo", "1", image="s")
+    assert pool.call("PUT", "/revisions/bob/solo", "bob", {"visibility": "private"})[0] == 200  # noqa: PLR2004
+    assert _page(_browser(pool, "eve"), f"{pool.url}/web/image/bob/solo:1")[0] == 404  # noqa: PLR2004
