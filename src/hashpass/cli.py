@@ -67,7 +67,7 @@ from hashpass.registry.passwords import (
 from hashpass.registry.refs import normalize_ref, split_ref
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.revisions import check_tag
-from hashpass.registry.server import make_server
+from hashpass.registry.server import PoolServer, make_server
 from hashpass.registry.token import token_user
 from hashpass.taskbuild import build_task
 from hashpass.taskdigest import task_digest
@@ -1337,6 +1337,36 @@ def _resolve_tls(env: Home, certfile: str | None, keyfile: str | None,
             msg = "для --tls-self-signed нужен openssl (или задайте --tls-cert/--tls-key)"
             raise RuntimeError(msg) from exc
     return cert, key
+
+
+def cmd_migrate_courses(env: Home, owner: str = "bunnyton", io: Io | None = None) -> int:
+    """
+    Move this pool (its data under the hashengine home) to revisions + a default course (spec §13).
+
+    Run on the pool machine, with the pool stopped or idle; done once (a second run reports so).
+    The old state is backed up first; the courses API is then switched on by HASHPASS_COURSES=1.
+    """
+    from hashpass.registry.migrate import migrate_to_courses  # noqa: PLC0415  (rare, heavy)
+    io = io or _default_io()
+    store = ImageStore(env.registry / "store")
+    users = UserStore(env.registry / "users.json")
+    if users.role(owner) != "admin":
+        msg = f"владелец курса по умолчанию должен быть администратором пула: {owner}"
+        raise RuntimeError(msg)
+    config_path = env.registry / "config.json"
+    server = PoolServer(store=store, users=users, secret=_registry_secret(env),
+                        config=load_config(config_path), config_path=config_path,
+                        catalog_path=env.registry / "catalog.json",
+                        progress_path=env.registry / "progress")
+    report = migrate_to_courses(server, owner=owner, base_ref=base_ref())
+    if not report:
+        io.write("пул уже переведён на курсы — делать нечего\n")
+        return 0
+    io.write(f"готово: образов {report['images']}, заданий в курсе {report['tasks']}, "
+             f"предложений {report['proposals']}; курс по умолчанию {server.config.default_course}\n"
+             "резервная копия — в .backup-courses-* рядом с хранилищем; включите курсы: "
+             "HASHPASS_COURSES=1\n")
+    return 0
 
 
 def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  # noqa: PLR0913

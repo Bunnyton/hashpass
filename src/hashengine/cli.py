@@ -83,6 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_source.add_argument("dest", nargs="?", help="куда распаковать (по умолчанию ./<имя задания>)")
     p_source.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
     _add_revision_commands(sub)
+    p_mig = sub.add_parser("migrate-courses", help="перевести этот пул на ревизии и курсы "
+                           "(один раз, на машине пула; администратор)")
+    p_mig.add_argument("--owner", default="bunnyton", help="владелец курса по умолчанию (администратор)")
     sub.add_parser("images", help="список локально собранных образов и заданий")
     p_cat = sub.add_parser("catalog", help="каталог пула: раскладка по блокам (администратор)")
     p_cat.add_argument("action", choices=["layout"], help="layout — задать блоки и порядок")
@@ -134,6 +137,7 @@ _REVISION_COMMANDS = {
     "tag": lambda env, a: cli.cmd_tag(env, a.src, a.to, a.registry),
     "rm": lambda env, a: cli.cmd_rm(env, a.ref, a.registry, local=a.local),
     "fork": lambda env, a: cli.cmd_fork(env, a.src, a.name, a.registry),
+    "migrate-courses": lambda env, a: cli.cmd_migrate_courses(env, a.owner),
 }
 
 

@@ -146,3 +146,20 @@ def test_before_the_move_students_still_get_the_approved_copy(legacy: PoolServer
     with tarfile.open(fileobj=io.BytesIO(client.get("/task/bob/lab/1", headers={
             "Authorization": f"Bearer {bob}"}).data)) as tar:
         assert tar.extractfile("task-meta.json").read() == b"lab-new"      # the author: the latest
+
+
+@pytest.mark.tier1
+def test_the_command_runs_once_on_the_pool_home(tmp_path: Path) -> None:
+    from hashpass import cli  # noqa: PLC0415
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    users = UserStore(env.registry / "users.json")
+    users.add("bunnyton", "pw-correct1", role="admin")
+    users.add("bob", "pw-correct1", role="author")
+    said: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=said.append, clock=lambda: "")
+    with pytest.raises(RuntimeError, match="администратором"):
+        cli.cmd_migrate_courses(env, "bob", io)
+    assert cli.cmd_migrate_courses(env, "bunnyton", io) == 0
+    assert "курс по умолчанию bunnyton/linux" in said[-1]
+    assert cli.cmd_migrate_courses(env, "bunnyton", io) == 0
+    assert "уже переведён" in said[-1]
