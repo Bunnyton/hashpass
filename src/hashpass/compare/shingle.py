@@ -1,10 +1,20 @@
 """Shingling + exact Jaccard."""
 
+# Characters nobody sees: zero-width space/joiners, word joiner, BOM -- pasted text drags them in.
+_INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"))
+
+
+def _line(raw: str) -> str:
+    """One line as a reader sees it: no invisible characters, no edge spaces, single inner spaces."""
+    return " ".join(raw.translate(_INVISIBLE).split())
+
 
 def shingle(text: str, *, mode: str = "word", k: int = 3) -> frozenset[str]:
     if mode == "line":
-        # In line mode, each non-blank line is one shingle; k parameter is ignored.
-        return frozenset(line for line in text.splitlines() if line.strip())
+        # In line mode, each non-blank line is one shingle; k parameter is ignored. Whitespace and
+        # invisible characters are insignificant: a copied answer drags in trailing spaces,
+        # \r or a BOM, and `ls -l` pads columns to the widest entry (mc, links, 2026-10-23).
+        return frozenset(line for line in map(_line, text.splitlines()) if line)
     if mode == "char":
         units: str | list[str] = text
     elif mode == "word":

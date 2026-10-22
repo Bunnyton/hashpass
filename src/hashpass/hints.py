@@ -48,12 +48,12 @@ def match_hint(hints_for_stage: list[dict], *, command: str, output: str,  # noq
 
 
 def _mentions(cmd: Cmd, token: str) -> bool:
-    """Return whether the command carries `token` -- a `-flag` matched as a flag, any word as an arg."""
+    """Whether the command carries `token` -- a `-flag` as a flag, a word as an arg or a path's last name."""
     # Without this a bare word (e.g. `missing ГОТОВО`) went through has_flag -- which only knows
     # `-flags` -- so it was ALWAYS absent, making `cmd <base> missing <word>` fire on every command.
     if token.startswith("-"):
         return cmd.has_flag(token)
-    return token in cmd.args
+    return any(arg == token or arg.endswith("/" + token) for arg in cmd.args)   # a name, any path to it
 
 
 def _cmd_matches(cond: CmdCond, command: str) -> bool:

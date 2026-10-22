@@ -98,6 +98,18 @@ def test_cmd_missing_and_has_match_words_not_just_flags():
 
 
 @pytest.mark.tier1
+def test_cmd_word_matches_a_path_ending_in_that_name():
+    # links, 2026-10-23: `missing file_link.txt` must see `ln -sf /abs dir/file_link.txt` as naming
+    # the link -- a word is a file name, however the path to it is spelled.
+    miss = (HintRule(CmdCond("ln", (), ("file_link.txt",)), SayAction("m")),)
+    for named in ("ln -sf /a/file.txt dir/file_link.txt", "ln -s /a/file.txt ./file_link.txt",
+                  "ln -s /a/file.txt /home/student/dir/file_link.txt"):
+        assert match_rule(miss, **{**_NO, "command": named}) is None, named
+    assert match_rule(miss, **{**_NO, "command": "ln -s /a/file.txt"}) == SayAction("m")
+    assert match_rule(miss, **{**_NO, "command": "ln -s /a/file.txt dir/file_link.txt.bak"}) == SayAction("m")
+
+
+@pytest.mark.tier1
 def test_first_match_wins_and_unparseable_command():
     rules = (
         HintRule(TriesCond(2), SayAction("first")),
