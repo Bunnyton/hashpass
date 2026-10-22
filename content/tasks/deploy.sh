@@ -118,7 +118,11 @@ done
 if [[ -z "$DRY" ]]; then
     echo
     echo "── раскладка каталога по блокам ──"
-    hashengine catalog layout --registry "$POOL_URL" "${SPECS[@]}"
+    # Пул, переведённый на курсы, раскладку из скрипта не принимает (410): блоки и порядок —
+    # на странице курса в вебе. Тогда отправленные ревизии уже на пуле, а раскладка — руками.
+    if ! hashengine catalog layout --registry "$POOL_URL" "${SPECS[@]}"; then
+        echo "раскладку не задать отсюда — откройте курс в вебе: $POOL_URL/c"
+    fi
 fi
 
 echo
