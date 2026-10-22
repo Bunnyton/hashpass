@@ -1,0 +1,43 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<div class='cat-head'>
+<h1>Курсы</h1>
+{% if signed_in %}
+<details class='add-menu'>
+<summary class='btn'>+ Создать курс</summary>
+<div class='add-panel card'>
+<form data-api='POST /courses' data-then='go:/c/{ref}'>
+<label>Имя в ссылке — строчные латинские буквы, цифры, дефис
+<input name='name' placeholder='например, linux-basics' pattern='[a-z0-9][a-z0-9-]*' required></label>
+<label>Название<input name='title' placeholder='Основы Linux'></label>
+<label>Видимость
+<select name='visibility'><option value='public'>публичный — проходить может любой</option>
+<option value='private'>приватный — по приглашению или заявке</option></select></label>
+<button type='submit'>Создать</button>
+</form>
+</div>
+</details>
+{% endif %}
+</div>
+{% if message %}<p class='sub'>{{ message }}</p>{% endif %}
+<form class='row search' method='get' action='/c'>
+<input name='q' value='{{ q }}' placeholder='поиск по названию, владельцу, описанию'>
+<button class='ghost' type='submit'>Найти</button>
+</form>
+{% if rows %}
+<div class='grid'>
+{% for r in rows %}
+<a class='card course-card' href='/c/{{ r.ref }}'>
+<div class='row'><b>{{ r.title }}</b><span class='sp'></span>
+{% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
+{% if r.role %}<span class='pill author sm'>{{ role_ru[r.role] }}</span>{% endif %}</div>
+<div class='mono small'>{{ r.ref }} · заданий: {{ r.tasks }}</div>
+{% if r.description %}<p class='sub small'>{{ r.description }}</p>{% endif %}
+</a>
+{% endfor %}
+</div>
+{% else %}
+<div class='empty card'><p class='sub'>{% if q %}Ничего не нашлось.{% else %}Курсов пока нет.{% endif %}</p></div>
+{% endif %}
+<script src='/static/api.js'></script>
+{% endblock %}

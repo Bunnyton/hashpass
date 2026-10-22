@@ -24,7 +24,7 @@ import zoneinfo
 from collections.abc import Callable, Iterable
 from http import HTTPStatus
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from flask import Flask, Response, g, request, send_file
 from werkzeug.serving import WSGIRequestHandler
@@ -42,6 +42,7 @@ from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, un
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.course_api import CourseApi
+from hashpass.registry.course_web import CourseWeb
 from hashpass.registry.merges import MergeRequests, tree_diff
 from hashpass.registry.passwords import (
     LOGIN_RE,
@@ -226,6 +227,12 @@ class DeletionRequests:
 
 
 _COPY = "approved-copy:"      # `_view_revision` result: the pre-revision approved copy of a ref
+
+
+def _local_path(url: str) -> str:
+    """Return a same-site path to come back to after login (`/c/x?invite=…`); anything else -> ''."""
+    url = unquote(url)
+    return url if url.startswith("/") and not url.startswith("//") and "\\" not in url else ""
 
 
 def _tag_ref(ref: str) -> str:
@@ -489,6 +496,7 @@ class PoolServer:
         self._register_routes(app)
         self.course_api = CourseApi(self)
         self.course_api.register(app)
+        CourseWeb(self).register(app)
         app.before_request(self._legacy_catalog_gone)
         return app
 
@@ -732,6 +740,7 @@ class PoolServer:
         if user is None or not self.users.has(user):
             return None
         g.hp_admin = self.users.role(user) == "admin"    # the nav shows admin pages to the admin only
+        g.hp_staff = self.users.role(user) in _AUTHOR_ROLES
         g.hp_tz = str((self.users.get(user) or {}).get("tz", ""))   # pages show times in it
         return user
 
@@ -891,7 +900,8 @@ class PoolServer:
         `HASHPASS_COURSES=1` switches the courses API on. Off by default, so a pool that follows
         `main` (prod) does not grow courses before their web and clients are ready.
         """
-        if request.path.startswith("/courses") and os.environ.get("HASHPASS_COURSES") != "1":
+        course_era = request.path.startswith(("/courses", "/c/")) or request.path == "/c"
+        if course_era and os.environ.get("HASHPASS_COURSES") != "1":
             return self._json(HTTPStatus.NOT_FOUND, {"error": "курсы на этом пуле ещё не включены"})
         if request.path not in self._LEGACY_WRITES or self.default_course() is None:
             return None
@@ -2408,17 +2418,25 @@ class PoolServer:
         # Already in, but an admin-only page sent us here: say so, or the form looks like a
         # lost session and the author logs in again -- in circles.
         user = self._session_user()
+        courses = os.environ.get("HASHPASS_COURSES") == "1"
+        next_url = _local_path(request.args.get("next", ""))
+        if user is not None and next_url:
+            return self._redirect(next_url)
         if user is not None:
-            return self._html(render_login(signed_in=user, role=self.users.role(user)))
-        return self._html(render_login())
+            return self._html(render_login(signed_in=user, role=self.users.role(user), courses=courses))
+        return self._html(render_login(next_url=next_url, courses=courses))
 
     def _web_login_post(self) -> Response:
         user = request.form.get("user", "").strip()
-        if (self.users.verify(user, request.form.get("password", ""))
-                and self.users.role(user) in _AUTHOR_ROLES):
+        courses = os.environ.get("HASHPASS_COURSES") == "1"     # with courses anyone signs in
+        staff = self.users.role(user) in _AUTHOR_ROLES
+        if self.users.verify(user, request.form.get("password", "")) and (staff or courses):
             token = issue_token(self.secret, user, now=time.time())
-            return self._redirect("/web", set_cookie=("hp_session", token))
-        return self._html(render_login("Неверный логин/пароль или нет доступа."),
+            target = _local_path(request.form.get("next", "")) or ("/web" if staff else "/c")
+            return self._redirect(target, set_cookie=("hp_session", token))
+        return self._html(render_login("Неверный логин/пароль или нет доступа.",
+                                       next_url=_local_path(request.form.get("next", "")),
+                                       courses=courses),
                           status=HTTPStatus.UNAUTHORIZED)
 
     def _web_logout(self) -> Response:

@@ -2,6 +2,7 @@
 import calendar
 import hashlib
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -28,6 +29,10 @@ _env.globals["viewer_is_admin"] = lambda: bool(getattr(g, "hp_admin", False)) if
 # The viewer's time zone from their settings ("" = the browser's): static/time.js renders every
 # <time class='ts'> in it.
 _env.globals["viewer_tz"] = lambda: str(getattr(g, "hp_tz", "")) if has_request_context() else ""
+# Staff pages (progress, the old catalog) in the nav: admins and authors; no request -> shown (tests).
+_env.globals["viewer_is_staff"] = (lambda: bool(getattr(g, "hp_staff", True))
+                                   if has_request_context() else True)
+_env.globals["courses_on"] = lambda: os.environ.get("HASHPASS_COURSES") == "1"
 
 
 def safe_id(text: str) -> str:
@@ -273,10 +278,11 @@ def render_front(pool_url: str) -> str:
         title="hashpass", nav=False, active="", url=url, flags=flags, prepare=PREPARE)
 
 
-def render_login(error: str = "", *, signed_in: str = "", role: str = "") -> str:
-    """Teacher/admin login form; `signed_in` -- who is already in (sent here by an admin-only page)."""
+def render_login(error: str = "", *, signed_in: str = "", role: str = "", next_url: str = "",
+                 courses: bool = False) -> str:
+    """Login form; `signed_in` -- who is already in (sent here by an admin-only page)."""
     return _env.get_template("login.html.j2").render(
-        title="Вход — hashpass", nav=False, active="", error=error,
+        title="Вход — hashpass", nav=False, active="", error=error, next=next_url, courses=courses,
         signed_in=signed_in, role={"author": "автор", "admin": "администратор"}.get(role, role))
 
 

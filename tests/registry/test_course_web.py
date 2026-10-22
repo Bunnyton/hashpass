@@ -1,0 +1,85 @@
+"""Tier1: course pages render what the viewer may see (spec 2026-10-21 §11)."""
+import http.cookiejar
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+import pytest
+
+from tests.registry.test_course_api import _Courses
+
+
+def _browser(pool: _Courses, user: str | None) -> urllib.request.OpenerDirector:
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    if user:
+        data = urllib.parse.urlencode({"user": user, "password": "pw-correct1"}).encode()
+        opener.open(urllib.request.Request(f"{pool.url}/web/login", data=data), timeout=10)  # noqa: S310
+    return opener
+
+
+def _page(opener: urllib.request.OpenerDirector, url: str) -> tuple[int, str]:
+    try:
+        with opener.open(url, timeout=10) as resp:
+            return resp.status, resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8")
+
+
+@pytest.fixture
+def pool(registry, tmp_path: Path) -> _Courses:
+    p = _Courses(registry, tmp_path)
+    p.push("bob/git-init", "1", image="one", task="t1")
+    p.call("POST", "/courses", "bob", {"name": "linux", "title": "Linux для всех"})
+    p.call("POST", "/courses", "bob", {"name": "closed", "title": "Секретный", "visibility": "private"})
+    block = p.call("POST", "/courses/bob/linux/blocks", "bob", {"name": "Git"})[1]["id"]
+    p.call("POST", "/courses/bob/linux/tasks", "bob", {"repo": "bob/git-init", "tag": "1", "block_id": block})
+    return p
+
+
+@pytest.mark.tier1
+def test_any_user_signs_in_and_lands_on_courses(pool: _Courses) -> None:
+    status, html = _page(_browser(pool, "kid"), f"{pool.url}/c")
+    assert status == 200  # noqa: PLR2004
+    assert "Linux для всех" in html
+    assert "Секретный" not in html                       # a private course is not listed
+    assert ">Прогресс<" not in html                       # staff pages stay off a student's nav
+
+
+@pytest.mark.tier1
+def test_course_page_for_a_student_and_for_the_owner(pool: _Courses) -> None:
+    status, html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")
+    assert status == 200  # noqa: PLR2004
+    assert "bob/git-init:1_v1" in html and "Пройти курс" in html
+    assert "id='settings'" not in html and "data-layout-url" not in html
+    owner = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
+    assert "data-layout-url='/courses/bob/linux/layout'" in owner
+    assert "id='settings'" in owner and "id='members'" in owner
+
+
+@pytest.mark.tier1
+def test_private_course_shows_only_the_request_form(pool: _Courses) -> None:
+    html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/closed")[1]
+    assert "Запросить доступ" in html
+    assert "Задания" not in html
+    invite = pool.call("GET", "/courses/bob/closed", "bob")[1]["invite"]
+    html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/closed?invite={invite}")[1]
+    assert "Вступить по приглашению" in html
+
+
+@pytest.mark.tier1
+def test_login_returns_to_the_invite_link(pool: _Courses) -> None:
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    target = "/c/bob/closed?invite=abc"
+    data = urllib.parse.urlencode({"user": "kid", "password": "pw-correct1", "next": target}).encode()
+    with opener.open(urllib.request.Request(f"{pool.url}/web/login", data=data), timeout=10) as resp:  # noqa: S310
+        assert resp.url.endswith(target)
+    data = urllib.parse.urlencode({"user": "kid", "password": "pw-correct1",
+                                   "next": "https://evil.example/"}).encode()
+    with opener.open(urllib.request.Request(f"{pool.url}/web/login", data=data), timeout=10) as resp:  # noqa: S310
+        assert resp.url.endswith("/c")                      # never off-site
+
+
+@pytest.mark.tier1
+def test_course_pages_are_off_without_the_switch(pool: _Courses, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HASHPASS_COURSES")
+    assert _page(_browser(pool, None), f"{pool.url}/c")[0] == 404  # noqa: PLR2004
