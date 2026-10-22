@@ -214,3 +214,32 @@ def test_rebuilt_image_rederives_every_stage(tmp_path, fake_build):
     fake_build["image_key"] = "img-key-2"
     _build(tmp_path, _cached_recipe(tmp_path), store)
     assert fake_build["derived"] == [0, 1]
+
+
+class _Runner:
+    def teardown(self) -> None:
+        pass
+
+
+@pytest.mark.tier1
+def test_derive_fails_when_the_reference_holds_the_build_date(monkeypatch):
+    # links, 2026-10-23: a reference with `ls -l` of a file made during solve holds today's date --
+    # it matches only on the build day. The build says so instead of shipping it.
+    from datetime import datetime  # noqa: PLC0415
+    now = datetime.now().astimezone()
+    listing = f"lrwxrwxrwx 1 student student 20 {now:%b} {now.day:>2} {now:%H:%M} file_link.txt -> x\n"
+    monkeypatch.setattr(tb, "run_stage", lambda *_a, **_k: {"<output>": FileState("file", listing)})
+    with pytest.raises(ValueError, match="дат"):
+        tb._derive_stage(_Runner, object(), 0, (), 3, keep_output=True)  # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_derive_reports_paths_that_change_between_runs(monkeypatch):
+    runs = iter(["one", "two", "three"])
+    monkeypatch.setattr(tb, "run_stage", lambda *_a, **_k: {
+        "home/student/a.txt": FileState("file", "same"),
+        "home/student/stamp.txt": FileState("file", next(runs))})
+    said: list[str] = []
+    checks = tb._derive_stage(_Runner, object(), 0, (), 3, progress=said.append)  # noqa: SLF001
+    assert "home/student/stamp.txt" not in checks.canonical
+    assert any("home/student/stamp.txt" in s and "не проверяется" in s for s in said)

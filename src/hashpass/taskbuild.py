@@ -9,12 +9,14 @@ import hashlib
 import itertools
 import json
 from collections.abc import Callable
+from datetime import datetime
 from fnmatch import fnmatch
 from pathlib import Path
 
 import hashpass
 from hashpass.build import build
 from hashpass.canon import Observation, canonicalize
+from hashpass.canon.timestamps import build_stamp
 from hashpass.hidden import stage_hidden_layer
 from hashpass.image.base import build_base
 from hashpass.imagestore.resolve import resolve_lowers
@@ -198,6 +200,14 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
             runner.teardown()
         observations.append(_curate(obs, exclude))
     canonical = canonicalize(observations)
+    for key in observations[0].keys() - canonical.keys():      # differs run to run: time, pid, random
+        _report(progress, f"    ! {key}: меняется от прогона к прогону — не проверяется")
+    now = datetime.now().astimezone()
+    for key, state in canonical.items():
+        if state.text and (line := build_stamp(state.text, now)):
+            msg = (f"stage {stage_index}: в эталоне {key} дата сборки — «{line.strip()}»; "
+                   "завтра он не совпадёт. Проверяй то, что от времени не зависит")
+            raise ValueError(msg)
     if not keep_output:
         # `observe <path>` grades FILES only. Drop the captured stdout: live grading compares
         # against a noisy terminal recording, never the clean solve stdout, so keeping OUTPUT_KEY
