@@ -6,7 +6,7 @@
 <button class='{{ cls }}' type='submit'>{{ label }}</button></form>
 {%- endmacro %}
 {% block main %}
-<nav class='crumb' aria-label='Путь'><a href='/c'>← Курсы</a></nav>
+<nav class='crumb' aria-label='Путь'><a href='/c'>← Мои курсы</a></nav>
 {% set ref_parts = c.ref.split('/', 1) %}
 {% set n_tasks = (c.blocks or []) | map(attribute='tasks') | map('length') | sum %}
 <div class='card-hero course-hero'>
@@ -49,6 +49,14 @@
 </div>
 
 {% if may.view %}
+<nav class='tabs' aria-label='Разделы курса'>
+<a href='#tasks' data-tab>{{ icon('task') }} Задания <span class='count'>{{ n_tasks }}</span></a>
+{% if may.add %}<a href='#students' data-tab>{{ icon('user') }} Студенты <span class='count'>{{ students | length }}</span></a>{% endif %}
+{% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
+{% if may.moderate and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
+{% if may.admin %}<a href='#members-tab' data-tab>Участники</a><a href='#settings-tab' data-tab>Настройки</a>{% endif %}
+</nav>
+<section id='tasks' class='tab-panel' aria-label='Задания'>
 <div class='cat-head'><h2>Задания</h2>
 {% if may.propose %}
 <details class='add-menu'>
@@ -96,7 +104,8 @@
 {% for t in b.tasks %}
 <li class='titem{% if t.hidden %} task-hidden{% endif %}' data-ref='{{ t.ref }}'>
 {% if may.moderate %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
-{% set rp = t.revision.rpartition('_v') %}<span class='tref'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span></span>
+{% set rp = t.revision.rpartition('_v') %}<span class='tref has-tip'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}' aria-describedby='tip-{{ loop.index }}-{{ b.id }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span>
+<span class='tip card' role='tooltip' id='tip-{{ loop.index }}-{{ b.id }}'><span class='kind kind-task'>{{ icon('task') }} задание</span><b class='mono'>{{ rp[0] }}</b><span class='sub small'>{{ t.about or 'без описания' }}</span><a class='small' href='/web/image/{{ t.revision | ref_url }}'>открыть задание →</a></span></span>
 {% if t.pinned %}<span class='pill sm'>закреплено</span>{% endif %}
 {% if t.hidden %}<span class='pill closed sm'>скрыто</span>{% endif %}
 {% if t.latest and t.latest > t.n %}<span class='pill warn sm'>есть версия {{ t.latest }}</span>{% endif %}
@@ -124,6 +133,8 @@
 <div class='empty card'><p class='sub'>Заданий пока нет.</p></div>
 {% endif %}
 
+</section>
+<section id='proposals-tab' class='tab-panel' aria-label='Предложения'>
 {% if c.proposals or c.updates %}
 <h2 id='proposals'>Предложения</h2>
 <div class='card'>
@@ -149,6 +160,8 @@
 </div>
 {% endif %}
 
+</section>
+<section id='requests-tab' class='tab-panel' aria-label='Заявки'>
 {% if may.moderate and c.requests %}
 <h2 id='requests'>Заявки на доступ</h2>
 <div class='card'><table>
@@ -160,6 +173,8 @@
 </table></div>
 {% endif %}
 
+</section>
+<section id='members-tab' class='tab-panel' aria-label='Участники'>
 {% if may.admin %}
 <h2 id='members'>Участники</h2>
 <div class='card'>
@@ -179,9 +194,10 @@
 </div>
 {% endif %}
 
+</section>
 {% if may.add %}
-<section aria-labelledby='students'>
-<div class='cat-head'><h2 id='students'>Студенты <span class='count-pill'>{{ students | length }}</span></h2></div>
+<section id='students' class='tab-panel' aria-label='Студенты'>
+<div class='cat-head'><h2>Студенты <span class='count-pill'>{{ students | length }}</span></h2></div>
 {% if students %}
 <div class='card'>
 <div class='row students-tools'>
@@ -197,7 +213,7 @@
 <tr data-text='{{ s.user }} {{ s.comment }}'>
 <td><a class='mono' href='/c/{{ c.ref }}/u/{{ s.user | q }}'>{{ s.user }}</a>{% if s.comment %}<div class='sub small'>{{ s.comment }}</div>{% endif %}</td>
 <td data-sort='{{ s.done }}'><div class='progress' role='progressbar' aria-valuemin='0' aria-valuemax='{{ s.total }}' aria-valuenow='{{ s.done }}' aria-label='решено {{ s.done }} из {{ s.total }}'><span style='width:{{ s.pct }}%'></span></div><span class='small num'>{{ s.done }} / {{ s.total }}</span></td>
-<td><div class='cells'>{% for x in s.cells %}<span class='cell {{ x.cls }}' title='№{{ x.n }} {{ x.ref }} — {{ x.word }}'>{{ x.mark }}</span>{% endfor %}</div></td>
+<td><div class='cells'>{% for x in s.cells %}<a class='cell {{ x.cls }}' href='/c/{{ c.ref }}/u/{{ s.user | q }}#t{{ x.n }}' title='№{{ x.n }} {{ x.ref }} — {{ x.word }}{% if x.about %}. {{ x.about }}{% endif %}' aria-label='задание {{ x.n }}, {{ x.ref }}: {{ x.word }}'>{{ x.mark }}</a>{% endfor %}</div></td>
 </tr>
 {% endfor %}
 </tbody>
@@ -209,6 +225,7 @@
 </section>
 {% endif %}
 
+<section id='settings-tab' class='tab-panel' aria-label='Настройки'>
 {% if may.admin %}
 <h2 id='settings'>Настройки</h2>
 <div class='card'>
@@ -223,9 +240,10 @@
 <button type='submit'>Сохранить</button>
 </form>
 <hr class='divider'>
-{{ act('DELETE', api, 'Удалить курс', 'sm danger', confirm='Удалить курс насовсем? Задания (образы) останутся на пуле.', then='go:/c') }}
+{{ act('DELETE', api, 'Удалить курс', 'sm danger', confirm='Удалить курс насовсем? Задания и образы останутся — удалится только курс.', then='go:/c') }}
 </div>
 {% endif %}
+</section>
 {% endif %}
 <script src='/static/api.js'></script>
 <script src='/static/filter.js'></script>

@@ -673,8 +673,9 @@ def _profile_row(user: str, number: object, ref: str, record: dict | None,
             "passed_s": _epoch(passed_at) or 0}
 
 
-def render_profile(profile: dict, entries: list[dict], progress: dict[str, dict],
-                   sessions: dict[str, list[dict]], *, course: dict | None = None) -> str:
+def render_profile(profile: dict, entries: list[dict], progress: dict[str, dict],  # noqa: PLR0913
+                   sessions: dict[str, list[dict]], *, course: dict | None = None,
+                   about: dict[str, str] | None = None) -> str:
     """
     One user's page: who they are + every catalog task with status, tries, time and links.
 
@@ -692,8 +693,15 @@ def render_profile(profile: dict, entries: list[dict], progress: dict[str, dict]
     passed = sum(1 for r in rows[:len(entries)] if r["cell"]["mark"].startswith("✓"))
     if course is not None:                   # a student inside one course: only its tasks
         rows = rows[:len(entries)]
+    for r in rows:
+        r["about"] = (about or {}).get(r["ref"], "")
+        r["state"] = "passed" if r["cell"]["mark"].startswith("✓") else ("started" if r["cell"]["mark"] else "none")
+    started = sum(1 for r in rows if r["state"] == "started")
+    stats = {"passed": passed, "started": started, "none": len(rows) - passed - started,
+             "tries": sum(int(r["tries"]) for r in rows),
+             "spent": _duration(sum(int(r["spent_s"]) for r in rows)) if any(r["tries"] for r in rows) else "—"}
     return _env.get_template("profile.html.j2").render(
-        title=f"{user} — hashpass", nav=True, active="/c" if course else "/web", course=course,
+        title=f"{user} — hashpass", nav=True, active="/c" if course else "/web", course=course, stats=stats,
         p={"user": user, "role": str(profile.get("role", "")),
            "group": str(profile.get("group", "")), "comment": str(profile.get("comment", "")),
            "created_at": profile.get("created_at") or None},

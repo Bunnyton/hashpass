@@ -52,12 +52,13 @@ def test_profile_lists_tasks_apart_from_images_and_all_courses_using_them(world:
 
 
 @pytest.mark.tier1
-def test_ones_own_profile_is_home_with_the_courses_one_takes(world: _Courses) -> None:
-    status, html = _page(_browser(world, "kid"), f"{world.url}/u/kid")
+def test_my_courses_show_the_courses_one_takes_with_progress(world: _Courses) -> None:
+    status, html = _page(_browser(world, "kid"), f"{world.url}/c")
     assert status == 200 and "Прохожу" in html and "/c/bob/linux" in html  # noqa: PLR2004
     assert "1 / 1" in html
-    assert "Прохожу" not in _page(_browser(world, "eve"), f"{world.url}/u/kid")[1]
-    assert "href='/u/kid'" in html                                        # the header links home
+    assert "Прохожу" not in _page(_browser(world, "eve"), f"{world.url}/u/kid")[1]   # private
+    assert "href='/u/kid'" in html                                        # the header links one's page
+    assert "Веду" in _page(_browser(world, "bob"), f"{world.url}/c")[1]
 
 
 @pytest.mark.tier1
@@ -90,7 +91,36 @@ def test_no_global_progress_images_catalog_or_groups(world: _Courses) -> None:
 @pytest.mark.tier1
 def test_the_home_page_is_a_showcase_with_search(world: _Courses) -> None:
     status, html = _page(_browser(world, None), f"{world.url}/")
-    assert status == 200 and "action='/search'" in html  # noqa: PLR2004
+    assert status == 200 and "action='/'" in html and "data-live" in html  # noqa: PLR2004
     assert "/c/bob/linux" in html and "/c/eve/hush" not in html            # what a visitor may see
     assert "bob/git-init" in html and "bob/base" in html and "href='/u/bob'" in html
     assert "install.sh" in html and "Войти" in html
+
+
+@pytest.mark.tier1
+def test_the_home_page_searches_in_place(world: _Courses) -> None:
+    """User 2026-10-23: «главная и поиск — одно и то же, при поиске не уезжать никуда»."""
+    part = _page(_browser(world, "kid"), f"{world.url}/?q=git&partial=1")[1]
+    assert "<html" not in part and "bob/git-init" in part and "data-tab='tasks'" in part
+    status, html = _page(_browser(world, "kid"), f"{world.url}/search?q=git")   # old links still land
+    assert status == 200 and "value='git'" in html  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_a_profile_photo(world: _Courses) -> None:
+    import urllib.request  # noqa: PLC0415
+    png = b"\x89PNG\r\n\x1a\n" + b"\0" * 64
+    b = "----hp"
+    body = (f'--{b}\r\nContent-Disposition: form-data; name="photo"; filename="me.png"\r\n'
+            "Content-Type: image/png\r\n\r\n").encode() + png + f"\r\n--{b}--\r\n".encode()
+    browser = _browser(world, "kid")
+    browser.open(urllib.request.Request(f"{world.url}/web/avatar", data=body,  # noqa: S310
+                                        headers={"Content-Type": f"multipart/form-data; boundary={b}"}))
+    with urllib.request.urlopen(f"{world.url}/u/kid/avatar") as resp:      # noqa: S310
+        assert resp.headers["Content-Type"] == "image/png" and resp.read() == png
+    assert "src='/u/kid/avatar'" in _page(_browser(world, "eve"), f"{world.url}/u/kid")[1]
+    bad = body.replace(png, b"<svg onload=alert(1)>")
+    browser.open(urllib.request.Request(f"{world.url}/web/avatar", data=bad,  # noqa: S310
+                                        headers={"Content-Type": f"multipart/form-data; boundary={b}"}))
+    with urllib.request.urlopen(f"{world.url}/u/kid/avatar") as resp:      # noqa: S310
+        assert resp.read() == png                                           # not an image: refused

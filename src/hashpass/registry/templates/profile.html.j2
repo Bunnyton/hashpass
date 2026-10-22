@@ -1,28 +1,45 @@
 {% extends 'base.html.j2' %}
+{% from '_cards.html.j2' import avatar %}
 {% block main %}
-<nav class='crumb' aria-label='Путь'>{% if course %}<a href='/c/{{ course.ref }}'>← {{ course.title or course.ref }}</a> · <a href='/c/{{ course.ref }}#students'>студенты</a>{% else %}<a href='/web'>← Прогресс</a>{% if viewer_is_admin() %} · <a href='/web/users'>пользователи</a>{% endif %}{% endif %}</nav>
+<nav class='crumb' aria-label='Путь'>{% if course %}<a href='/c/{{ course.ref }}#students'>← {{ course.title or course.ref }} · студенты</a>{% else %}<a href='/web'>← Прогресс</a>{% if viewer_is_admin() %} · <a href='/web/users'>пользователи</a>{% endif %}{% endif %}</nav>
+{% set pct = (100 * passed / total) | round | int if total else 0 %}
 <div class='card-hero student-hero'>
 <div class='row'>
-<span class='avatar' aria-hidden='true'>{{ p.user[:1] | upper }}</span>
+{{ avatar(p.user, 'md') }}
 <div class='grow'>
 <h1 class='mono'><a href='/u/{{ p.user | q }}'>{{ p.user }}</a></h1>
 {% if p.comment %}<p class='sub small'><span class='dim'>приватный комментарий:</span> {{ p.comment }}</p>{% endif %}
+{% if course %}<p class='sub small'>в курсе «{{ course.title or course.ref }}»{% if p.created_at %} · с нами с {{ ts(p.created_at) }}{% endif %}</p>{% endif %}
+</div>
+<div class='ring' style='--pct:{{ pct }}' role='img' aria-label='решено {{ pct }}%'><span><b>{{ pct }}%</b><small>решено</small></span></div>
+</div>
+<div class='stat-tiles'>
+<div class='tile ok'><b>{{ passed }} / {{ total }}</b><span>✓ решено</span></div>
+<div class='tile warn'><b>{{ stats.started }}</b><span>◐ в процессе</span></div>
+<div class='tile'><b>{{ stats.none }}</b><span>· не начато</span></div>
+<div class='tile'><b>{{ stats.tries }}</b><span>попыток</span></div>
+<div class='tile'><b>{{ stats.spent }}</b><span>в консоли</span></div>
 </div>
 </div>
-{% set pct = (100 * passed / total) | round | int if total else 0 %}
-<div class='progress lg' role='progressbar' aria-valuemin='0' aria-valuemax='{{ total }}' aria-valuenow='{{ passed }}' aria-label='решено {{ passed }} из {{ total }}'><span style='width:{{ pct }}%'></span></div>
-<p class='small'><b>{{ passed }} / {{ total }}</b> <span class='dim'>решено{% if course %} в курсе{% endif %} · {{ pct }}%</span>{% if p.created_at %} <span class='dim'>· на пуле с {{ ts(p.created_at) }}</span>{% endif %}</p>
+<div class='row filter-bar'>
+<div class='chips' role='group' aria-label='Показать'>
+<button type='button' class='chip on' data-show='all'>все <span>{{ rows | length }}</span></button>
+<button type='button' class='chip' data-show='passed'>✓ решено <span>{{ passed }}</span></button>
+<button type='button' class='chip' data-show='started'>◐ в процессе <span>{{ stats.started }}</span></button>
+<button type='button' class='chip' data-show='none'>· не начато <span>{{ stats.none }}</span></button>
 </div>
-<h2>Задания</h2>
-<p class='sub small'>Название — карточка задания, статус — история команд и попыток. Заголовки столбцов сортируют.</p>
+<label class='visually-hidden' for='task-q'>Найти задание</label>
+<input id='task-q' type='search' placeholder='найти задание' data-filter='#task-rows tr'>
+</div>
 <div class='table-wrap card'>
-<table class='sortable'>
+<table class='sortable progress-table'>
 <thead><tr><th scope='col'>№</th><th scope='col'>Задание</th><th scope='col'>Статус</th><th scope='col'>Попыток</th><th scope='col'>Время в консоли</th><th scope='col'>Последняя активность</th><th scope='col'>Решено</th></tr></thead>
-<tbody>
+<tbody id='task-rows'>
 {% for r in rows %}
-<tr><td class='c' data-sort='{{ r.number if r.number != "" else "" }}'>{{ r.number if r.number != "" else "—" }}</td>
-<td class='mono'><a href='/web/image/{{ r.ref_url }}'>{{ r.ref }}</a></td>
-<td class='{{ r.cell.cls }}' data-sort='{{ r.cell.rank }}'>{% if r.cell.href %}<a href='{{ r.cell.href }}' title='{{ r.cell.title }}'>{{ r.cell.mark }} {{ r.status }}</a>{% else %}<span class='dim'>· {{ r.status }}</span>{% endif %}</td>
+<tr id='t{{ r.number }}' data-state='{{ r.state }}' data-text='{{ r.ref }} {{ r.about }}'>
+<td class='c num' data-sort='{{ r.number if r.number != "" else "" }}'>{{ r.number if r.number != "" else "—" }}</td>
+<td><a class='mono' href='/web/image/{{ r.ref_url }}'>{{ r.ref }}</a>{% if r.about %}<div class='sub small clamp'>{{ r.about }}</div>{% endif %}</td>
+<td data-sort='{{ r.cell.rank }}'>{% if r.cell.href %}<a class='status {{ r.state }}' href='{{ r.cell.href }}' title='история команд и попыток'>{{ r.cell.mark }} {{ r.status }}</a>{% else %}<span class='status none'>· {{ r.status }}</span>{% endif %}</td>
 <td class='c num'>{{ r.tries }}</td>
 <td class='c num' data-sort='{{ r.spent_s }}'>{{ r.spent }}</td>
 <td data-sort='{{ (r.last or 0)|int }}'>{{ ts(r.last) }}</td>
@@ -33,4 +50,14 @@
 </tbody>
 </table>
 </div>
+<p class='sub small'>Статус — история команд и попыток. Заголовки столбцов сортируют.</p>
+<script src='/static/filter.js'></script>
+<script>
+document.querySelectorAll('.chips .chip').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.chips .chip').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('#task-rows tr[data-state]').forEach((tr) => {
+    tr.classList.toggle('chip-hidden', b.dataset.show !== 'all' && tr.dataset.state !== b.dataset.show);
+  });
+}));
+</script>
 {% endblock %}

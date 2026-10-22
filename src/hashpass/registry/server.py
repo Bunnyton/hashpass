@@ -2539,6 +2539,8 @@ class PoolServer:
         user = self._session_user()
         if user is None:
             return self._redirect("/web/login")
+        if request.args.get("photo") == "bad":
+            return self._settings_page(user, error="фото не подошло: PNG, JPEG, GIF или WebP, до 2 МБ")
         return self._settings_page(user)
 
     def _web_settings_tz(self) -> Response:

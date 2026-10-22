@@ -10,7 +10,7 @@
 <input type='hidden' name='type' value='{{ kind }}'>
 <button type='submit'>Найти</button>
 </form>
-{% if missing %}<div class='empty card'><p class='sub'>Пользователя «{{ missing }}» на этом пуле нет.</p></div>{% endif %}
+{% if missing %}<div class='empty card'><p class='sub'>Пользователя «{{ missing }}» нет.</p></div>{% endif %}
 {% if kinds %}
 <div class='search-layout'>
 <nav class='search-side card' aria-label='Что искать'>

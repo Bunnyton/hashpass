@@ -16,7 +16,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flask import Flask, Response, request
+from flask import Flask, Response, current_app, has_app_context, request, send_file
 
 from hashpass.registry import courses as course_model
 from hashpass.registry.access import can
@@ -31,6 +31,9 @@ _STAFF_ROLES = ("owner", "maintainer", "author")   # a student's own enrolments 
 _KINDS = (("users", "Пользователи"), ("courses", "Курсы"), ("tasks", "Задания"), ("images", "Образы"))
 _ROLE_RU = {"owner": "владелец", "maintainer": "сопровождающий", "author": "автор", "member": "участник"}
 _SUMMARY_MAX = 140
+_AVATAR_MAX = 2 * 1024 * 1024
+_AVATAR_KINDS = ((b"\x89PNG\r\n\x1a\n", "png", "image/png"), (b"\xff\xd8\xff", "jpg", "image/jpeg"),
+                 (b"GIF8", "gif", "image/gif"), (b"RIFF", "webp", "image/webp"))
 
 
 def summary(text: str) -> str:
@@ -40,6 +43,12 @@ def summary(text: str) -> str:
         if line:
             return line if len(line) <= _SUMMARY_MAX else line[:_SUMMARY_MAX - 1].rstrip() + "…"
     return ""
+
+
+def _has_avatar(login: object) -> bool:
+    """Whether `login` has a photo on the pool serving this request (templates' `has_avatar`)."""
+    people = current_app.config.get("hp_people") if has_app_context() else None
+    return people is not None and people._avatar_file(str(login)) is not None  # noqa: SLF001
 
 
 class SearchWeb:
@@ -52,6 +61,62 @@ class SearchWeb:
     def register(self, app: Flask) -> None:
         app.add_url_rule("/search", "web_search", self.search, methods=["GET"])
         app.add_url_rule("/u/<login>", "web_user_page", self.user_page, methods=["GET"])
+        app.add_url_rule("/u/<login>/avatar", "web_user_avatar", self.avatar, methods=["GET"])
+        app.add_url_rule("/web/avatar", "web_avatar_put", self.avatar_put, methods=["POST"])
+        app.add_url_rule("/web/avatar/delete", "web_avatar_delete", self.avatar_delete, methods=["POST"])
+        app.config["hp_people"] = self                # templates ask the app serving this request
+        _env.globals["has_avatar"] = _has_avatar
+
+    # -- profile photo (user 2026-10-23: «фотку в профиль хочу добавлять») --------
+
+    def _avatar_dir(self) -> Path:
+        return Path(self.server.store.root) / ".avatars"
+
+    def _avatar_file(self, login: str) -> Path | None:
+        if not login or "/" in login or login.startswith("."):
+            return None
+        return next((p for _m, ext, _t in _AVATAR_KINDS
+                     if (p := self._avatar_dir() / f"{login}.{ext}").is_file()), None)
+
+    def avatar(self, login: str) -> Response:
+        """Serve a user's photo (anyone who sees the user sees it)."""
+        path = self._avatar_file(login)
+        if path is None:
+            return self.server._empty(HTTPStatus.NOT_FOUND)                  # noqa: SLF001
+        mime = next(t for _m, ext, t in _AVATAR_KINDS if path.suffix == f".{ext}")
+        resp = send_file(path, mimetype=mime, max_age=300)
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        return resp
+
+    def avatar_put(self) -> Response:
+        """Set one's own photo: PNG/JPEG/GIF/WebP up to 2 MB (checked by its first bytes)."""
+        user, _role = self._viewer()
+        if user is None:
+            return self.server._redirect("/web/login")                        # noqa: SLF001
+        upload = request.files.get("photo")
+        data = upload.read(_AVATAR_MAX + 1) if upload else b""
+        kind = next(((ext, t) for magic, ext, t in _AVATAR_KINDS if data.startswith(magic)
+                     and (ext != "webp" or data[8:12] == b"WEBP")), None)
+        if not data or len(data) > _AVATAR_MAX or kind is None:
+            return self.server._redirect("/web/settings?photo=bad")          # noqa: SLF001
+        folder = self._avatar_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        self._drop_avatar(user)
+        tmp = folder / f".{user}.tmp"
+        tmp.write_bytes(data)
+        tmp.replace(folder / f"{user}.{kind[0]}")
+        return self.server._redirect(f"/u/{user}")                           # noqa: SLF001
+
+    def avatar_delete(self) -> Response:
+        user, _role = self._viewer()
+        if user is None:
+            return self.server._redirect("/web/login")                        # noqa: SLF001
+        self._drop_avatar(user)
+        return self.server._redirect("/web/settings")                        # noqa: SLF001
+
+    def _drop_avatar(self, user: str) -> None:
+        for _m, ext, _t in _AVATAR_KINDS:
+            (self._avatar_dir() / f"{user}.{ext}").unlink(missing_ok=True)
 
     def _viewer(self) -> tuple[str | None, str | None]:
         user = self.server._session_user()          # noqa: SLF001  (same package)
@@ -60,19 +125,14 @@ class SearchWeb:
     # -- pages ------------------------------------------------------------------
 
     def search(self) -> Response:
-        user, role = self._viewer()
-        q = request.args.get("q", "").strip()
+        """Send the old search address home: the home page is the search now (user 2026-10-23)."""
+        query = request.query_string.decode("utf-8", "replace")
+        return self.server._redirect("/" + (f"?{query}" if query else ""))   # noqa: SLF001
+
+    def _found(self, user: str | None, role: str | None, q: str) -> dict[str, list[dict]]:
         repos = self.repos(user, q)
-        found = {"users": self._users(q), "courses": self._courses(user, role, q),
-                 "tasks": [r for r in repos if r["task"]], "images": [r for r in repos if not r["task"]]}
-        kind = request.args.get("type", "")
-        if kind not in found:
-            kind = next((k for k, _t in _KINDS if found[k]), "courses")
-        html = _env.get_template("search.html.j2").render(
-            title="Поиск — hashpass", nav=True, active="/search", q=q, kind=kind,
-            kinds=[{"key": k, "title": t, "count": len(found[k])} for k, t in _KINDS],
-            rows=found[kind][:_LIMIT], more=max(0, len(found[kind]) - _LIMIT), role_ru=_ROLE_RU)
-        return self.server._html(html)               # noqa: SLF001
+        return {"users": self._users(q), "courses": self._courses(user, role, q),
+                "tasks": [r for r in repos if r["task"]], "images": [r for r in repos if not r["task"]]}
 
     def user_page(self, login: str) -> Response:
         """Show a user's page (see the module docstring); one's own page is home."""
@@ -97,7 +157,7 @@ class SearchWeb:
             login=login, me=user == login, courses=sorted(runs, key=lambda r: r["ref"]),
             tasks=[r for r in repos if r["task"]], images=[r for r in repos if not r["task"]],
             used=sorted(used.values(), key=lambda r: r["course"]),
-            taking=self._taking(login) if user == login else [],
+            taking=[],
             created=(self.server.users.get(login) or {}).get("created_at"), role_ru=_ROLE_RU)
         return self.server._html(html)               # noqa: SLF001
 
@@ -109,18 +169,26 @@ class SearchWeb:
         «все N →» into the search.
         """
         user, role = self._viewer()
-        repos = self.repos(user, "")
-        found = {"courses": sorted(self._courses(user, role, ""), key=lambda r: (-int(r["tasks"]), r["ref"])),
-                 "tasks": [r for r in repos if r["task"]], "images": [r for r in repos if not r["task"]],
-                 "users": self._users("")}
+        q = request.args.get("q", "").strip()
+        found = self._found(user, role, q)
+        found["courses"].sort(key=lambda r: (-int(r["tasks"]), r["ref"]))
+        kind = request.args.get("type", "")
+        if kind not in found:
+            kind = next((k for k, _t in _KINDS if found[k]), "courses")
         shown = {"courses": 6, "tasks": 9, "images": 6, "users": 24}
         pool = self.server._pool_url().rstrip("/")   # noqa: SLF001
+        ctx = {"q": q, "kind": kind, "searching": bool(q or request.args.get("type")), "role_ru": _ROLE_RU, "counts": {k: len(v) for k, v in found.items()},
+               "kinds": [{"key": k, "title": t, "count": len(found[k])} for k, t in _KINDS],
+               "rows": found[kind][:_LIMIT], "more": max(0, len(found[kind]) - _LIMIT),
+               "sections": [(k, t, found[k][:shown[k]]) for k, t in
+                            (("courses", "Курсы"), ("tasks", "Задания"), ("images", "Образы"),
+                             ("users", "Пользователи"))]}
+        if request.args.get("partial") == "1":       # live search: only the results part
+            return self.server._html(_env.get_template("_results.html.j2").render(**ctx))  # noqa: SLF001
         html = _env.get_template("explore.html.j2").render(
-            title="hashpass — задания по Linux", nav=True, active="/", role_ru=_ROLE_RU,
-            counts={k: len(v) for k, v in found.items()},
-            sections=[(k, t, found[k][:shown[k]]) for k, t in
-                      (("courses", "Курсы"), ("tasks", "Задания"), ("images", "Образы"), ("users", "Пользователи"))],
-            url=pool, flags="-fsSLk" if pool.startswith("https://") else "-fsSL", prepare=PREPARE)
+            title="hashpass — задания по Linux" if not q else f"{q} — поиск — hashpass", nav=True,
+            active="/", url=pool, flags="-fsSLk" if pool.startswith("https://") else "-fsSL",
+            prepare=PREPARE, **ctx)
         return self.server._html(html)               # noqa: SLF001
 
     # -- data -------------------------------------------------------------------

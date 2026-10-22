@@ -37,12 +37,13 @@ def pool(registry, tmp_path: Path) -> _Courses:
 
 
 @pytest.mark.tier1
-def test_any_user_signs_in_and_lands_on_courses(pool: _Courses) -> None:
-    status, html = _page(_browser(pool, "kid"), f"{pool.url}/c")
+def test_any_user_signs_in_and_finds_courses_on_the_home_page(pool: _Courses) -> None:
+    status, html = _page(_browser(pool, "kid"), f"{pool.url}/?type=courses")
     assert status == 200  # noqa: PLR2004
     assert "Linux для всех" in html
     assert "Секретный" not in html                       # a private course is not listed
     assert ">Прогресс<" not in html                       # staff pages stay off a student's nav
+    assert ">Главная<" in html and ">Мои курсы<" in html
 
 
 @pytest.mark.tier1

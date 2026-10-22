@@ -1,59 +1,40 @@
 {% extends 'base.html.j2' %}
-{% from '_cards.html.j2' import course_card, repo_card, place_card %}
+{% from '_cards.html.j2' import course_card, repo_card, place_card, avatar, sort_bar %}
 {% from '_files.html.j2' import icon %}
 {% block main %}
 <div class='user-layout'>
 <aside class='user-side' aria-label='О пользователе'>
-<div class='avatar' aria-hidden='true'>{{ login[:1] | upper }}</div>
+{% if me %}<a class='avatar-edit' href='/web/settings#photo' title='Сменить фото'>{{ avatar(login, 'xl') }}<span class='edit-badge'>сменить фото</span></a>{% else %}{{ avatar(login, 'xl') }}{% endif %}
 <h1 class='mono user-login'>{{ login }}</h1>
-{% if created %}<p class='sub small'>на пуле с {{ ts(created) }}</p>{% endif %}
+{% if created %}<p class='sub small'>с нами с {{ ts(created) }}</p>{% endif %}
 <ul class='user-stats'>
 <li><a href='#courses'>ведёт <b>{{ courses | length | plural('курс', 'курса', 'курсов') }}</b></a></li>
 <li><a href='#tasks'><b>{{ tasks | length | plural('задание', 'задания', 'заданий') }}</b></a></li>
 <li><a href='#images'><b>{{ images | length | plural('образ', 'образа', 'образов') }}</b></a></li>
 <li><a href='#used'>в <b>{{ used | length | plural('курсе', 'курсах', 'курсах') }}</b></a></li>
 </ul>
-{% if me %}<a class='btn sm ghost full' href='/web/settings'>Настройки</a>{% endif %}
+{% if me %}<a class='btn sm ghost full' href='/c'>Мои курсы</a><a class='btn sm ghost full' href='/web/settings'>Настройки</a>{% endif %}
 </aside>
 <div class='user-main'>
-{% if me %}
-<section aria-labelledby='taking-h'>
-<h2 id='taking-h'>Прохожу</h2>
-{% if taking %}
-<div class='grid'>
-{% for c in taking %}
-<a class='card item-card course-card' href='/c/{{ c.ref }}'>
-<div class='item-head'><span class='kind kind-course'>{{ icon('course') }} курс</span>{% if c.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}</div>
-<b class='item-title'>{{ c.title or c.ref }}</b>
-<div class='progress' role='progressbar' aria-valuemin='0' aria-valuemax='{{ c.total }}' aria-valuenow='{{ c.done }}' aria-label='решено {{ c.done }} из {{ c.total }}'><span style='width:{{ c.pct }}%'></span></div>
-<div class='small'><b>{{ c.done }} / {{ c.total }}</b> <span class='dim'>решено · {{ c.pct }}%</span></div>
-</a>
-{% endfor %}
-</div>
-{% else %}<div class='empty card'><p class='sub'>Вы пока не проходите курсов. <a href='/c'>Выбрать курс →</a></p></div>{% endif %}
-</section>
-{% endif %}
-
-<section aria-labelledby='courses'>
-<h2 id='courses'>Курсы</h2>
-{% if courses %}<div class='grid'>{% for r in courses %}{{ course_card(r, role_ru) }}{% endfor %}</div>
+<nav class='tabs' aria-label='Разделы профиля'>
+<a href='#courses' data-tab>{{ icon('course') }} Курсы <span class='count'>{{ courses | length }}</span></a>
+<a href='#tasks' data-tab>{{ icon('task') }} Задания <span class='count'>{{ tasks | length }}</span></a>
+<a href='#images' data-tab>{{ icon('image') }} Образы <span class='count'>{{ images | length }}</span></a>
+<a href='#used' data-tab>{{ icon('course') }} Используется в курсах <span class='count'>{{ used | length }}</span></a>
+</nav>
+<section id='courses' class='tab-panel' aria-label='Курсы'>
+{% if courses %}{{ sort_bar('courses') }}<div class='grid' data-sortable>{% for r in courses %}{{ course_card(r, role_ru) }}{% endfor %}</div>
 {% else %}<div class='empty card'><p class='sub'>{% if me %}Вы пока не ведёте курсов. <a href='/c'>Создать курс →</a>{% else %}Не ведёт курсов.{% endif %}</p></div>{% endif %}
 </section>
-
-<section aria-labelledby='tasks'>
-<h2 id='tasks'>Задания</h2>
-{% if tasks %}<div class='grid'>{% for r in tasks %}{{ repo_card(r) }}{% endfor %}</div>
+<section id='tasks' class='tab-panel' aria-label='Задания'>
+{% if tasks %}{{ sort_bar('tasks') }}<div class='grid' data-sortable>{% for r in tasks %}{{ repo_card(r) }}{% endfor %}</div>
 {% else %}<div class='empty card'><p class='sub'>Заданий нет.{% if me %} Задание — образ с Taskfile: <code>hashpass build</code> → <code>hashpass push</code>.{% endif %}</p></div>{% endif %}
 </section>
-
-<section aria-labelledby='images'>
-<h2 id='images'>Образы</h2>
-{% if images %}<div class='grid'>{% for r in images %}{{ repo_card(r) }}{% endfor %}</div>
+<section id='images' class='tab-panel' aria-label='Образы'>
+{% if images %}{{ sort_bar('images') }}<div class='grid' data-sortable>{% for r in images %}{{ repo_card(r) }}{% endfor %}</div>
 {% else %}<div class='empty card'><p class='sub'>Образов без заданий нет.</p></div>{% endif %}
 </section>
-
-<section aria-labelledby='used'>
-<h2 id='used'>Используется в курсах</h2>
+<section id='used' class='tab-panel' aria-label='Используется в курсах'>
 {% if used %}<div class='grid'>{% for u in used %}{{ place_card(u) }}{% endfor %}</div>
 {% else %}<div class='empty card'><p class='sub'>Задания и образы {{ login }} пока не стоят в курсах.</p></div>{% endif %}
 </section>

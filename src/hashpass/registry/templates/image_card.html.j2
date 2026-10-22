@@ -21,11 +21,21 @@
 {% elif image.moderation == 'approved' %}<span class='pill'>одобрено</span>{% endif %}
 </div>
 </div>
+<nav class='tabs' aria-label='Разделы'>
+<a href='#about-tab' data-tab>Описание</a>
+<a href='#sources-tab' data-tab>{{ icon('dir') }} Исходники</a>
+{% if repo_info %}<a href='#revisions' data-tab>Версии <span class='count'>{{ repo_info.tags.values() | map('length') | sum }}</span></a>{% endif %}
+{% if courses_era %}<a href='#courses' data-tab>{{ icon('course') }} Используется в курсах <span class='count'>{{ used_in | length }}</span></a>{% endif %}
+{% if merges or may_fork or (fork_origin and n) %}<a href='#changes-tab' data-tab>Предложения{% if merges %} <span class='count'>{{ merges | selectattr('state', 'equalto', 'open') | list | length }}</span>{% endif %}</a>{% endif %}
+</nav>
+<section id='about-tab' class='tab-panel' aria-label='Описание'>
 <div class='card'>
 <h2>Описание</h2>
 {% if image.description %}<div class='about'>{% if image.about[0] %}<h3>{{ image.about[0] }}</h3>{% endif %}{% for p in image.about[1] %}<p>{{ p }}</p>{% endfor %}</div>{% else %}<p class='sub'>Описания нет.</p>{% endif %}
-{% if owner %}<p class='sub small'>Описание — это файл <code>README.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashpass push</code>.</p>{% endif %}
+{% if owner %}<p class='sub small'>Описание — это файл <code>README.md</code> рядом с Taskfile: правится в задании и публикуется с <code>hashpass push</code>.</p>{% endif %}
 </div>
+</section>
+<section id='sources-tab' class='tab-panel' aria-label='Исходники'>
 <h2>Исходники</h2>
 {% if image.sources %}
 {{ filebox(image.sources) }}
@@ -38,11 +48,13 @@
 </table>
 </div>
 {% else %}
-<div class='card'><p class='sub'>Исходников нет — они приходят на пул с <code>hashpass push</code>.</p></div>
+<div class='card'><p class='sub'>Исходников нет — они публикуются вместе с заданием (<code>hashpass push</code>).</p></div>
 {% endif %}
+</section>
 
 {% if repo_info %}
-<h2 id='revisions'>Версии</h2>
+<section id='revisions' class='tab-panel' aria-label='Версии'>
+<h2>Версии</h2>
 <div class='card'>
 <div class='row'>
 {% if repo_info.visibility == 'private' %}<span class='pill closed'>приватный</span>{% else %}<span class='pill open'>публичный</span>{% endif %}
@@ -73,10 +85,12 @@
 <input name='to' placeholder='новый тег, например stable' required><button class='sm ghost' type='submit'>Навесить тег</button></form>{% endif %}
 {% endif %}
 </div>
+</section>
 {% endif %}
 
 {% if courses_era %}
-<h2 id='courses'>Используется в курсах</h2>
+<section id='courses' class='tab-panel' aria-label='Используется в курсах'>
+<h2>Используется в курсах</h2>
 <div class='card'>
 {% if used_in %}
 <table class='places'>
@@ -97,7 +111,9 @@
 </form>
 {% endif %}
 </div>
+</section>
 {% endif %}
+<section id='changes-tab' class='tab-panel' aria-label='Предложения'>
 
 {% if may_fork %}
 <h2 id='fork'>Форк</h2>
@@ -140,5 +156,6 @@
 </div>
 {% endfor %}
 {% endif %}
+</section>
 <script src='/static/api.js'></script>
 {% endblock %}

@@ -1,8 +1,12 @@
-{# Shared cards for the people/search pages: a course, a repository (task or image). #}
+{# Shared cards: a course, a repository (task or image), a user tile, the sort bar. #}
 {% from '_files.html.j2' import icon %}
 
+{% macro avatar(login, cls='') -%}
+{% if has_avatar(login) %}<img class='avatar {{ cls }}' src='/u/{{ login | q }}/avatar' alt='' loading='lazy'>{% else %}<span class='avatar {{ cls }}' aria-hidden='true'>{{ login[:1] | upper }}</span>{% endif %}
+{%- endmacro %}
+
 {% macro course_card(r, role_ru) -%}
-<a class='card item-card course-card' href='/c/{{ r.ref }}'>
+<a class='card item-card course-card' href='/c/{{ r.ref }}' data-name='{{ r.title or r.ref }}' data-tasks='{{ r.tasks }}' data-owner='{{ r.owner }}'>
 <div class='item-head'><span class='kind kind-course'>{{ icon('course') }} курс</span>
 {% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
 {% if r.role %}<span class='pill author sm'>{{ role_ru[r.role] }}</span>{% endif %}</div>
@@ -13,20 +17,34 @@
 {%- endmacro %}
 
 {% macro repo_card(r) -%}
-<article class='card item-card'>
+<article class='card item-card' data-name='{{ r.name }}' data-at='{{ r.tags | map(attribute="at") | max }}' data-owner='{{ r.name.split("/")[0] }}'>
 <div class='item-head'>
 {% if r.task %}<span class='kind kind-task'>{{ icon('task') }} задание</span>{% else %}<span class='kind kind-image'>{{ icon('image') }} образ</span>{% endif %}
 {% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
+{% if r.role %}<span class='pill author sm'>{{ r.role_ru or r.role }}</span>{% endif %}
 {% if r.fork_of %}<span class='pill sm'>форк {{ r.fork_of }}</span>{% endif %}
 </div>
-<a class='item-title mono' href='/web/image/{{ r.tags[0].ref | ref_url }}'>{{ r.name }}</a>
+<a class='item-title mono stretched' href='/web/image/{{ r.tags[0].ref | ref_url }}'>{{ r.name }}</a>
 {% if r.about %}<p class='sub small clamp'>{{ r.about }}</p>{% else %}<p class='sub small dim'>без описания</p>{% endif %}
 <div class='item-tags'>{% for t in r.tags %}<a class='tagchip' href='/web/image/{{ t.ref | ref_url }}' title='тег {{ t.tag }}, последняя версия {{ t.n }}'><span class='mono'>:{{ t.tag }}</span> <span class='ver'>· версия {{ t.n }}</span></a>{% endfor %}</div>
 </article>
 {%- endmacro %}
 
+{% macro user_tile(p) -%}
+<a class='card user-row' href='/u/{{ p.user | q }}' data-name='{{ p.user }}'>{{ avatar(p.user, 'sm') }}<span class='mono'>{{ p.user }}</span></a>
+{%- endmacro %}
+
+{% macro sort_bar(kind) -%}
+<div class='sort-bar'><label for='sort-{{ kind }}'>Сортировать</label>
+<select id='sort-{{ kind }}' data-sort-for='[data-sortable]'>
+<option value='name'>по названию</option>
+{% if kind == 'courses' %}<option value='-tasks'>по числу заданий</option>{% else %}<option value='-at'>сначала новые</option>{% endif %}
+<option value='owner'>по автору</option>
+</select></div>
+{%- endmacro %}
+
 {% macro place_card(u) -%}
-<a class='card item-card course-card' href='/c/{{ u.course }}'>
+<a class='card item-card course-card' href='/c/{{ u.course }}' data-name='{{ u.title or u.course }}'>
 <div class='item-head'><span class='kind kind-course'>{{ icon('course') }} курс</span>
 {% if u.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}</div>
 <b class='item-title'>{{ u.title or u.course }}</b>

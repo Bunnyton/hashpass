@@ -9,7 +9,7 @@
 </form>
 </div></div>
 <div class='card'><div class='row' style='justify-content:space-between'>
-<span>Авто-одобрение заданий для всего пула: <b>{{ 'включено' if pool_auto else 'выключено' }}</b>
+<span>Авто-одобрение заданий для всех: <b>{{ 'включено' if pool_auto else 'выключено' }}</b>
 <span class='sub small'>(иначе — у отмеченных авторов ниже; по умолчанию всё одобряет админ)</span></span>
 <form class='inline' method='post' action='/web/pool/auto-approve'>
 <input type='hidden' name='on' value='{{ '0' if pool_auto else '1' }}'>

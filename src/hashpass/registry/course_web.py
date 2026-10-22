@@ -19,10 +19,10 @@ if TYPE_CHECKING:
 _ROLE_RU = {"owner": "владелец", "maintainer": "сопровождающий", "author": "автор", "member": "участник"}
 
 
-def render_courses(rows: list[dict], *, q: str, signed_in: str | None, message: str = "") -> str:
-    """Render the course list page: search, the viewer's and public courses, «create»."""
+def render_courses(rows: list[dict], *, q: str, signed_in: str | None, message: str = "") -> str:  # noqa: ARG001
+    """Render «Мои курсы» empty but for a message (a course that is not there)."""
     return _env.get_template("courses.html.j2").render(
-        title="Курсы — hashpass", nav=True, active="/c", rows=rows, q=q, signed_in=signed_in,
+        title="Мои курсы — hashpass", nav=True, active="/c", taking=[], runs=[], signed_in=signed_in,
         role_ru=_ROLE_RU, message=message)
 
 
@@ -62,25 +62,29 @@ class CourseWeb:
         return self.server._html(render_profile(                                 # noqa: SLF001
             self.server.users.get(login) or {"user": login}, entries,
             self.server.progress().get(login), attempts.by_task(login),
-            course={"ref": course.ref, "title": course.title}))
+            course={"ref": course.ref, "title": course.title},
+            about={e["ref"]: self.server.people.about(self.server._live_ref(e["ref"])) for e in entries}))  # noqa: SLF001
 
     def _viewer(self) -> tuple[str | None, str | None]:
         user = self.server._session_user()          # noqa: SLF001  (same package)
         return user, (self.server.users.role(user) if user else None)
 
     def courses(self) -> Response:
-        user, role = self._viewer()
-        api = self.server.course_api
-        q = request.args.get("q", "").strip()
-        rows = []
-        for course in api.courses.all():
-            if not can(user, role, course, "view"):
-                continue
-            if q and q.casefold() not in f"{course.ref} {course.title} {course.description}".casefold():
-                continue
-            rows.append(api._summary(course, user) | {"tasks": sum(1 for _ in course.tasks())})  # noqa: SLF001
-        rows.sort(key=lambda r: (r["role"] is None, r["ref"]))
-        return self.server._html(render_courses(rows, q=q, signed_in=user))  # noqa: SLF001
+        """
+        «Мои курсы» (user 2026-10-23): the courses one takes, with progress, and the ones one runs.
+
+        Finding other courses is the home page's job (it is the search).
+        """
+        user, _role = self._viewer()
+        if user is None:
+            return self.server._redirect("/web/login?next=%2Fc")              # noqa: SLF001
+        people = self.server.people
+        runs = [people._course_row(c, role_of=user) for c in self.server.course_api.courses.all()  # noqa: SLF001
+                if c.role_of(user) in ("owner", "maintainer", "author")]
+        return self.server._html(_env.get_template("courses.html.j2").render(  # noqa: SLF001
+            title="Мои курсы — hashpass", nav=True, active="/c", signed_in=user, role_ru=_ROLE_RU,
+            taking=people._taking(user), runs=sorted(runs, key=lambda r: r["ref"]),  # noqa: SLF001
+            message=request.args.get("message", "")))
 
     def course(self, owner: str, name: str) -> Response:
         user, role = self._viewer()
@@ -92,6 +96,9 @@ class CourseWeb:
                 status=HTTPStatus.NOT_FOUND)
         may = {a: can(user, role, course, a) for a in ("view", "play", "propose", "add", "moderate", "admin")}
         view = api._view(course, user, role) if may["view"] else api._peek(course, user)  # noqa: SLF001
+        for block in view.get("blocks") or []:        # «what is this task» for the hover card
+            for task in block.get("tasks", []):
+                task["about"] = self.server.people.about(str(task.get("revision") or task["ref"]))
         pool = self.server._pool_url()                                         # noqa: SLF001
         link = f"{pool}/c/{course.ref}"
         invite_link = f"{link}?invite={quote(course.invite)}" if may["admin"] else ""
@@ -107,6 +114,7 @@ class CourseWeb:
         """Who started the course and how far they got in it (its tasks only)."""
         api = self.server.course_api
         refs = [f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()]
+        about = {r: self.server.people.about(self.server._live_ref(r)) for r in refs}  # noqa: SLF001
         rows = []
         for student in api.enrollments.users_of(course.id):
             if course.role_of(student) in ("owner", "maintainer", "author"):
@@ -118,7 +126,8 @@ class CourseWeb:
             for i, r in enumerate(refs, 1):
                 status = (progress.get(r) or {}).get("status", "")
                 mark, word = ("✓", "решено") if status == "passed" else (("◐", "начато") if status else ("·", "не начато"))
-                cells.append({"n": i, "ref": r, "mark": mark, "word": word, "cls": status or "none"})
+                cells.append({"n": i, "ref": r, "mark": mark, "word": word, "cls": status or "none",
+                              "about": about[r]})
             rows.append({"user": student, "comment": profile.get("comment", ""),
                          "done": len(done), "total": len(refs),
                          "pct": round(100 * len(done) / len(refs)) if refs else 0, "cells": cells})

@@ -1,0 +1,31 @@
+{# Home page body: the showcase (no query) or the search results (a query) -- live search swaps it. #}
+{% from '_files.html.j2' import icon %}
+{% from '_cards.html.j2' import course_card, repo_card, user_tile, sort_bar %}
+{% if not searching %}
+{% for key, title, rows in sections %}
+<section class='explore-section' aria-labelledby='ex-{{ key }}'>
+<div class='section-head'><h2 id='ex-{{ key }}'>{{ title }}</h2>{% if counts[key] > rows | length %}<a class='more' href='/?type={{ key }}' data-kind='{{ key }}'>все {{ counts[key] }} →</a>{% endif %}</div>
+{% if not rows %}<div class='empty card'><p class='sub'>Пока пусто.</p></div>
+{% elif key == 'courses' %}<div class='grid'>{% for r in rows %}{{ course_card(r, role_ru) }}{% endfor %}</div>
+{% elif key == 'users' %}<div class='user-list'>{% for p in rows %}{{ user_tile(p) }}{% endfor %}</div>
+{% else %}<div class='grid'>{% for r in rows %}{{ repo_card(r) }}{% endfor %}</div>{% endif %}
+</section>
+{% endfor %}
+{% else %}
+<div class='search-layout'>
+<nav class='search-side card' aria-label='Что искать'>
+{% for k in kinds %}<a href='/?q={{ q | q }}&type={{ k.key }}' data-tab='{{ k.key }}' data-kind='{{ k.key }}'{% if k.key == kind %} class='on' aria-current='page'{% endif %}><span>{{ icon({'users': 'user', 'courses': 'course', 'tasks': 'task', 'images': 'image'}[k.key]) }} {{ k.title }}</span> <span class='count'>{{ k.count }}</span></a>{% endfor %}
+</nav>
+<section class='search-results'>
+{% if not rows %}
+<div class='empty card'><p class='sub'>{% if q %}По запросу «{{ q }}» здесь ничего нет — загляните в соседние разделы слева.{% else %}Пока пусто.{% endif %}</p></div>
+{% else %}
+{% if kind != 'users' %}{{ sort_bar(kind) }}{% endif %}
+{% if kind == 'courses' %}<div class='grid' data-sortable>{% for r in rows %}{{ course_card(r, role_ru) }}{% endfor %}</div>
+{% elif kind in ('tasks', 'images') %}<div class='grid' data-sortable>{% for r in rows %}{{ repo_card(r) }}{% endfor %}</div>
+{% else %}<div class='user-list'>{% for p in rows %}{{ user_tile(p) }}{% endfor %}</div>{% endif %}
+{% endif %}
+{% if more %}<p class='sub small'>и ещё {{ more }} — уточните запрос</p>{% endif %}
+</section>
+</div>
+{% endif %}

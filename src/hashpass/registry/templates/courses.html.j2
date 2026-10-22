@@ -1,8 +1,9 @@
 {% extends 'base.html.j2' %}
+{% from '_cards.html.j2' import course_card %}
+{% from '_files.html.j2' import icon %}
 {% block main %}
 <div class='cat-head'>
-<h1>Курсы</h1>
-{% if signed_in %}
+<h1>Мои курсы</h1>
 <details class='add-menu'>
 <summary class='btn'>+ Создать курс</summary>
 <div class='add-panel card'>
@@ -17,27 +18,31 @@
 </form>
 </div>
 </details>
-{% endif %}
 </div>
 {% if message %}<p class='sub'>{{ message }}</p>{% endif %}
-<form class='row search' method='get' action='/c'>
-<input name='q' value='{{ q }}' placeholder='поиск по названию, владельцу, описанию'>
-<button class='ghost' type='submit'>Найти</button>
-</form>
-{% if rows %}
+<nav class='tabs' aria-label='Мои курсы'>
+<a href='#taking' data-tab>{{ icon('course') }} Прохожу <span class='count'>{{ taking | length }}</span></a>
+<a href='#running' data-tab>{{ icon('user') }} Веду <span class='count'>{{ runs | length }}</span></a>
+</nav>
+<section id='taking' class='tab-panel' aria-label='Прохожу'>
+{% if taking %}
 <div class='grid'>
-{% for r in rows %}
-<a class='card course-card' href='/c/{{ r.ref }}'>
-<div class='row'><b>{{ r.title }}</b><span class='sp'></span>
-{% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
-{% if r.role %}<span class='pill author sm'>{{ role_ru[r.role] }}</span>{% endif %}</div>
-<div class='mono small'>{{ r.ref }} · заданий: {{ r.tasks }}</div>
-{% if r.description %}<p class='sub small'>{{ r.description }}</p>{% endif %}
+{% for c in taking %}
+<a class='card item-card course-card' href='/c/{{ c.ref }}'>
+<div class='item-head'><span class='kind kind-course'>{{ icon('course') }} курс</span>{% if c.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}{% if c.done == c.total and c.total %}<span class='pill open sm'>пройден</span>{% endif %}</div>
+<b class='item-title'>{{ c.title or c.ref }}</b>
+<div class='mono small dim'>{{ c.ref }}</div>
+<div class='progress' role='progressbar' aria-valuemin='0' aria-valuemax='{{ c.total }}' aria-valuenow='{{ c.done }}' aria-label='решено {{ c.done }} из {{ c.total }}'><span style='width:{{ c.pct }}%'></span></div>
+<div class='small'><b>{{ c.done }} / {{ c.total }}</b> <span class='dim'>решено · {{ c.pct }}%</span></div>
 </a>
 {% endfor %}
 </div>
-{% else %}
-<div class='empty card'><p class='sub'>{% if q %}Ничего не нашлось.{% else %}Курсов пока нет.{% endif %}</p></div>
-{% endif %}
+<p class='sub small'>Проходить — в терминале: <code>hashpass</code> → клавиша <kbd>c</kbd>, выбрать курс.</p>
+{% else %}<div class='empty card'><p class='sub'>Вы пока не проходите курсов. <a href='/?type=courses'>Найти курс →</a></p></div>{% endif %}
+</section>
+<section id='running' class='tab-panel' aria-label='Веду'>
+{% if runs %}<div class='grid'>{% for r in runs %}{{ course_card(r, role_ru) }}{% endfor %}</div>
+{% else %}<div class='empty card'><p class='sub'>Вы пока не ведёте курсов — создайте свой кнопкой «+ Создать курс».</p></div>{% endif %}
+</section>
 <script src='/static/api.js'></script>
 {% endblock %}

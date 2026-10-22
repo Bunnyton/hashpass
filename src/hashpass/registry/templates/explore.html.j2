@@ -1,34 +1,30 @@
 {% extends 'base.html.j2' %}
-{% from '_cards.html.j2' import course_card, repo_card %}
 {% from '_install.html.j2' import install_steps %}
 {% block main %}
-<section class='explore-hero' aria-labelledby='explore-h'>
+<section class='explore-hero{% if searching %} compact{% endif %}' aria-labelledby='explore-h'>
+{% if not searching %}
 <h1 id='explore-h'>Интерактивные задания по Linux</h1>
 <p class='lead'>Живая консоль Debian, проверка каждого шага. Найдите курс, задание или образ — и запускайте.</p>
-<form class='search-bar hero-search' method='get' action='/search' role='search'>
+{% else %}<h1 id='explore-h' class='visually-hidden'>Поиск</h1>{% endif %}
+<form class='search-bar hero-search' method='get' action='/' role='search' data-live='#results'>
 <label class='visually-hidden' for='home-q'>Что найти</label>
 <span class='search-ic' aria-hidden='true'><svg viewBox='0 0 16 16' width='18' height='18'><path d='M10.68 11.74a6 6 0 0 1-7.92-8.98 6 6 0 0 1 8.98 7.92l3.04 3.04a.75.75 0 1 1-1.06 1.06ZM11.5 7a4.5 4.5 0 1 0-9 0 4.5 4.5 0 0 0 9 0Z'/></svg></span>
-<input id='home-q' type='search' name='q' placeholder='курсы, задания, образы, пользователи' autofocus>
+<input id='home-q' type='search' name='q' value='{{ q }}' placeholder='курсы, задания, образы, пользователи' autocomplete='off' autofocus>
+<input type='hidden' name='type' value='{{ kind if searching else "" }}'>
 <button type='submit'>Найти</button>
 </form>
+{% if not searching %}
 <div class='hero-stats'>
-{% for key, words in [('courses', ('курс', 'курса', 'курсов')), ('tasks', ('задание', 'задания', 'заданий')), ('images', ('образ', 'образа', 'образов')), ('users', ('пользователь', 'пользователя', 'пользователей'))] %}{% set text = counts[key] | plural(*words) %}<a href='/search?type={{ key }}'><b>{{ text.split(' ', 1)[0] }}</b> {{ text.split(' ', 1)[1] }}</a>
+{% for key, words in [('courses', ('курс', 'курса', 'курсов')), ('tasks', ('задание', 'задания', 'заданий')), ('images', ('образ', 'образа', 'образов')), ('users', ('пользователь', 'пользователя', 'пользователей'))] %}{% set text = counts[key] | plural(*words) %}<a href='/?type={{ key }}' data-kind='{{ key }}'><b>{{ text.split(' ', 1)[0] }}</b> {{ text.split(' ', 1)[1] }}</a>
 {% endfor %}
 </div>
 <details class='install card'>
 <summary><b>Установить hashpass</b> <span class='sub small'>— одна команда в терминале</span></summary>
 {{ install_steps(prepare, flags, url) }}
 </details>
+{% endif %}
 </section>
-
-{% for key, title, rows in sections %}
-<section class='explore-section' aria-labelledby='ex-{{ key }}'>
-<div class='section-head'><h2 id='ex-{{ key }}'>{{ title }}</h2>{% if counts[key] > rows | length %}<a class='more' href='/search?type={{ key }}'>все {{ counts[key] }} →</a>{% endif %}</div>
-{% if not rows %}<div class='empty card'><p class='sub'>Пока пусто.</p></div>
-{% elif key == 'courses' %}<div class='grid'>{% for r in rows %}{{ course_card(r, role_ru) }}{% endfor %}</div>
-{% elif key == 'users' %}<div class='user-list'>{% for p in rows %}<a class='card user-row' href='/u/{{ p.user | q }}'><span class='avatar sm' aria-hidden='true'>{{ p.user[:1] | upper }}</span><span class='mono'>{{ p.user }}</span></a>{% endfor %}</div>
-{% else %}<div class='grid'>{% for r in rows %}{{ repo_card(r) }}{% endfor %}</div>{% endif %}
-</section>
-{% endfor %}
+<div id='results' aria-live='polite'>{% include '_results.html.j2' %}</div>
 <script src='/static/copy.js'></script>
+<script src='/static/live.js'></script>
 {% endblock %}
