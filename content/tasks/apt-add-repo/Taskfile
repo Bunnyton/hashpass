@@ -31,7 +31,7 @@ stage
   on pass say "Пакет пришёл из download.docker.com — apt policy docker-ce-cli показывает, из какого репозитория."
   hint output "has no installation candidate" read repo.md
   hint output "Unable to locate package" read repo.md
-  hint output "Permission denied" say "Прав не хватает: всё в /etc принадлежит root. Как одолжить его права на одну команду?"
+  hint output "Permission denied" say "Прав не хватает: в /etc пишет только root. sudo уже стоит, а ошибка осталась? Перечитай, зачем в инструкции | sudo tee."
   hint output "NO_PUBKEY" say "apt не верит репозиторию: ключа подписи нет там, куда указывает signed-by."
   hint tries 5 say "Шаги идут по порядку: инструменты, ключ, запись, update, установка. Какой ещё не сделан?"
 

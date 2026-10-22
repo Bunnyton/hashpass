@@ -58,7 +58,7 @@ stage
   hint tries 5 say "ls -l и каталог, где теперь лежит ссылка."
 
 stage
-  say "Почини ссылку: пересоздай её с путём от корня — и прочитай файл через неё"
+  say "Почини file_link.txt: пересоздай её с путём от корня — и прочитай файл через неё"
   solve:
     ln -sf /home/student/dir/dir/dir/file.txt /home/student/dir/file_link.txt
     cat /home/student/dir/file_link.txt
@@ -68,6 +68,7 @@ stage
   neutral ls pwd cd
   on pass say "Ссылка с путём от корня переносится куда угодно. Относительная — только вместе со своей целью."
   hint output "File exists" say "Ссылка с таким именем уже есть. Заменить её ln поможет с ключом -f."
+  hint cmd ln missing file_link.txt say "Без второго аргумента ln назвал ссылку именем файла. Загляни в ls -l: а чинили мы file_link.txt."
   hint tries 5 say "Сначала — полный путь к файлу от /, потом — имя ссылки в dir. И -f, чтобы заменить старую."
 
 stage

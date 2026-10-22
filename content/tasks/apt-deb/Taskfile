@@ -24,7 +24,8 @@ stage
   check exec sh -c "dpkg-query -W -f='\${Status}' cmatrix 2>/dev/null | grep -q 'install ok installed'"
   neutral ls cat pwd
   on pass say "dpkg -L cmatrix перечислит все файлы, которые принёс пакет. Найди, где лежит сам бинарь."
-  hint output "command not found" say "Такой скачивалки нет. Их как минимум две — загугли."
+  hint cmd cmatrix say "Рано: cmatrix ещё не установлен."
+  hint output "command not found" say "Такой команды нет. Файлы из сети скачивает wget — он в теории."
   hint output "dependency problems" say "dpkg ставит ровно этот файл и не достаёт зависимости из репозитория. Доделать умеет apt: sudo apt -f install (fix-broken) — или ставь сразу через apt: sudo apt install ./файл.deb."
   hint output "Unmet dependencies" say "apt отказался — и в последней строке сам написал, что попробовать. Прочитай её."
   hint output "Permission denied" say "Установщику не хватило прав. Как обычный пользователь одалживает права администратора на одну команду?"

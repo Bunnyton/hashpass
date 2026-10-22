@@ -1,12 +1,15 @@
-# apt-remove — удалить пакет через apt. Продолжение apt-update: наследуем его образ и
-# воспроизводим его конечное состояние (sl установлен) — действия студента между заданиями
-# не сохраняются. Без `|| true`: если sl не встал, сборка обязана упасть, а не выпустить
-# задание с ложной предпосылкой.
+# apt-remove — удалить пакет через apt, затем purge и autoremove (пользователь, 2026-10-23:
+# «добавь продолжение в это же задание с использованием apt purge и autoremove, чтобы всё объяснить
+# сразу»). Продолжение apt-update: наследуем его образ и воспроизводим его конечное состояние (sl
+# установлен, libncurses6 пришла с ним как зависимость) — действия студента между заданиями не
+# сохраняются. nano ставим ради /etc/nanorc: у sl нет настроек, которые оставил бы remove. Без
+# `|| true`: если пакеты не встали, сборка обязана упасть, а не выпустить задание с ложной
+# предпосылкой.
 
 image apt-remove:1
 from apt-update:1
 
-run apt-get update >/dev/null && apt-get install -y sl >/dev/null
+run apt-get update >/dev/null && apt-get install -y sl nano >/dev/null
 
 hidden hp
 
@@ -21,9 +24,30 @@ stage
   solve sudo apt-get remove -y sl
   observe bool /usr/games/sl
   neutral ls cat pwd
-  on pass say "Удалённый пакет оставляет библиотеки-сироты, которые ставились ради него. Их подчищает apt autoremove."
+  on pass say "Поезд ушёл. А пока он уходил, apt кое-что написал про лишние пакеты — это ещё пригодится."
   hint output "Permission denied" say "apt отказал: прав не хватает. Кто имеет право удалять пакеты — и как одолжить его права на одну команду?"
   hint tries 5 say "Ставил через apt — удаляй через него же, другим действием."
-  hint tries 10 say "apt --help перечисляет действия. Или загугли: «apt удалить пакет»."
+  hint tries 10 say "apt --help перечисляет действия: найди то, что удаляет."
+
+stage
+  say "nano нам не нужен — есть vim. Удали nano так, чтобы не осталось и его настроек /etc/nanorc"
+  solve sudo apt-get purge -y nano
+  observe bool /usr/bin/nano /etc/nanorc
+  on enter read purge.md
+  block rm match "nanorc" say "Руками — долго и наугад: у пакета бывают десятки файлов настроек. apt знает их все."
+  neutral ls cat pwd
+  on pass say "У пакета, снятого через remove, dpkg -l пишет состояние rc: программы нет, настройки остались. После purge его нет и там."
+  hint cmd apt has remove say "Программа ушла — а ls /etc/nanorc? remove настройки бережёт. Нужно действие посильнее."
+  hint cmd apt-get has remove say "Программа ушла — а ls /etc/nanorc? remove настройки бережёт. Нужно действие посильнее."
+  hint tries 5 say "Что осталось от nano? Проверь /usr/bin/nano и /etc/nanorc."
+
+stage
+  say "Подчисти библиотеки, которые ставились только ради удалённых пакетов"
+  solve sudo apt-get autoremove -y
+  observe bool /usr/lib/x86_64-linux-gnu/libncurses.so.6
+  neutral ls cat pwd
+  on pass say "Ставишь пакет — apt помечает его зависимости как «поставлены автоматически». Когда они больше никому не нужны, autoremove их убирает. А apt purge --autoremove делает всё одной командой."
+  hint tries 5 say "Перечитай, что apt написал при удалении: он сам назвал лишние пакеты и команду, которая их уберёт."
+  hint tries 10 say "Действие apt звучит почти как «удалить автоматически»."
 
 exec finale
