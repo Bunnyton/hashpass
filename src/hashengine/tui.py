@@ -365,6 +365,11 @@ class EngineTUI(App):
         else:
             try:
                 files, fetch = listing_or_taskfile(self.client, ref, self.token)
+            except urllib.error.HTTPError as exc:
+                text = ("у этого образа нет исходников на пуле" if exc.code == 404  # noqa: PLR2004
+                        else f"исходники не открылись: {_reason(exc)}")
+                self.notify(text, severity="warning", timeout=6)
+                return
             except Exception as exc:                        # noqa: BLE001
                 self.notify(f"исходники не открылись: {_reason(exc)}", severity="error", timeout=6)
                 return
