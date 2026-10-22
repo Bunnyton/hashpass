@@ -183,6 +183,26 @@ def test_a_running_pool_updates_itself_and_restarts_when_idle():
 
 
 @pytest.mark.tier1
+def test_a_pool_that_never_looks_idle_still_restarts_after_an_hour():
+    # Prod 2026-10-22: a request that never counted done kept a new `main` installed but not running.
+    from hashpass.version import watch_for_updates  # noqa: PLC0415
+    events: list[object] = []
+    clock = [0.0]
+
+    def sleep(s: float) -> None:
+        clock[0] += s
+
+    watch_for_updates("hashengine", ["serve"], rounds=1, every=600.0, sleep=sleep,
+                      installed=lambda: OLD, fetch=lambda: NEW, install=lambda _c: True,
+                      idle=lambda: False, restart=lambda a: events.append(("restart", a, clock[0])),
+                      write=lambda _s: None, monotonic=lambda: clock[0])
+    assert len(events) == 1
+    _, argv, at = events[0]
+    assert argv == ["serve"]
+    assert 600.0 + 3600.0 <= at < 600.0 + 3600.0 + 5
+
+
+@pytest.mark.tier1
 def test_the_pool_watch_leaves_a_developer_checkout_alone():
     from hashpass.version import watch_for_updates  # noqa: PLC0415
     events: list[object] = []

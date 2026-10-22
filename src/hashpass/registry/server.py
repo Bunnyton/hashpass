@@ -29,7 +29,6 @@ from urllib.parse import quote, unquote
 from flask import Flask, Response, g, request, send_file
 from werkzeug.serving import WSGIRequestHandler
 from werkzeug.serving import make_server as _wsgi_make_server
-from werkzeug.wsgi import ClosingIterator
 
 from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
@@ -805,8 +804,11 @@ class PoolServer:
         user = str(data.get("user", "")).strip()
         password = str(data.get("password", ""))
         group = str(data.get("group", "")).strip()
-        comment = str(data.get("comment", "")).strip()[:_MAX_COMMENT]
-        # login + password are required; group/comment are metadata and may be empty
+        comment = str(data.get("comment", "")).strip()
+        if group and not comment.startswith(group):   # spec §3: groups are gone; an old client's
+            comment = f"{group} · {comment}".rstrip(" ·")   # group leads the comment (as the move does)
+        comment = comment[:_MAX_COMMENT]
+        # login + password are required; the comment is free metadata and may be empty
         if not _USER_RE.match(user):
             return self._json(HTTPStatus.BAD_REQUEST, {"error": LOGIN_RULE})
         if not password:
@@ -2850,8 +2852,11 @@ class InFlight:
     """
     WSGI wrapper counting requests whose response is not fully sent yet.
 
-    A request stays «in flight» until the server closes its response iterable -- i.e. after the
-    last byte of a streamed blob, not when Flask pops the request context. The pool restarts for
+    A request stays «in flight» until the last byte of its body is handed to the server (a
+    streamed blob too, not just until Flask pops the request context), or until its body is
+    dropped (client gone). Not until werkzeug closes the body: before that it drains «the rest of
+    the request» from the socket, which a client can hold forever or break with an error that
+    skips the close -- prod's self-update once waited for idle() for good. The pool restarts for
     an update only when `idle()`.
     """
 
@@ -2877,7 +2882,46 @@ class InFlight:
         except BaseException:
             self._done()
             raise
-        return ClosingIterator(body, [self._done])
+        return _Counted(body, self._done)
+
+
+class _Counted:
+    """A response body that reports «done» once: at its end, on close, or when it is dropped."""
+
+    def __init__(self, body: Iterable[bytes], done: Callable[[], None]) -> None:
+        self._body = body
+        self._it = iter(body)
+        self._done = done
+        self._open = True
+
+    def __iter__(self) -> "_Counted":
+        return self
+
+    def __next__(self) -> bytes:
+        try:
+            return next(self._it)
+        except StopIteration:        # the last chunk was taken
+            self._finish()
+            raise
+        except BaseException:
+            self._finish()
+            raise
+
+    def close(self) -> None:
+        try:
+            close = getattr(self._body, "close", None)
+            if close is not None:
+                close()
+        finally:
+            self._finish()
+
+    def _finish(self) -> None:
+        if self._open:
+            self._open = False
+            self._done()
+
+    def __del__(self) -> None:       # the server dropped it without close (client gone mid-send)
+        self._finish()
 
 
 def make_server(store: ImageStore, users: UserStore, secret: bytes, *,   # noqa: PLR0913

@@ -499,3 +499,30 @@ def test_attachment_get_follows_the_repositorys_source_setting(registry, tmp_pat
         assert _http("GET", url, headers=auth(reader)) == (HTTPStatus.OK, b"tgz-bytes")
     missing = f"{registry.base_url}/attachment/bob/app/1?name=nope.txt"
     assert _http("GET", missing, headers=auth("root"))[0] == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.tier2
+def test_a_client_holding_its_socket_open_does_not_keep_the_pool_busy(tmp_path):
+    # Prod 2026-10-22: the self-update installed a new `main` and then waited for idle() forever.
+    # werkzeug drains «the rest of the request» before closing the response, and a client that
+    # sent extra bytes and kept the socket open held that read -- the request never counted done.
+    import socket  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    from hashpass.registry.server import make_server  # noqa: PLC0415
+
+    server = make_server(ImageStore(tmp_path / "srv"), UserStore(tmp_path / "users.json"), b"s" * 32)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        sock = socket.create_connection(server.server_address)
+        sock.sendall(b"GET / HTTP/1.1\r\nHost: pool\r\n\r\n")
+        assert sock.recv(64).startswith(b"HTTP/1.1")
+        sock.sendall(b"leftover bytes after the response")
+        deadline = time.monotonic() + 5
+        sock.close()
+        while not server.idle() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert server.idle()
+    finally:
+        server.shutdown()

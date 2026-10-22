@@ -17,8 +17,7 @@ def test_register_creates_student_and_me(registry):
     me = c.me(token=token)
     assert me["user"] == "stud"
     assert me["role"] == "student"
-    assert me["group"] == "ИУ7-31"
-    assert me["comment"] == "hi"
+    assert me["comment"] == "ИУ7-31 · hi"     # spec §3: a group (an old client) leads the comment
 
 
 @pytest.mark.tier2
@@ -149,3 +148,19 @@ def test_login_prompt_reasks_on_full_name_in_cyrillic():
     assert cli._read_login(io) == "nikitin.vn"  # noqa: SLF001
     text = "".join(out)
     assert "не должно быть пробелов" in text and "латиницей" in text and "nikitin.vn" in text
+
+
+@pytest.mark.tier2
+def test_interactive_register_asks_no_group(registry, monkeypatch):
+    """Spec 2026-10-21 §3: groups are gone -- the comment carries one, if the student wants."""
+    from hashpass import cli  # noqa: PLC0415
+    prompts: list[str] = []
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _p: "pass123!")
+    io = cli.Io(read=lambda p: prompts.append(p) or "ИУ7-31 Иванов", write=lambda _s: None,
+                clock=lambda: "")
+    cli._register_interactive(RemoteRegistry(registry.base_url), "ivanov", io,  # noqa: SLF001
+                              password="pass123!")  # noqa: S106
+    assert not any("групп" in p.lower() and "необязательно" in p.lower() and "комментарий" not in p
+                   for p in prompts)
+    assert len(prompts) == 1 and "комментарий" in prompts[0]
+    assert registry.users.get("ivanov")["comment"] == "ИУ7-31 Иванов"

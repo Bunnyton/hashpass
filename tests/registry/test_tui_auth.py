@@ -77,13 +77,15 @@ def test_register_button_creates_account(registry, env):
             app.screen.submit()
             await _wait(pilot, lambda: "Пароли не совпадают" in _error(app))
             await _type(pilot, app, "password2", "pass123!")
-            await _type(pilot, app, "group", "G1")
+            assert not app.screen.query("#group")            # spec §3: no group, a comment
+            await _type(pilot, app, "comment", "G1")
             app.screen.submit()
             await _wait(pilot, lambda: app.user == "newbie"
                         and not isinstance(app.screen, (LoginScreen, RegisterScreen)))
             await pilot.pause(0.2)
             assert app.title == "hashpass · newbie"
             assert registry.users.has("newbie")
+            assert registry.users.get("newbie")["comment"] == "G1"
     asyncio.run(drive())
 
 

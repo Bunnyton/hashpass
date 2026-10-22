@@ -124,6 +124,7 @@ def check_and_update(module: str, argv: list[str], *,  # noqa: PLR0913
 
 _WATCH_EVERY = 600.0          # a running pool checks `main` every 10 minutes
 _IDLE_POLL = 1.0
+_IDLE_PATIENCE = 3600.0       # a pool that never looks idle restarts anyway after an hour
 _NEVER_REPEAT = ("--reset-admin",)   # a restart must not regenerate the admin password
 
 
@@ -140,14 +141,17 @@ def watch_for_updates(module: str, argv: list[str], *,  # noqa: PLR0913
                       install: Callable[[str], bool] = _pip_install,
                       idle: Callable[[], bool] = lambda: True,
                       restart: Callable[[list[str]], object] | None = None,
-                      write: Callable[[str], object] = sys.stderr.write) -> None:
+                      write: Callable[[str], object] = sys.stderr.write,
+                      monotonic: Callable[[], float] = time.monotonic) -> None:
     """
     Keep a long-running process (the pool, `hashengine serve`) on the latest `main`.
 
     Every `every` seconds: if `main` moved past the installed commit, pip-install it, wait until
     `idle()` (no request in flight -- a student's download is never cut) and restart in place
     with the same arguments minus --reset-admin. A developer checkout (no installed commit) and
-    HASHPASS_NO_UPDATE are left alone; a failed install just waits for the next round.
+    HASHPASS_NO_UPDATE are left alone; a failed install just waits for the next round. If the
+    pool never looks idle for an hour (a stuck connection), it restarts anyway: a new `main`
+    installed but never running is worse than one cut download.
     """
     argv = [a for a in argv if a not in _NEVER_REPEAT]
     done = 0
@@ -166,7 +170,8 @@ def watch_for_updates(module: str, argv: list[str], *,  # noqa: PLR0913
         if not install(latest):
             write("\x1b[33mобновить не удалось — попробую позже\x1b[0m\n")
             continue
-        while not idle():
+        since = monotonic()
+        while not idle() and monotonic() - since < _IDLE_PATIENCE:
             sleep(_IDLE_POLL)
         write(f"\x1b[32m{module} обновлён — перезапускаюсь\x1b[0m\n")
         (restart or (lambda a: _restart(module, a)))(argv)

@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-update", action="store_true",
                         help="не обновляться при запуске (иначе ставится свежий main с GitHub)")
     sub = parser.add_subparsers(dest="command")
-    p_reg = sub.add_parser("register", help="регистрация на пуле (логин + группа)")
+    p_reg = sub.add_parser("register", help="регистрация на пуле (логин и пароль)")
     p_reg.add_argument("--pool", help="адрес пула (иначе $HASHPASS_POOL или сохранённый)")
     p_login = sub.add_parser("login", help="вход на пул")
     p_login.add_argument("--pool", help="адрес пула (иначе $HASHPASS_POOL или сохранённый)")

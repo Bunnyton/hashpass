@@ -2065,17 +2065,16 @@ def _prompt_new_password(io: Io) -> str:
 
 
 def cmd_register(env: Home, pool_url: str | None = None, io: Io | None = None) -> int:
-    """Register on the pool (only login+password required; group/comment optional)."""
+    """Register on the pool (only login+password required; a comment -- name, group -- optional)."""
     io = io or _default_io()
     url = _pool_url(env, pool_url) or (io.read("Адрес пула (URL): ") or "").strip()
     if not url:
         msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
         raise RuntimeError(msg)
     user = _read_login(io)
-    group = (io.read("группа (необязательно, напр. ИУ7-31): ") or "").strip()
-    comment = (io.read("комментарий (необязательно): ") or "").strip()
+    comment = (io.read("комментарий (необязательно: имя, группа — напр. ИУ7-31): ") or "").strip()
     password = _prompt_new_password(io)
-    RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, group, comment)
+    RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, "", comment)
     save_pool(env, url, user)
     io.write(f"\x1b[32m✓ регистрация выполнена\x1b[0m: {user}\n")
     return 0
@@ -2138,7 +2137,7 @@ def _read_login(io: Io) -> str:
 def _register_interactive(client: RemoteRegistry, user: str, io: Io,
                           *, password: str | None = None) -> None:
     """
-    Register the given login: group + optional comment + password.
+    Register the given login: an optional comment (name, group) + password.
 
     No Y/N confirm -- if we got here, the caller already knows the account doesn't
     exist and wants it created.  `password` (if given, e.g. the one just typed at
@@ -2146,14 +2145,13 @@ def _register_interactive(client: RemoteRegistry, user: str, io: Io,
     fall back to the full `_prompt_new_password` dialog.
     """
     io.write(f"\x1b[36mРегистрирую нового пользователя «{user}» на пуле.\x1b[0m\n")
-    group = (io.read("группа (необязательно, напр. ИУ7-31): ") or "").strip()
-    comment = (io.read("комментарий (необязательно): ") or "").strip()
+    comment = (io.read("комментарий (необязательно: имя, группа — напр. ИУ7-31): ") or "").strip()
     while True:
         # Reuse the caller-supplied password on the first attempt (typed at login);
         # if the server refuses it as weak, ask through the strict double-entry prompt.
         pw = password if password is not None else _prompt_new_password(io)
         try:
-            client.register(user, pw, group, comment)
+            client.register(user, pw, "", comment)
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.BAD_REQUEST:
                 reason = _http_error_reason(exc)
@@ -2199,7 +2197,7 @@ def _require_pool_identity(env: Home, io: Io) -> tuple[str, str]:
     Return (url, user) for the pool.
 
     With a valid cached token, returns it silently. Otherwise asks for a login + password directly;
-    if that login fails, offers registration in place (group + optional comment, password confirmed).
+    if that login fails, offers registration in place (optional comment, password confirmed).
     """
     url = _pool_url(env)
     if url and (token := _pool_token(env, url)) and (user := token_user(token)):
@@ -2305,7 +2303,8 @@ def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
     `hashpass add <course link>`: join the course (switching pool if the link names another one).
 
     A public course is joined at once; a private one with the link's invite token too; without
-    it the student may send an access request. The course becomes the current one.
+    it the student may send an access request. The course becomes the current one. Without an
+    account the student signs in or, with a new login, registers on the spot.
     """
     from hashpass import my_courses  # noqa: PLC0415
     io = io or _default_io()
@@ -2320,8 +2319,8 @@ def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
     if not saved or registry_key(saved) != registry_key(pool):
         save_pool(env, pool, "")
     url, _user, token = account_current(env)
-    if not token:
-        cmd_pool_login(env, pool, io)
+    if not token:          # a newcomer follows a course link: sign in, or sign up right here
+        _require_pool_identity(env, io)
         url, _user, token = account_current(env)
     client = RemoteRegistry(url, token=token)
     try:

@@ -84,3 +84,19 @@ def test_a_private_course_without_invite_asks_for_access(pool: _Courses, tmp_pat
     assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux", io) == 0
     assert "заявка" in said[-1]
     assert [r["user"] for r in pool.call("GET", "/courses/bob/linux", "bob")[1]["requests"]] == ["kid"]
+
+
+@pytest.mark.tier2
+def test_a_newcomer_registers_right_from_the_course_link(pool: _Courses, tmp_path: Path,
+                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    """Was: `hashpass add <link>` without an account ended in a bare «HTTP Error 401»."""
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "new")}, default_home=tmp_path)
+    pool.call("PUT", "/courses/bob/linux", "bob", {"visibility": "public"})
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _p: "pw-correct1!")
+    answers = iter(["newbie", "ИУ7-31"])
+    said: list[str] = []
+    io = cli.Io(read=lambda _p: next(answers), write=said.append, clock=lambda: "")
+    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux", io) == 0
+    assert pool.r.users.has("newbie")
+    assert my_courses.current(env.root, pool.url) == "bob/linux"
+    assert "регистр" in "".join(said).lower()
