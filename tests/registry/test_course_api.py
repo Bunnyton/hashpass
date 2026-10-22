@@ -140,3 +140,10 @@ def test_stale_rev_is_a_conflict(pool: _Courses) -> None:
     pool.call("PUT", path, "bob", {"title": "A", "rev": rev})
     code, _ = pool.call("PUT", path, "bob", {"title": "B", "rev": rev})
     assert code == 409  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_courses_are_off_unless_switched_on(pool: _Courses, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HASHPASS_COURSES")
+    code, body = pool.call("GET", "/courses", "bob")
+    assert code == 404 and "не включены" in body["error"]  # noqa: PLR2004

@@ -883,7 +883,14 @@ class PoolServer:
                       "/web/blocks/hide-tasks")
 
     def _legacy_catalog_gone(self) -> Response | None:
-        """After the move to courses the old catalog editing answers 410 with where to go."""
+        """
+        Gate the course era: `/courses` only where switched on; old catalog edits 410 after the move.
+
+        `HASHPASS_COURSES=1` switches the courses API on. Off by default, so a pool that follows
+        `main` (prod) does not grow courses before their web and clients are ready.
+        """
+        if request.path.startswith("/courses") and os.environ.get("HASHPASS_COURSES") != "1":
+            return self._json(HTTPStatus.NOT_FOUND, {"error": "курсы на этом пуле ещё не включены"})
         if request.path not in self._LEGACY_WRITES or self.default_course() is None:
             return None
         return self._json(HTTPStatus.GONE, {
