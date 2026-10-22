@@ -3,7 +3,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from hashpass import cli, version
+from hashpass import cli, my_courses, version
 from hashpass.emulation import ensure_x86_emulation
 from hashpass.sudo import ensure_sudo
 
@@ -30,6 +30,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("task", help="номер из каталога (напр. 1) или ref (имя:версия)")
     p_sol = sub.add_parser("solution", help="показать своё решение задания (команды и вывод)")
     p_sol.add_argument("task", help="номер из каталога (напр. 1) или ref (имя:версия)")
+    p_add = sub.add_parser("add", help="добавить курс по ссылке со страницы курса")
+    p_add.add_argument("link", help="ссылка вида https://<пул>/c/<владелец>/<курс>")
+    p_courses = sub.add_parser("courses", help="мои курсы; с именем — сделать курс текущим")
+    p_courses.add_argument("course", nargs="?", help="владелец/курс")
     p_cfg = sub.add_parser("config", help="показать/задать настройки (адрес пула)")
     cfg_sub = p_cfg.add_subparsers(dest="config_key")
     p_cfg_pool = cfg_sub.add_parser("pool", help="показать или задать адрес пула")
@@ -37,9 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911
+def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911, C901
     """Route a parsed student sub-command (no sub-command → pool home: pull + list)."""
     command = args.command
+    my_courses.activate(env.root, cli._pool_url(env) or "")   # noqa: SLF001  (tasks come through it)
     if command in _NEEDS_SUDO:   # ask for the password HERE, in the plain terminal, not under the TUI
         say = lambda s: (sys.stdout.write(s), sys.stdout.flush())  # noqa: E731
         ensure_sudo(say)
@@ -58,6 +63,10 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911
         return cli.cmd_solution(env, args.task)
     if command == "config":
         return cli.cmd_config_pool(env, getattr(args, "url", None))
+    if command == "add":
+        return cli.cmd_course_add(env, args.link)
+    if command == "courses":
+        return cli.cmd_courses(env, args.course)
     return cli.cmd_pool_run(env, args.task)
 
 

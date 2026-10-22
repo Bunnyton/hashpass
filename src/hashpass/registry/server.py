@@ -881,6 +881,12 @@ class PoolServer:
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
+        wanted = request.args.get("course")
+        if wanted and os.environ.get("HASHPASS_COURSES") == "1":    # one course, in catalog rows
+            picked = self.course_api.courses.get(wanted)
+            if picked is None or not can(user, self.users.role(user), picked, "view"):
+                return self._json(HTTPStatus.NOT_FOUND, {"error": f"нет такого курса: {wanted}"})
+            return self._json(HTTPStatus.OK, {"catalog": self._course_rows(picked, user)})
         course = self.default_course()
         if course is not None:                        # after the move to courses (spec §9)
             return self._json(HTTPStatus.OK, {"catalog": self._course_rows(course, user)})
