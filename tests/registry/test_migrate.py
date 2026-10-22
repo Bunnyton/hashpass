@@ -126,6 +126,18 @@ def test_old_clients_work_in_the_default_course(legacy: PoolServer) -> None:
 
 
 @pytest.mark.tier1
+def test_anonymous_pulls_of_a_public_course_still_work(legacy: PoolServer) -> None:
+    """Before the move anyone pulled a catalogued task (installer, a client without a token)."""
+    client = legacy.app.test_client()
+    assert client.get("/closure/bob/lab/1?revisions=1").status_code == 200  # noqa: PLR2004
+    migrate_to_courses(legacy, owner="bunnyton", base_ref="bunnyton/debian:trixie")
+    closure = client.get("/closure/bob/lab/1?revisions=1")
+    assert closure.status_code == 200 and closure.get_json()["refs"][-1] == "bob/lab:1_v1"  # noqa: PLR2004
+    assert client.get("/image/bob/lab/1").status_code == 200  # noqa: PLR2004
+    assert client.get("/closure/bob/new/1?revisions=1").status_code == 404  # noqa: PLR2004  (a proposal)
+
+
+@pytest.mark.tier1
 def test_before_the_move_students_still_get_the_approved_copy(legacy: PoolServer) -> None:
     """Prod 2026-10-22: tasks with a waiting update must keep serving the approved copy (no 404)."""
     Catalog(legacy.catalog_path).set_task_hidden("bob/lab:1", hidden=False)

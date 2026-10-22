@@ -346,8 +346,8 @@ class PoolServer:
         if self._fresh_for(user, name):
             return resolved
         tag, n, _latest = parse_version(version)
-        hit = self._course_revision(user, name, tag, n)
-        if hit is not None:                       # a course the caller may play holds it
+        hit = self._course_revision(user, name, tag, n, action="view")
+        if hit is not None:                       # a course the caller may see holds it (anyone: public)
             ref = f"{name}:{revision_version(tag, hit[1])}"
             return ref if self.store.exists(ref) else None
         if self.repo(name).visibility == "private":
@@ -368,13 +368,16 @@ class PoolServer:
         name, _, version = ref.partition(":")
         return (self.resolve(name, version) if name and version else None) or ref
 
-    def _course_revision(self, user: str | None, repo: str, tag: str, n: int | None,
-                         course_ref: str | None = None) -> tuple["course_model.Course", int] | None:
+    def _course_revision(self, user: str | None, repo: str, tag: str, n: int | None,  # noqa: PLR0913
+                         course_ref: str | None = None, *,
+                         action: str = "play") -> tuple["course_model.Course", int] | None:
         """
         Return (course, revision) through which `user` gets `repo:tag` (spec §9), or None.
 
         The course is `?course=owner/name` when given, else the first course the caller may play
-        holding the tag. A requested `_vN` must be the course's current revision of it.
+        holding the tag. A requested `_vN` must be the course's current revision of it. Reading
+        needs only `view` (a public course's tasks download without a token, as before courses);
+        credit needs `play`.
         """
         role = self.users.role(user) if user else None
         wanted = course_ref or (request.args.get("course") if request else None)
@@ -382,7 +385,7 @@ class PoolServer:
         candidates = [c for c in ([store.get(wanted)] if wanted else store.courses_with(repo, tag)) if c]
         for course in candidates:
             task = course.find_task(repo, tag)
-            if task is None or not can(user, role, course, "play"):
+            if task is None or not can(user, role, course, action):
                 continue
             latest = self.repo(repo).latest(tag)
             eff = course_model.effective_n(course, task, latest=latest.n if latest else None)
