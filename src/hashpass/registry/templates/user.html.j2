@@ -1,0 +1,46 @@
+{% extends 'base.html.j2' %}
+{% macro course_cards(rows, role_ru) -%}
+{% for r in rows %}
+<a class='card course-card' href='/c/{{ r.ref }}'>
+<div class='row'><b>{{ r.title }}</b><span class='sp'></span>
+{% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
+{% if r.role %}<span class='pill author sm'>{{ role_ru[r.role] }}</span>{% endif %}</div>
+<div class='mono small'>{{ r.ref }} · заданий: {{ r.tasks }}</div>
+{% if r.description %}<p class='sub small'>{{ r.description }}</p>{% endif %}
+</a>
+{% endfor %}
+{%- endmacro %}
+{% block main %}
+<div class='user-layout'>
+<aside class='user-side card'>
+<div class='avatar' aria-hidden='true'>{{ login[:1] | upper }}</div>
+<h1 class='mono'>{{ login }}</h1>
+<p class='sub small'>курсов: {{ courses | length }} · образов: {{ images | length }}</p>
+{% if may_profile %}<a class='btn sm ghost' href='/web/user/{{ login | q }}'>Прогресс в заданиях</a>{% endif %}
+</aside>
+<section class='user-main'>
+<h2>Курсы</h2>
+{% if courses %}<div class='grid'>{{ course_cards(courses, {'owner': 'владелец', 'maintainer': 'сопровождающий', 'author': 'автор'}) }}</div>
+{% else %}<div class='empty card'><p class='sub'>{% if me %}Вы пока не ведёте курсов.{% else %}Курсов нет.{% endif %}</p></div>{% endif %}
+
+<h2>Образы</h2>
+{% if images %}
+<div class='grid user-images'>
+{% for r in images %}
+<div class='card'>
+<div class='row'><b class='mono'>{{ r.name }}</b><span class='sp'></span>
+{% if r.task %}<span class='pill author sm'>задание</span>{% else %}<span class='pill sm'>образ</span>{% endif %}
+{% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
+{% if r.fork_of %}<span class='pill sm'>форк {{ r.fork_of }}</span>{% endif %}</div>
+<div class='row small'>{% for t in r.tags %}<span><a class='mono' href='/web/image/{{ t.ref | ref_url }}'>{{ r.name }}:{{ t.tag }}</a> <span class='pill sm ver'>версия {{ t.n }}</span></span>{% endfor %}</div>
+</div>
+{% endfor %}
+</div>
+{% else %}<div class='empty card'><p class='sub'>Образов нет.</p></div>{% endif %}
+
+<h2>Используется в курсах</h2>
+{% if used_in %}<div class='grid'>{{ course_cards(used_in, {}) }}</div>
+{% else %}<div class='empty card'><p class='sub'>Задания {{ login }} пока не стоят в чужих курсах.</p></div>{% endif %}
+</section>
+</div>
+{% endblock %}

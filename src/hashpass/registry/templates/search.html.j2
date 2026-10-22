@@ -33,7 +33,7 @@
 {% endfor %}
 {% else %}
 <div class='card'><table>
-{% for p in rows %}<tr><td class='mono'>{% if may_profile %}<a href='/web/user/{{ p.user | q }}'>{{ p.user }}</a>{% else %}{{ p.user }}{% endif %}</td></tr>{% endfor %}
+{% for p in rows %}<tr><td class='mono'><a href='/u/{{ p.user | q }}'>{{ p.user }}</a></td></tr>{% endfor %}
 </table></div>
 {% endif %}
 {% if more %}<p class='sub small'>и ещё {{ more }} — уточните запрос</p>{% endif %}

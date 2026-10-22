@@ -317,3 +317,13 @@ pre.diff{background:var(--surface2);border:1px solid var(--border);border-radius
 .search-bar input[name=q]{flex:1;min-width:0;width:auto}
 .search-side a{gap:12px}
 .search-results .card{margin:0}
+/* user page: the person on the left, their courses/images on the right (GitHub-like) */
+.user-layout{display:grid;grid-template-columns:260px 1fr;gap:24px;align-items:start}
+.user-side{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.user-side h1{margin:4px 0 0;font-size:22px;word-break:break-all}
+.user-side .avatar{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;font-size:40px;font-weight:800;
+  color:var(--accent-ink);background:linear-gradient(135deg,var(--accent),#7aa8ff)}
+.user-main{min-width:0}
+.user-main>h2:first-child{margin-top:0}
+@media (max-width:720px){.user-layout{grid-template-columns:1fr}}
+.user-images .card{margin:0}

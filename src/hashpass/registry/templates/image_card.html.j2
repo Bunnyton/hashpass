@@ -48,7 +48,7 @@
 <tr{% if t == tag and r.n == n %} class='on'{% endif %}><td class='mono'>{{ t }}</td>
 <td class='mono'><a href='/web/image/{{ (repo ~ ":" ~ t ~ "_v" ~ r.n) | ref_url }}'>версия {{ r.n }}</a>{% if loop.first %} <span class='pill sm'>последняя</span>{% endif %}
 {% if r.merged_from %}<span class='sub small'>слияние из {{ r.merged_from }}</span>{% endif %}</td>
-<td>{{ ts(r.at) }}</td><td>{{ r.by }}</td>
+<td>{{ ts(r.at) }}</td><td><a href='/u/{{ r.by | q }}'>{{ r.by }}</a></td>
 <td>{% if owner %}<form class='inline' data-api='DELETE /revisions/{{ repo }}/{{ t }}/{{ r.n }}' data-confirm='Удалить версию {{ r.n }} тега {{ t }}? Если она стоит в чужих курсах, удаление подождёт решения администратора.'><button class='sm ghost' type='submit'>удалить</button></form>{% endif %}</td></tr>
 {% endfor %}{% endfor %}
 </table>

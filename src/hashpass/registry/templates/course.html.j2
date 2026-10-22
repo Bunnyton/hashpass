@@ -9,7 +9,7 @@
 <div class='card-hero'>
 <h1>{{ c.title }}</h1>
 <div class='row'>
-<span class='mono'>{{ c.ref }}</span>
+{% set ref_parts = c.ref.split('/', 1) %}<span class='mono'><a href='/u/{{ ref_parts[0] | q }}'>{{ ref_parts[0] }}</a>/{{ ref_parts[1] }}</span>
 {% if c.visibility == 'private' %}<span class='pill closed'>приватный</span>{% else %}<span class='pill open'>публичный</span>{% endif %}
 {% if c.role %}<span class='pill author'>{{ role_ru[c.role] }}</span>{% endif %}
 </div>

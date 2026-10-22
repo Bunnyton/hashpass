@@ -8,6 +8,7 @@ Each kind shows only what the viewer may see: courses by `view`, images by repos
 visibility. Users are found by login by anyone; their comment is private (user 2026-10-22:
 «виден только при работе с курсом») -- never shown or searched here.
 """
+from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
 
 _LIMIT = 200
+_STAFF_ROLES = ("owner", "maintainer", "author")   # a student's own enrolments stay private
 _KINDS = (("users", "Пользователи"), ("courses", "Курсы"), ("images", "Образы"))
 
 
@@ -33,6 +35,38 @@ class SearchWeb:
 
     def register(self, app: Flask) -> None:
         app.add_url_rule("/search", "web_search", self.search, methods=["GET"])
+        app.add_url_rule("/u/<login>", "web_user_page", self.user_page, methods=["GET"])
+
+    def user_page(self, login: str) -> Response:
+        """
+        Show a user's page, GitHub-like (user 2026-10-22).
+
+        Courses they run, their images, and courses where their tasks are used -- each only as
+        far as the viewer may see (a private course or image only to who has access). The
+        private comment is not shown here.
+        """
+        user = self.server._session_user()          # noqa: SLF001  (same package)
+        role = self.server.users.role(user) if user else None
+        if not self.server.users.has(login):
+            return self.server._html(_env.get_template("search.html.j2").render(  # noqa: SLF001
+                title="Нет такого пользователя — hashpass", nav=True, active="/search", q=login,
+                kind="users", kinds=[], rows=[], more=0, may_profile=False),
+                status=HTTPStatus.NOT_FOUND)
+        viewable = [c for c in self.server.course_api.courses.all() if can(user, role, c, "view")]
+        runs = [c for c in viewable if c.role_of(login) in _STAFF_ROLES]
+        mine = {c.ref for c in runs}
+        prefix = f"{login}/"
+        used = [c for c in viewable if c.ref not in mine
+                and any(str(t["repo"]).startswith(prefix) for _b, t in c.tasks())]
+        api = self.server.course_api
+        row = lambda c: api._summary(c, login) | {"tasks": sum(1 for _ in c.tasks())}  # noqa: E731, SLF001
+        html = _env.get_template("user.html.j2").render(
+            title=f"{login} — hashpass", nav=True, active="", login=login,
+            courses=sorted((row(c) for c in runs), key=lambda r: r["ref"]),
+            used_in=sorted((row(c) | {"role": None} for c in used), key=lambda r: r["ref"]),
+            images=self._images(user, "", owner=login),
+            may_profile=role in ("author", "admin"), me=user == login)
+        return self.server._html(html)               # noqa: SLF001
 
     def search(self) -> Response:
         user = self.server._session_user()          # noqa: SLF001  (same package)
@@ -62,10 +96,10 @@ class SearchWeb:
             rows.append(api._summary(course, user) | {"tasks": sum(1 for _ in course.tasks())})  # noqa: SLF001
         return sorted(rows, key=lambda r: (r["role"] is None, r["ref"]))
 
-    def _images(self, user: str | None, q: str) -> list[dict]:
+    def _images(self, user: str | None, q: str, *, owner: str = "*") -> list[dict]:
         root = Path(self.server.store.root) / ".repos"
         rows = []
-        for index in sorted(root.glob("*/*/repo.json")) if root.is_dir() else []:
+        for index in sorted(root.glob(f"{owner}/*/repo.json")) if root.is_dir() else []:
             name = f"{index.parent.parent.name}/{index.parent.name}"
             if q.casefold() not in name.casefold() or not self.server._may_see_repo(user, name):  # noqa: SLF001
                 continue
