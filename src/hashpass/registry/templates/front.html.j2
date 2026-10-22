@@ -1,25 +1,11 @@
 {% extends 'base.html.j2' %}
+{% from '_install.html.j2' import install_steps %}
 {% block main %}
 <div class='hero'>
 <span class='pill accent'>учебный пул</span>
 <h1>Интерактивные задания по Linux</h1>
 <p class='sub'>Живая консоль Debian, автоматическая проверка каждого шага. Подготовьте систему и запустите установщик:</p>
-{%- for pm, _label, _cmds in prepare %}
-<input class='pm-r' type='radio' name='pm' id='pm-{{ pm }}'{% if loop.first %} checked{% endif %}>
-{%- endfor %}
-<div class='seg' role='group' aria-label='Пакетный менеджер'>
-{%- for pm, label, _cmds in prepare %}
-<label for='pm-{{ pm }}'>{{ label }}</label>
-{%- endfor %}
-</div>
-{%- for pm, _label, cmds in prepare %}
-<ol class='steps {{ "pm-" ~ pm }}'>
-{%- for cmd in cmds %}
-<li><span class='step-n'>{{ loop.index }}</span><div class='cmd'><span class='prompt'>$</span><code>{{ cmd }}</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div></li>
-{%- endfor %}
-<li><span class='step-n'>{{ cmds|length + 1 }}</span><div class='cmd'><span class='prompt'>$</span><code>curl {{ flags }} {{ url }}/install.sh | bash</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div></li>
-</ol>
-{%- endfor %}
+{{ install_steps(prepare, flags, url) }}
 <a class='btn ghost' href='/web/login'>Вход для преподавателя</a>
 </div>
 <script src='/static/copy.js'></script>

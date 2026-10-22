@@ -11,21 +11,34 @@
 {% block head %}{% endblock %}
 </head>
 <body data-tz='{{ viewer_tz() }}'>
+<a class='skip-link' href='#main'>К содержимому</a>
 {%- if nav %}
-<div class='nav'><span class='brand'><span class='logo'></span>hash<b>pass</b></span>
+<header class='nav'>
+<a class='brand' href='/' aria-label='hashpass — на главную'><span class='logo' aria-hidden='true'></span>hash<b>pass</b></a>
+<nav class='nav-main' aria-label='Разделы'>
 {%- if courses_on() %}
-<a href='/c'{% if active == '/c' %} class='on'{% endif %}>Курсы</a>
-{%- endif %}
+<a href='/c'{% if active == '/c' %} class='on' aria-current='page'{% endif %}>Курсы</a>
+{%- else %}
 {%- if viewer_is_staff() %}
-<a href='/web'{% if active == '/web' %} class='on'{% endif %}>Прогресс</a>
-<a href='/web/images'{% if active == '/web/images' %} class='on'{% endif %}>Образы и каталог</a>
+<a href='/web'{% if active == '/web' %} class='on' aria-current='page'{% endif %}>Прогресс</a>
+<a href='/web/images'{% if active == '/web/images' %} class='on' aria-current='page'{% endif %}>Образы и каталог</a>
+{%- endif %}
 {%- endif %}
 {%- if viewer_is_admin() %}
-<a href='/web/users'{% if active == '/web/users' %} class='on'{% endif %}>Пользователи</a>
+<a href='/web/users'{% if active == '/web/users' %} class='on' aria-current='page'{% endif %}>Пользователи</a>
 {%- endif %}
-<span class='sp'></span>{% if courses_on() and active != '/search' %}<form class='nav-search' method='get' action='/search' role='search'><input name='q' placeholder='Поиск' aria-label='Поиск по пользователям, курсам и образам'></form>{% endif %}<a href='/web/settings'{% if active == '/web/settings' %} class='on'{% endif %}>Настройки</a><a href='/web/logout'>Выход</a></div>
+</nav>
+<span class='sp'></span>
+{%- if courses_on() and active not in ('/search', '/') %}
+<form class='nav-search' method='get' action='/search' role='search'><input type='search' name='q' placeholder='Поиск' aria-label='Поиск: пользователи, курсы, задания, образы'></form>
 {%- endif %}
-<main>{% block main %}{% endblock %}</main>
+{%- if viewer_login() %}
+<a class='me{% if active == "/u/" ~ viewer_login() %} on{% endif %}' href='/u/{{ viewer_login() | q }}'{% if active == "/u/" ~ viewer_login() %} aria-current='page'{% endif %}><span class='avatar xs' aria-hidden='true'>{{ viewer_login()[:1] | upper }}</span><span class='me-name'>{{ viewer_login() }}</span></a>
+{%- endif %}
+{%- if viewer_login() %}<a class='logout' href='/web/logout'>Выход</a>{% else %}<a class='btn sm' href='/web/login'>Войти</a>{% endif %}
+</header>
+{%- endif %}
+<main id='main' tabindex='-1'>{% block main %}{% endblock %}</main>
 <script src='/static/time.js'></script>
 <script src='/static/sort.js'></script>
 </body></html>

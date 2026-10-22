@@ -66,10 +66,10 @@ def test_deleted_admins_web_cookie_stops_working(registry):
                          data={"user": "admin", "password": "pass123!"})
     cookie = headers["Set-Cookie"].split(";")[0]
     # sanity: /web works with the cookie
-    assert _req(opener, "GET", f"{registry.base_url}/web", cookie=cookie)[0] == HTTPStatus.OK
+    assert _req(opener, "GET", f"{registry.base_url}/web/users", cookie=cookie)[0] == HTTPStatus.OK
     # the OTHER admin deletes them
     registry.users.delete("admin")
     # cookie is still cryptographically valid, but the account is gone -> redirect to login
-    status, redir_headers, _ = _req(opener, "GET", f"{registry.base_url}/web", cookie=cookie)
+    status, redir_headers, _ = _req(opener, "GET", f"{registry.base_url}/web/users", cookie=cookie)
     assert status == HTTPStatus.SEE_OTHER
     assert redir_headers["Location"] == "/web/login"

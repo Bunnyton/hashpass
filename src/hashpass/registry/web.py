@@ -33,6 +33,7 @@ _env.globals["viewer_tz"] = lambda: str(getattr(g, "hp_tz", "")) if has_request_
 _env.globals["viewer_is_staff"] = (lambda: bool(getattr(g, "hp_staff", True))
                                    if has_request_context() else True)
 _env.globals["courses_on"] = lambda: os.environ.get("HASHPASS_COURSES") == "1"
+_env.globals["viewer_login"] = lambda: str(getattr(g, "hp_user", "") or "") if has_request_context() else ""
 
 
 def safe_id(text: str) -> str:
@@ -88,6 +89,17 @@ def version_ref(ref: object) -> Markup:
 
 
 _env.filters["ver"] = version_ref
+
+
+def plural(n: object, one: str, few: str, many: str) -> str:
+    """Return «N word» with the Russian plural form: 1 курс, 3 курса, 5 курсов."""
+    k = int(n or 0)
+    tail = k % 100
+    word = many if 11 <= tail <= 14 else {1: one, 2: few, 3: few, 4: few}.get(k % 10, many)  # noqa: PLR2004
+    return f"{k} {word}"
+
+
+_env.filters["plural"] = plural
 
 
 _INSTALL_TEMPLATE = """\
@@ -662,7 +674,7 @@ def _profile_row(user: str, number: object, ref: str, record: dict | None,
 
 
 def render_profile(profile: dict, entries: list[dict], progress: dict[str, dict],
-                   sessions: dict[str, list[dict]]) -> str:
+                   sessions: dict[str, list[dict]], *, course: dict | None = None) -> str:
     """
     One user's page: who they are + every catalog task with status, tries, time and links.
 
@@ -678,8 +690,10 @@ def render_profile(profile: dict, entries: list[dict], progress: dict[str, dict]
     rows += [_profile_row(user, None, ref, progress.get(ref), list(sessions.get(ref) or []))
              for ref in extra]
     passed = sum(1 for r in rows[:len(entries)] if r["cell"]["mark"].startswith("✓"))
+    if course is not None:                   # a student inside one course: only its tasks
+        rows = rows[:len(entries)]
     return _env.get_template("profile.html.j2").render(
-        title=f"{user} — hashpass", nav=True, active="/web",
+        title=f"{user} — hashpass", nav=True, active="/c" if course else "/web", course=course,
         p={"user": user, "role": str(profile.get("role", "")),
            "group": str(profile.get("group", "")), "comment": str(profile.get("comment", "")),
            "created_at": profile.get("created_at") or None},

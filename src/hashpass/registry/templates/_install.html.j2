@@ -1,0 +1,19 @@
+{# The «prepare the system + run install.sh» steps (apt/pacman tabs), shared by the front pages. #}
+{% macro install_steps(prepare, flags, url) -%}
+{%- for pm, _label, _cmds in prepare %}
+<input class='pm-r' type='radio' name='pm' id='pm-{{ pm }}'{% if loop.first %} checked{% endif %}>
+{%- endfor %}
+<div class='seg' role='group' aria-label='Пакетный менеджер'>
+{%- for pm, label, _cmds in prepare %}
+<label for='pm-{{ pm }}'>{{ label }}</label>
+{%- endfor %}
+</div>
+{%- for pm, _label, cmds in prepare %}
+<ol class='steps {{ "pm-" ~ pm }}'>
+{%- for cmd in cmds %}
+<li><span class='step-n'>{{ loop.index }}</span><div class='cmd'><span class='prompt'>$</span><code>{{ cmd }}</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div></li>
+{%- endfor %}
+<li><span class='step-n'>{{ cmds|length + 1 }}</span><div class='cmd'><span class='prompt'>$</span><code>curl {{ flags }} {{ url }}/install.sh | bash</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div></li>
+</ol>
+{%- endfor %}
+{%- endmacro %}

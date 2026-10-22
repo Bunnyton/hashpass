@@ -87,7 +87,6 @@ def test_users_toggle_and_inline_controls():
     assert "/web/users/role" in html          # inline per-user role change
     assert "/web/users/reset" in html         # per-user reset link
     assert "ссылка сброса" in html
-    assert "/web/users/delete-group" in html  # delete a whole group
 
 
 @pytest.mark.tier1

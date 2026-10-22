@@ -31,7 +31,7 @@ def test_ts_html_is_utc_iso_for_the_browser_to_localise():
 def test_users_page_links_logins_to_profiles_and_is_sortable():
     html = render_users([{"user": "s 1", "role": "student", "group": "G", "comment": "c",
                           "created_at": 0.0}], registration_open=True)
-    assert "href='/web/user/s%201'" in html
+    assert "href='/u/s%201'" in html
     assert "class='wide sortable'" in html
     assert "<thead>" in html
     assert "/static/sort.js" in html
@@ -70,8 +70,8 @@ def test_profile_lists_every_catalog_task_with_status_attempts_and_times():
                               {"started": 1_699_000_000, "updated": 1_699_000_060,
                                "final": "abandoned"}]}
     html = render_profile(profile, _ENTRIES, progress, sessions)
-    assert "Иван" in html and "G1" in html
-    assert "1/2" in html                                     # passed / catalog tasks
+    assert "Иван" in html                                   # the private comment, to staff
+    assert "1 / 2" in html                                     # passed / catalog tasks
     assert "href='/web/image/lab/one:1'" in html             # task name -> card
     assert "href='/web/history?user=s1&amp;ref=lab%2Fone%3A1'" in html
     assert "datetime='2026-10-21T10:00:00Z'" in html         # credited at
@@ -111,11 +111,11 @@ def test_settings_time_zone_is_per_viewer_and_reaches_every_page(registry):
     assert "data-tz=''" in body                               # default: the browser's zone
     _req(opener, "POST", f"{registry.base_url}/web/settings/tz", cookie=cookie,
          data={"tz": "Asia/Tokyo"})
-    _, _, body = _req(opener, "GET", f"{registry.base_url}/web", cookie=cookie)
+    _, _, body = _req(opener, "GET", f"{registry.base_url}/c", cookie=cookie)
     assert "data-tz='Asia/Tokyo'" in body
     _req(opener, "POST", f"{registry.base_url}/web/settings/tz", cookie=cookie,
          data={"tz": "Not/AZone"})                            # junk is refused, setting kept
-    _, _, body = _req(opener, "GET", f"{registry.base_url}/web", cookie=cookie)
+    _, _, body = _req(opener, "GET", f"{registry.base_url}/c", cookie=cookie)
     assert "data-tz='Asia/Tokyo'" in body
 
 

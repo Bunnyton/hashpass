@@ -16,11 +16,6 @@
 <button class='sm' type='submit'>{{ 'Выключить' if pool_auto else 'Включить' }}</button>
 </form>
 </div></div>
-<div class='card'><form class='inline row' method='post' action='/web/users/delete-group'>
-<span>Удалить группу целиком:</span>
-<input name='group' placeholder='ИУ7-31' style='width:auto'>
-<button class='sm ghost' type='submit'>Удалить группу</button>
-</form></div>
 {% if deletions %}
 <h2>Запросы на удаление версий</h2>
 <div class='card'><table>
@@ -36,22 +31,16 @@
 {% endif %}
 <h2>Все пользователи</h2>
 <form class='row search' method='get' action='/web/users'>
-<input name='q' value='{{ q }}' placeholder='поиск по логину или комментарию (например, группе ИТ-21)'>
+<input type='search' name='q' value='{{ q }}' placeholder='поиск по логину или приватному комментарию (например, ИТ-21)' aria-label='Поиск пользователей'>
 <button class='ghost' type='submit'>Найти</button>{% if q %}<a class='btn ghost sm' href='/web/users'>сбросить</a>{% endif %}
 </form>
-<p class='sub small'>Группа и комментарий редактируются кликом по ячейке (Enter/уход из поля — сохраняет). Не отображаются студентам.</p>
-<p class='sub small'>Клик по заголовку столбца — сортировка (повторный — в обратную сторону). Логин открывает профиль с прогрессом.</p>
+<p class='sub small'>Приватный комментарий редактируется кликом по ячейке (Enter или уход из поля — сохраняет). Его видят только админ и преподаватели курсов, где учится человек.</p>
+<p class='sub small'>Клик по заголовку столбца — сортировка (повторный — в обратную сторону). Логин открывает страницу пользователя.</p>
 <table class='wide sortable'>
-<thead><tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Приватный комментарий</th><th>Создан</th><th data-nosort>Изменить роль</th><th>Авто-одобрение</th><th data-nosort>Пароль</th><th data-nosort>Удалить</th></tr></thead>
+<thead><tr><th>Логин</th><th>Роль</th><th>Приватный комментарий</th><th>Создан</th><th data-nosort>Изменить роль</th><th>Авто-одобрение</th><th data-nosort>Пароль</th><th data-nosort>Удалить</th></tr></thead>
 <tbody>
 {% if rows %}{% for r in rows %}
-<tr><td class='mono'><a href='/web/user/{{ r.user_q }}'>{{ r.user }}</a></td>
-<td>
-<form class='inline user-edit' method='post' action='/web/users/group'>
-<input type='hidden' name='user' value='{{ r.user }}'>
-<input name='group' value='{{ r.group }}' placeholder='—' class='inline-edit' style='width:9em' maxlength='64'>
-</form>
-</td>
+<tr><td class='mono'><a href='/u/{{ r.user_q }}'>{{ r.user }}</a></td>
 <td data-sort='{{ {'admin': 'a', 'author': 'b', 'student': 'c'}.get(r.role, r.role) }}'><span class='pill {{ r.role }}'>{{ r.role }}</span></td>
 <td>
 <form class='inline user-edit' method='post' action='/web/users/comment'>
@@ -84,7 +73,7 @@
 </form>
 {% endif %}</td>
 </tr>
-{% endfor %}{% else %}<tr><td colspan=9 class=dim>нет пользователей</td></tr>{% endif %}
+{% endfor %}{% else %}<tr><td colspan=8 class=dim>нет пользователей</td></tr>{% endif %}
 </tbody>
 </table>
 <script src='/static/users.js'></script>

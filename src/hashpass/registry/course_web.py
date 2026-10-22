@@ -11,7 +11,7 @@ from urllib.parse import quote
 from flask import Flask, Response, request
 
 from hashpass.registry.access import can
-from hashpass.registry.web import _env
+from hashpass.registry.web import _env, render_profile
 
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
@@ -43,6 +43,26 @@ class CourseWeb:
     def register(self, app: Flask) -> None:
         app.add_url_rule("/c", "web_courses", self.courses, methods=["GET"])
         app.add_url_rule("/c/<owner>/<name>", "web_course", self.course, methods=["GET"])
+        app.add_url_rule("/c/<owner>/<name>/u/<login>", "web_course_student", self.student, methods=["GET"])
+
+    def student(self, owner: str, name: str, login: str) -> Response:
+        """One student inside a course: its tasks with status, tries, time -- the course's staff."""
+        user, role = self._viewer()
+        course = self.server.course_api.courses.get(f"{owner}/{name}")
+        if course is None or not self.server.users.has(login):
+            return self.server._empty(HTTPStatus.NOT_FOUND)                     # noqa: SLF001
+        if user is None:
+            return self.server._redirect(f"/web/login?next={quote(request.path, safe='')}")  # noqa: SLF001
+        if not can(user, role, course, "add"):
+            return self.server._empty(HTTPStatus.FORBIDDEN)                     # noqa: SLF001
+        entries = [{"ref": f"{t['repo']}:{t['tag']}", "number": i}
+                   for i, (_b, t) in enumerate(course.tasks(), 1)]
+        attempts = self.server.attempts()
+        attempts.prune(login)
+        return self.server._html(render_profile(                                 # noqa: SLF001
+            self.server.users.get(login) or {"user": login}, entries,
+            self.server.progress().get(login), attempts.by_task(login),
+            course={"ref": course.ref, "title": course.title}))
 
     def _viewer(self) -> tuple[str | None, str | None]:
         user = self.server._session_user()          # noqa: SLF001  (same package)
@@ -94,7 +114,12 @@ class CourseWeb:
             progress = self.server.progress().get(student)
             done = [r for r in refs if (progress.get(r) or {}).get("status") == "passed"]
             profile = self.server.users.get(student) or {}
+            cells = []
+            for i, r in enumerate(refs, 1):
+                status = (progress.get(r) or {}).get("status", "")
+                mark, word = ("✓", "решено") if status == "passed" else (("◐", "начато") if status else ("·", "не начато"))
+                cells.append({"n": i, "ref": r, "mark": mark, "word": word, "cls": status or "none"})
             rows.append({"user": student, "comment": profile.get("comment", ""),
                          "done": len(done), "total": len(refs),
-                         "cells": [(r, (progress.get(r) or {}).get("status", "")) for r in refs]})
-        return rows
+                         "pct": round(100 * len(done) / len(refs)) if refs else 0, "cells": cells})
+        return sorted(rows, key=lambda r: (-r["done"], r["user"]))

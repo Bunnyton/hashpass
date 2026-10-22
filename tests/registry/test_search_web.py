@@ -18,7 +18,7 @@ def test_search_finds_courses_and_images_a_viewer_may_see(pool: _Courses) -> Non
     assert pool.call("PUT", "/revisions/bob/solo", "bob", {"visibility": "private"})[0] == 200  # noqa: PLR2004
     status, html = _page(_browser(pool, "eve"), f"{pool.url}/search?q=git")
     assert status == 200  # noqa: PLR2004
-    assert _tabs(html) == {"users": 0, "courses": 0, "images": 1}
+    assert _tabs(html) == {"users": 0, "courses": 0, "tasks": 1, "images": 0}   # a task apart from images
     assert "bob/git-init" in html and "версия 1" in html
     html = _page(_browser(pool, "eve"), f"{pool.url}/search?q=bob&type=courses")[1]
     assert "/c/bob/linux" in html and "/c/bob/closed" not in html  # a private course stays hidden

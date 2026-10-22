@@ -1,30 +1,36 @@
 {% extends 'base.html.j2' %}
 {% block main %}
-<p class='crumb'><a href='/web'>← Прогресс</a>{% if viewer_is_admin() %} · <a href='/web/users'>← Пользователи</a>{% endif %}</p>
-<h1>{{ p.user }}</h1>
-<div class='flags'>
-<span class='pill {{ p.role }}'>{{ p.role }}</span>
-{% if p.group %}<a class='pill' href='/web?group={{ p.group|q }}'>{{ p.group }}</a>{% endif %}
-<span class='pill ok'>зачтено: {{ passed }}/{{ total }}</span>
-{% if p.created_at %}<span class='pill'>создан: {{ ts(p.created_at) }}</span>{% endif %}
+<nav class='crumb' aria-label='Путь'>{% if course %}<a href='/c/{{ course.ref }}'>← {{ course.title or course.ref }}</a> · <a href='/c/{{ course.ref }}#students'>студенты</a>{% else %}<a href='/web'>← Прогресс</a>{% if viewer_is_admin() %} · <a href='/web/users'>пользователи</a>{% endif %}{% endif %}</nav>
+<div class='card-hero student-hero'>
+<div class='row'>
+<span class='avatar' aria-hidden='true'>{{ p.user[:1] | upper }}</span>
+<div class='grow'>
+<h1 class='mono'><a href='/u/{{ p.user | q }}'>{{ p.user }}</a></h1>
+{% if p.comment %}<p class='sub small'><span class='dim'>приватный комментарий:</span> {{ p.comment }}</p>{% endif %}
 </div>
-{% if p.comment %}<p class='sub'>{{ p.comment }}</p>{% endif %}
-<h2>Прогресс по заданиям</h2>
-<p class='sub small'>Клик по названию — карточка задания, по статусу — история команд и попыток. Заголовки столбцов сортируют.</p>
+</div>
+{% set pct = (100 * passed / total) | round | int if total else 0 %}
+<div class='progress lg' role='progressbar' aria-valuemin='0' aria-valuemax='{{ total }}' aria-valuenow='{{ passed }}' aria-label='решено {{ passed }} из {{ total }}'><span style='width:{{ pct }}%'></span></div>
+<p class='small'><b>{{ passed }} / {{ total }}</b> <span class='dim'>решено{% if course %} в курсе{% endif %} · {{ pct }}%</span>{% if p.created_at %} <span class='dim'>· на пуле с {{ ts(p.created_at) }}</span>{% endif %}</p>
+</div>
+<h2>Задания</h2>
+<p class='sub small'>Название — карточка задания, статус — история команд и попыток. Заголовки столбцов сортируют.</p>
+<div class='table-wrap card'>
 <table class='sortable'>
-<thead><tr><th>№</th><th>Задание</th><th>Статус</th><th>Попыток</th><th>Время в консоли</th><th>Последняя активность</th><th>Зачтено</th></tr></thead>
+<thead><tr><th scope='col'>№</th><th scope='col'>Задание</th><th scope='col'>Статус</th><th scope='col'>Попыток</th><th scope='col'>Время в консоли</th><th scope='col'>Последняя активность</th><th scope='col'>Решено</th></tr></thead>
 <tbody>
 {% for r in rows %}
-<tr><td class='c' data-sort='{{ r.number if r.number != "" else "" }}'>{{ r.number if r.number != "" else "вне каталога" }}</td>
+<tr><td class='c' data-sort='{{ r.number if r.number != "" else "" }}'>{{ r.number if r.number != "" else "—" }}</td>
 <td class='mono'><a href='/web/image/{{ r.ref_url }}'>{{ r.ref }}</a></td>
 <td class='{{ r.cell.cls }}' data-sort='{{ r.cell.rank }}'>{% if r.cell.href %}<a href='{{ r.cell.href }}' title='{{ r.cell.title }}'>{{ r.cell.mark }} {{ r.status }}</a>{% else %}<span class='dim'>· {{ r.status }}</span>{% endif %}</td>
-<td class='c'>{{ r.tries }}</td>
-<td class='c' data-sort='{{ r.spent_s }}'>{{ r.spent }}</td>
+<td class='c num'>{{ r.tries }}</td>
+<td class='c num' data-sort='{{ r.spent_s }}'>{{ r.spent }}</td>
 <td data-sort='{{ (r.last or 0)|int }}'>{{ ts(r.last) }}</td>
 <td data-sort='{{ r.passed_s|int }}'>{{ ts(r.passed_at) }}</td></tr>
 {% else %}
-<tr><td colspan=7 class='dim'>каталог пуст</td></tr>
+<tr><td colspan=7 class='dim'>заданий нет</td></tr>
 {% endfor %}
 </tbody>
 </table>
+</div>
 {% endblock %}

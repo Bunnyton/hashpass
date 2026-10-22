@@ -1,19 +1,25 @@
 {% extends 'base.html.j2' %}
+{% from '_files.html.j2' import icon %}
 {% macro act(method, path, label, cls='menu-item', fields={}, confirm='', then='') -%}
 <form class='inline' data-api='{{ method }} {{ path }}'{% if confirm %} data-confirm='{{ confirm }}'{% endif %}{% if then %} data-then='{{ then }}'{% endif %}>
 {%- for k, v in fields.items() %}<input type='hidden' name='{{ k }}' value='{{ v }}'{% if v is sameas true or v is sameas false %} data-type='bool'{% elif v is number %} data-type='int'{% endif %}>{% endfor -%}
 <button class='{{ cls }}' type='submit'>{{ label }}</button></form>
 {%- endmacro %}
 {% block main %}
-<p class='crumb'><a href='/c'>← Курсы</a></p>
-<div class='card-hero'>
+<nav class='crumb' aria-label='Путь'><a href='/c'>← Курсы</a></nav>
+{% set ref_parts = c.ref.split('/', 1) %}
+{% set n_tasks = (c.blocks or []) | map(attribute='tasks') | map('length') | sum %}
+<div class='card-hero course-hero'>
+<div class='row hero-kind'><span class='kind kind-course'>{{ icon('course') }} курс</span>
+{% if c.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% else %}<span class='pill open sm'>публичный</span>{% endif %}
+{% if c.role %}<span class='pill author sm'>{{ role_ru[c.role] }}</span>{% endif %}</div>
 <h1>{{ c.title }}</h1>
-<div class='row'>
-{% set ref_parts = c.ref.split('/', 1) %}<span class='mono'><a href='/u/{{ ref_parts[0] | q }}'>{{ ref_parts[0] }}</a>/{{ ref_parts[1] }}</span>
-{% if c.visibility == 'private' %}<span class='pill closed'>приватный</span>{% else %}<span class='pill open'>публичный</span>{% endif %}
-{% if c.role %}<span class='pill author'>{{ role_ru[c.role] }}</span>{% endif %}
+{% if c.description %}<p class='lead'>{{ c.description }}</p>{% endif %}
+<div class='row hero-meta'>
+<a class='owner' href='/u/{{ ref_parts[0] | q }}'><span class='avatar xs' aria-hidden='true'>{{ ref_parts[0][:1] | upper }}</span><span class='mono'>{{ ref_parts[0] }}</span></a><span class='mono dim'>/ {{ ref_parts[1] }}</span>
+{% if c.blocks is defined %}<span class='dim'>·</span><span class='small'>{{ n_tasks | plural('задание', 'задания', 'заданий') }} в {{ (c.blocks | length) | plural('блоке', 'блоках', 'блоках') }}</span>{% endif %}
+{% if may.add %}<span class='dim'>·</span><a class='small' href='#students'>{{ students | length | plural('студент', 'студента', 'студентов') }}</a>{% endif %}
 </div>
-{% if c.description %}<p class='sub'>{{ c.description }}</p>{% endif %}
 </div>
 
 <div class='card'>
@@ -90,7 +96,7 @@
 {% for t in b.tasks %}
 <li class='titem{% if t.hidden %} task-hidden{% endif %}' data-ref='{{ t.ref }}'>
 {% if may.moderate %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
-<a class='mono ref' href='/web/image/{{ t.revision | ref_url }}'>{{ t.revision | ver }}</a>
+{% set rp = t.revision.rpartition('_v') %}<span class='tref'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span></span>
 {% if t.pinned %}<span class='pill sm'>закреплено</span>{% endif %}
 {% if t.hidden %}<span class='pill closed sm'>скрыто</span>{% endif %}
 {% if t.latest and t.latest > t.n %}<span class='pill warn sm'>есть версия {{ t.latest }}</span>{% endif %}
@@ -173,14 +179,34 @@
 </div>
 {% endif %}
 
-{% if may.add and students %}
-<h2 id='students'>Студенты</h2>
-<div class='card'><table class='sortable'>
-<tr><th>Кто</th><th>Приватный комментарий</th><th class='c'>Решено</th></tr>
+{% if may.add %}
+<section aria-labelledby='students'>
+<div class='cat-head'><h2 id='students'>Студенты <span class='count-pill'>{{ students | length }}</span></h2></div>
+{% if students %}
+<div class='card'>
+<div class='row students-tools'>
+<label class='visually-hidden' for='student-q'>Найти студента</label>
+<input id='student-q' type='search' placeholder='найти по логину или приватному комментарию' data-filter='#student-rows tr'>
+<span class='sub small legend'><span class='cell passed'>✓</span> решено <span class='cell started'>◐</span> начато <span class='cell none'>·</span> не начато</span>
+</div>
+<div class='table-wrap'>
+<table class='sortable students'>
+<thead><tr><th scope='col'>Студент</th><th scope='col'>Прогресс</th><th scope='col' data-nosort>По заданиям</th></tr></thead>
+<tbody id='student-rows'>
 {% for s in students %}
-<tr><td><a href='/web/user/{{ s.user | q }}'>{{ s.user }}</a></td><td class='sub small'>{{ s.comment }}</td><td class='c'>{{ s.done }} / {{ s.total }}</td></tr>
+<tr data-text='{{ s.user }} {{ s.comment }}'>
+<td><a class='mono' href='/c/{{ c.ref }}/u/{{ s.user | q }}'>{{ s.user }}</a>{% if s.comment %}<div class='sub small'>{{ s.comment }}</div>{% endif %}</td>
+<td data-sort='{{ s.done }}'><div class='progress' role='progressbar' aria-valuemin='0' aria-valuemax='{{ s.total }}' aria-valuenow='{{ s.done }}' aria-label='решено {{ s.done }} из {{ s.total }}'><span style='width:{{ s.pct }}%'></span></div><span class='small num'>{{ s.done }} / {{ s.total }}</span></td>
+<td><div class='cells'>{% for x in s.cells %}<span class='cell {{ x.cls }}' title='№{{ x.n }} {{ x.ref }} — {{ x.word }}'>{{ x.mark }}</span>{% endfor %}</div></td>
+</tr>
 {% endfor %}
-</table></div>
+</tbody>
+</table>
+</div>
+<p class='sub small'>Логин — задания студента в этом курсе: попытки, время, история команд.</p>
+</div>
+{% else %}<div class='empty card'><p class='sub'>Курс пока никто не проходит. Поделитесь ссылкой: <code class='copy'>{{ link }}</code></p></div>{% endif %}
+</section>
 {% endif %}
 
 {% if may.admin %}
@@ -202,5 +228,6 @@
 {% endif %}
 {% endif %}
 <script src='/static/api.js'></script>
+<script src='/static/filter.js'></script>
 {% if may.moderate %}<script src='/static/catalog.js'></script>{% endif %}
 {% endblock %}

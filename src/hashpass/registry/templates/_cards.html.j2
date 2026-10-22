@@ -1,0 +1,36 @@
+{# Shared cards for the people/search pages: a course, a repository (task or image). #}
+{% from '_files.html.j2' import icon %}
+
+{% macro course_card(r, role_ru) -%}
+<a class='card item-card course-card' href='/c/{{ r.ref }}'>
+<div class='item-head'><span class='kind kind-course'>{{ icon('course') }} курс</span>
+{% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
+{% if r.role %}<span class='pill author sm'>{{ role_ru[r.role] }}</span>{% endif %}</div>
+<b class='item-title'>{{ r.title or r.ref }}</b>
+<div class='mono small dim'>{{ r.ref }} · {{ r.tasks | plural('задание', 'задания', 'заданий') }}</div>
+{% if r.description %}<p class='sub small clamp'>{{ r.description }}</p>{% endif %}
+</a>
+{%- endmacro %}
+
+{% macro repo_card(r) -%}
+<article class='card item-card'>
+<div class='item-head'>
+{% if r.task %}<span class='kind kind-task'>{{ icon('task') }} задание</span>{% else %}<span class='kind kind-image'>{{ icon('image') }} образ</span>{% endif %}
+{% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
+{% if r.fork_of %}<span class='pill sm'>форк {{ r.fork_of }}</span>{% endif %}
+</div>
+<a class='item-title mono' href='/web/image/{{ r.tags[0].ref | ref_url }}'>{{ r.name }}</a>
+{% if r.about %}<p class='sub small clamp'>{{ r.about }}</p>{% else %}<p class='sub small dim'>без описания</p>{% endif %}
+<div class='item-tags'>{% for t in r.tags %}<a class='tagchip' href='/web/image/{{ t.ref | ref_url }}' title='тег {{ t.tag }}, последняя версия {{ t.n }}'><span class='mono'>:{{ t.tag }}</span> <span class='ver'>· версия {{ t.n }}</span></a>{% endfor %}</div>
+</article>
+{%- endmacro %}
+
+{% macro place_card(u) -%}
+<a class='card item-card course-card' href='/c/{{ u.course }}'>
+<div class='item-head'><span class='kind kind-course'>{{ icon('course') }} курс</span>
+{% if u.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}</div>
+<b class='item-title'>{{ u.title or u.course }}</b>
+<div class='mono small dim'>{{ u.course }}</div>
+<ul class='uses'>{% for i in u['items'] | unique %}<li class='mono small'>{{ i }}</li>{% endfor %}</ul>
+</a>
+{%- endmacro %}

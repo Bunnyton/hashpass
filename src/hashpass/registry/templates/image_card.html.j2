@@ -3,12 +3,19 @@
 {% block main %}
 <p class='crumb'>{% if courses_era %}<a href='/c'>← Курсы</a>{% else %}<a href='/web/images'>← Каталог</a>{% endif %}</p>
 <div class='card-hero'>
+<div class='row hero-kind'>
+{% if image.kind == 'task' %}<span class='kind kind-task'>{{ icon('task') }} задание</span>{% else %}<span class='kind kind-image'>{{ icon('image') }} образ</span>{% endif %}
+{% if repo_info and repo_info.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
+</div>
 <h1 class='mono ref-title'>{{ image.ref | ver }}</h1>
+{% if image.about[0] or image.about[1] %}<p class='lead'>{{ image.about[0] or image.about[1][0] }}</p>{% endif %}
 <div class='row'>
-{% if image.kind == 'task' %}<span class='pill author'>задание</span>{% else %}<span class='pill'>образ</span>{% endif %}
+<span class='sub small'>владелец <a href='/u/{{ repo.split('/')[0] | q }}'>{{ repo.split('/')[0] }}</a></span>
+{% if not courses_era %}
 {% if image.block_name %}<span class='pill'>блок «{{ image.block_name }}»</span>{% endif %}
 {% if image.hidden %}<span class='pill closed'>скрыт</span>{% endif %}
-{% if image.moderation == 'rejected' %}<span class='pill no'>отклонено{% if image.reason %}: {{ image.reason }}{% endif %}</span>
+{% endif %}
+{% if courses_era %}{% elif image.moderation == 'rejected' %}<span class='pill no'>отклонено{% if image.reason %}: {{ image.reason }}{% endif %}</span>
 {% elif image.pending_update %}<span class='pill warn'>обновление на проверке</span>
 {% elif image.moderation == 'pending' %}<span class='pill warn'>на проверке</span>
 {% elif image.moderation == 'approved' %}<span class='pill'>одобрено</span>{% endif %}
@@ -17,7 +24,7 @@
 <div class='card'>
 <h2>Описание</h2>
 {% if image.description %}<div class='about'>{% if image.about[0] %}<h3>{{ image.about[0] }}</h3>{% endif %}{% for p in image.about[1] %}<p>{{ p }}</p>{% endfor %}</div>{% else %}<p class='sub'>Описания нет.</p>{% endif %}
-<p class='sub'>Описание — это файл <code>README.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashengine push</code>.</p>
+{% if owner %}<p class='sub small'>Описание — это файл <code>README.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashengine push</code>.</p>{% endif %}
 </div>
 <h2>Исходники</h2>
 {% if image.sources %}
@@ -69,9 +76,16 @@
 {% endif %}
 
 {% if courses_era %}
-<h2 id='courses'>Курсы</h2>
+<h2 id='courses'>Используется в курсах</h2>
 <div class='card'>
-{% if used_in %}<p class='sub'>Используется в: {% for c in used_in %}{% if '/' in c %}<a href='/c/{{ c }}'>{{ c }}</a>{% else %}{{ c }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% if used_in %}
+<table class='places'>
+<thead><tr><th scope='col'>Курс</th><th scope='col'>Блок</th><th scope='col'>Версия у студентов</th></tr></thead>
+<tbody>
+{% for u in used_in %}<tr><td><a href='/c/{{ u.course }}'>{{ u.title or u.course }}</a> <span class='mono small dim'>{{ u.course }}</span>{% if u.visibility == 'private' %} <span class='pill closed sm'>приватный</span>{% endif %}</td>
+<td>{{ u.block or '—' }}{% if u.hidden %} <span class='pill closed sm'>скрыто</span>{% endif %}</td>
+<td><a class='mono' href='/web/image/{{ (u.repo ~ ":" ~ u.tag ~ "_v" ~ u.n) | ref_url }}'>{{ u.tag }}</a> <span class='pill sm ver'>версия {{ u.n }}</span>{% if u.pinned %} <span class='pill sm'>закреплена</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
 {% else %}<p class='sub'>Пока ни в одном курсе.</p>{% endif %}
 {% if propose_to and n %}
 <form class='row' data-api='POST /courses/__COURSE__/tasks' data-course-select>

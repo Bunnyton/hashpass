@@ -19,6 +19,13 @@ from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.server import _parse_multipart
 
 
+@pytest.fixture(autouse=True)
+def _pool_without_courses(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run on a pool not on courses: its global progress page, catalog editor and moderation."""
+    monkeypatch.delenv("HASHPASS_COURSES", raising=False)
+
+
+
 @pytest.mark.tier2
 def test_history_and_antibot_recorded_and_shown(registry):
     Catalog(registry.catalog_path).add_task("lab:1", "d1", hidden=False, auto=True)

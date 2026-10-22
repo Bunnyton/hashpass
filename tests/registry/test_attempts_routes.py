@@ -69,8 +69,9 @@ def test_attempt_unknown_ref_and_bad_session(registry, tmp_path):
 
 
 @pytest.mark.tier2
-def test_teacher_sees_attempts_with_output_on_the_site(registry, tmp_path):
+def test_teacher_sees_attempts_with_output_on_the_site(registry, tmp_path, monkeypatch):
     from tests.registry.test_images_web import _author_cookie, _req  # noqa: PLC0415
+    monkeypatch.delenv("HASHPASS_COURSES", raising=False)   # the global matrix: a pool not on courses
     _publish(registry, tmp_path)
     sc = RemoteRegistry(registry.base_url)
     tok = sc.register("stud", "pass123!", group="G")

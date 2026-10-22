@@ -76,7 +76,7 @@ def test_login_returns_to_the_invite_link(pool: _Courses) -> None:
     data = urllib.parse.urlencode({"user": "kid", "password": "pw-correct1",
                                    "next": "https://evil.example/"}).encode()
     with opener.open(urllib.request.Request(f"{pool.url}/web/login", data=data), timeout=10) as resp:  # noqa: S310
-        assert resp.url.endswith("/c")                      # never off-site
+        assert resp.url.endswith("/u/kid")                  # never off-site: home is one's own page
 
 
 @pytest.mark.tier1

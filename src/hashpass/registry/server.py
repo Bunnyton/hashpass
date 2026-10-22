@@ -500,7 +500,8 @@ class PoolServer:
         self.course_api = CourseApi(self)
         self.course_api.register(app)
         CourseWeb(self).register(app)
-        SearchWeb(self).register(app)
+        self.people = SearchWeb(self)
+        self.people.register(app)
         app.before_request(self._legacy_catalog_gone)
         return app
 
@@ -751,6 +752,7 @@ class PoolServer:
         g.hp_admin = self.users.role(user) == "admin"    # the nav shows admin pages to the admin only
         g.hp_staff = self.users.role(user) in _AUTHOR_ROLES
         g.hp_tz = str((self.users.get(user) or {}).get("tz", ""))   # pages show times in it
+        g.hp_user = user                                 # the nav links one's own page (home)
         return user
 
     def _session_role(self, roles: tuple[str, ...]) -> str | None:
@@ -775,6 +777,8 @@ class PoolServer:
     # -- routes: public / installers ----------------------------------------
 
     def _route_front(self) -> Response:
+        if os.environ.get("HASHPASS_COURSES") == "1":   # the home page is the showcase + search
+            return self.people.explore()
         return self._html(render_front(self._pool_url()))
 
     def _route_install_sh(self) -> Response:
@@ -2290,6 +2294,8 @@ class PoolServer:
     # -- routes: web dashboard ---------------------------------------------
 
     def _web_dashboard(self) -> Response:
+        if os.environ.get("HASHPASS_COURSES") == "1":   # progress lives in each course now
+            return self._redirect("/c")
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
         group = request.args.get("group") or None
@@ -2329,6 +2335,8 @@ class PoolServer:
         return self._redirect("/web/users")
 
     def _web_images(self) -> Response:
+        if os.environ.get("HASHPASS_COURSES") == "1":   # tasks/images: search and user pages
+            return self._redirect("/search?type=tasks")
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
         blocks = [b.as_dict() for b in self.catalog().blocks()]
@@ -2359,7 +2367,6 @@ class PoolServer:
         idx = self.repo(name)
         role = self.users.role(viewer)
         owner = self._may_write(viewer, name)
-        used = self.course_api.courses.courses_with(name, tag)
         merges = self.merges(name).all() if owner else [m for m in self.merges(name).all() if m["by"] == viewer]
         open_merges = []
         for m in merges:
@@ -2373,7 +2380,8 @@ class PoolServer:
         return {
             "repo": name, "tag": tag, "n": n, "repo_info": idx.as_dict() if idx.exists else None,
             "owner": owner, "courses_era": os.environ.get("HASHPASS_COURSES") == "1",
-            "used_in": self._course_names(used, viewer) if used else [],
+            "used_in": self.people.where_used(name, tag, viewer=viewer, role=role,
+                                              see_all=owner or role == "admin"),
             "propose_to": [c.ref for c in self.course_api.courses.all() if can(viewer, role, c, "propose")
                            and c.find_task(name, tag) is None],
             "may_fork": self._may_read_sources(viewer, name) and not owner and n is not None,
@@ -2428,10 +2436,31 @@ class PoolServer:
         resp.headers["Content-Disposition"] = f'attachment; filename="{name}.tar.gz"'
         return resp
 
+    def _may_watch(self, viewer: str | None, student: str, ref: str) -> bool:
+        """
+        Tell whether `viewer` may read `student`'s commands on `ref`.
+
+        Staff (old roles) may, and whoever adds tasks to a course `student` takes that holds
+        `ref` -- work with the course.
+        """
+        if viewer is None:
+            return False
+        role = self.users.role(viewer)
+        if role in _AUTHOR_ROLES:
+            return True
+        repo, _, tag = ref.partition(":")
+        api = self.course_api
+        taken = api.enrollments.of(student)
+        return any(c.id in taken and c.find_task(repo, tag) is not None and can(viewer, role, c, "add")
+                   for c in api.courses.all())
+
     def _web_history(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._redirect("/web/login")
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
+        viewer = self._session_user()
+        if viewer is None:
+            return self._redirect("/web/login")
+        if not self._may_watch(viewer, user, ref):
+            return self._empty(HTTPStatus.FORBIDDEN)
         record = self.progress().get(user).get(ref, {}) if user else {}
         sessions = self.attempts().sessions(user, ref) if user and ref else []
         return self._html(render_history(user, ref, record,
@@ -2444,9 +2473,9 @@ class PoolServer:
 
         The page asks every few seconds with the signature it has; a student typing changes it.
         """
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._empty(HTTPStatus.UNAUTHORIZED)
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
+        if not self._may_watch(self._session_user(), user, ref):
+            return self._empty(HTTPStatus.UNAUTHORIZED)
         record = self.progress().get(user).get(ref, {}) if user else {}
         sessions = self.attempts().sessions(user, ref) if user and ref else []
         body, sig = render_history_live(user, ref, record,
@@ -2488,7 +2517,8 @@ class PoolServer:
         staff = self.users.role(user) in _AUTHOR_ROLES
         if self.users.verify(user, request.form.get("password", "")) and (staff or courses):
             token = issue_token(self.secret, user, now=time.time())
-            target = _local_path(request.form.get("next", "")) or ("/web" if staff else "/c")
+            home = f"/u/{quote(user, safe='')}" if courses else "/web"   # one's own page is home
+            target = _local_path(request.form.get("next", "")) or home
             return self._redirect(target, set_cookie=("hp_session", token))
         return self._html(render_login("Неверный логин/пароль или нет доступа.",
                                        next_url=_local_path(request.form.get("next", "")),
