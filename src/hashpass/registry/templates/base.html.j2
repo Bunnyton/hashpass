@@ -13,8 +13,13 @@
 <body data-tz='{{ viewer_tz() }}'>
 {%- if nav %}
 <div class='nav'><span class='brand'><span class='logo'></span>hash<b>pass</b></span>
+{%- if courses_on() %}
+<a href='/c'{% if active == '/c' %} class='on'{% endif %}>Курсы</a>
+{%- endif %}
+{%- if viewer_is_staff() %}
 <a href='/web'{% if active == '/web' %} class='on'{% endif %}>Прогресс</a>
 <a href='/web/images'{% if active == '/web/images' %} class='on'{% endif %}>Образы и каталог</a>
+{%- endif %}
 {%- if viewer_is_admin() %}
 <a href='/web/users'{% if active == '/web/users' %} class='on'{% endif %}>Пользователи</a>
 {%- endif %}

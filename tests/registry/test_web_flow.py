@@ -60,7 +60,9 @@ def test_login_sets_cookie_and_dashboard_lists_students(registry):
 
 
 @pytest.mark.tier2
-def test_web_login_rejects_student(registry):
+def test_web_login_rejects_student(registry, monkeypatch):
+    """Without courses the web is for staff only (with HASHPASS_COURSES=1 anyone signs in)."""
+    monkeypatch.delenv("HASHPASS_COURSES")
     registry.users.add("s1", "pw", role="student", group="G")
     status, _, body = _req(_opener(), "POST", f"{registry.base_url}/web/login",
                            data={"user": "s1", "password": "pw"})

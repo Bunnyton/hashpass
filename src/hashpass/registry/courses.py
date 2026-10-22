@@ -250,6 +250,23 @@ def move_task(course: Course, repo: str, tag: str, step: int) -> bool:
     return False
 
 
+def set_layout(course: Course, layout: list[dict]) -> None:
+    """Reorder blocks and tasks: `[{id, tasks: ["repo:tag", ...]}]` naming every block and task once."""
+    by_block = {b["id"]: b for b in course.blocks}
+    by_task = {f"{t['repo']}:{t['tag']}": t for _b, t in course.tasks()}
+    seen_blocks = [str(b.get("id", "")) for b in layout]
+    seen_tasks = [str(r) for b in layout for r in b.get("tasks", [])]
+    if sorted(seen_blocks) != sorted(by_block) or sorted(seen_tasks) != sorted(by_task):
+        msg = "раскладка не совпадает с курсом — обновите страницу"
+        raise ValueError(msg)
+    blocks = []
+    for item in layout:
+        block = by_block[str(item["id"])]
+        block["tasks"] = [by_task[str(r)] for r in item.get("tasks", [])]
+        blocks.append(block)
+    course.blocks = blocks
+
+
 def effective_n(course: Course, task: dict, *, latest: int | None) -> int:
     """Return the revision students get: the newest with auto_update on and the task not pinned."""
     if course.auto_update and not task.get("pinned") and latest:

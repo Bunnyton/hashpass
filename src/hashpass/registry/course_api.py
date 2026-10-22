@@ -5,7 +5,9 @@ Every handler resolves the caller, the course and `access.can(...)` first; cours
 through `CourseStore.edit` (lock + rev). Tasks reference pool revisions, checked against the
 registry (`PoolServer.repo`) when added. Who joined which course is kept in `.enrollments/`.
 """
+import fcntl
 import json
+import os
 import time
 from collections.abc import Callable
 from http import HTTPStatus
@@ -39,12 +41,17 @@ class Enrollments:
             return {}
 
     def enroll(self, user: str, course_id: str) -> None:
-        data = self.of(user)
-        if course_id in data:
-            return
-        data[course_id] = time.time()
+        """Mark that `user` started `course_id` (locked, atomic: parallel joins keep each other)."""
         self._root.mkdir(parents=True, exist_ok=True)
-        (self._root / f"{user}.json").write_text(json.dumps(data), encoding="utf-8")
+        with (self._root / f".{user}.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            data = self.of(user)
+            if course_id in data:
+                return
+            data[course_id] = time.time()
+            tmp = self._root / f".{user}.{os.getpid()}.tmp"
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            tmp.replace(self._root / f"{user}.json")
 
     def users_of(self, course_id: str) -> list[str]:
         if not self._root.is_dir():
@@ -86,6 +93,7 @@ class CourseApi:
         rule("/courses/<owner>/<name>/blocks", "course_blocks", self.add_block, methods=["POST"])
         rule("/courses/<owner>/<name>/blocks/<block_id>", "course_block", self.block,
              methods=["PUT", "DELETE"])
+        rule("/courses/<owner>/<name>/layout", "course_layout", self.layout, methods=["PUT"])
         rule("/courses/<owner>/<name>/tasks", "course_tasks", self.add_task, methods=["POST"])
         rule("/courses/<owner>/<name>/tasks/<path:task>", "course_task", self.task,
              methods=["PUT", "DELETE"])
@@ -324,6 +332,16 @@ class CourseApi:
                 cm.set_block_open(c, block_id, open_=bool(body["open"]))
         err = self._edit(course.ref, change)
         return err or self._json(HTTPStatus.OK, {"id": block_id})
+
+    def layout(self, owner: str, name: str) -> Response:
+        course, _user, err = self._load(owner, name, "moderate")
+        if err is not None:
+            return err
+        blocks = self._body().get("blocks")
+        if not isinstance(blocks, list):
+            return self._err(HTTPStatus.BAD_REQUEST, "нужен список блоков")
+        err = self._edit(course.ref, lambda c: cm.set_layout(c, blocks))
+        return err or self._json(HTTPStatus.OK, {"rev": self.courses.get(course.ref).rev})
 
     def _revision_ok(self, course: Course, user: str, repo: str, tag: str, n: int | None) -> str | int:
         """Return the revision number to use, or a Russian reason it cannot go into this course."""

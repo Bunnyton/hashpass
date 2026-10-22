@@ -126,6 +126,18 @@ def test_old_clients_work_in_the_default_course(legacy: PoolServer) -> None:
 
 
 @pytest.mark.tier1
+def test_anonymous_pulls_of_a_public_course_still_work(legacy: PoolServer) -> None:
+    """Before the move anyone pulled a catalogued task (installer, a client without a token)."""
+    client = legacy.app.test_client()
+    assert client.get("/closure/bob/lab/1?revisions=1").status_code == 200  # noqa: PLR2004
+    migrate_to_courses(legacy, owner="bunnyton", base_ref="bunnyton/debian:trixie")
+    closure = client.get("/closure/bob/lab/1?revisions=1")
+    assert closure.status_code == 200 and closure.get_json()["refs"][-1] == "bob/lab:1_v1"  # noqa: PLR2004
+    assert client.get("/image/bob/lab/1").status_code == 200  # noqa: PLR2004
+    assert client.get("/closure/bob/new/1?revisions=1").status_code == 404  # noqa: PLR2004  (a proposal)
+
+
+@pytest.mark.tier1
 def test_before_the_move_students_still_get_the_approved_copy(legacy: PoolServer) -> None:
     """Prod 2026-10-22: tasks with a waiting update must keep serving the approved copy (no 404)."""
     Catalog(legacy.catalog_path).set_task_hidden("bob/lab:1", hidden=False)
@@ -146,3 +158,53 @@ def test_before_the_move_students_still_get_the_approved_copy(legacy: PoolServer
     with tarfile.open(fileobj=io.BytesIO(client.get("/task/bob/lab/1", headers={
             "Authorization": f"Bearer {bob}"}).data)) as tar:
         assert tar.extractfile("task-meta.json").read() == b"lab-new"      # the author: the latest
+
+
+@pytest.mark.tier1
+def test_the_command_runs_once_on_the_pool_home(tmp_path: Path) -> None:
+    from hashpass import cli  # noqa: PLC0415
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    users = UserStore(env.registry / "users.json")
+    users.add("bunnyton", "pw-correct1", role="admin")
+    users.add("bob", "pw-correct1", role="author")
+    said: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=said.append, clock=lambda: "")
+    with pytest.raises(RuntimeError, match="администратором"):
+        cli.cmd_migrate_courses(env, "bob", io)
+    assert cli.cmd_migrate_courses(env, "bunnyton", io) == 0
+    assert "курс по умолчанию bunnyton/linux" in said[-1]
+    assert cli.cmd_migrate_courses(env, "bunnyton", io) == 0
+    assert "уже переведён" in said[-1]
+
+
+@pytest.mark.tier1
+def test_a_tag_collision_stops_before_any_change(legacy: PoolServer, tmp_path: Path) -> None:
+    _image(tmp_path / "c1", legacy.store, "bob/x", "1_v1", "a")
+    _image(tmp_path / "c2", legacy.store, "bob/x", "1-v1", "b")
+    before = sorted(legacy.store.list())
+    with pytest.raises(RuntimeError, match="один тег"):
+        migrate_to_courses(legacy, owner="bunnyton", base_ref="bunnyton/debian:trixie")
+    assert sorted(legacy.store.list()) == before
+    assert not (Path(legacy.store.root) / ".migrated-courses").exists()
+
+
+@pytest.mark.tier1
+def test_an_interrupted_move_finishes_on_the_next_run(legacy: PoolServer, monkeypatch: pytest.MonkeyPatch) -> None:
+    from hashpass.registry import migrate  # noqa: PLC0415
+    real = migrate.cm.add_block
+
+    def crash(*_a: object, **_k: object) -> str:
+        msg = "disk full"
+        raise OSError(msg)
+
+    monkeypatch.setattr(migrate.cm, "add_block", crash)
+    with pytest.raises(OSError, match="disk full"):
+        migrate_to_courses(legacy, owner="bunnyton", base_ref="bunnyton/debian:trixie")
+    monkeypatch.setattr(migrate.cm, "add_block", real)
+    report = migrate_to_courses(legacy, owner="bunnyton", base_ref="bunnyton/debian:trixie")
+    assert report["images"] == 4  # noqa: PLR2004
+    assert sorted(legacy.store.list()) == ["bob/lab:1_v1", "bob/lab:1_v2", "bob/new:1_v1", "bob/ok:1_v1",
+                                           "bunnyton/debian:trixie_v1"]
+    course = legacy.course_api.courses.get("bunnyton/linux")
+    assert [b["name"] for b in course.blocks] == ["Git", "Docker"]
+    assert [r.n for r in legacy.repo("bob/lab").revisions("1")] == [1, 2]

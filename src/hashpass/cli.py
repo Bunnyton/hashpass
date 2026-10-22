@@ -67,7 +67,7 @@ from hashpass.registry.passwords import (
 from hashpass.registry.refs import normalize_ref, split_ref
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.revisions import check_tag
-from hashpass.registry.server import make_server
+from hashpass.registry.server import PoolServer, make_server
 from hashpass.registry.token import token_user
 from hashpass.taskbuild import build_task
 from hashpass.taskdigest import task_digest
@@ -1339,6 +1339,36 @@ def _resolve_tls(env: Home, certfile: str | None, keyfile: str | None,
     return cert, key
 
 
+def cmd_migrate_courses(env: Home, owner: str = "bunnyton", io: Io | None = None) -> int:
+    """
+    Move this pool (its data under the hashengine home) to revisions + a default course (spec §13).
+
+    Run on the pool machine, with the pool stopped or idle; done once (a second run reports so).
+    The old state is backed up first; the courses API is then switched on by HASHPASS_COURSES=1.
+    """
+    from hashpass.registry.migrate import migrate_to_courses  # noqa: PLC0415  (rare, heavy)
+    io = io or _default_io()
+    store = ImageStore(env.registry / "store")
+    users = UserStore(env.registry / "users.json")
+    if users.role(owner) != "admin":
+        msg = f"владелец курса по умолчанию должен быть администратором пула: {owner}"
+        raise RuntimeError(msg)
+    config_path = env.registry / "config.json"
+    server = PoolServer(store=store, users=users, secret=_registry_secret(env),
+                        config=load_config(config_path), config_path=config_path,
+                        catalog_path=env.registry / "catalog.json",
+                        progress_path=env.registry / "progress")
+    report = migrate_to_courses(server, owner=owner, base_ref=base_ref())
+    if not report:
+        io.write("пул уже переведён на курсы — делать нечего\n")
+        return 0
+    io.write(f"готово: образов {report['images']}, заданий в курсе {report['tasks']}, "
+             f"предложений {report['proposals']}; курс по умолчанию {server.config.default_course}\n"
+             "резервная копия — в .backup-courses-* рядом с хранилищем; включите курсы: "
+             "HASHPASS_COURSES=1\n")
+    return 0
+
+
 def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  # noqa: PLR0913
               certfile: str | None = None, keyfile: str | None = None,
               self_signed: bool = False, reset_admin: bool = False) -> int:
@@ -1620,18 +1650,18 @@ def unpack_task_source(blob: bytes, dest: Path) -> None:
 
 
 def _attach_about(client: RemoteRegistry, ref: str, task_dir: Path, io: Io, staging: str = "") -> None:
-    """On push, attach the task's about.md: the pool shows it as the task's description."""
-    about = task_dir / "about.md"
-    if not about.is_file():
-        io.write("\x1b[2mabout.md нет — у задания на пуле не будет описания\x1b[0m\n")
+    """On push, attach the task's README.md (old name: about.md): the pool shows it as the description."""
+    about = next((p for p in (task_dir / "README.md", task_dir / "about.md") if p.is_file()), None)
+    if about is None:
+        io.write("\x1b[2mREADME.md нет — у задания на пуле не будет описания\x1b[0m\n")
         return
     name, version = split_ref(ref)
     try:
         client.push_attachment(name, version, about.name, about.read_bytes(), staging=staging)
     except (urllib.error.URLError, OSError, RuntimeError, ValueError) as exc:
-        io.write(f"\x1b[33m⚠ не удалось приложить about.md: {exc}\x1b[0m\n")
+        io.write(f"\x1b[33m⚠ не удалось приложить {about.name}: {exc}\x1b[0m\n")
         return
-    io.write("\x1b[36m↑ описание\x1b[0m: about.md\n")
+    io.write(f"\x1b[36m↑ описание\x1b[0m: {about.name}\n")
 
 
 def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io, staging: str = "") -> None:
@@ -2267,6 +2297,69 @@ def cmd_solution(env: Home, arg: str, io: Io | None = None) -> int:
         io.write(f"{NO_SOLUTION}: {ref}\n")
         return 1
     io.write(solution_text(record))
+    return 0
+
+
+def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
+    """
+    `hashpass add <course link>`: join the course (switching pool if the link names another one).
+
+    A public course is joined at once; a private one with the link's invite token too; without
+    it the student may send an access request. The course becomes the current one.
+    """
+    from hashpass import my_courses  # noqa: PLC0415
+    io = io or _default_io()
+    pool, ref, invite = my_courses.parse_link(link)
+    saved = _pool_url(env)
+    if saved and registry_key(saved) != registry_key(pool):
+        answer = (io.read(f"Ссылка ведёт на другой пул ({pool}), сейчас — {saved}. Переключиться? [Д/н] ")
+                  or "д").strip().lower()
+        if answer not in ("д", "да", "y", "yes", ""):
+            io.write("остаёмся на прежнем пуле\n")
+            return 1
+    if not saved or registry_key(saved) != registry_key(pool):
+        save_pool(env, pool, "")
+    url, _user, token = account_current(env)
+    if not token:
+        cmd_pool_login(env, pool, io)
+        url, _user, token = account_current(env)
+    client = RemoteRegistry(url, token=token)
+    try:
+        client.join(ref, invite)
+    except urllib.error.HTTPError as exc:
+        if exc.code == HTTPStatus.NOT_FOUND:
+            msg = f"на пуле нет курса {ref} (или курсы там ещё не включены)"
+            raise RuntimeError(msg) from exc
+        if exc.code != HTTPStatus.FORBIDDEN:
+            raise
+        comment = (io.read("Курс закрытый. Попросить доступ? Напишите пару слов о себе "
+                           "(пусто — не просить): ") or "").strip()
+        if not comment:
+            return 1
+        client.request_access(ref, comment)
+        io.write(f"заявка в {ref} отправлена — когда её примут, курс появится в hashpass\n")
+        my_courses.choose(env.root, url, ref)
+        return 0
+    my_courses.choose(env.root, url, ref)
+    io.write(f"курс {ref} добавлен и выбран — запустите hashpass\n")
+    return 0
+
+
+def cmd_courses(env: Home, ref: str | None = None, io: Io | None = None) -> int:
+    """`hashpass courses [owner/name]`: list the courses added here, or switch to one."""
+    from hashpass import my_courses  # noqa: PLC0415
+    io = io or _default_io()
+    url = _pool_url(env) or ""
+    if ref:
+        my_courses.choose(env.root, url, ref)
+        io.write(f"текущий курс: {ref}\n")
+        return 0
+    now = my_courses.current(env.root, url)
+    rows = my_courses.mine(env.root, url)
+    if not rows:
+        io.write("курсов пока нет — добавьте по ссылке: hashpass add <ссылка курса>\n")
+    for r in rows:
+        io.write(f"{'▸' if r == now else ' '} {r}\n")
     return 0
 
 

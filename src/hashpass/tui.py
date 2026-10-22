@@ -32,10 +32,11 @@ from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Input, Label, Static, Tree
 
-from hashpass import account
+from hashpass import account, my_courses
 from hashpass.attempts import flush_outbox, sync_solutions
 from hashpass.auth_screens import LoginScreen
-from hashpass.imagestore.store import ImageStore
+from hashpass.course_screen import LINK_PREFIX, AskScreen, CoursePicker
+from hashpass.imagestore.store import ImageStore, registry_key
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.taskdigest import task_digest
 from hashpass.treekeys import VIM_BINDINGS, vim_walk
@@ -234,7 +235,7 @@ class PoolTUI(App):
 
     CSS = """
     Screen { background: $surface; }
-    ReasonScreen, ConfirmScreen { align: center middle; }
+    ReasonScreen, ConfirmScreen, AskScreen { align: center middle; }
     #dialog { width: 80; height: auto; padding: 1 2; border: thick $accent; background: $panel; }
     Tree { padding: 1 2; background: $surface; }
     Tree > .tree--cursor { background: $accent 40%; color: $text; }
@@ -253,6 +254,7 @@ class PoolTUI(App):
         # the common keys: the staff keys below overflow the footer (user: «В футере нет»)
         Binding("p,P,з,З", "solution", "Решение"),
         Binding("L,Д", "relogin", "Сменить аккаунт"),
+        Binding("c,C,с,С", "courses", "Курсы"),     # a pool with courses (spec 2026-10-21 §9)
         # Catalog editing for staff (shown only to them, see check_action): the same rights as
         # the web catalog -- an author hides/shows its own tasks, the admin also moves them.
         Binding("x,X,ч,Ч", "toggle_hidden", "Скрыть/показать"),
@@ -303,6 +305,7 @@ class PoolTUI(App):
         self._leaf_nodes: dict[str, object] = {}          # ref -> its Tree leaf (relabelled in place)
         self.role = "student"                        # from the pool's /me on mount
         self._show_rejected = True                   # «Отклонённые» shown (z toggles, remembered)
+        self.courses_mode = False                    # the pool has courses: tasks come through one
 
     # -- lifecycle --------------------------------------------------------
 
@@ -394,6 +397,15 @@ class PoolTUI(App):
                 return
         except Exception:                                  # noqa: BLE001, S110  (offline / old pool)
             pass
+        try:
+            listed = self.client.courses(token=self.token)
+        except Exception:                                  # noqa: BLE001  (offline / old pool)
+            listed = None
+        self.courses_mode = listed is not None
+        if self.courses_mode:
+            if my_courses.activate(self.env.root, self.url) is None and listed:
+                self.call_after_refresh(self.action_courses)      # first time: pick a course
+            self._course_title()
         self.refresh_bindings()
         self._reload_catalog()
         threading.Thread(target=self._sync_solutions, args=(self.token,), daemon=True).start()
@@ -419,6 +431,73 @@ class PoolTUI(App):
         if (pulled or marked) and token == self.token:
             with contextlib.suppress(Exception):          # the app may be closing
                 self.call_from_thread(self._reload_catalog)
+
+    # -- courses (spec 2026-10-21 §9) ----------------------------------------
+
+    def _course_title(self) -> None:
+        course = my_courses.current(self.env.root, self.url)
+        self.title = f"hashpass · {self.user}" + (f" · {course}" if course else "")
+
+    def action_courses(self) -> None:
+        """c: pick the course to work in (or paste a course link)."""
+        self.push_screen(CoursePicker(self.client, self.token, my_courses.mine(self.env.root, self.url),
+                                      my_courses.current(self.env.root, self.url)),
+                         callback=self._course_picked)
+
+    def _course_picked(self, choice: str | None) -> None:
+        if not choice:
+            return
+        if choice.startswith(LINK_PREFIX):
+            try:
+                pool, ref, invite = my_courses.parse_link(choice.removeprefix(LINK_PREFIX))
+            except ValueError as exc:
+                self.notify(str(exc), severity="warning", timeout=6)
+                return
+            if registry_key(pool) != registry_key(self.url):
+                self.notify(f"Ссылка ведёт на другой пул ({pool}). Выйдите (q) и выполните: "
+                            f"hashpass add {choice.removeprefix(LINK_PREFIX)}", timeout=10)
+                return
+            self._enter_course(ref, invite)
+            return
+        self._enter_course(choice)
+
+    def _enter_course(self, ref: str, invite: str = "") -> None:
+        """Make `ref` current: join a public course, use an invite, or ask for access."""
+        try:
+            view = self.client.course_view(ref, token=self.token)
+            if "blocks" not in view and invite:
+                self.client.join(ref, invite, token=self.token)
+                view = self.client.course_view(ref, token=self.token)
+        except urllib.error.HTTPError as exc:
+            self.notify(f"{ref}: {'нет такого курса' if exc.code == HTTPStatus.NOT_FOUND else exc}",
+                        severity="warning", timeout=6)
+            return
+        if "blocks" not in view:                           # private, no access yet
+            if view.get("access") == "requested":
+                self.notify(f"Заявка в {ref} уже отправлена — ждите ответа", timeout=6)
+                return
+
+            def send(comment: str | None) -> None:
+                if comment is None:
+                    return
+                try:
+                    self.client.request_access(ref, comment, token=self.token)
+                except urllib.error.HTTPError as exc:
+                    self.notify(f"заявку не отправить: {exc}", severity="warning", timeout=6)
+                    return
+                self.notify(f"Заявка в {ref} отправлена — курс откроется, когда её примут", timeout=8)
+            self.push_screen(AskScreen(f"Курс [b]{escape(ref)}[/] закрытый. Пару слов о себе для заявки:",
+                                       "кто вы, зачем курс"), callback=send)
+            return
+        if view.get("visibility") == "public" and not view.get("role"):
+            with contextlib.suppress(Exception):           # «приступил» (spec §7)
+                self.client.join(ref, token=self.token)
+        my_courses.choose(self.env.root, self.url, ref)
+        self._course_title()
+        with self._rows_lock:
+            self.rows = []
+        self._reload_catalog()
+        self.notify(f"Курс: {view.get('title') or ref}", timeout=4)
 
     def action_relogin(self) -> None:
         """L: log out and sign in as someone else (spec 2026-10-16)."""
@@ -697,10 +776,12 @@ class PoolTUI(App):
 
     # -- catalog editing (staff) ------------------------------------------
 
-    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:  # noqa: PLR0911
         """Editing keys exist only for staff: hide/show for an author, moving too for the admin."""
         if not self.token and action in _CATALOG_ACTIONS:
             return False                                  # signed out: only the login form
+        if action == "courses":
+            return self.courses_mode
         if action in ("toggle_hidden", "toggle_block"):
             return self.role in ("author", "admin")
         if action == "move":

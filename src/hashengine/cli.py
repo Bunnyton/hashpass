@@ -83,6 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_source.add_argument("dest", nargs="?", help="куда распаковать (по умолчанию ./<имя задания>)")
     p_source.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
     _add_revision_commands(sub)
+    p_mig = sub.add_parser("migrate-courses", help="перевести этот пул на ревизии и курсы "
+                           "(один раз, на машине пула; администратор)")
+    p_mig.add_argument("--owner", default="bunnyton", help="владелец курса по умолчанию (администратор)")
     sub.add_parser("images", help="список локально собранных образов и заданий")
     p_cat = sub.add_parser("catalog", help="каталог пула: раскладка по блокам (администратор)")
     p_cat.add_argument("action", choices=["layout"], help="layout — задать блоки и порядок")
@@ -94,10 +97,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911, C901
+def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911, PLR0912, C901
     """Route a parsed engine sub-command (no sub-command prints help)."""
     command = args.command
     if command is None:
+        if sys.stdin.isatty() and sys.stdout.isatty():      # the work screen (spec 2026-10-21 §10)
+            from hashengine.tui import run_engine_tui  # noqa: PLC0415
+            return run_engine_tui(env)
         build_parser().print_help()
         return 0
     if command == "build":
@@ -134,6 +140,7 @@ _REVISION_COMMANDS = {
     "tag": lambda env, a: cli.cmd_tag(env, a.src, a.to, a.registry),
     "rm": lambda env, a: cli.cmd_rm(env, a.ref, a.registry, local=a.local),
     "fork": lambda env, a: cli.cmd_fork(env, a.src, a.name, a.registry),
+    "migrate-courses": lambda env, a: cli.cmd_migrate_courses(env, a.owner),
 }
 
 

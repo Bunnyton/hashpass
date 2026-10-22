@@ -14,7 +14,7 @@ TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
 _FORBIDDEN = re.compile(
     r"стади|этап|грейдер|засчит|зач[её]т|\bTaskfile\b|(?<![\w/])/hp\b|build time|\bcopy`",
     re.IGNORECASE)
-# Author-facing text (Taskfile `#` comments, README.md, hp/* script comments) travels to the pool
+# Author-facing text (Taskfile `#` comments, NOTES.md, hp/* script comments) travels to the pool
 # with the task and is read there, so it speaks the world's language too; a file NAME (Taskfile)
 # is fine in a comment.
 _FORBIDDEN_AUTHOR = re.compile(r"стади|этап|грейдер|засчит|зач[её]т|(?<![\w/])/hp\b", re.IGNORECASE)
@@ -37,8 +37,8 @@ def _student_texts(task: Path, *, assets: bool = True) -> list[tuple[str, str]]:
             continue
         out += [(f"{task.name}/Taskfile", m.group(1) or m.group(2)) for m in _SAY.finditer(line)]
     for f in sorted(task.rglob("*")):
-        if not f.is_file() or f.name.lower() == "readme.md" or f.name == "Taskfile":
-            continue                               # README is for authors; the Taskfile is parsed above
+        if not f.is_file() or f.name.lower() == "notes.md" or f.name == "Taskfile":
+            continue                               # NOTES.md is for authors; the Taskfile is parsed above
         if not assets and ("data" in f.relative_to(task).parts or (f.suffix != ".md" and f.name != "finale")):
             continue                               # data files of the task's world, not its prose
         try:
@@ -97,7 +97,7 @@ def test_student_facing_text_does_not_repeat_itself(task: Path):
 
 
 def _author_texts(task: Path) -> list[tuple[str, str]]:
-    """(where, text) for every author-facing line: `#` comments of Taskfile/hp scripts and README.md."""
+    """(where, text) for every author-facing line: `#` comments of Taskfile/hp scripts and NOTES.md."""
     out: list[tuple[str, str]] = []
     for f in sorted(task.rglob("*")):
         if not f.is_file() or "data" in f.relative_to(task).parts:
@@ -106,7 +106,7 @@ def _author_texts(task: Path) -> list[tuple[str, str]]:
             text = f.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        if f.name.lower() == "readme.md":
+        if f.name.lower() == "notes.md":                 # README.md is the task's public description
             out.append((f"{task.name}/{f.relative_to(task)}", text))
         elif f.name == "Taskfile" or f.parent.name == "hp":
             comments = [ln for ln in text.splitlines() if ln.lstrip().startswith("#")]

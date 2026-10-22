@@ -21,7 +21,24 @@
 <input name='group' placeholder='ИУ7-31' style='width:auto'>
 <button class='sm ghost' type='submit'>Удалить группу</button>
 </form></div>
+{% if deletions %}
+<h2>Запросы на удаление ревизий</h2>
+<div class='card'><table>
+<tr><th>Ревизия</th><th>Кто просит</th><th>Курсы</th><th>Когда</th><th></th></tr>
+{% for d in deletions %}
+<tr><td class='mono'><a href='/web/image/{{ d.ref | ref_url }}'>{{ d.ref }}</a></td><td>{{ d.by }}</td>
+<td>{% for c in d.courses %}<a href='/c/{{ c }}'>{{ c }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td><td>{{ ts(d.at) }}</td>
+<td class='row'><form class='inline' data-api='POST /deletion-requests/{{ d.id }}' data-confirm='Удалить {{ d.ref }}? Курсы, где она стоит, получат предложение вернуть предыдущую ревизию.'><input type='hidden' name='action' value='approve'><button class='sm danger' type='submit'>Удалить</button></form>
+<form class='inline' data-api='POST /deletion-requests/{{ d.id }}'><input type='hidden' name='action' value='reject'><button class='sm ghost' type='submit'>Оставить</button></form></td></tr>
+{% endfor %}
+</table></div>
+<script src='/static/api.js'></script>
+{% endif %}
 <h2>Все пользователи</h2>
+<form class='row search' method='get' action='/web/users'>
+<input name='q' value='{{ q }}' placeholder='поиск по логину или комментарию (например, группе ИТ-21)'>
+<button class='ghost' type='submit'>Найти</button>{% if q %}<a class='btn ghost sm' href='/web/users'>сбросить</a>{% endif %}
+</form>
 <p class='sub small'>Группа и комментарий редактируются кликом по ячейке (Enter/уход из поля — сохраняет). Не отображаются студентам.</p>
 <p class='sub small'>Клик по заголовку столбца — сортировка (повторный — в обратную сторону). Логин открывает профиль с прогрессом.</p>
 <table class='wide sortable'>

@@ -28,13 +28,26 @@
     });
   }
 
+  // the course page names its own endpoint (PUT /courses/…/layout + rev); the old catalog page posts here
+  var cat = document.getElementById('cat');
+  var layoutUrl = (cat && cat.getAttribute('data-layout-url')) || '/web/catalog/layout';
+
   function save() {
-    fetch('/web/catalog/layout', {
-      method: 'POST',
+    var body = { blocks: snapshot() };
+    var rev = cat && cat.getAttribute('data-rev');
+    if (rev !== null && rev !== undefined && rev !== '') body.rev = parseInt(rev, 10);
+    fetch(layoutUrl, {
+      method: cat && cat.getAttribute('data-layout-url') ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blocks: snapshot() })
+      credentials: 'same-origin',
+      body: JSON.stringify(body)
     }).then(function (r) {
-      if (r.ok) { toast('Порядок сохранён'); return; }
+      if (r.ok) {
+        r.json().then(function (j) { if (j && j.rev !== undefined && cat) cat.setAttribute('data-rev', j.rev); })
+          .catch(function () {});
+        toast('Порядок сохранён');
+        return;
+      }
       toast(r.status === 403 ? 'Порядок заданий меняет только администратор'
                              : 'Не удалось сохранить порядок — обновляю страницу', true);
       setTimeout(function () { location.reload(); }, 1600);
@@ -170,7 +183,10 @@
   // -- inline block-name save when the input loses focus (Enter also blurs it)
   document.addEventListener('change', function (e) {
     var input = e.target.closest && e.target.closest('.block-name-input');
-    if (input) input.form.submit();
+    if (input) {
+      if (input.form.hasAttribute('data-api') && input.form.requestSubmit) input.form.requestSubmit();
+      else input.form.submit();
+    }
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.classList.contains('block-name-input')) {

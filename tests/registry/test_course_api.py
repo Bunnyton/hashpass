@@ -147,3 +147,51 @@ def test_courses_are_off_unless_switched_on(pool: _Courses, monkeypatch: pytest.
     monkeypatch.delenv("HASHPASS_COURSES")
     code, body = pool.call("GET", "/courses", "bob")
     assert code == 404 and "не включены" in body["error"]  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_layout_reorders_and_moves_between_blocks(pool: _Courses) -> None:
+    path = _course(pool)
+    one = pool.call("POST", f"{path}/blocks", "bob", {"name": "One"})[1]["id"]
+    two = pool.call("POST", f"{path}/blocks", "bob", {"name": "Two"})[1]["id"]
+    pool.call("POST", f"{path}/tasks", "bob", {"repo": "bob/git-init", "tag": "1", "block_id": one})
+    pool.call("POST", f"{path}/tasks", "bob", {"repo": "eve/regex", "tag": "1", "block_id": one})
+    rev = pool.call("GET", path, "bob")[1]["rev"]
+    layout = [{"id": two, "tasks": ["eve/regex:1"]}, {"id": one, "tasks": ["bob/git-init:1"]}]
+    assert pool.call("PUT", f"{path}/layout", "kid", {"blocks": layout})[0] == 403  # noqa: PLR2004
+    assert pool.call("PUT", f"{path}/layout", "bob", {"blocks": layout, "rev": rev})[0] == 200  # noqa: PLR2004
+    view = pool.call("GET", path, "bob")[1]
+    assert [(b["name"], [t["ref"] for t in b["tasks"]]) for b in view["blocks"]] == [
+        ("Two", ["eve/regex:1"]), ("One", ["bob/git-init:1"])]
+    code, body = pool.call("PUT", f"{path}/layout", "bob", {"blocks": layout[:1]})
+    assert code == 400 and "не совпадает" in body["error"]  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_the_web_session_cookie_works_for_the_api(pool: _Courses) -> None:
+    import urllib.request  # noqa: PLC0415
+    path = _course(pool, "private")
+    req = urllib.request.Request(f"{pool.url}/web/login", data=b"user=bob&password=pw-correct1",  # noqa: S310
+                                 method="POST")
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
+    opener.open(req, timeout=10)
+    with opener.open(f"{pool.url}{path}", timeout=10) as resp:
+        assert b'"role": "owner"' in resp.read()
+
+
+@pytest.mark.tier1
+def test_a_cross_site_form_post_does_not_act_for_the_user(pool: _Courses) -> None:
+    """Codex 2026-10-22: a plain form POST carries the session cookie; it must not count."""
+    import urllib.parse  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+    _course(pool, "private")
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
+    opener.open(urllib.request.Request(f"{pool.url}/web/login",  # noqa: S310
+                                       data=b"user=kid&password=pw-correct1"), timeout=10)
+    form = urllib.parse.urlencode({"comment": "csrf"}).encode()
+    req = urllib.request.Request(f"{pool.url}/courses/bob/linux/requests", data=form,  # noqa: S310
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        opener.open(req, timeout=10)
+    assert exc.value.code == 401  # noqa: PLR2004
+    assert pool.call("GET", "/courses/bob/linux", "bob")[1]["requests"] == []

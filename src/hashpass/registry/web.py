@@ -2,6 +2,7 @@
 import calendar
 import hashlib
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -28,6 +29,10 @@ _env.globals["viewer_is_admin"] = lambda: bool(getattr(g, "hp_admin", False)) if
 # The viewer's time zone from their settings ("" = the browser's): static/time.js renders every
 # <time class='ts'> in it.
 _env.globals["viewer_tz"] = lambda: str(getattr(g, "hp_tz", "")) if has_request_context() else ""
+# Staff pages (progress, the old catalog) in the nav: admins and authors; no request -> shown (tests).
+_env.globals["viewer_is_staff"] = (lambda: bool(getattr(g, "hp_staff", True))
+                                   if has_request_context() else True)
+_env.globals["courses_on"] = lambda: os.environ.get("HASHPASS_COURSES") == "1"
 
 
 def safe_id(text: str) -> str:
@@ -239,9 +244,18 @@ def _install_script(pool_url: str, *, role: str, nxt: str, extra: str = ":") -> 
             .replace("__NEXT__", nxt))
 
 
+# `curl …/install.sh | bash -s -- <course link>`: the course is added right after the install
+_COURSE_ON_INSTALL = """\
+COURSE="${1:-}"
+if [ -n "$COURSE" ]; then
+  "$BIN/hashpass" --no-update add "$COURSE" <"$TTY" || echo "курс не добавлен — позже: hashpass add $COURSE"
+fi"""
+
+
 def render_install_script(pool_url: str) -> str:
-    """Return the student install script (installs `hashpass`, seeds the pool URL into pool.json)."""
-    return _install_script(pool_url, role="student", nxt="Запустите:  hashpass   (без sudo — пароль sudo он спросит сам)")
+    """Return the student install script (installs `hashpass`, seeds the pool URL; adds a course given as $1)."""
+    return _install_script(pool_url, role="student", extra=_COURSE_ON_INSTALL,
+                           nxt="Запустите:  hashpass   (без sudo — пароль sudo он спросит сам)")
 
 
 def render_engine_install_script(pool_url: str) -> str:
@@ -273,10 +287,11 @@ def render_front(pool_url: str) -> str:
         title="hashpass", nav=False, active="", url=url, flags=flags, prepare=PREPARE)
 
 
-def render_login(error: str = "", *, signed_in: str = "", role: str = "") -> str:
-    """Teacher/admin login form; `signed_in` -- who is already in (sent here by an admin-only page)."""
+def render_login(error: str = "", *, signed_in: str = "", role: str = "", next_url: str = "",
+                 courses: bool = False) -> str:
+    """Login form; `signed_in` -- who is already in (sent here by an admin-only page)."""
     return _env.get_template("login.html.j2").render(
-        title="Вход — hashpass", nav=False, active="", error=error,
+        title="Вход — hashpass", nav=False, active="", error=error, next=next_url, courses=courses,
         signed_in=signed_in, role={"author": "автор", "admin": "администратор"}.get(role, role))
 
 
@@ -516,11 +531,11 @@ def render_catalog(images: list[dict], blocks: list[dict]) -> str:
 render_images = render_catalog
 
 
-def render_image_card(image: dict) -> str:
-    """Render one image's dedicated page (description editor + files)."""
+def render_image_card(image: dict, **extra: object) -> str:
+    """Render one image's dedicated page (description, sources, files; revisions and courses)."""
     return _env.get_template("image_card.html.j2").render(
         title=f"{image.get('ref', '')} — hashpass", nav=True, active="/web/images",
-        image=_prepare_image(image))
+        image=_prepare_image(image), **extra)
 
 
 def _children(sources: list[dict], folder: str) -> list[dict]:
@@ -581,8 +596,8 @@ def _plural(n: int, one: str, few: str, many: str) -> str:
 _ROLES = ("student", "author", "admin")
 
 
-def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "",
-                 pool_auto: bool = False) -> str:
+def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "",  # noqa: PLR0913
+                 pool_auto: bool = False, q: str = "", deletions: list[dict] | None = None) -> str:
     """User management: per-user role change / reset link / delete, delete-group, registration toggle."""
     rows = [{"user": str(p["user"]), "user_q": quote(str(p["user"]), safe=""),
              "created_at": p.get("created_at") or None,
@@ -593,7 +608,7 @@ def render_users(profiles: list[dict], *, registration_open: bool, current_user:
              "is_self": str(p["user"]) == current_user} for p in profiles]
     return _env.get_template("users.html.j2").render(
         title="Пользователи — hashpass", nav=True, active="/web/users",
-        rows=rows, roles=_ROLES, pool_auto=pool_auto,
+        rows=rows, roles=_ROLES, pool_auto=pool_auto, q=q, deletions=deletions or [],
         reg_label="открыта" if registration_open else "закрыта",
         toggle_to="false" if registration_open else "true",
         toggle_label="Закрыть регистрацию" if registration_open else "Открыть регистрацию")

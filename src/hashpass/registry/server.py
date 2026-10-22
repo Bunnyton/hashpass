@@ -24,7 +24,7 @@ import zoneinfo
 from collections.abc import Callable, Iterable
 from http import HTTPStatus
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from flask import Flask, Response, g, request, send_file
 from werkzeug.serving import WSGIRequestHandler
@@ -42,6 +42,7 @@ from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, un
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.course_api import CourseApi
+from hashpass.registry.course_web import CourseWeb
 from hashpass.registry.merges import MergeRequests, tree_diff
 from hashpass.registry.passwords import (
     LOGIN_RE,
@@ -228,6 +229,12 @@ class DeletionRequests:
 _COPY = "approved-copy:"      # `_view_revision` result: the pre-revision approved copy of a ref
 
 
+def _local_path(url: str) -> str:
+    """Return a same-site path to come back to after login (`/c/x?invite=…`); anything else -> ''."""
+    url = unquote(url)
+    return url if url.startswith("/") and not url.startswith("//") and "\\" not in url else ""
+
+
 def _tag_ref(ref: str) -> str:
     """Return a revision ref as its tag (`x:1_v3` -> `x:1`), for clients that predate revisions."""
     name, _, version = ref.partition(":")
@@ -339,8 +346,8 @@ class PoolServer:
         if self._fresh_for(user, name):
             return resolved
         tag, n, _latest = parse_version(version)
-        hit = self._course_revision(user, name, tag, n)
-        if hit is not None:                       # a course the caller may play holds it
+        hit = self._course_revision(user, name, tag, n, action="view")
+        if hit is not None:                       # a course the caller may see holds it (anyone: public)
             ref = f"{name}:{revision_version(tag, hit[1])}"
             return ref if self.store.exists(ref) else None
         if self.repo(name).visibility == "private":
@@ -361,13 +368,16 @@ class PoolServer:
         name, _, version = ref.partition(":")
         return (self.resolve(name, version) if name and version else None) or ref
 
-    def _course_revision(self, user: str | None, repo: str, tag: str, n: int | None,
-                         course_ref: str | None = None) -> tuple["course_model.Course", int] | None:
+    def _course_revision(self, user: str | None, repo: str, tag: str, n: int | None,  # noqa: PLR0913
+                         course_ref: str | None = None, *,
+                         action: str = "play") -> tuple["course_model.Course", int] | None:
         """
         Return (course, revision) through which `user` gets `repo:tag` (spec §9), or None.
 
         The course is `?course=owner/name` when given, else the first course the caller may play
-        holding the tag. A requested `_vN` must be the course's current revision of it.
+        holding the tag. A requested `_vN` must be the course's current revision of it. Reading
+        needs only `view` (a public course's tasks download without a token, as before courses);
+        credit needs `play`.
         """
         role = self.users.role(user) if user else None
         wanted = course_ref or (request.args.get("course") if request else None)
@@ -375,7 +385,7 @@ class PoolServer:
         candidates = [c for c in ([store.get(wanted)] if wanted else store.courses_with(repo, tag)) if c]
         for course in candidates:
             task = course.find_task(repo, tag)
-            if task is None or not can(user, role, course, "play"):
+            if task is None or not can(user, role, course, action):
                 continue
             latest = self.repo(repo).latest(tag)
             eff = course_model.effective_n(course, task, latest=latest.n if latest else None)
@@ -489,6 +499,7 @@ class PoolServer:
         self._register_routes(app)
         self.course_api = CourseApi(self)
         self.course_api.register(app)
+        CourseWeb(self).register(app)
         app.before_request(self._legacy_catalog_gone)
         return app
 
@@ -662,7 +673,14 @@ class PoolServer:
     def _token_user(self) -> str | None:
         auth = request.headers.get("Authorization", "")
         if not auth.startswith(_BEARER):
-            return None
+            # the web pages call the JSON API with their cookie session. A cross-site page can send
+            # a plain form POST with that cookie, so a write counts the cookie only with a JSON body
+            # (which, like PUT / DELETE, needs a CORS preflight this server never grants).
+            if not request.cookies.get("hp_session"):
+                return None
+            if request.method not in ("GET", "HEAD") and not request.is_json:
+                return None
+            return self._session_user()
         user = verify_token(self.secret, auth[len(_BEARER):], now=time.time())
         # The HMAC token is valid till its expiry regardless of whether the account still
         # exists.  If an admin deleted the user, we treat the token as unauthenticated so
@@ -730,6 +748,7 @@ class PoolServer:
         if user is None or not self.users.has(user):
             return None
         g.hp_admin = self.users.role(user) == "admin"    # the nav shows admin pages to the admin only
+        g.hp_staff = self.users.role(user) in _AUTHOR_ROLES
         g.hp_tz = str((self.users.get(user) or {}).get("tz", ""))   # pages show times in it
         return user
 
@@ -870,6 +889,12 @@ class PoolServer:
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
+        wanted = request.args.get("course")
+        if wanted and os.environ.get("HASHPASS_COURSES") == "1":    # one course, in catalog rows
+            picked = self.course_api.courses.get(wanted)
+            if picked is None or not can(user, self.users.role(user), picked, "view"):
+                return self._json(HTTPStatus.NOT_FOUND, {"error": f"нет такого курса: {wanted}"})
+            return self._json(HTTPStatus.OK, {"catalog": self._course_rows(picked, user)})
         course = self.default_course()
         if course is not None:                        # after the move to courses (spec §9)
             return self._json(HTTPStatus.OK, {"catalog": self._course_rows(course, user)})
@@ -889,7 +914,8 @@ class PoolServer:
         `HASHPASS_COURSES=1` switches the courses API on. Off by default, so a pool that follows
         `main` (prod) does not grow courses before their web and clients are ready.
         """
-        if request.path.startswith("/courses") and os.environ.get("HASHPASS_COURSES") != "1":
+        course_era = request.path.startswith(("/courses", "/c/")) or request.path == "/c"
+        if course_era and os.environ.get("HASHPASS_COURSES") != "1":
             return self._json(HTTPStatus.NOT_FOUND, {"error": "курсы на этом пуле ещё не включены"})
         if request.path not in self._LEGACY_WRITES or self.default_course() is None:
             return None
@@ -2064,8 +2090,13 @@ class PoolServer:
         """Update a record stored before revisions (`name:tag` itself) with its task, in place."""
         ref_tag = f"{name}:{tag}"
         task_dir = self.store.get(ref_tag).layer.parent / "task"
-        shutil.rmtree(task_dir, ignore_errors=True)
-        shutil.move(st.images.dir(name, tag) / "task", task_dir)
+        incoming = task_dir.with_name(f"task.incoming-{st.sid}")
+        old = task_dir.with_name(f"task.old-{st.sid}")
+        shutil.move(st.images.dir(name, tag) / "task", incoming)   # next to it: same filesystem
+        if task_dir.exists():
+            task_dir.rename(old)                       # the working grader stays until the swap
+        incoming.rename(task_dir)
+        shutil.rmtree(old, ignore_errors=True)
         intent = st.intent
         st.remove()
         self._catalog_on_commit(name, tag, task_digest(task_dir), self._image_digest(ref_tag), intent)
@@ -2270,10 +2301,12 @@ class PoolServer:
         actor = self._session_role(("admin",))
         if actor is None:
             return self._redirect("/web/login")
+        q = request.args.get("q", "").strip()
         return self._html(render_users(
-            self.users.all_users(),
+            self.users.search(q) if q else self.users.all_users(),
             registration_open=self.config.registration_open, current_user=actor,
-            pool_auto=self.pool_settings().auto_approve))
+            pool_auto=self.pool_settings().auto_approve, q=q,
+            deletions=[r for r in self.deletions().all() if r["state"] == "open"]))
 
     def _web_users_auto_approve(self) -> Response:
         """Admin: switch one author's auto-approval (own included)."""
@@ -2298,10 +2331,12 @@ class PoolServer:
         return self._html(render_catalog(self._pool_image_rows(), blocks))
 
     def _web_image_card(self, ref: str) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._redirect("/web/login")
+        viewer = self._session_user()
+        courses_on = os.environ.get("HASHPASS_COURSES") == "1"
+        if viewer is None or (not courses_on and self.users.role(viewer) not in _AUTHOR_ROLES):
+            return self._redirect(f"/web/login?next={quote('/web/image/' + ref, safe='')}")
         ref = self._live_ref(ref)
-        if not self.store.exists(ref):
+        if not self.store.exists(ref) or not self._may_see_repo(viewer, ref.partition(":")[0]):
             return self._web_not_found(ref)
         row = next((r for r in self._pool_image_rows() if r["ref"] == ref), None)
         if row is None:
@@ -2311,7 +2346,36 @@ class PoolServer:
                "sources": self.sources().listing(ref) if self._sources_ready(ref) else [],
                **({"state": entry.state, "reason": entry.reason,
                    "pending_update": entry.as_dict()["pending_update"]} if entry else {})}
-        return self._html(render_image_card(row))
+        return self._html(render_image_card(row, **self._card_extra(viewer, ref)))
+
+    def _card_extra(self, viewer: str, ref: str) -> dict[str, object]:
+        """Revisions, settings, where used, proposals and merges for an image card (spec §11)."""
+        name, _, version = ref.partition(":")
+        tag, n, _latest = parse_version(version)
+        idx = self.repo(name)
+        role = self.users.role(viewer)
+        owner = self._may_write(viewer, name)
+        used = self.course_api.courses.courses_with(name, tag)
+        merges = self.merges(name).all() if owner else [m for m in self.merges(name).all() if m["by"] == viewer]
+        open_merges = []
+        for m in merges:
+            row = dict(m)
+            if m["state"] == "open" and owner:
+                base = self.resolve(name, m["to_tag"])
+                row["files"] = tree_diff(self.sources()._dir(base) if base else None,  # noqa: SLF001
+                                         self.sources()._dir(m["from"]))           # noqa: SLF001
+            open_merges.append(row)
+        origin = idx.fork_of.partition(":")[0]
+        return {
+            "repo": name, "tag": tag, "n": n, "repo_info": idx.as_dict() if idx.exists else None,
+            "owner": owner, "courses_era": os.environ.get("HASHPASS_COURSES") == "1",
+            "used_in": self._course_names(used, viewer) if used else [],
+            "propose_to": [c.ref for c in self.course_api.courses.all() if can(viewer, role, c, "propose")
+                           and c.find_task(name, tag) is None],
+            "may_fork": self._may_read_sources(viewer, name) and not owner and n is not None,
+            "fork_origin": origin if origin and owner else "",
+            "merges": open_merges, "viewer": viewer,
+        }
 
     def _web_source_file(self) -> Response:  # noqa: PLR0911  (page / folder / raw / download)
         """
@@ -2406,17 +2470,25 @@ class PoolServer:
         # Already in, but an admin-only page sent us here: say so, or the form looks like a
         # lost session and the author logs in again -- in circles.
         user = self._session_user()
+        courses = os.environ.get("HASHPASS_COURSES") == "1"
+        next_url = _local_path(request.args.get("next", ""))
+        if user is not None and next_url:
+            return self._redirect(next_url)
         if user is not None:
-            return self._html(render_login(signed_in=user, role=self.users.role(user)))
-        return self._html(render_login())
+            return self._html(render_login(signed_in=user, role=self.users.role(user), courses=courses))
+        return self._html(render_login(next_url=next_url, courses=courses))
 
     def _web_login_post(self) -> Response:
         user = request.form.get("user", "").strip()
-        if (self.users.verify(user, request.form.get("password", ""))
-                and self.users.role(user) in _AUTHOR_ROLES):
+        courses = os.environ.get("HASHPASS_COURSES") == "1"     # with courses anyone signs in
+        staff = self.users.role(user) in _AUTHOR_ROLES
+        if self.users.verify(user, request.form.get("password", "")) and (staff or courses):
             token = issue_token(self.secret, user, now=time.time())
-            return self._redirect("/web", set_cookie=("hp_session", token))
-        return self._html(render_login("Неверный логин/пароль или нет доступа."),
+            target = _local_path(request.form.get("next", "")) or ("/web" if staff else "/c")
+            return self._redirect(target, set_cookie=("hp_session", token))
+        return self._html(render_login("Неверный логин/пароль или нет доступа.",
+                                       next_url=_local_path(request.form.get("next", "")),
+                                       courses=courses),
                           status=HTTPStatus.UNAUTHORIZED)
 
     def _web_logout(self) -> Response:

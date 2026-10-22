@@ -86,6 +86,20 @@ def _not_found_error(exc: urllib.error.HTTPError, ref: str) -> RuntimeError | No
     return RuntimeError(f"образ «{ref}» не найден на пуле")
 
 
+# The course this process works in, per pool (spec 2026-10-21 §9): set by hashpass when the student
+# picks a course; every client of that pool then reads tasks and gets credit through it.
+_COURSES: dict[str, str] = {}
+
+
+def use_course(url: str, course: str | None) -> None:
+    """Make `course` (`owner/name`) the course every client of the pool at `url` works in."""
+    key = registry_key(url)
+    if course:
+        _COURSES[key] = course
+    else:
+        _COURSES.pop(key, None)
+
+
 @dataclass
 class RemoteRegistry:
     """HTTP pool client: anonymous pull, token-gated push/register/submit. Never point at 185.x."""
@@ -108,6 +122,15 @@ class RemoteRegistry:
     # what the last `push` did per ref: {"ref": "x:1_v3", "n": 3, "unchanged": bool}
     last_push: list[dict[str, object]] = field(default_factory=list, init=False, repr=False,
                                                compare=False)
+
+    @property
+    def course(self) -> str | None:
+        """The course this client reads tasks and gets credit through (None: no courses / old pool)."""
+        return _COURSES.get(registry_key(self.base_url))
+
+    def _cq(self, sep: str = "?") -> str:
+        """Return the `course=` query for a task read (`sep` = '?' or '&'), '' without a course."""
+        return f"{sep}course={urllib.parse.quote(self.course, safe='/')}" if self.course else ""
 
     def _bases(self) -> list[str]:
         """
@@ -281,7 +304,7 @@ class RemoteRegistry:
         """Whether the pool holds `ref` (HEAD)."""
         name, version = split_ref(ref)
         try:
-            self._request("HEAD", f"/image/{name}/{version}", headers=self._reader_headers())
+            self._request("HEAD", f"/image/{name}/{version}{self._cq()}", headers=self._reader_headers())
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.NOT_FOUND:
                 return False
@@ -294,7 +317,7 @@ class RemoteRegistry:
         """Return the pool's digest for `ref`; None when absent OR a legacy record without a digest."""
         name, version = split_ref(ref)
         try:
-            _body, headers = self._request("HEAD", f"/image/{name}/{version}",
+            _body, headers = self._request("HEAD", f"/image/{name}/{version}{self._cq()}",
                                            headers=self._reader_headers())
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.NOT_FOUND:
@@ -312,7 +335,7 @@ class RemoteRegistry:
         """
         name, version = split_ref(ref)
         with dest.open("wb") as sink:
-            _body, headers = self._request("GET", f"/image/{name}/{version}", sink=sink,
+            _body, headers = self._request("GET", f"/image/{name}/{version}{self._cq()}", sink=sink,
                                            on_bytes=on_bytes, headers=self._reader_headers())
         expected = headers.get(_DIGEST_HEADER, "")
         if not expected:
@@ -515,6 +538,13 @@ class RemoteRegistry:
         """Return a repository's settings and tags with their revisions (oldest first)."""
         return self._get_json(f"/revisions/{name}", token=self._auth_token(token))
 
+    def repo_settings(self, name: str, *, token: str | None = None, **fields: object) -> dict[str, object]:
+        """Change your repository's settings: visibility (public/private), hide_sources."""
+        raw = self._send("PUT", f"/revisions/{name}", data=json.dumps(fields).encode("utf-8"),
+                         headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}",
+                                  "Content-Type": "application/json"})
+        return json.loads(raw.decode("utf-8")) if raw else {}
+
     def tag(self, src: str, to: str, *, token: str | None = None) -> str:
         """Tag your revision `src` (`x:1_v3`, or `x:1` = its newest) as `to`; return the new revision."""
         name, version = split_ref(src)
@@ -697,7 +727,7 @@ class RemoteRegistry:
 
     def catalog(self, *, token: str | None = None) -> list[dict[str, object]]:
         """Return the ordered task catalog (requires a login token)."""
-        result = self._get_json("/catalog", token=self._auth_token(token))
+        result = self._get_json(f"/catalog{self._cq()}", token=self._auth_token(token))
         return list(result.get("catalog", []))
 
     def pool_images(self, *, token: str | None = None) -> list[dict[str, object]]:
@@ -711,6 +741,8 @@ class RemoteRegistry:
                token: str | None = None, session_id: str | None = None) -> dict[str, object]:
         """Submit a task result (+ optional command history / anti-bot signal); returns {status,...}."""
         payload: dict[str, object] = {"task_ref": task_ref, "digest": digest, "passed": passed}
+        if self.course:
+            payload["course"] = self.course
         if session_id:
             payload["session_id"] = session_id   # the console session this pass closes
         if history is not None:
@@ -727,7 +759,34 @@ class RemoteRegistry:
                                       "seq": seq, "entries": entries}
         if final:
             payload["final"] = final
+        if self.course:
+            payload["course"] = self.course
         return self._post_json("/attempt", payload, token=self._auth_token(token))
+
+    # --- courses (spec 2026-10-21 §9) --------------------------------------------
+
+    def courses(self, q: str = "", *, token: str | None = None) -> list[dict[str, object]] | None:
+        """Courses the caller may see (None: this pool has no courses -- an old one, or off)."""
+        query = f"?q={urllib.parse.quote(q)}" if q else ""
+        try:
+            return list(self._get_json(f"/courses{query}", token=self._auth_token(token or self.token))["courses"])
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.NOT_FOUND:
+                return None
+            raise
+
+    def course_view(self, ref: str, *, token: str | None = None) -> dict[str, object]:
+        """One course as the caller sees it (an outsider of a private one: title + `access`)."""
+        return self._get_json(f"/courses/{ref}", token=self._auth_token(token or self.token))
+
+    def join(self, ref: str, invite: str = "", *, token: str | None = None) -> dict[str, object]:
+        """Join a course: a public one, or a private one with its invite token."""
+        return self._post_json(f"/courses/{ref}/join", {"invite": invite} if invite else {},
+                               token=self._auth_token(token or self.token))
+
+    def request_access(self, ref: str, comment: str = "", *, token: str | None = None) -> None:
+        """Ask the course's staff for access to a private course."""
+        self._post_json(f"/courses/{ref}/requests", {"comment": comment}, token=self._auth_token(token or self.token))
 
     def solutions(self, *, token: str | None = None) -> dict[str, dict[str, object]]:
         """List the caller's solved tasks with a saved solution: {ref: {session_id, at}}."""
@@ -758,7 +817,7 @@ class RemoteRegistry:
     def _get_task(self, ref: str, *, token: str) -> bytes:
         name, version = split_ref(ref)
         try:
-            return self._send("GET", f"/task/{name}/{version}",
+            return self._send("GET", f"/task/{name}/{version}{self._cq()}",
                               headers={"Authorization": f"Bearer {token}"})
         except urllib.error.HTTPError as exc:
             err = _not_found_error(exc, ref)
@@ -769,7 +828,7 @@ class RemoteRegistry:
     def _closure(self, ref: str) -> list[str]:
         name, version = split_ref(ref)
         try:
-            body = self._send("GET", f"/closure/{name}/{version}?revisions=1",
+            body = self._send("GET", f"/closure/{name}/{version}?revisions=1{self._cq('&')}",
                               headers=self._reader_headers())
         except urllib.error.HTTPError as exc:
             err = _not_found_error(exc, ref)
