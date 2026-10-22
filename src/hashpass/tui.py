@@ -398,11 +398,12 @@ class PoolTUI(App):
         except Exception:                                  # noqa: BLE001, S110  (offline / old pool)
             pass
         try:
-            self.courses_mode = self.client.courses(token=self.token) is not None
+            listed = self.client.courses(token=self.token)
         except Exception:                                  # noqa: BLE001  (offline / old pool)
-            self.courses_mode = False
+            listed = None
+        self.courses_mode = listed is not None
         if self.courses_mode:
-            if my_courses.activate(self.env.root, self.url) is None:
+            if my_courses.activate(self.env.root, self.url) is None and listed:
                 self.call_after_refresh(self.action_courses)      # first time: pick a course
             self._course_title()
         self.refresh_bindings()
