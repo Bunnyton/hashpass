@@ -4,10 +4,15 @@ Merge requests: a fork's revision offered back to the repository it came from (s
 Stored next to the target repository's index (`.repos/<owner>/<name>/merges.json`). One open
 request per (fork tag -> target tag); a newer offer from the same fork tag refreshes it.
 """
+import contextlib
 import difflib
+import fcntl
 import json
+import os
+import tempfile
 import time
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 _MAX_DIFF_FILE = 256 * 1024
@@ -28,35 +33,55 @@ class MergeRequests:
             return []
 
     def _save(self, rows: list[dict]) -> None:
+        """Write atomically (a reader never sees half a file)."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+        fd, tmp = tempfile.mkstemp(prefix=".merges-", suffix=".tmp", dir=self._path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(rows, f, ensure_ascii=False, indent=2)
+            Path(tmp).replace(self._path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                Path(tmp).unlink()
+            raise
+
+    @contextlib.contextmanager
+    def _locked(self) -> Iterator[list[dict]]:
+        """Read-modify-write under the file lock: two offers at once never lose one."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with (self._path.parent / ".merges.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                rows = self.all()
+                yield rows
+                self._save(rows)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
     def get(self, mid: str) -> dict | None:
         return next((r for r in self.all() if r["id"] == mid), None)
 
     def offer(self, *, src: str, to_tag: str, by: str, comment: str) -> dict:
         """Open (or refresh) the request from `src` (a fork revision) into `to_tag`."""
-        rows = self.all()
-        src_tag = src.rpartition("_v")[0]
-        row = next((r for r in rows if r["state"] == "open" and r["to_tag"] == to_tag
-                    and r["from"].rpartition("_v")[0] == src_tag), None)
-        if row is None:
-            row = {"id": f"m-{uuid.uuid4().hex[:8]}", "to_tag": to_tag, "state": "open",
-                   "reason": "", "decided_by": "", "decided_at": 0.0, "result": ""}
-            rows.append(row)
-        row.update({"from": src, "by": by, "comment": comment[:2000], "at": time.time()})
-        self._save(rows)
-        return row
+        with self._locked() as rows:
+            src_tag = src.rpartition("_v")[0]
+            row = next((r for r in rows if r["state"] == "open" and r["to_tag"] == to_tag
+                        and r["from"].rpartition("_v")[0] == src_tag), None)
+            if row is None:
+                row = {"id": f"m-{uuid.uuid4().hex[:8]}", "to_tag": to_tag, "state": "open",
+                       "reason": "", "decided_by": "", "decided_at": 0.0, "result": ""}
+                rows.append(row)
+            row.update({"from": src, "by": by, "comment": comment[:2000], "at": time.time()})
+            return dict(row)
 
     def close(self, mid: str, state: str, *, by: str, reason: str = "", result: str = "") -> dict | None:
-        rows = self.all()
-        row = next((r for r in rows if r["id"] == mid and r["state"] == "open"), None)
-        if row is None:
-            return None
-        row.update({"state": state, "decided_by": by, "decided_at": time.time(),
-                    "reason": reason[:500], "result": result})
-        self._save(rows)
-        return row
+        with self._locked() as rows:
+            row = next((r for r in rows if r["id"] == mid and r["state"] == "open"), None)
+            if row is None:
+                return None
+            row.update({"state": state, "decided_by": by, "decided_at": time.time(),
+                        "reason": reason[:500], "result": result})
+            return dict(row)
 
 
 def tree_diff(old: Path | None, new: Path | None) -> list[dict]:

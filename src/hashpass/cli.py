@@ -461,6 +461,9 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
         _reset_workdir(build_work)                     # sudo rsync --delete: it may hold root-owned files
     sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} ({kind})\n")
     store.set_taskfile_path(ref, str(taskfile_path.resolve()))   # push attaches it to the card later
+    origin = _origin_of(taskfile_path.resolve().parent)
+    if origin and origin != split_ref(ref)[0]:             # a clone: push goes back to it
+        store.set_meta_field(ref, "origin", origin)
     if not _uses_local_service(env):
         # A pool is configured: publishing is an explicit `hashpass push` (never automatic).
         flag = " --task" if task else ""
@@ -1688,13 +1691,19 @@ def unpack_task_source(blob: bytes, dest: Path) -> None:
         tar.extractall(dest, filter="data")
 
 
+def _pushed_as(client: RemoteRegistry, ref: str) -> tuple[str, str]:
+    """`name, tag` the running push really writes to (the origin or one's fork), else the ref's."""
+    name, version = split_ref(ref)
+    return getattr(client, "push_target", "") or name, version
+
+
 def _attach_about(client: RemoteRegistry, ref: str, task_dir: Path, io: Io, staging: str = "") -> None:
     """On push, attach the task's README.md (old name: about.md): the pool shows it as the description."""
     about = next((p for p in (task_dir / "README.md", task_dir / "about.md") if p.is_file()), None)
     if about is None:
         io.write("\x1b[2mREADME.md нет — у задания на пуле не будет описания\x1b[0m\n")
         return
-    name, version = split_ref(ref)
+    name, version = _pushed_as(client, ref)
     try:
         client.push_attachment(name, version, about.name, about.read_bytes(), staging=staging)
     except (urllib.error.URLError, OSError, RuntimeError, ValueError) as exc:
@@ -1705,7 +1714,7 @@ def _attach_about(client: RemoteRegistry, ref: str, task_dir: Path, io: Io, stag
 
 def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io, staging: str = "") -> None:
     """On push, upload the whole task dir so authors/admins can read the task as it was written."""
-    name, version = split_ref(ref)
+    name, version = _pushed_as(client, ref)
     try:
         blob = pack_task_source(task_dir)
         if len(blob) > _SOURCE_MAX:
@@ -1738,7 +1747,7 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
     if path is None or not path.is_file():
         io.write("\x1b[2mTaskfile не найден — исходники на пул не приложены\x1b[0m\n")
         return
-    name, version = split_ref(ref)
+    name, version = _pushed_as(client, ref)
     try:
         client.push_attachment(name, version, path.name, path.read_bytes(), taskfile=True,
                                staging=staging)
@@ -1748,6 +1757,14 @@ def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io
     io.write(f"\x1b[36m↑ прикреплён Taskfile\x1b[0m: {path.name}\n")
     _attach_about(client, ref, path.parent, io, staging)
     _attach_source(client, ref, path.parent, io, staging)
+
+
+def _push_origin(store: ImageStore, ref: str) -> str:
+    """Return the pool image a cloned build goes back to ('' -- its own name)."""
+    try:
+        return store.get(ref).origin or ""
+    except KeyError:
+        return ""
 
 
 def _built_on_base(store: ImageStore, ref: str) -> str | None:
@@ -1788,9 +1805,14 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
     _push_call(client.push, store, ref, force=force, task_dir=tdir if tdir.exists() else None,
                publish=publish, block=block,
                extras=lambda staging: _attach_taskfile(client, store, ref, io, staging),
-               base=_built_on_base(store, ref), message=message)
+               base=_built_on_base(store, ref), message=message, origin=_push_origin(store, ref))
     for done in client.last_push:
-        if done["unchanged"]:
+        if done.get("proposal"):
+            to = done["proposal"]["to"]
+            sys.stdout.write(f"\x1b[36m↗ отправлено предложением в {to}\x1b[0m — решит владелец "
+                             f"({human_ref(done['ref'])}); посмотреть: {url.rstrip('/')}/web/image/{to}:"
+                             f"{split_ref(done['ref'])[1].rpartition('_v')[0]}#changes-tab\n")
+        elif done["unchanged"]:
             sys.stdout.write(f"без изменений: {human_ref(done['ref'])} уже на пуле\n")
         else:
             sys.stdout.write(f"отправлено {human_ref(done['ref'])}\n")
@@ -1950,6 +1972,21 @@ def cmd_fork(env: Home, src: str, name: str | None = None, registry: str | None 
     return 0
 
 
+_ORIGIN_FILE = ".hashpass.json"      # a clone remembers where it came from (spec 2026-10-23 §3)
+
+
+def _remember_origin(folder: Path, name: str) -> None:
+    (folder / _ORIGIN_FILE).write_text(json.dumps({"origin": name}, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _origin_of(folder: Path) -> str:
+    """Return the pool image a cloned folder came from ('' if it was not cloned)."""
+    try:
+        return str(json.loads((folder / _ORIGIN_FILE).read_text(encoding="utf-8")).get("origin") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
 def cmd_source(env: Home, ref: str, dest: str | None = None, registry: str | None = None,
                io: Io | None = None) -> int:
     """
@@ -1979,10 +2016,14 @@ def cmd_source(env: Home, ref: str, dest: str | None = None, registry: str | Non
             raise
         if filename in ("", _SOURCE_NAME):
             unpack_task_source(blob, out)
-            io.write(f"\x1b[32m✓ исходники {ref}\x1b[0m → {out}\n")
+            _remember_origin(out, name)
+            io.write(f"\x1b[32m✓ исходники {ref}\x1b[0m → {out}\n"
+                     f"\x1b[2m  поправьте, соберите (hashpass build) и отправьте (hashpass push -m «что "
+                     f"поменялось») — версия уйдёт в {name}: сразу или предложением владельцу\x1b[0m\n")
         else:
             out.mkdir(parents=True, exist_ok=True)
             (out / "Taskfile").write_bytes(blob)
+            _remember_origin(out, name)
             io.write(f"\x1b[32m✓ {ref}\x1b[0m → {out / 'Taskfile'}\n"
                      "\x1b[2m  задание выложено до того, как пул стал хранить исходники целиком: "
                      "здесь только Taskfile (остальное — после следующего push автора)\x1b[0m\n")

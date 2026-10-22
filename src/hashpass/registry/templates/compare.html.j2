@@ -1,0 +1,22 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<nav class='crumb' aria-label='Путь'><a href='/web/image/{{ new | ref_url }}#revisions'>← {{ name }}</a></nav>
+<div class='card-hero'>
+<h1>Сравнение версий</h1>
+<p class='compare-refs'><a class='mono' href='/web/image/{{ old | ref_url }}'>{{ old | ver }}</a> <span class='dim'>→</span> <a class='mono' href='/web/image/{{ new | ref_url }}'>{{ new | ver }}</a></p>
+<div class='row'>
+<span class='pill open sm'>+ добавлено: {{ counts.added }}</span>
+<span class='pill warn sm'>± изменено: {{ counts.changed }}</span>
+<span class='pill closed sm'>− удалено: {{ counts.removed }}</span>
+</div>
+</div>
+{% if not files %}<div class='empty card'><p class='sub'>Исходники одинаковые.</p></div>{% endif %}
+{% for f in files %}
+<details class='card diff-file' open>
+<summary class='row'><span class='mono'>{{ {'added': '+', 'removed': '−', 'changed': '±'}[f.change] }} {{ f.path }}</span>
+<span class='sp'></span><span class='pill sm{% if f.change == "added" %} open{% elif f.change == "removed" %} closed{% else %} warn{% endif %}'>{{ {'added': 'добавлен', 'removed': 'удалён', 'changed': 'изменён'}[f.change] }}</span></summary>
+{% if f.diff %}<pre class='diff'>{% for line in f.diff.splitlines() %}<span class='{% if line.startswith("+") and not line.startswith("+++") %}add{% elif line.startswith("-") and not line.startswith("---") %}del{% elif line.startswith("@@") %}hunk{% endif %}'>{{ line }}</span>
+{% endfor %}</pre>{% else %}<p class='sub small'>двоичный или большой файл — без построчной разницы</p>{% endif %}
+</details>
+{% endfor %}
+{% endblock %}

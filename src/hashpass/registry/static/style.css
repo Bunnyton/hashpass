@@ -525,3 +525,9 @@ tr:target td{background:var(--accent-soft)}
 .people li{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .people .person{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--text);min-width:180px}
 .people .person:hover .mono{color:var(--accent);text-decoration:underline}
+.compare-refs{font-size:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.diff-file summary{list-style:none;cursor:pointer}.diff-file summary::-webkit-details-marker{display:none}
+pre.diff span{display:block}
+pre.diff .add{background:var(--ok-soft);color:var(--ok)}
+pre.diff .del{background:var(--danger-soft);color:var(--danger)}
+pre.diff .hunk{color:var(--accent)}

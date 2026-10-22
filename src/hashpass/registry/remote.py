@@ -5,6 +5,7 @@ Point base_url at your pool (loopback in tests, or the self-hosted pool). It mus
 legacy server (no 185.x). Tokens are cached locally and reused until they expire.
 """
 import contextlib
+import dataclasses
 import hashlib
 import json
 import os
@@ -473,10 +474,20 @@ class RemoteRegistry:
         local = store.get(item).pool_digests.get(registry_key(self.base_url))
         return bool(local) and local == remote
 
-    def begin(self, name: str, tag: str, *, token: str | None = None, base: str | None = None) -> str:
-        """Open a staging area for one revision of `name:tag` (built on `base`); return its id."""
-        return str(self._post_json(f"/revisions/{name}/{tag}", {"base": base} if base else {},
-                                   token=self._auth_token(token))["staging"])
+    def begin(self, name: str, tag: str, *, token: str | None = None, base: str | None = None,
+              propose: bool = False) -> str:
+        """
+        Open a staging area for one revision of `name:tag` (built on `base`); return its id.
+
+        `propose`: without the right to publish `name`, the pool opens it in one's fork instead
+        (spec 2026-10-23 §3) -- `push_target` then says where the push really goes.
+        """
+        body: dict[str, object] = {"base": base} if base else {}
+        if propose:
+            body["propose"] = True
+        answer = self._post_json(f"/revisions/{name}/{tag}", body, token=self._auth_token(token))
+        self.push_target = str(answer.get("name") or name)
+        return str(answer["staging"])
 
     def commit(self, name: str, tag: str, staging: str, *, token: str | None = None,
                message: str = "") -> dict[str, object]:
@@ -489,7 +500,7 @@ class RemoteRegistry:
     def push(self, store: ImageStore, ref: str, *, token: str | None = None,  # noqa: PLR0913
              force: bool = False, task_dir: Path | None = None, publish: bool = False,
              block: str | None = None, extras: Callable[[str], None] | None = None,
-             base: str | None = None, message: str = "") -> list[str]:
+             base: str | None = None, message: str = "", origin: str = "") -> list[str]:
         """
         Push ref + its own `from` closure, bottom-up, each as one revision (spec 2026-10-21 §2.3).
 
@@ -509,19 +520,18 @@ class RemoteRegistry:
             if parse_version(version)[1] is not None:
                 continue                                   # a pool revision: already there
             is_target = item == normalize_ref(ref)
-            try:
-                sid = self.begin(name, version, token=auth,
+            self.push_target = ""
+            propose = bool(is_target and origin and origin != name)
+            try:                       # a clone of someone's image goes back to it (or a proposal)
+                sid = self.begin(origin if propose else name, version, token=auth, propose=propose,
                                  base=base if base and normalize_ref(base) != item else None)
+                name = self.push_target or name
             except urllib.error.HTTPError as exc:
                 if exc.code not in (HTTPStatus.NOT_FOUND, HTTPStatus.METHOD_NOT_ALLOWED):
                     raise
                 return self._push_legacy(store, ref, auth, force=force, task_dir=task_dir,
                                          publish=publish, block=block, extras=extras)
-            digest = None
-            if force or not self._already_there(store, item):
-                with tempfile.TemporaryDirectory() as td:
-                    blob = pack_image_to_file(store.get(item), Path(td) / "image.tar.gz")
-                    digest = self._put_image_file(name, version, blob, auth, staging=sid)
+            digest = self._upload_image(store, item, name, version, auth, sid, force=force)
             tdir = task_dir if is_target else store.get(item).layer.parent / "task"
             if tdir is not None and tdir.is_dir():
                 self.push_task(tdir, name, version, publish=publish and is_target,
@@ -532,10 +542,23 @@ class RemoteRegistry:
             if digest:                    # remember what THIS pool now holds for this ref
                 store.set_pool_digest(item, digest, registry=self.base_url)
             self.last_push.append({"ref": str(result.get("ref", item)), "n": result.get("n"),
-                                   "unchanged": bool(result.get("unchanged"))})
+                                   "unchanged": bool(result.get("unchanged"))}
+                                  | ({"proposal": result["proposal"]} if result.get("proposal") else {}))
             if not result.get("unchanged"):
                 made.append(str(result.get("ref", item)))
         return made
+
+    def _upload_image(self, store: ImageStore, item: str, name: str, version: str,  # noqa: PLR0913, PLR0917
+                      auth: str, sid: str, *, force: bool) -> str | None:
+        """Send `item`'s image into staging `sid` as `name` (unless the pool has it); its digest."""
+        if not (force or name != split_ref(item)[0] or not self._already_there(store, item)):
+            return None
+        with tempfile.TemporaryDirectory() as td:
+            img = store.get(item)
+            if img.name != name:                      # going back to the origin under its name
+                img = dataclasses.replace(img, name=name)
+            blob = pack_image_to_file(img, Path(td) / "image.tar.gz")
+            return self._put_image_file(name, version, blob, auth, staging=sid)
 
     def revisions(self, name: str, *, token: str | None = None) -> dict[str, object]:
         """Return a repository's settings and tags with their revisions (oldest first)."""

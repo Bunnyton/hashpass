@@ -102,3 +102,29 @@ def test_a_version_carries_what_changed(registry, tmp_path, monkeypatch):
     cli.cmd_push(env, "bob/lab:1", registry.base_url, message="первая версия: каркас")
     rev = RepoIndex(registry.store.root / ".repos", "bob/lab").latest("1")
     assert (rev.n, rev.message, rev.by) == (1, "первая версия: каркас", "bob")
+
+
+@pytest.mark.tier2
+def test_a_clone_goes_back_as_a_proposal_or_as_a_version(registry, tmp_path, monkeypatch, capsys):
+    """Spec 2026-10-23 §3: clone -> build -> push lands in the origin: a proposal without rights."""
+    bob = _login(registry, tmp_path, monkeypatch, "bob", "bob")
+    _seed(ImageStore(bob.images), tmp_path, "bob/lab", "one")
+    cli.cmd_push(bob, "bob/lab:1", registry.base_url)
+    kid = _login(registry, tmp_path, monkeypatch, "kid", "kid")
+    store = ImageStore(kid.images)
+    (tmp_path / "k").mkdir()
+    _seed(store, tmp_path / "k", "kid/lab", "better")         # what `hashpass build` of a clone makes
+    store.set_meta_field("kid/lab:1", "origin", "bob/lab")
+    capsys.readouterr()
+    cli.cmd_push(kid, "kid/lab:1", registry.base_url, message="поправил опечатку")
+    assert "предложением в bob/lab" in capsys.readouterr().out
+    assert RepoIndex(registry.store.root / ".repos", "bob/lab").latest("1").n == 1    # not yet
+    assert RepoIndex(registry.store.root / ".repos", "kid/lab").fork_of.startswith("bob/lab:")
+    with RepoIndex(registry.store.root / ".repos", "bob/lab").locked() as idx:   # now an author there
+        idx.set_member("kid", "author")
+    (tmp_path / "k2").mkdir()
+    _seed(store, tmp_path / "k2", "kid/lab", "even better")
+    store.set_meta_field("kid/lab:1", "origin", "bob/lab")
+    cli.cmd_push(kid, "kid/lab:1", registry.base_url, message="ещё лучше")
+    rev = RepoIndex(registry.store.root / ".repos", "bob/lab").latest("1")
+    assert (rev.n, rev.by, rev.message) == (2, "kid", "ещё лучше")

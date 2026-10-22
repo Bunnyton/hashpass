@@ -64,12 +64,13 @@
 {% if repo_info.fork_of %}<span class='pill sm'>форк <a href='/web/image/{{ repo_info.fork_of | ref_url }}'>{{ repo_info.fork_of }}</a></span>{% endif %}
 </div>
 <table>
-<tr><th>Тег</th><th>Версия</th><th>Когда</th><th>Кто</th><th></th></tr>
-{% for t, revs in repo_info.tags.items() %}{% for r in revs | reverse %}
+<tr><th>Тег</th><th>Версия</th><th>Что поменялось</th><th>Когда</th><th>Автор</th><th></th></tr>
+{% for t, revs in repo_info.tags.items() %}{% set ordered = revs | sort(attribute='n') %}{% for r in ordered | reverse %}
 <tr{% if t == tag and r.n == n %} class='on'{% endif %}><td class='mono'>{{ t }}</td>
-<td class='mono'><a href='/web/image/{{ (repo ~ ":" ~ t ~ "_v" ~ r.n) | ref_url }}'>версия {{ r.n }}</a>{% if loop.first %} <span class='pill sm'>последняя</span>{% endif %}
-{% if r.merged_from %}<span class='sub small'>слияние из {{ r.merged_from }}</span>{% endif %}</td>
-<td>{{ ts(r.at) }}</td><td><a href='/u/{{ r.by | q }}'>{{ r.by }}</a></td>
+<td class='mono'><a href='/web/image/{{ (repo ~ ":" ~ t ~ "_v" ~ r.n) | ref_url }}'>версия {{ r.n }}</a>{% if loop.first %} <span class='pill sm'>последняя</span>{% endif %}</td>
+<td class='small'>{{ r.message or '—' }}{% if r.merged_from %}<div class='dim'>предложение из {{ r.merged_from | ver }}</div>{% endif %}
+{% if not loop.last %}<div><a href='/web/compare/{{ repo }}?from={{ t }}_v{{ (ordered | reverse | list)[loop.index].n }}&to={{ t }}_v{{ r.n }}'>сравнить с предыдущей</a></div>{% endif %}</td>
+<td>{{ ts(r.at) }}</td><td><a href='/u/{{ r.by | q }}'>{{ r.by }}</a>{% if r.accepted_by %}<div class='sub small'>принял <a href='/u/{{ r.accepted_by | q }}'>{{ r.accepted_by }}</a></div>{% endif %}</td>
 <td>{% if owner %}<form class='inline' data-api='DELETE /revisions/{{ repo }}/{{ t }}/{{ r.n }}' data-confirm='Удалить версию {{ r.n }} тега {{ t }}? Если она стоит в чужих курсах, удаление подождёт решения администратора.'><button class='sm ghost' type='submit'>удалить</button></form>{% endif %}</td></tr>
 {% endfor %}{% endfor %}
 </table>
@@ -175,7 +176,8 @@
 <h2 id='merges'>Запросы на слияние</h2>
 {% for m in merges | reverse %}
 <div class='card'>
-<div class='row'><span class='mono'>{{ m['from'] }} → {{ repo }}:{{ m.to_tag }}</span><span class='sp'></span>
+<div class='row'><span class='mono'>{{ m['from'] | ver }} → {{ repo }}:{{ m.to_tag }}</span>
+<a class='small' href='/web/compare/{{ repo }}?from={{ m.to_tag }}&to={{ m["from"] | q }}'>сравнить с текущей</a><span class='sp'></span>
 {% if m.state == 'open' %}<span class='pill warn sm'>открыт</span>{% elif m.state == 'merged' %}<span class='pill open sm'>принят → {{ m.result }}</span>{% elif m.state == 'rejected' %}<span class='pill no sm'>отклонён{% if m.reason %}: {{ m.reason }}{% endif %}</span>{% else %}<span class='pill sm'>отозван</span>{% endif %}</div>
 <p class='sub small'>{{ m.by }}{% if m.comment %}: {{ m.comment }}{% endif %}</p>
 {% if m.files %}<details><summary>Изменения ({{ m.files | length }})</summary>

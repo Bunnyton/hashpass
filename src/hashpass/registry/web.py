@@ -713,3 +713,11 @@ def render_settings(*, tz: str, zones: list[str], error: str = "", done: str = "
     return _env.get_template("password.html.j2").render(
         title="Настройки — hashpass", nav=True, active="/web/settings",
         tz=tz, zones=zones, error=error, done=done, hint=_PW_HINT, now=time.time())
+
+
+def render_compare(name: str, old: str, new: str, files: list[dict]) -> str:
+    """Two versions side by side: what changed, file by file (spec 2026-10-23 §3)."""
+    counts = {k: sum(1 for f in files if f["change"] == k) for k in ("added", "removed", "changed")}
+    return _env.get_template("compare.html.j2").render(
+        title=f"{name}: сравнение — hashpass", nav=True, active="", name=name, old=old, new=new,
+        files=files, counts=counts)

@@ -68,6 +68,7 @@ from hashpass.registry.staging import Staging, new_staging, sweep_stale
 from hashpass.registry.token import issue_token, verify_token
 from hashpass.registry.web import (
     render_catalog,
+    render_compare,
     render_dashboard,
     render_engine_install_script,
     render_front,
@@ -558,6 +559,7 @@ class PoolServer:
         app.add_url_rule("/users/<user>/auto-approve", "user_auto_approve",
                          self._route_user_auto_approve, methods=["PUT"])
         app.add_url_rule("/closure/<path:tail>", "closure", self._route_closure, methods=["GET"])
+        app.add_url_rule("/web/compare/<path:name>", "web_compare", self._web_compare, methods=["GET"])
         app.add_url_rule("/repo-members/<path:tail>", "repo_members", self._route_repo_members,
                          methods=["PUT", "DELETE"])
         app.add_url_rule("/deletion-requests", "deletion_requests", self._route_deletions,
@@ -1647,16 +1649,51 @@ class PoolServer:
         return user, name, tag, None
 
     def _revision_begin(self, tail: str) -> Response:
+        data = request.get_json(silent=True) or {}
+        data = data if isinstance(data, dict) else {}
+        proposal = self._proposal_target(tail) if data.get("propose") else None
+        if isinstance(proposal, Response):
+            return proposal
+        if proposal is not None:                       # no right to publish: into one's fork
+            target, tail = proposal
         user, name, tag, err = self._write_tag(tail)
         if err is not None:
             return err
         sweep_stale(self.store.root)
         st = new_staging(self.store.root, owner=user, name=name, tag=tag)
-        data = request.get_json(silent=True) or {}
-        base = str(data.get("base", "")) if isinstance(data, dict) else ""
+        base = str(data.get("base", ""))
         if base:                                       # the base it was built on (an implicit FROM)
             st.save_intent(st.intent | {"base": base})
-        return self._json(HTTPStatus.CREATED, {"staging": st.sid})
+        if proposal is not None:
+            st.save_intent(st.intent | {"propose_to": target})
+            return self._json(HTTPStatus.CREATED, {"staging": st.sid, "name": name, "proposal_to": target})
+        return self._json(HTTPStatus.CREATED, {"staging": st.sid, "name": name})
+
+    def _proposal_target(self, tail: str) -> tuple[str, str] | Response | None:
+        """
+        Tell where a push without the right to publish goes (spec 2026-10-23 §3).
+
+        A new client asks with `propose`: if the caller sees `name` but may not publish it, the
+        push goes into their fork `<them>/<name>` (made now if missing), and committing it
+        opens a proposal. Returns (target, the fork's `name/tag`), None (they may publish --
+        a plain push), or an error.
+        """
+        parts = self._split_ref(tail)
+        user = self._token_user()
+        if parts is None or user is None:
+            return None
+        name, tag = parts
+        if not self.repo(name).exists or self._may_write(user, name) or not self._may_see_repo(user, name):
+            return None
+        fork = f"{user}/{name.split('/', 1)[1]}"
+        with self.repo(fork).locked() as idx:
+            if not idx.exists:
+                idx.set_meta(fork_of=f"{name}:{tag}")
+            elif not idx.fork_of.startswith(f"{name}:"):
+                return self._json(HTTPStatus.CONFLICT, {
+                    "error": f"у вас уже есть свой {fork}, не форк {name} — предложите через форк с другим "
+                             f"именем: hashpass fork {name}:{tag} <имя>"})
+        return name, f"{fork}/{tag}"
 
     def _revision_commit(self, tail: str) -> Response:
         user, name, tag, err = self._write_tag(tail)
@@ -1674,7 +1711,13 @@ class PoolServer:
         if intent.get("owner") != user and self.users.role(user) != "admin":
             return self._empty(HTTPStatus.FORBIDDEN)
         message = str(data.get("message", "")).strip()[:_MAX_MESSAGE] if isinstance(data, dict) else ""
-        return self._commit(user, name, tag, st, message=message)
+        target = str(intent.get("propose_to") or "")
+        resp = self._commit(user, name, tag, st, message=message)
+        if not target or resp.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
+            return resp
+        body = resp.get_json() or {}                   # the fork's version -> a proposal to the owner
+        row = self.merges(target).offer(src=str(body["ref"]), to_tag=tag, by=user, comment=message)
+        return self._json(HTTPStatus(resp.status_code), body | {"proposal": {"to": target, "id": row["id"]}})
 
     def _revisions_get(self, name: str) -> Response:
         if self._token_user() is None:
@@ -1704,6 +1747,30 @@ class PoolServer:
         if filename.rsplit("/", 1)[-1] in ("README.md", "about.md"):
             return True
         return not self.repo(name).hide_sources or self._may_write(user, name)
+
+    def _web_compare(self, name: str) -> Response:
+        """
+        Compare two versions of an image, like GitHub (spec 2026-10-23 §3).
+
+        `?from=&to=` -- a version of this image (`1_v2`, a tag = its newest) or a full ref of
+        another one (a proposal's fork version). Files added / removed / changed, with diffs.
+        """
+        viewer = self._session_user()
+        if viewer is None:
+            return self._redirect(f"/web/login?next={quote(request.full_path, safe='')}")
+        refs = []
+        for key in ("from", "to"):
+            raw = request.args.get(key, "")
+            other, sep, version = raw.rpartition(":")
+            repo_name, ver = (other, version) if sep else (name, raw)
+            resolved = self.resolve(repo_name, ver) if repo_name and ver else None
+            if resolved is None or not self._may_read_sources(viewer, repo_name):
+                return self._web_not_found(f"{repo_name}:{ver}")
+            refs.append(resolved)
+        trees = [self.sources()._dir(r) if self._sources_ready(r)                      # noqa: SLF001
+                 else self.store.get(r).layer.parent / "task" for r in refs]   # older pushes: task/
+        files = tree_diff(trees[0], trees[1])
+        return self._html(render_compare(name, refs[0], refs[1], files))
 
     def _route_repo_members(self, tail: str) -> Response:  # noqa: PLR0911
         """
@@ -1768,7 +1835,8 @@ class PoolServer:
         return self._json(HTTPStatus.OK, self.repo(name).as_dict())
 
     def _copy_revision(self, src_ref: str, name: str, tag: str, by: str,  # noqa: PLR0913
-                       idx: RepoIndex, *, merged_from: str = "") -> str:
+                       idx: RepoIndex, *, merged_from: str = "", message: str = "",
+                       accepted_by: str = "") -> str:
         """Add revision `name:tag_vN` with `src_ref`'s content (shared blob) + files; `idx` is locked."""
         src_name, _, src_version = src_ref.partition(":")
         src_tag, src_n, _ = parse_version(src_version)
@@ -1791,7 +1859,8 @@ class PoolServer:
             idx.add(tag, {"image_digest": img.digest or "",
                           "task_digest": src_rev.task_digest if src_rev else (
                               task_digest(task) if task.is_dir() else ""),
-                          "parents": list(img.parents), "by": by, "merged_from": merged_from})
+                          "parents": list(img.parents), "by": by, "merged_from": merged_from,
+                          "message": message, "accepted_by": accepted_by})
         except BaseException:
             for d in made:
                 shutil.rmtree(d, ignore_errors=True)
@@ -1933,9 +2002,10 @@ class PoolServer:
                                                          reason=str(data.get("reason", ""))))
         if not self.store.exists(row["from"]):
             return self._json(HTTPStatus.CONFLICT, {"error": f"версии {row['from']} больше нет"})
-        with self.repo(target).locked() as idx:
-            ref = self._copy_revision(row["from"], target, row["to_tag"], user, idx,
-                                      merged_from=row["from"])
+        with self.repo(target).locked() as idx:      # its author: who proposed; spec 2026-10-23 §3
+            ref = self._copy_revision(row["from"], target, row["to_tag"], str(row.get("by") or user), idx,
+                                      merged_from=row["from"], message=str(row.get("comment", "")),
+                                      accepted_by=user)
         return self._json(HTTPStatus.OK, store.close(rest, "merged", by=user, result=ref))
 
     def _merge_offer(self, target: str, user: str, data: dict) -> Response:
