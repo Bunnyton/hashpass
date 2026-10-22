@@ -78,7 +78,8 @@ class CourseWeb:
         students = self._students(course) if may["add"] else []
         joined = user is not None and course.id in api.enrollments.of(user)
         return self.server._html(render_course(  # noqa: SLF001
-            view, may=may, signed_in=user, link=link, invite_link=invite_link,
+            view, may=may, signed_in=user, link=link, invite_link=invite_link, pool=pool,
+            curl_flags="-fsSLk" if pool.startswith("https://") else "-fsSL",
             invite=request.args.get("invite", ""), students=students, joined=joined,
             api=f"/courses/{course.ref}", next_url=quote(request.full_path.rstrip("?"), safe="")))
 

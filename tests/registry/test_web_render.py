@@ -217,3 +217,11 @@ def test_install_script_works_without_a_controlling_tty():
     assert script.count("</dev/tty") == 1                  # only the probe itself
     assert "TTY=/dev/tty; ( : </dev/tty ) 2>/dev/null || TTY=/dev/null" in script
     assert 'PKG_INSTALL="sudo env DEBIAN_FRONTEND=noninteractive apt install -y"' in script
+
+
+@pytest.mark.tier1
+def test_install_script_adds_a_course_given_as_its_argument():
+    """`curl …/install.sh | bash -s -- <course link>`: install, then `hashpass add <link>`."""
+    script = render_install_script("http://pool:8080")
+    assert 'COURSE="${1:-}"' in script
+    assert '"$BIN/hashpass" --no-update add "$COURSE"' in script

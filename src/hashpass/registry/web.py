@@ -244,9 +244,18 @@ def _install_script(pool_url: str, *, role: str, nxt: str, extra: str = ":") -> 
             .replace("__NEXT__", nxt))
 
 
+# `curl …/install.sh | bash -s -- <course link>`: the course is added right after the install
+_COURSE_ON_INSTALL = """\
+COURSE="${1:-}"
+if [ -n "$COURSE" ]; then
+  "$BIN/hashpass" --no-update add "$COURSE" <"$TTY" || echo "курс не добавлен — позже: hashpass add $COURSE"
+fi"""
+
+
 def render_install_script(pool_url: str) -> str:
-    """Return the student install script (installs `hashpass`, seeds the pool URL into pool.json)."""
-    return _install_script(pool_url, role="student", nxt="Запустите:  hashpass   (без sudo — пароль sudo он спросит сам)")
+    """Return the student install script (installs `hashpass`, seeds the pool URL; adds a course given as $1)."""
+    return _install_script(pool_url, role="student", extra=_COURSE_ON_INSTALL,
+                           nxt="Запустите:  hashpass   (без sudo — пароль sudo он спросит сам)")
 
 
 def render_engine_install_script(pool_url: str) -> str:

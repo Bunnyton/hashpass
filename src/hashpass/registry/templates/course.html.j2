@@ -37,6 +37,8 @@
   {{ act('POST', api ~ '/join', 'Пройти курс', 'btn') }}
   {% endif %}
   <p class='sub small'>Пройти в терминале: <code class='copy'>hashpass add {{ link }}</code> — курс появится в списке hashpass.</p>
+  <p class='sub small'>hashpass ещё не установлен? Одной командой — установка и курс:
+  <code class='copy'>curl {{ curl_flags }} {{ pool }}/install.sh | bash -s -- {{ link }}</code></p>
 {% endif %}
 </div>
 
