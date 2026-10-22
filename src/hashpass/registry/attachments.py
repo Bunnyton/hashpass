@@ -13,7 +13,8 @@ import threading
 import time
 from pathlib import Path
 
-ABOUT = "about.md"   # a task's description, attached on push
+ABOUT = "about.md"   # a task's description before 2026-10-22 (still read)
+README = "README.md"   # a task's description, attached on push (spec 2026-10-21 §2.6)
 _COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")          # one ref path segment
 _FILENAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .,()_-]{0,127}")  # an attachment file name
 
@@ -127,14 +128,16 @@ class AttachmentStore:
         """
         Return {description, files:[{name, size, taskfile, uploaded_at}]} sorted by name.
 
-        The description is the task's `about.md` (attached by `hashengine push`, like a README on
-        GitHub -- edited in the task, not on the web); a card without one keeps its old text.
+        The description is the task's `README.md` (attached by `hashengine push`, as on GitHub --
+        edited in the task, not on the web; `about.md` is its old name); else the old text.
         """
         data = self._load(ref)
         files = data["files"] if isinstance(data.get("files"), dict) else {}
         rows = [{"name": n, **v} for n, v in sorted(files.items())]
         description = str(data.get("description", ""))
-        if ABOUT in files:
-            with contextlib.suppress(OSError):
-                description = self.read_file(ref, ABOUT).decode("utf-8", "replace").strip()
+        for name in (README, ABOUT):                 # the README wins; about.md is the old name
+            if name in files:
+                with contextlib.suppress(OSError):
+                    description = self.read_file(ref, name).decode("utf-8", "replace").strip()
+                break
         return {"description": description, "files": rows}

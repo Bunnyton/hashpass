@@ -17,7 +17,7 @@
 <div class='card'>
 <h2>Описание</h2>
 {% if image.description %}<div class='about'>{% if image.about[0] %}<h3>{{ image.about[0] }}</h3>{% endif %}{% for p in image.about[1] %}<p>{{ p }}</p>{% endfor %}</div>{% else %}<p class='sub'>Описания нет.</p>{% endif %}
-<p class='sub'>Описание — это файл <code>about.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashengine push</code>.</p>
+<p class='sub'>Описание — это файл <code>README.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashengine push</code>.</p>
 </div>
 <h2>Исходники</h2>
 {% if image.sources %}

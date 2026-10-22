@@ -65,3 +65,13 @@ def test_about_md_is_the_description(tmp_path):
     store.put_file("lab:1", "about.md", "Права в Linux: chmod.\n".encode())
     assert store.describe("lab:1")["description"] == "Права в Linux: chmod."
     assert store.describe("other:1")["description"] == ""
+
+
+@pytest.mark.tier1
+def test_readme_is_the_description_and_wins_over_about(tmp_path):
+    """Spec 2026-10-21 §2.6: README.md is the description; about.md is its old name."""
+    store = AttachmentStore(tmp_path)
+    store.put_file("lab:1", "about.md", "старое\n".encode())
+    assert store.describe("lab:1")["description"] == "старое"
+    store.put_file("lab:1", "README.md", "# Лаба\nновое\n".encode())
+    assert store.describe("lab:1")["description"] == "# Лаба\nновое"
