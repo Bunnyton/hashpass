@@ -2308,13 +2308,7 @@ def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
     """
     from hashpass import my_courses  # noqa: PLC0415
     io = io or _default_io()
-    if _COURSE_NAME.match(link.strip()):            # `owner/name`: a course on the current pool
-        current = _pool_url(env)
-        if not current:
-            msg = "пул не задан — дайте полную ссылку на курс или: hashpass login --pool <адрес>"
-            raise RuntimeError(msg)
-        link = f"{current.rstrip('/')}/c/{link.strip()}"
-    pool, ref, invite = my_courses.parse_link(link)
+    pool, ref, invite = my_courses.parse_link(_course_link(env, link))
     saved = _pool_url(env)
     if saved and registry_key(saved) != registry_key(pool):
         answer = (io.read(f"Ссылка ведёт на другой пул ({pool}), сейчас — {saved}. Переключиться? [Д/н] ")
@@ -2351,6 +2345,17 @@ def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
 
 
 _COURSE_NAME = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+
+
+def _course_link(env: Home, link: str) -> str:
+    """Turn `owner/name` into a link on the current pool; a real link stays as it is."""
+    if not _COURSE_NAME.match(link.strip()):
+        return link
+    current = _pool_url(env)
+    if not current:
+        msg = "пул не задан — дайте полную ссылку на курс или: hashpass login --pool <адрес>"
+        raise RuntimeError(msg)
+    return f"{current.rstrip('/')}/c/{link.strip()}"
 
 
 def cmd_course_search(env: Home, query: str = "", io: Io | None = None) -> int:
