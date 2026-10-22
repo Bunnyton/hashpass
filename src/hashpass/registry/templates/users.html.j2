@@ -42,7 +42,7 @@
 <p class='sub small'>Группа и комментарий редактируются кликом по ячейке (Enter/уход из поля — сохраняет). Не отображаются студентам.</p>
 <p class='sub small'>Клик по заголовку столбца — сортировка (повторный — в обратную сторону). Логин открывает профиль с прогрессом.</p>
 <table class='wide sortable'>
-<thead><tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Комментарий</th><th>Создан</th><th data-nosort>Изменить роль</th><th>Авто-одобрение</th><th data-nosort>Пароль</th><th data-nosort>Удалить</th></tr></thead>
+<thead><tr><th>Логин</th><th>Группа</th><th>Роль</th><th>Приватный комментарий</th><th>Создан</th><th data-nosort>Изменить роль</th><th>Авто-одобрение</th><th data-nosort>Пароль</th><th data-nosort>Удалить</th></tr></thead>
 <tbody>
 {% if rows %}{% for r in rows %}
 <tr><td class='mono'><a href='/web/user/{{ r.user_q }}'>{{ r.user }}</a></td>

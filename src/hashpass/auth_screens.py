@@ -168,7 +168,7 @@ class RegisterScreen(Screen[Session | None]):
                 with Vertical():
                     yield Label("Повторите пароль")
                     yield Input(placeholder="ещё раз", password=True, id="password2")
-            yield Label("Комментарий (необязательно)")
+            yield Label("Приватный комментарий (необязательно) — видят только преподаватели ваших курсов")
             yield Input(placeholder="имя, фамилия, группа — например Иванов И., ИУ7-31", id="comment")
             yield Static(f"{PASSWORD_RULE}\n{TEACHER_SEES}", id="auth-note")
             yield Static("", id="auth-error")

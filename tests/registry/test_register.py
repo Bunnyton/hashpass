@@ -162,5 +162,5 @@ def test_interactive_register_asks_no_group(registry, monkeypatch):
                               password="pass123!")  # noqa: S106
     assert not any("групп" in p.lower() and "необязательно" in p.lower() and "комментарий" not in p
                    for p in prompts)
-    assert len(prompts) == 1 and "комментарий" in prompts[0]
+    assert len(prompts) == 1 and "приватный комментарий" in prompts[0]
     assert registry.users.get("ivanov")["comment"] == "ИУ7-31 Иванов"

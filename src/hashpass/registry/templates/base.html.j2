@@ -23,7 +23,7 @@
 {%- if viewer_is_admin() %}
 <a href='/web/users'{% if active == '/web/users' %} class='on'{% endif %}>Пользователи</a>
 {%- endif %}
-<span class='sp'></span><a href='/web/settings'{% if active == '/web/settings' %} class='on'{% endif %}>Настройки</a><a href='/web/logout'>Выход</a></div>
+<span class='sp'></span>{% if courses_on() and active != '/search' %}<form class='nav-search' method='get' action='/search' role='search'><input name='q' placeholder='Поиск' aria-label='Поиск по пользователям, курсам и образам'></form>{% endif %}<a href='/web/settings'{% if active == '/web/settings' %} class='on'{% endif %}>Настройки</a><a href='/web/logout'>Выход</a></div>
 {%- endif %}
 <main>{% block main %}{% endblock %}</main>
 <script src='/static/time.js'></script>

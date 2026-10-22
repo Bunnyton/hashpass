@@ -2072,7 +2072,7 @@ def cmd_register(env: Home, pool_url: str | None = None, io: Io | None = None) -
         msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
         raise RuntimeError(msg)
     user = _read_login(io)
-    comment = (io.read("комментарий (необязательно: имя, группа — напр. ИУ7-31): ") or "").strip()
+    comment = (io.read("приватный комментарий — имя, группа, напр. Иванов И., ИУ7-31 (необязательно; видят только преподаватели ваших курсов): ") or "").strip()
     password = _prompt_new_password(io)
     RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, "", comment)
     save_pool(env, url, user)
@@ -2145,7 +2145,7 @@ def _register_interactive(client: RemoteRegistry, user: str, io: Io,
     fall back to the full `_prompt_new_password` dialog.
     """
     io.write(f"\x1b[36mРегистрирую нового пользователя «{user}» на пуле.\x1b[0m\n")
-    comment = (io.read("комментарий (необязательно: имя, группа — напр. ИУ7-31): ") or "").strip()
+    comment = (io.read("приватный комментарий — имя, группа, напр. Иванов И., ИУ7-31 (необязательно; видят только преподаватели ваших курсов): ") or "").strip()
     while True:
         # Reuse the caller-supplied password on the first attempt (typed at login);
         # if the server refuses it as weak, ask through the strict double-entry prompt.

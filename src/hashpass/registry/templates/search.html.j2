@@ -1,0 +1,42 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<form class='row search search-bar' method='get' action='/search'>
+<input name='q' value='{{ q }}' placeholder='поиск по пользователям, курсам, образам' autofocus>
+<input type='hidden' name='type' value='{{ kind }}'>
+<button class='ghost' type='submit'>Найти</button>
+</form>
+<div class='search-layout'>
+<nav class='search-side card' aria-label='Что искать'>
+{% for k in kinds %}<a href='/search?q={{ q | q }}&type={{ k.key }}' data-tab='{{ k.key }}'{% if k.key == kind %} class='on'{% endif %}>{{ k.title }} <span class='count'>{{ k.count }}</span></a>{% endfor %}
+</nav>
+<section class='search-results'>
+{% if not rows %}
+<div class='empty card'><p class='sub'>{% if q %}По запросу «{{ q }}» ничего не нашлось.{% else %}Пока пусто.{% endif %}</p></div>
+{% elif kind == 'courses' %}
+{% for r in rows %}
+<a class='card course-card' href='/c/{{ r.ref }}'>
+<div class='row'><b>{{ r.title }}</b><span class='sp'></span>
+{% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}</div>
+<div class='mono small'>{{ r.ref }} · заданий: {{ r.tasks }}</div>
+{% if r.description %}<p class='sub small'>{{ r.description }}</p>{% endif %}
+</a>
+{% endfor %}
+{% elif kind == 'images' %}
+{% for r in rows %}
+<div class='card'>
+<div class='row'><b class='mono'>{{ r.name }}</b><span class='sp'></span>
+{% if r.task %}<span class='pill author sm'>задание</span>{% else %}<span class='pill sm'>образ</span>{% endif %}
+{% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
+{% if r.fork_of %}<span class='pill sm'>форк {{ r.fork_of }}</span>{% endif %}</div>
+<div class='row small'>{% for t in r.tags %}<span><a class='mono' href='/web/image/{{ t.ref | ref_url }}'>{{ r.name }}:{{ t.tag }}</a> <span class='pill sm ver'>версия {{ t.n }}</span></span>{% endfor %}</div>
+</div>
+{% endfor %}
+{% else %}
+<div class='card'><table>
+{% for p in rows %}<tr><td class='mono'>{% if may_profile %}<a href='/web/user/{{ p.user | q }}'>{{ p.user }}</a>{% else %}{{ p.user }}{% endif %}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+{% if more %}<p class='sub small'>и ещё {{ more }} — уточните запрос</p>{% endif %}
+</section>
+</div>
+{% endblock %}

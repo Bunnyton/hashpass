@@ -302,3 +302,18 @@ pre.diff{background:var(--surface2);border:1px solid var(--border);border-radius
 .course-card{display:block;text-decoration:none;color:inherit}
 .course-card:hover{border-color:var(--border-strong)}
 @media(max-width:640px){.card table{display:block;overflow-x:auto}}
+/* search page: kinds on the left, results on the right (GitHub-like); stacked on phones */
+.search-layout{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start}
+.search-side{display:flex;flex-direction:column;padding:8px}
+.search-side a{display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;text-decoration:none;color:inherit}
+.search-side a.on{background:var(--accent-soft,rgba(37,99,235,.1));font-weight:600}
+.search-side .count{color:var(--muted,#6b7280);font-variant-numeric:tabular-nums}
+.search-results{display:flex;flex-direction:column;gap:12px;min-width:0}
+.search-results .row.small{flex-wrap:wrap;gap:12px}
+@media (max-width:720px){.search-layout{grid-template-columns:1fr}.search-side{flex-direction:row;flex-wrap:wrap}}
+.nav-search input{width:200px;padding:6px 10px;font-size:14px}
+@media (max-width:720px){.nav-search{display:none}}
+.search-bar{flex-wrap:nowrap;margin-bottom:16px}
+.search-bar input[name=q]{flex:1;min-width:0;width:auto}
+.search-side a{gap:12px}
+.search-results .card{margin:0}

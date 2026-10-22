@@ -56,6 +56,7 @@ from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.revisions import RepoIndex, check_tag, parse_version, revision_version
+from hashpass.registry.search_web import SearchWeb
 from hashpass.registry.sources import SourceStore
 from hashpass.registry.staging import Staging, new_staging, sweep_stale
 from hashpass.registry.token import issue_token, verify_token
@@ -499,6 +500,7 @@ class PoolServer:
         self.course_api = CourseApi(self)
         self.course_api.register(app)
         CourseWeb(self).register(app)
+        SearchWeb(self).register(app)
         app.before_request(self._legacy_catalog_gone)
         return app
 

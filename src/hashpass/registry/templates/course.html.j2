@@ -176,7 +176,7 @@
 {% if may.add and students %}
 <h2 id='students'>Студенты</h2>
 <div class='card'><table class='sortable'>
-<tr><th>Кто</th><th>Комментарий</th><th class='c'>Решено</th></tr>
+<tr><th>Кто</th><th>Приватный комментарий</th><th class='c'>Решено</th></tr>
 {% for s in students %}
 <tr><td><a href='/web/user/{{ s.user | q }}'>{{ s.user }}</a></td><td class='sub small'>{{ s.comment }}</td><td class='c'>{{ s.done }} / {{ s.total }}</td></tr>
 {% endfor %}
