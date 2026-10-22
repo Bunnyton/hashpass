@@ -662,7 +662,9 @@ class PoolServer:
     def _token_user(self) -> str | None:
         auth = request.headers.get("Authorization", "")
         if not auth.startswith(_BEARER):
-            return None
+            # the web pages call the JSON API with their cookie session; a cross-site page cannot
+            # (JSON bodies / PUT / DELETE need a CORS preflight this server never grants)
+            return self._session_user() if request.cookies.get("hp_session") else None
         user = verify_token(self.secret, auth[len(_BEARER):], now=time.time())
         # The HMAC token is valid till its expiry regardless of whether the account still
         # exists.  If an admin deleted the user, we treat the token as unauthenticated so

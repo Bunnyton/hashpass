@@ -86,6 +86,7 @@ class CourseApi:
         rule("/courses/<owner>/<name>/blocks", "course_blocks", self.add_block, methods=["POST"])
         rule("/courses/<owner>/<name>/blocks/<block_id>", "course_block", self.block,
              methods=["PUT", "DELETE"])
+        rule("/courses/<owner>/<name>/layout", "course_layout", self.layout, methods=["PUT"])
         rule("/courses/<owner>/<name>/tasks", "course_tasks", self.add_task, methods=["POST"])
         rule("/courses/<owner>/<name>/tasks/<path:task>", "course_task", self.task,
              methods=["PUT", "DELETE"])
@@ -324,6 +325,16 @@ class CourseApi:
                 cm.set_block_open(c, block_id, open_=bool(body["open"]))
         err = self._edit(course.ref, change)
         return err or self._json(HTTPStatus.OK, {"id": block_id})
+
+    def layout(self, owner: str, name: str) -> Response:
+        course, _user, err = self._load(owner, name, "moderate")
+        if err is not None:
+            return err
+        blocks = self._body().get("blocks")
+        if not isinstance(blocks, list):
+            return self._err(HTTPStatus.BAD_REQUEST, "нужен список блоков")
+        err = self._edit(course.ref, lambda c: cm.set_layout(c, blocks))
+        return err or self._json(HTTPStatus.OK, {"rev": self.courses.get(course.ref).rev})
 
     def _revision_ok(self, course: Course, user: str, repo: str, tag: str, n: int | None) -> str | int:
         """Return the revision number to use, or a Russian reason it cannot go into this course."""
