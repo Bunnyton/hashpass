@@ -478,15 +478,18 @@ class RemoteRegistry:
         return str(self._post_json(f"/revisions/{name}/{tag}", {"base": base} if base else {},
                                    token=self._auth_token(token))["staging"])
 
-    def commit(self, name: str, tag: str, staging: str, *, token: str | None = None) -> dict[str, object]:
-        """Commit a staging area: {"ref": "name:tag_vN", "n": N} (+ "unchanged": True)."""
-        return self._post_json(f"/revisions/{name}/{tag}/commit", {"staging": staging},
-                               token=self._auth_token(token))
+    def commit(self, name: str, tag: str, staging: str, *, token: str | None = None,
+               message: str = "") -> dict[str, object]:
+        """Commit a staging area (+ what changed): {"ref": "name:tag_vN", "n": N} (+ "unchanged")."""
+        body: dict[str, object] = {"staging": staging}
+        if message:
+            body["message"] = message
+        return self._post_json(f"/revisions/{name}/{tag}/commit", body, token=self._auth_token(token))
 
     def push(self, store: ImageStore, ref: str, *, token: str | None = None,  # noqa: PLR0913
              force: bool = False, task_dir: Path | None = None, publish: bool = False,
              block: str | None = None, extras: Callable[[str], None] | None = None,
-             base: str | None = None) -> list[str]:
+             base: str | None = None, message: str = "") -> list[str]:
         """
         Push ref + its own `from` closure, bottom-up, each as one revision (spec 2026-10-21 §2.3).
 
@@ -525,7 +528,7 @@ class RemoteRegistry:
                                block=block if is_target else None, token=auth, staging=sid)
             if is_target and extras is not None:
                 extras(sid)
-            result = self.commit(name, version, sid, token=auth)
+            result = self.commit(name, version, sid, token=auth, message=message if is_target else "")
             if digest:                    # remember what THIS pool now holds for this ref
                 store.set_pool_digest(item, digest, registry=self.base_url)
             self.last_push.append({"ref": str(result.get("ref", item)), "n": result.get("n"),
@@ -556,7 +559,7 @@ class RemoteRegistry:
         name, version = split_ref(ref)
         tag, n, _latest = parse_version(version)
         if n is None:
-            msg = f"укажите версию: {name}:{version}_vN (список — hashengine remote)"
+            msg = f"укажите версию: {name}:{version}_vN (список — hashpass remote)"
             raise ValueError(msg)
         self._send("DELETE", f"/revisions/{name}/{tag}/{n}",
                    headers={"Authorization": f"Bearer {self._auth_token(token)}"})

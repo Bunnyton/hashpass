@@ -12,7 +12,7 @@ PIP_INSTALL := $(PY) -m pip install --user -e . --break-system-packages --root-u
 ACTIVATE_ENGINE := mkdir -p "$(HOME)/.hashengine" && touch "$(HOME)/.hashengine/engine.enabled"
 
 help:
-	@echo "make install         — установить обе команды (hashpass + hashengine), editable"
+	@echo "make install         — установить hashpass (editable; hashengine — старый псевдоним)"
 	@echo "make update          — обновиться из git (безопасно, с autostash) и переустановить"
 	@echo "make install-student — установить (сейчас ставит обе; отдельная студ.-дистрибуция — фаза 8)"
 	@echo "make uninstall       — удалить"

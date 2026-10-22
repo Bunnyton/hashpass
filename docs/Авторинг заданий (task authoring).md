@@ -44,11 +44,11 @@ Taskfile (генератор `.claude/skills/task-authoring/scripts/mkdata.py`, 
 каталогов — чтобы была видна магия) и подключи `copy data/notes /home/student/notes` +
 `run chown -R student:student /home/student/notes`. Каталог копируется содержимым, как `COPY` в Docker.
 
-**2. Собери и запусти** — авторская команда `hashengine` (нужен `systemd-nspawn` + scoped sudo; базовый
+**2. Собери и запусти** — авторская команда `hashpass` (нужен `systemd-nspawn` + scoped sudo; базовый
 rootfs `<home>/base/rootfs.tar` — готовится один раз вручную, docker в рантайме не нужен):
 
 ```bash
-hashengine build Taskfile        # собрать; base-rootfs Debian создастся сам при первом build
+hashpass build Taskfile        # собрать; base-rootfs Debian создастся сам при первом build
 hashpass run <логин>/hello-grep:1  # запустить локально: интерактивная сессия задания
 ```
 
@@ -57,8 +57,8 @@ hashpass run <логин>/hello-grep:1  # запустить локально: �
 вроде «принято»/«завершено» НЕТ, это на усмотрение автора (`on pass` / `voice bye` / финал);
 подсказки даются по условиям; `exit` — выйти. Неправильное решение просто не проходит стадию.
 
-> `hashengine` появляется и активируется после `make install` (в корне репо); без установки —
-> `python3 -m hashengine build …`. Хранилище автора — `~/.hashengine/` (base-rootfs кэшируется там же).
+> `hashpass` появляется и активируется после `make install` (в корне репо); без установки —
+> `python3 -m hashpass build …`. Хранилище автора — `~/.hashengine/` (base-rootfs кэшируется там же).
 
 ---
 
@@ -259,32 +259,32 @@ react on command exec watch.sh   # (перехватчик на каждую к�
 ## CLI — команды
 
 ```bash
-# автор (hashengine):
-hashengine build <Taskfile> [-t name:ver]        # собрать; имя: -t > image-строка > каталог
-hashengine images                                # список собранного (name:ver + kind: task|image)
-hashengine login <registry-url> [--if-needed]    # логин/пароль → токен (кэш 7 дней)
-hashengine logout <registry-url>                 # забыть токен (адрес пула остаётся сохранён)
-hashengine push <name:ver> --task <N> --title "…"  # опубликовать задание в пул под номером N
-hashengine push base [--force]  # базовый образ этого runtime на пул (студенты его скачивают, а не собирают)
+# автор (hashpass):
+hashpass build <Taskfile> [-t name:ver]        # собрать; имя: -t > image-строка > каталог
+hashpass images                                # список собранного (name:ver + kind: task|image)
+hashpass login <registry-url> [--if-needed]    # логин/пароль → токен (кэш 7 дней)
+hashpass logout <registry-url>                 # забыть токен (адрес пула остаётся сохранён)
+hashpass push <name:ver> --task <N> --title "…"  # опубликовать задание в пул под номером N
+hashpass push base [--force]  # базовый образ этого runtime на пул (студенты его скачивают, а не собирают)
                                 # deploy.sh шлёт базу БЕЗ --force (новый стамп = новый ref); --force — только вручную:
                                 # перезалитую базу заново скачивает каждый студент (~57 МБ)
-hashengine serve                                 # поднять пул (реестр + веб-панель)
+hashpass serve                                 # поднять пул (реестр + веб-панель)
 # студент (hashpass):
 hashpass                        # без аргументов → подтянуть каталог и показать задания по номерам
 hashpass register / login       # регистрация (ФИО+группа) / вход на пул
 hashpass run <номер|name:ver>   # запустить задание; по прохождению результат уходит на пул
 ```
 
-`hashengine` доступна после `make install`; иначе — `python3 -m hashengine …`. Ошибки пользователя
+`hashpass` доступна после `make install`; иначе — `python3 -m hashpass …`. Ошибки пользователя
 (кривой Taskfile, нет базового rootfs, `push` без `login`, неизвестный ref) → чистое `<cmd>: <причина>` в
 stderr, без трейсбека. `rmi` пока нет (удаление root-owned слоёв требует `sudo rm`, не выдан).
 
-`build` берёт namespace из логина на пуле (`hashengine login`); локальный реестр `127.0.0.1:8080`
+`build` берёт namespace из логина на пуле (`hashpass login`); локальный реестр `127.0.0.1:8080`
 со своим логином используется только без настроенного пула (офлайн). На пул собранное уходит только
 явным `push`. `push` принимается пулом только под своим логином: образ должен называться
 `<логин>/<имя>:<версия>`, иначе пул отвечает 403 («образ принадлежит другому автору» / «...только администратор»). Базовый
 образ — `bunnyton/debian:trixie`: один фиксированный тег, владелец `bunnyton` (или администратор);
-`hashengine push base` перезаливает его под тем же тегом только если локальная база пересобрана
+`hashpass push base` перезаливает его под тем же тегом только если локальная база пересобрана
 (новый runtime), студенты подтягивают обновление по digest. Ref без пространства имён публикует
 только администратор. Если ref не найден, а одноимённый образ есть в другом пространстве имён,
 пул отвечает «быть может, вы искали bunnyton/debian:trixie?».

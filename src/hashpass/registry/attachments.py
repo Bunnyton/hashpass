@@ -128,7 +128,7 @@ class AttachmentStore:
         """
         Return {description, files:[{name, size, taskfile, uploaded_at}]} sorted by name.
 
-        The description is the task's `README.md` (attached by `hashengine push`, as on GitHub --
+        The description is the task's `README.md` (attached by `hashpass push`, as on GitHub --
         edited in the task, not on the web; `about.md` is its old name); else the old text.
         """
         data = self._load(ref)

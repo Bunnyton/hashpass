@@ -144,7 +144,7 @@ def watch_for_updates(module: str, argv: list[str], *,  # noqa: PLR0913
                       write: Callable[[str], object] = sys.stderr.write,
                       monotonic: Callable[[], float] = time.monotonic) -> None:
     """
-    Keep a long-running process (the pool, `hashengine serve`) on the latest `main`.
+    Keep a long-running process (the pool, `hashpass serve`) on the latest `main`.
 
     Every `every` seconds: if `main` moved past the installed commit, pip-install it, wait until
     `idle()` (no request in flight -- a student's download is never cut) and restart in place

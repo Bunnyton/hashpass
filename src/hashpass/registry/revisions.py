@@ -68,17 +68,21 @@ class Revision:
     at: str
     by: str
     merged_from: str = ""
+    message: str = ""        # what changed (`push -m`, a proposal's comment) -- spec 2026-10-23 §3
+    accepted_by: str = ""    # who accepted the proposal it came from (its `by` is who proposed)
 
     def as_dict(self) -> dict[str, object]:
         return {"n": self.n, "image_digest": self.image_digest, "task_digest": self.task_digest,
                 "parents": list(self.parents), "at": self.at, "by": self.by,
-                "merged_from": self.merged_from}
+                "merged_from": self.merged_from, "message": self.message,
+                "accepted_by": self.accepted_by}
 
 
 def _revision(raw: dict) -> Revision:
     return Revision(int(raw["n"]), str(raw.get("image_digest", "")), str(raw.get("task_digest", "")),
                     tuple(str(p) for p in raw.get("parents", [])), str(raw.get("at", "")),
-                    str(raw.get("by", "")), str(raw.get("merged_from", "")))
+                    str(raw.get("by", "")), str(raw.get("merged_from", "")),
+                    str(raw.get("message", "")), str(raw.get("accepted_by", "")))
 
 
 class RepoIndex:

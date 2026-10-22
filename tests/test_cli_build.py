@@ -68,7 +68,7 @@ def test_cmd_build_with_a_pool_configured_hints_push_and_never_pushes_locally(tm
     out: list[str] = []
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
     assert cli.cmd_build(env, str(imf), io=io) == 0
-    assert any("hashengine push bunnyton/tool:1" in s for s in out)
+    assert any("hashpass push bunnyton/tool:1" in s for s in out)
 
 
 @pytest.mark.tier1

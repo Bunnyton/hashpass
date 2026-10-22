@@ -24,7 +24,7 @@
 <div class='card'>
 <h2>Описание</h2>
 {% if image.description %}<div class='about'>{% if image.about[0] %}<h3>{{ image.about[0] }}</h3>{% endif %}{% for p in image.about[1] %}<p>{{ p }}</p>{% endfor %}</div>{% else %}<p class='sub'>Описания нет.</p>{% endif %}
-{% if owner %}<p class='sub small'>Описание — это файл <code>README.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashengine push</code>.</p>{% endif %}
+{% if owner %}<p class='sub small'>Описание — это файл <code>README.md</code> рядом с Taskfile: правится в задании и приходит на пул с <code>hashpass push</code>.</p>{% endif %}
 </div>
 <h2>Исходники</h2>
 {% if image.sources %}
@@ -38,7 +38,7 @@
 </table>
 </div>
 {% else %}
-<div class='card'><p class='sub'>Исходников нет — они приходят на пул с <code>hashengine push</code>.</p></div>
+<div class='card'><p class='sub'>Исходников нет — они приходят на пул с <code>hashpass push</code>.</p></div>
 {% endif %}
 
 {% if repo_info %}
@@ -102,7 +102,7 @@
 {% if may_fork %}
 <h2 id='fork'>Форк</h2>
 <div class='card'>
-<p class='sub'>Форк — копия задания в вашем пространстве имён: доработайте её (<code>hashengine source</code> → правка → <code>build</code> → <code>push</code>) и предложите автору.</p>
+<p class='sub'>Форк — копия задания в вашем пространстве имён: доработайте её (<code>hashpass clone</code> → правка → <code>build</code> → <code>push</code>) и предложите автору.</p>
 <form class='row' data-api='POST /revisions/{{ viewer }}/__FORKNAME__/fork' data-fork-name data-then='go:/web/image/{ref}'>
 <input type='hidden' name='from' value='{{ image.ref }}'>
 <input name='__forkname' value='{{ repo.rpartition("/")[2] }}' required>

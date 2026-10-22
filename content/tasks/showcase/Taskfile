@@ -1,6 +1,6 @@
 # ============================================================================
 # showcase — образцовое задание, демонстрирующее почти все возможности, вживую.
-#   Сборка:  cd content/tasks/showcase && hashengine build Taskfile
+#   Сборка:  cd content/tasks/showcase && hashpass build Taskfile
 #   Запуск:  hashpass run showcase:1   (или через пул: hashpass run <номер>)
 # Пути hidden/copy/readme резолвятся относительно ПАПКИ этого Taskfile — собирать можно откуда угодно.
 # Комментарии — только на отдельной строке. Стиль подсказок — по skill task-authoring:

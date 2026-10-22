@@ -141,7 +141,7 @@ def test_cmd_catalog_layout_explains_a_pool_without_the_route(tmp_path, monkeypa
         raise urllib.error.HTTPError(url, HTTPStatus.NOT_FOUND, "NOT FOUND", {}, io.BytesIO(b""))
     monkeypatch.setattr(cli.RemoteRegistry, "set_catalog_layout", _gone)
     quiet = cli.Io(read=lambda _p: None, write=lambda _s: None, clock=lambda: "")
-    with pytest.raises(RuntimeError, match="обновите hashengine на сервере"):
+    with pytest.raises(RuntimeError, match="обновите hashpass на сервере"):
         cli.cmd_catalog_layout(env, ["Первый: a:1"], "http://pool.test", quiet)
 
 

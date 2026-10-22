@@ -24,7 +24,7 @@ def test_no_subcommand_calls_pool_home(monkeypatch):
 def test_run_calls_pool_run(monkeypatch):
     seen = {}
     monkeypatch.setattr(student_cli.cli, "cmd_pool_run",
-                        lambda _env, arg: seen.update(arg=arg) or 0)
+                        lambda _env, arg, *_a: seen.update(arg=arg) or 0)
     assert student_cli.main(["run", "3"]) == 0
     assert seen["arg"] == "3"
 

@@ -92,3 +92,13 @@ def test_engine_run_pulls_a_missing_ref_first(registry, tmp_path, monkeypatch):
     assert cli.cmd_engine_run(other, "bob/lab:1", registry.base_url) == 0
     assert ran == ["bob/lab:1"]
     assert ImageStore(other.images).get("bob/lab:1").version == "1_v1"
+
+
+@pytest.mark.tier2
+def test_a_version_carries_what_changed(registry, tmp_path, monkeypatch):
+    """Spec 2026-10-23 §3: `hashpass push -m «…»` -- the comment lives with the version."""
+    env = _login(registry, tmp_path, monkeypatch, "bob", "bob")
+    _seed(ImageStore(env.images), tmp_path, "bob/lab", "one")
+    cli.cmd_push(env, "bob/lab:1", registry.base_url, message="первая версия: каркас")
+    rev = RepoIndex(registry.store.root / ".repos", "bob/lab").latest("1")
+    assert (rev.n, rev.message, rev.by) == (1, "первая версия: каркас", "bob")

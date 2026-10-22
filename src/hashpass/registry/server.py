@@ -90,6 +90,7 @@ def _time_zones() -> list[str]:
     """IANA zones a viewer may pick on the settings page (zone/city names, sorted)."""
     return sorted(z for z in zoneinfo.available_timezones() if "/" in z and not z.startswith("Etc/"))
 _MAX_COMMENT = 500
+_MAX_MESSAGE = 2000          # a version's «what changed» (spec 2026-10-23 §3)
 _MAX_REASON = 500                # a rejection reason, shown to the author
 _REJECTED_BLOCK = "rejected"     # the virtual block of rejected tasks (author + admin)
 _STUDENT_FIELDS = frozenset(("number", "name", "version", "digest", "ref", "block_id",
@@ -183,7 +184,7 @@ def _ownership_message(name: str) -> str:
     owner = _owner_of(name)
     if owner is None:
         return f"образ без пространства имён («{name}») может публиковать только администратор"
-    return f"образ принадлежит другому автору («{owner}»); войдите под ним: hashengine login"
+    return f"образ принадлежит другому автору («{owner}»); войдите под ним: hashpass login"
 
 
 _LAYOUT_ADMIN_ONLY = ("раскладку каталога меняет только администратор; своё задание автор "
@@ -1040,7 +1041,7 @@ class PoolServer:
 
     def _route_catalog_layout(self) -> Response:
         """
-        Replace the whole catalog layout (blocks + task order) -- `hashengine catalog layout`.
+        Replace the whole catalog layout (blocks + task order) -- `hashpass catalog layout`.
 
         Admin-only like the web drag-and-drop: it renumbers and can de-list any task. Refs that
         are not published on the pool are dropped by `Catalog.set_layout`; the reply lists the
@@ -1650,7 +1651,8 @@ class PoolServer:
             return self._json(HTTPStatus.NOT_FOUND, {"error": "черновик отправки не найден — начните push заново"})
         if intent.get("owner") != user and self.users.role(user) != "admin":
             return self._empty(HTTPStatus.FORBIDDEN)
-        return self._commit(user, name, tag, st)
+        message = str(data.get("message", "")).strip()[:_MAX_MESSAGE] if isinstance(data, dict) else ""
+        return self._commit(user, name, tag, st, message=message)
 
     def _revisions_get(self, name: str) -> Response:
         if self._token_user() is None:
@@ -2012,7 +2014,8 @@ class PoolServer:
         p_name, _, p_version = parent.partition(":")
         return self.resolve(p_name, p_version or "latest")
 
-    def _commit(self, user: str, name: str, tag: str, st: Staging) -> Response:  # noqa: PLR0911, C901
+    def _commit(self, user: str, name: str, tag: str, st: Staging, *,  # noqa: PLR0911, C901
+                message: str = "") -> Response:
         """
         Turn a staging area into revision `tag_vN` (spec §2.3), atomically under the repo lock.
 
@@ -2059,7 +2062,7 @@ class PoolServer:
                 return self._json(HTTPStatus.CONFLICT, {"error": f"публичный образ нельзя строить на приватной базе {base}"})
             if raw_base and base is None:
                 st.remove()
-                return self._json(HTTPStatus.CONFLICT, {"error": f"базовый образ {raw_base} не найден на пуле — отправьте его первым (hashengine push base)"})
+                return self._json(HTTPStatus.CONFLICT, {"error": f"базовый образ {raw_base} не найден на пуле — отправьте его первым (hashpass push base)"})
             prev_base = self.store.get(latest_ref).base if latest_ref else None
             # attachments: compare the files only (their index records upload times)
             changed_files = any(
@@ -2084,7 +2087,7 @@ class PoolServer:
                 if base:
                     self._set_meta_field(dest, "base", base)
                 idx.add(tag, {"image_digest": image_digest, "task_digest": t_digest,
-                              "parents": pinned, "by": user})
+                              "parents": pinned, "by": user, "message": message})
             except (OSError, ValueError, KeyError, tarfile.TarError) as exc:
                 for d in (dest, att_dest, src_dest):
                     shutil.rmtree(d, ignore_errors=True)

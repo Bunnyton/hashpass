@@ -1,156 +1,27 @@
-"""hashengine CLI: author/server front end (build, push, serve, login, images) over hashpass.cli."""
-import argparse
-import os
+"""
+`hashengine` -- the old name of the author's commands, now one `hashpass` binary (spec 2026-10-23 §1).
+
+Kept as an alias so nothing that still says `hashengine` breaks: `hashengine <args>` is
+`hashpass <args>` (same arguments, same exit code), `hashengine` alone is `hashpass work`. The prod
+pool runs `python3 -m hashengine serve` and its self-update restarts the same module, so this must
+keep working until every pool is started as `hashpass serve`.
+"""
 import sys
 from collections.abc import Sequence
-from pathlib import Path
 
-from hashpass import cli
-
-_ENABLE_ENV = "HASHENGINE_ENABLE"
-_HOME_ENV = "HASHENGINE_HOME"
-
-
-def _engine_enabled() -> bool:
-    """Whether the author toolkit is activated here (only make install / the pool installer set it)."""
-    if os.environ.get(_ENABLE_ENV):
-        return True
-    home = Path(os.environ.get(_HOME_ENV, Path.home() / ".hashengine"))
-    return (home / "engine.enabled").exists()
-
-
-def _add_revision_commands(sub: argparse._SubParsersAction) -> None:
-    """`run`, `tag`, `rm`, `fork`: work with revisions (spec 2026-10-21 §2, §10)."""
-    p_run = sub.add_parser("run", help="запустить образ/задание как автор (без зачёта)")
-    p_run.add_argument("ref", help="локальный образ, версия x:1_v3 или тег x:1 (= последняя версия)")
-    p_run.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
-    p_tag = sub.add_parser("tag", help="навесить тег на свою версию на пуле")
-    p_tag.add_argument("src", help="версия x:1_v3 или тег x:1 (= последняя)")
-    p_tag.add_argument("to", help="новый тег, например stable")
-    p_tag.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
-    p_rm = sub.add_parser("rm", help="удалить версию с пула (x:1_v3) или локальную копию (--local)")
-    p_rm.add_argument("ref")
-    p_rm.add_argument("--local", action="store_true", help="удалить только с этой машины")
-    p_rm.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
-    p_fork = sub.add_parser("fork", help="форкнуть чужое задание в своё пространство имён")
-    p_fork.add_argument("src", help="версия или тег, например alice/lab:1")
-    p_fork.add_argument("name", nargs="?", help="имя форка (по умолчанию — как у исходного)")
-    p_fork.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
-
-
-def build_parser() -> argparse.ArgumentParser:
-    """Construct the author/server parser: build, push, serve, login, images."""
-    parser = argparse.ArgumentParser(
-        prog="hashengine",
-        description="Сборка, публикация и запуск пула заданий hashpass (для авторов).")
-    parser.add_argument("--no-update", action="store_true",
-                        help="не обновляться при запуске (иначе ставится свежий main с GitHub)")
-    sub = parser.add_subparsers(dest="command")
-    p_build = sub.add_parser("build", help="собрать образ/задание из Taskfile")
-    p_build.add_argument("taskfile")
-    p_build.add_argument("-t", "--tag", help="имя[:версия] (переопределяет строку image в Taskfile)")
-    p_push = sub.add_parser("push", help="отправить образ/задание на пул")
-    p_push.add_argument("ref", help="образ/задание, или `base` — базовый образ этого runtime")
-    p_push.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
-    p_push.add_argument("--task", action="store_true",
-                        help="добавить задание в каталог (новое — скрытым, пока его не покажут)")
-    p_push.add_argument("--block", help="блок каталога, в который публиковать (создастся, если нет)")
-    p_push.add_argument("--force", action="store_true",
-                        help="перезаписать образ на пуле, даже если ref уже там "
-                             "(нужно, чтобы залить чистый слой поверх контаминированного)")
-    p_serve = sub.add_parser("serve", help="запустить пул (реестр + веб)")
-    p_serve.add_argument("--host", help="адрес привязки (по умолчанию 127.0.0.1 или $HASHPASS_REGISTRY; "
-                         "0.0.0.0 — открыть пул наружу)")
-    p_serve.add_argument("--port", type=int, help="порт (по умолчанию 8080 или $HASHPASS_REGISTRY)")
-    p_serve.add_argument("--tls-cert", help="TLS-сертификат (PEM) → работать по HTTPS")
-    p_serve.add_argument("--tls-key", help="приватный TLS-ключ (PEM), вместе с --tls-cert")
-    p_serve.add_argument("--tls-self-signed", action="store_true",
-                         help="сгенерировать и использовать самоподписанный сертификат (нужен openssl)")
-    p_serve.add_argument("--reset-admin", action="store_true",
-                         help="перегенерировать пароль администратора при старте и вывести его")
-    p_login = sub.add_parser("login", help="вход на пул (запросит логин + пароль)")
-    p_login.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
-    p_login.add_argument("--if-needed", action="store_true",
-                         help="ничего не спрашивать, если токен уже в кэше (для скриптов/deploy.sh)")
-    p_logout = sub.add_parser("logout", help="выйти с пула (забыть токен, оставить адрес)")
-    p_logout.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
-    p_pull = sub.add_parser("pull", help="подтянуть образ/задание с пула")
-    p_pull.add_argument("ref")
-    p_pull.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
-    p_source = sub.add_parser("source", help="скачать исходники задания с пула "
-                              "(Taskfile, брифы, data/, hp/ — авторам и администраторам)")
-    p_source.add_argument("ref", help="задание на пуле, например 4istBorw/root-tour:1")
-    p_source.add_argument("dest", nargs="?", help="куда распаковать (по умолчанию ./<имя задания>)")
-    p_source.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
-    _add_revision_commands(sub)
-    p_mig = sub.add_parser("migrate-courses", help="перевести этот пул на версии и курсы "
-                           "(один раз, на машине пула; администратор)")
-    p_mig.add_argument("--owner", default="bunnyton", help="владелец курса по умолчанию (администратор)")
-    sub.add_parser("images", help="список локально собранных образов и заданий")
-    p_cat = sub.add_parser("catalog", help="каталог пула: раскладка по блокам (администратор)")
-    p_cat.add_argument("action", choices=["layout"], help="layout — задать блоки и порядок")
-    p_cat.add_argument("specs", nargs="+", metavar="'Название: ref ref …'",
-                       help="блоки по порядку; ref без namespace получает ваш логин")
-    p_cat.add_argument("--registry", help="адрес пула (по умолчанию — сохранённый)")
-    p_remote = sub.add_parser("remote", help="список образов/заданий на пуле")
-    p_remote.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
-    return parser
-
-
-def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:  # noqa: PLR0911, PLR0912, C901
-    """Route a parsed engine sub-command (no sub-command prints help)."""
-    command = args.command
-    if command is None:
-        if sys.stdin.isatty() and sys.stdout.isatty():      # the work screen (spec 2026-10-21 §10)
-            from hashengine.tui import run_engine_tui  # noqa: PLC0415
-            return run_engine_tui(env)
-        build_parser().print_help()
-        return 0
-    if command == "build":
-        return cli.cmd_build(env, args.taskfile, args.tag)
-    if command == "push":
-        if args.ref == "base":
-            return cli.cmd_push_base(env, args.registry, force=args.force)
-        return cli.cmd_push(env, args.ref, args.registry, publish=args.task, force=args.force,
-                            block=args.block)
-    if command == "serve":
-        return cli.cmd_serve(env, args.host, args.port, certfile=args.tls_cert,
-                             keyfile=args.tls_key, self_signed=args.tls_self_signed,
-                             reset_admin=args.reset_admin)
-    if command == "login":
-        return cli.cmd_login(env, args.registry, if_needed=args.if_needed)
-    if command == "logout":
-        return cli.cmd_logout(env, args.registry)
-    if command == "pull":
-        return cli.cmd_pull(env, args.ref, args.registry)
-    if command == "source":
-        return cli.cmd_source(env, args.ref, args.dest, args.registry)
-    if command == "remote":
-        return cli.cmd_remote_images(env, args.registry)
-    if command == "catalog":
-        return cli.cmd_catalog_layout(env, args.specs, args.registry)
-    revision_cmd = _REVISION_COMMANDS.get(command)
-    if revision_cmd is not None:
-        return revision_cmd(env, args)
-    return cli.cmd_images(env)
-
-
-_REVISION_COMMANDS = {
-    "run": lambda env, a: cli.cmd_engine_run(env, a.ref, a.registry),
-    "tag": lambda env, a: cli.cmd_tag(env, a.src, a.to, a.registry),
-    "rm": lambda env, a: cli.cmd_rm(env, a.ref, a.registry, local=a.local),
-    "fork": lambda env, a: cli.cmd_fork(env, a.src, a.name, a.registry),
-    "migrate-courses": lambda env, a: cli.cmd_migrate_courses(env, a.owner),
-}
+from hashpass.author_cli import say_moved
+from hashpass.student_cli import build_parser
+from hashpass.student_cli import main as hashpass_main
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Parse args and dispatch under the shared error boundary (author toolkit must be activated)."""
-    if not _engine_enabled():
-        sys.stderr.write(
-            "hashengine не активирован на этой машине.\n"
-            "Это авторский инструмент; поставьте его с сайта пула (нужна роль автора):\n"
-            "  curl -fsSL <pool>/install-engine.sh | bash\n"
-            "или локально из клона: make install\n")
-        return 1
-    return cli.run_main(build_parser(), _dispatch, argv)
+    """Run the same `hashpass` command (a bare `hashengine` opens the work screen)."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not any(not a.startswith("-") for a in args) and "-h" not in args and "--help" not in args:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):   # no terminal: no work screen
+            say_moved("--help")
+            build_parser().print_help()
+            return 0
+        args.append("work")
+    say_moved(" ".join(a for a in args if a != "--no-update"))
+    return hashpass_main(args)

@@ -2,8 +2,8 @@
 # deploy.sh — собрать все Taskfile-задания и запушить в пул одной командой.
 #
 # Требования (только на машине автора, с настроенным scoped sudo для nspawn):
-#   - hashengine установлен и активирован (`make install` в корне репо)
-#   - hashengine login выполнен ХОТЯ БЫ РАЗ (Bearer-токен закэширован)
+#   - hashpass установлен (`make install` в корне репо)
+#   - hashpass login выполнен ХОТЯ БЫ РАЗ (Bearer-токен закэширован)
 #   - в HASHPASS_POOL (или ~/.hashpass/pool.json) указан адрес пула
 #
 # Использование:
@@ -28,7 +28,7 @@ done
 
 cd "$(dirname "$0")"
 # Блоки каталога по темам. Порядок блоков и заданий внутри = нумерация на пуле: после всех
-# push-ей раскладка целиком отправляется `hashengine catalog layout` (только администратор).
+# push-ей раскладка целиком отправляется `hashpass catalog layout` (только администратор).
 # Формат строки: 'Название блока: каталог каталог …' (имена каталогов заданий здесь).
 BLOCKS=(
     'Знакомство: intro-hello first-commands cd-abs'
@@ -51,14 +51,14 @@ for block in "${BLOCKS[@]}"; do
     TASKS+=("${names[@]}")
     for n in "${names[@]}"; do BLOCK_OF[$n]="${block%%:*}"; done
 done
-# Must equal the namespace the images were built under -- `hashengine build` namespaces images
+# Must equal the namespace the images were built under -- `hashpass build` namespaces images
 # by the LOCAL login, and the pool now rejects a push whose ref namespace differs from the
 # pushing user (author == author): a mismatch here gets a 403, not a silent wrong owner.
 USER_LOGIN="${HASHPASS_USER:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("user",""))' 2>/dev/null || true)}"
 POOL_URL="${HASHPASS_POOL:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("url",""))' 2>/dev/null || true)}"
 
 if [[ -z "$USER_LOGIN" ]]; then
-    echo "нужен логин: HASHPASS_USER=... ./deploy.sh, либо предварительно  hashengine login" >&2
+    echo "нужен логин: HASHPASS_USER=... ./deploy.sh, либо предварительно  hashpass login" >&2
     exit 1
 fi
 
@@ -68,7 +68,7 @@ fi
 # блокироваться на вводе.
 if [[ -z "$DRY" ]]; then
     echo "── единоразовый вход на пул ($POOL_URL) от имени $USER_LOGIN ──"
-    hashengine login "$POOL_URL" --if-needed || {
+    hashpass login "$POOL_URL" --if-needed || {
         echo "вход на пул не удался — деплой прерван" >&2
         exit 1
     }
@@ -81,9 +81,9 @@ if [[ -z "$DRY" && -z "$LAYOUT_ONLY" ]]; then
     # с машины, которая на этот пул базу ещё не заливала; неизменная не отправляется, а
     # залитую с другой машины он не трогает (скажет об этом). --force перезалил бы базу и
     # заставил КАЖДОГО студента заново скачать ~57 МБ; если это действительно нужно — вручную:
-    #   hashengine push base --force
+    #   hashpass push base --force
     # Логин на пул должен быть владельцем базы (bunnyton) или администратором.
-    hashengine push base
+    hashpass push base
 fi
 
 declare -A REF_OF
@@ -96,11 +96,11 @@ for name in "${TASKS[@]}"; do
     echo "=== $name ==="
     (
         cd "$name"
-        hashengine build Taskfile
+        hashpass build Taskfile
         if [[ -z "$DRY" ]]; then
             # Сразу в свой блок; НОВОЕ задание появляется скрытым (автор проверяет в hashpass, потом
             # «Показать» в веб-каталоге); уже опубликованное сохраняет место и видимость.
-            hashengine push "$USER_LOGIN/$image_ref" --task --block "${BLOCK_OF[$name]}" $FORCE
+            hashpass push "$USER_LOGIN/$image_ref" --task --block "${BLOCK_OF[$name]}" $FORCE
         fi
     )
 done
@@ -120,7 +120,7 @@ if [[ -z "$DRY" ]]; then
     echo "── раскладка каталога по блокам ──"
     # Пул, переведённый на курсы, раскладку из скрипта не принимает (410): блоки и порядок —
     # на странице курса в вебе. Тогда отправленные ревизии уже на пуле, а раскладка — руками.
-    if ! hashengine catalog layout --registry "$POOL_URL" "${SPECS[@]}"; then
+    if ! hashpass catalog layout --registry "$POOL_URL" "${SPECS[@]}"; then
         echo "раскладку не задать отсюда — откройте курс в вебе: $POOL_URL/c"
     fi
 fi

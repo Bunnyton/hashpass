@@ -462,9 +462,9 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} ({kind})\n")
     store.set_taskfile_path(ref, str(taskfile_path.resolve()))   # push attaches it to the card later
     if not _uses_local_service(env):
-        # A pool is configured: publishing is an explicit `hashengine push` (never automatic).
+        # A pool is configured: publishing is an explicit `hashpass push` (never automatic).
         flag = " --task" if task else ""
-        io.write(f"\x1b[2m  сохранено локально — на пул: hashengine push {ref}{flag}\x1b[0m\n")
+        io.write(f"\x1b[2m  сохранено локально — на пул: hashpass push {ref}{flag}\x1b[0m\n")
     elif task:
         # The registry blob carries an image's layer, not a task's hidden grader -- keep tasks local.
         io.write("\x1b[2m  задание сохранено локально (на сервис отправляются образы)\x1b[0m\n")
@@ -1065,7 +1065,7 @@ def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, 
     Save the console's edits back into an image (its layer + overlay upper) under the owner's namespace.
 
     Offline (no pool) the result is auto-pushed to the local service; with a pool configured
-    publishing stays an explicit `hashengine push`, and the hint says so.
+    publishing stays an explicit `hashpass push`, and the hint says so.
     """
     upper = runner.rootfs_upper
     try:
@@ -1096,7 +1096,7 @@ def _commit_image_edits(env: Home, runner: object, store: ImageStore, ref: str, 
     if _uses_local_service(env):
         _push_image(env, store, f"{name}:{version}", io)
     else:
-        io.write(f"\x1b[2m  сохранено локально — на пул: hashengine push {name}:{version}\x1b[0m\n")
+        io.write(f"\x1b[2m  сохранено локально — на пул: hashpass push {name}:{version}\x1b[0m\n")
 
 
 def _run_image(env: Home, ref: str, store: ImageStore, io: Io) -> int:
@@ -1180,7 +1180,7 @@ def _ensure_registry(env: Home, io: Io) -> str:
     env.registry.mkdir(parents=True, exist_ok=True)
     with (env.registry / "serve.log").open("ab") as log:
         subprocess.Popen(  # detached: outlives this CLI process and keeps serving
-            [sys.executable, "-m", "hashengine", "serve"],
+            [sys.executable, "-m", "hashpass", "serve"],
             stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             start_new_session=True, env={**os.environ, _ENV_HOME: str(env.root)},
         )
@@ -1202,11 +1202,11 @@ def _author_identity(env: Home, io: Io) -> str:
     """
     Return the login whose namespace owns the images built here.
 
-    With a pool configured (`hashengine login` / $HASHPASS_POOL) it is the POOL login, and the
+    With a pool configured (`hashpass login` / $HASHPASS_POOL) it is the POOL login, and the
     local registry service is never started, logged into or pushed to. Only the NAME is needed
     to build (the password matters at push), so no network is touched when possible: a live
     cached token names the user; else the login pool.json remembers from the last successful
-    `hashengine login` is used (offline-safe); only with neither is the pool login asked for --
+    `hashpass login` is used (offline-safe); only with neither is the pool login asked for --
     an EXISTING login, never a registration. Without a pool (offline authoring, tests) the
     local service login is used as before.
     """
@@ -1226,7 +1226,7 @@ def _author_identity(env: Home, io: Io) -> str:
     token = _pool_token(env, url)
     user = token_user(token) if token else ""
     if not user:
-        msg = "не удалось определить логин на пуле — выполните hashengine login"
+        msg = "не удалось определить логин на пуле — выполните hashpass login"
         raise RuntimeError(msg)
     return user
 
@@ -1341,7 +1341,7 @@ def _resolve_tls(env: Home, certfile: str | None, keyfile: str | None,
 
 def cmd_migrate_courses(env: Home, owner: str = "bunnyton", io: Io | None = None) -> int:
     """
-    Move this pool (its data under the hashengine home) to revisions + a default course (spec §13).
+    Move this pool (its data under the hashpass home) to revisions + a default course (spec §13).
 
     Run on the pool machine, with the pool stopped or idle; done once (a second run reports so).
     The old state is backed up first; the courses API is then switched on by HASHPASS_COURSES=1.
@@ -1369,6 +1369,45 @@ def cmd_migrate_courses(env: Home, owner: str = "bunnyton", io: Io | None = None
     return 0
 
 
+def _running_module() -> str:
+    """
+    Return the module this process was started as, for the self-update to restart the same way.
+
+    Prod runs `python3 -m hashpass serve` (the old name, now an alias of hashpass): restarting
+    it as `-m hashengine` keeps whatever supervises it happy; a new pool runs `hashpass serve`.
+    """
+    started = Path(sys.argv[0])
+    return "hashengine" if "hashengine" in (started.name, started.parent.name) else "hashpass"
+
+
+def cmd_run_any(env: Home, arg: str, registry: str | None = None, io: Io | None = None) -> int:
+    """
+    Run `hashpass run <arg>`: a course task with credit, anything else without.
+
+    A number or a task of the current course -- the course run, with credit; anything else (a
+    local build, another image) -- the author's run, without credit, and it says so.
+    """
+    io = io or _default_io()
+    if arg.isdigit() or (registry is None and _in_current_course(env, arg)):
+        return cmd_pool_run(env, arg, io)
+    io.write(f"\x1b[2m{arg} не из текущего курса — запускаю без зачёта\x1b[0m\n")
+    return cmd_engine_run(env, arg, registry)
+
+
+def _in_current_course(env: Home, ref: str) -> bool:
+    """Whether `ref` is a task of the current course (no prompt: an unknown pool/login -> False)."""
+    url = _pool_url(env)
+    token = _pool_token(env, url) if url else None
+    if not url or not token:
+        return False
+    try:
+        rows = RemoteRegistry(url).catalog(token=token)
+    except (urllib.error.URLError, RuntimeError, ValueError, OSError):
+        return False
+    wanted = normalize_ref(ref) if ":" in ref else ref
+    return any(str(r.get("ref")) in (ref, wanted) for r in rows)
+
+
 def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  # noqa: PLR0913
               certfile: str | None = None, keyfile: str | None = None,
               self_signed: bool = False, reset_admin: bool = False) -> int:
@@ -1394,7 +1433,7 @@ def cmd_serve(env: Home, host: str | None = None, port: int | None = None, *,  #
     _seed_admin(users, _default_io(), reset=reset_admin)   # only after the port bound successfully
     # A pool runs for weeks: follow `main` while running, not only at launch (same args, never
     # --reset-admin; restarts only when no download is in flight).
-    threading.Thread(target=watch_for_updates, args=("hashengine", sys.argv[1:]),
+    threading.Thread(target=watch_for_updates, args=(_running_module(), sys.argv[1:]),
                      kwargs={"idle": server.idle}, daemon=True).start()
 
     def _stop(*_a: object) -> None:
@@ -1458,7 +1497,7 @@ def _login_or_register(env: Home, url: str, user: str, io: Io, *, register: bool
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     if not client.user_exists(user):
         if not register:
-            msg = (f"на пуле {url} нет логина «{user}» — сначала hashengine login "
+            msg = (f"на пуле {url} нет логина «{user}» — сначала hashpass login "
                    "(аккаунт автора заводит администратор пула)")
             raise RuntimeError(msg)
         _register_interactive(client, user, io)
@@ -1479,7 +1518,7 @@ def _cache_hit_or_forget(env: Home, url: str, io: Io) -> str | None:
     Return the user of a live cached token, or None if the caller must prompt anew.
 
     Alive cache -> return the user AND re-sync pool.json to the URL under which the
-    token is cached, so a later `hashengine push` (which reads pool.json.url as its
+    token is cached, so a later `hashpass push` (which reads pool.json.url as its
     default registry) hits the SAME cache key and doesn't re-prompt.  This bug was
     the reason deploy.sh kept asking for a pool password even after login had
     printed "уже вошли": login used the URL from deploy.sh's $POOL_URL, but push
@@ -1608,7 +1647,7 @@ def _pool_forbidden_message(exc: urllib.error.HTTPError) -> str:
         payload = None
     if isinstance(payload, dict) and isinstance(payload.get("error"), str) and payload["error"]:
         return payload["error"]
-    return "пул отклонил push (403): войдите под владельцем образа — hashengine login"
+    return "пул отклонил push (403): войдите под владельцем образа — hashpass login"
 
 
 def _push_call(fn: Callable[..., object], *args: object, **kwargs: object) -> object:
@@ -1683,7 +1722,7 @@ def _attach_source(client: RemoteRegistry, ref: str, task_dir: Path, io: Io, sta
         io.write(f"\x1b[33m⚠ не удалось приложить исходники задания: {exc}\x1b[0m\n")
         return
     io.write(f"\x1b[36m↑ приложены исходники задания\x1b[0m: {_SOURCE_NAME} "
-             f"(скачать: hashengine source {ref})\n")
+             f"(скачать: hashpass clone {ref})\n")
 
 
 def _attach_taskfile(client: RemoteRegistry, store: ImageStore, ref: str, io: Io,
@@ -1724,7 +1763,7 @@ def _built_on_base(store: ImageStore, ref: str) -> str | None:
 
 def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0913
              publish: bool = False, force: bool = False, block: str | None = None,
-             io: Io | None = None) -> int:
+             io: Io | None = None, message: str = "") -> int:
     """
     Push a ref (+ its `from` closure); with `publish`, also add it to the catalog.
 
@@ -1749,7 +1788,7 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
     _push_call(client.push, store, ref, force=force, task_dir=tdir if tdir.exists() else None,
                publish=publish, block=block,
                extras=lambda staging: _attach_taskfile(client, store, ref, io, staging),
-               base=_built_on_base(store, ref))
+               base=_built_on_base(store, ref), message=message)
     for done in client.last_push:
         if done["unchanged"]:
             sys.stdout.write(f"без изменений: {human_ref(done['ref'])} уже на пуле\n")
@@ -1786,7 +1825,7 @@ def cmd_push_base(env: Home, registry: str | None = None, *, force: bool = False
             return 0
         if remote is not None and local is not None:
             io.write(f"\x1b[33mна пуле база {ref}, загруженная с другой машины — оставляю; "
-                     f"перезаписать: hashengine push base --force\x1b[0m\n")
+                     f"перезаписать: hashpass push base --force\x1b[0m\n")
             return 0
     return cmd_push(env, ref, url, publish=False, force=True, io=io)
 
@@ -1797,7 +1836,7 @@ def parse_layout_specs(specs: list[str], owner: str) -> list[dict[str, object]]:
 
     Each spec is one block in catalog order; its refs are the block's tasks in order, spelled
     as published (`name:version`); only a missing namespace is filled in, exactly like
-    `hashengine build` does for the image name.
+    `hashpass build` does for the image name.
     """
     blocks: list[dict[str, object]] = []
     for spec in specs:
@@ -1825,7 +1864,7 @@ def cmd_catalog_layout(env: Home, specs: list[str], registry: str | None = None,
     except urllib.error.HTTPError as exc:
         if exc.code != HTTPStatus.NOT_FOUND:
             raise
-        msg = ("пул не знает раскладки каталога (PUT /catalog/layout) — обновите hashengine на "
+        msg = ("пул не знает раскладки каталога (PUT /catalog/layout) — обновите hashpass на "
                "сервере из main и перезапустите пул, затем повторите deploy.sh")
         raise RuntimeError(msg) from exc
     rows = list(result.get("catalog", []))
@@ -1873,7 +1912,7 @@ def cmd_engine_run(env: Home, ref: str, registry: str | None = None, io: Io | No
 
 
 def cmd_tag(env: Home, src: str, to: str, registry: str | None = None, io: Io | None = None) -> int:
-    """Tag one of your revisions on the pool (`hashengine tag x:1_v3 stable`)."""
+    """Tag one of your revisions on the pool (`hashpass tag x:1_v3 stable`)."""
     io = io or _default_io()
     check_tag(to)
     url = _ensure_registry_login(env, registry, io)
@@ -1901,13 +1940,13 @@ def cmd_rm(env: Home, ref: str, registry: str | None = None, *, local: bool = Fa
 
 def cmd_fork(env: Home, src: str, name: str | None = None, registry: str | None = None,
              io: Io | None = None) -> int:
-    """Fork a revision into your namespace (`hashengine fork alice/lab:1 [lab2]`)."""
+    """Fork a revision into your namespace (`hashpass fork alice/lab:1 [lab2]`)."""
     io = io or _default_io()
     url = _ensure_registry_login(env, registry, io)
     user = _author_identity(env, io)
     short = name or split_ref(src)[0].rpartition("/")[2]
     made = _push_call(RemoteRegistry(url, cache=CredentialCache(env.creds)).fork, src, f"{user}/{short}")
-    sys.stdout.write(f"форк создан: {made} (исходники: hashengine source {made})\n")
+    sys.stdout.write(f"форк создан: {made} (исходники: hashpass clone {made})\n")
     return 0
 
 
@@ -1925,7 +1964,7 @@ def cmd_source(env: Home, ref: str, dest: str | None = None, registry: str | Non
     name, version = split_ref(ref)
     out = Path(dest) if dest else Path.cwd() / name.rsplit("/", 1)[-1]
     if out.exists() and any(out.iterdir()):
-        msg = f"{out} уже существует и не пуст — укажите другой каталог: hashengine source {ref} <каталог>"
+        msg = f"{out} уже существует и не пуст — укажите другой каталог: hashpass clone {ref} <каталог>"
         raise RuntimeError(msg)
     for filename in ("", _SOURCE_NAME, "Taskfile"):   # "" = the tree the pool keeps as files
         try:
@@ -1998,7 +2037,7 @@ def _url_variants(url: str) -> list[str]:
     Equivalent forms of the same pool URL, tried when looking up a cached token.
 
     The cache key is whatever string was passed to `RemoteRegistry(...)` at login time --
-    but `hashengine login "$POOL_URL"` and `hashengine push` (which falls back to
+    but `hashpass login "$POOL_URL"` and `hashpass push` (which falls back to
     pool.json.url or $HASHPASS_POOL) can each spell the same address slightly
     differently ("https://IP:8080", "IP:8080", trailing slash).  Try all reasonable
     forms so a scheme/slash mismatch doesn't lose the token.
@@ -2669,7 +2708,7 @@ def task_mode(env: Home, io: Io | None = None) -> int:
     store = ImageStore(env.images)
     tasks = [ref for ref in store.list() if _kind(store, ref) == "task"]
     if not tasks:
-        io.write("заданий пока нет — автор сначала делает `hashengine build <Taskfile>`\n")
+        io.write("заданий пока нет — автор сначала делает `hashpass build <Taskfile>`\n")
         return 0
     for i, ref in enumerate(tasks, 1):
         io.write(f"{i}. {ref}\n")
@@ -2689,7 +2728,7 @@ def run_main(parser: argparse.ArgumentParser,
     Parse argv, build the env, and route via `dispatch` under a common error boundary.
 
     Never dumps a traceback on an ordinary user error. Shared by the `hashpass` (student)
-    and `hashengine` (author) front ends; each supplies its own parser and dispatch,
+    and `hashpass` (author) front ends; each supplies its own parser and dispatch,
     including how a missing sub-command is handled.
     """
     real_argv = list(argv) if argv is not None else sys.argv[1:]

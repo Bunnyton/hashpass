@@ -15,7 +15,7 @@ content/tasks/<id>/
     grade         # опционально: скрипт для `check exec` (только живые процессы — см. SKILL.md)
 ```
 
-Пути `hidden`/`copy`/`readme` резолвятся относительно **папки Taskfile** (`hashengine build` сам
+Пути `hidden`/`copy`/`readme` резолвятся относительно **папки Taskfile** (`hashpass build` сам
 переводит их в абсолютные). `read`/`show file <p>` ищет файл сначала в `/hp/work/<p>`, потом в ФС
 студента (`settings workdir`, по умолчанию `/home/student`), потом по абсолютному пути.
 
@@ -24,7 +24,7 @@ content/tasks/<id>/
 | Директива | Синтаксис | Смысл |
 |---|---|---|
 | `image` | `image <name>:<ver>` | Имя образа. Без `:ver` → `latest`. Один раз. |
-| `from` | `from <ref>[, <ref>…]` | Наследование (транзитивное); правее = приоритет. Голое имя (`from apt-update:1`) `hashengine build` подставляет в namespace владельца (`bunnyton/apt-update:1`); явный `alice/lib:2` остаётся как есть. Задание-продолжение: `from <предыдущее>` + `run` решения предыдущего (действия студента не сохраняются). |
+| `from` | `from <ref>[, <ref>…]` | Наследование (транзитивное); правее = приоритет. Голое имя (`from apt-update:1`) `hashpass build` подставляет в namespace владельца (`bunnyton/apt-update:1`); явный `alice/lib:2` остаётся как есть. Задание-продолжение: `from <предыдущее>` + `run` решения предыдущего (действия студента не сохраняются). |
 | `run` | `run <shell-команда>` | Выполняется **при сборке**, запекается в образ. Пакеты, права, владельцы, пустые каталоги (`apt-get install`, `chmod 000`, `chgrp`, `chown -R student:student …`, `mkdir -p`); сами данные приходят через `copy data/…`, а не `printf`. |
 | `copy` | `copy <src> <dst>` | Файл/каталог из папки задания → в образ (`copy data/haystack /home/student/haystack`: каталог ложится **содержимым** в `dst`, как `COPY` в Docker). Так в задание попадают настоящие данные (`data/`), а не `printf` в `run`. Владельца ставь следом: `run chown -R student:student …`. |
 | `hidden` | `hidden <dir>` | Каталог → скрытый `/hp/work/`. Обычно `hidden hp`. |
@@ -209,15 +209,15 @@ hint idle 240  say "Долгая пауза. Перечитай задание: 
 ## Команды
 
 ```bash
-cd content/tasks/<id> && hashengine build Taskfile      # собрать (деривация в nspawn; apt-задания — минуты)
+cd content/tasks/<id> && hashpass build Taskfile      # собрать (деривация в nspawn; apt-задания — минуты)
 hashpass run <id>:1                                    # живая консоль студента (exit — выйти)
-hashengine images                                      # что собрано
+hashpass images                                      # что собрано
 python3 -m pytest tests/content/test_bundled_taskfiles_parse.py -q   # все Taskfile парсятся, ссылки на файлы целы
 content/tasks/deploy.sh --dry                          # собрать ВСЕ задания без пуша
-hashengine push base                                   # базовый образ этого runtime на пул
+hashpass push base                                   # базовый образ этого runtime на пул
 ```
 
-Пуш на пул (`hashengine push … --task [--force]`) — только по явной просьбе автора курса
+Пуш на пул (`hashpass push … --task [--force]`) — только по явной просьбе автора курса
 (135.106.177.228 — prod).
-`hashengine build` берёт namespace из пул-логина (локальный реестр 127.0.0.1:8080 — только без пула). Пул принимает push только под своим логином (`<логин>/<имя>:<версия>`); база — `bunnyton/debian:trixie` (фиксированный тег, владелец bunnyton/админ; `push base` перезаливает только пересобранную базу). Ненайденный ref с одноимённым образом в другом namespace → «быть может, вы искали …?».
-`hashengine logout` — забыть кэшированный токен; `login` при живом токене спрашивает про перезаход (`--if-needed` — не спрашивать, для скриптов).
+`hashpass build` берёт namespace из пул-логина (локальный реестр 127.0.0.1:8080 — только без пула). Пул принимает push только под своим логином (`<логин>/<имя>:<версия>`); база — `bunnyton/debian:trixie` (фиксированный тег, владелец bunnyton/админ; `push base` перезаливает только пересобранную базу). Ненайденный ref с одноимённым образом в другом namespace → «быть может, вы искали …?».
+`hashpass logout` — забыть кэшированный токен; `login` при живом токене спрашивает про перезаход (`--if-needed` — не спрашивать, для скриптов).

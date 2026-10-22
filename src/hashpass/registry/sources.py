@@ -3,9 +3,9 @@ A task's sources on the pool, kept as FILES.
 
 User, 2026-10-14: «давай не архивом, давай все-таки все файлы, но скачать можно архив».
 
-`hashengine push` sends the task directory as one tar.gz; the pool unpacks it into
+`hashpass push` sends the task directory as one tar.gz; the pool unpacks it into
 `<root>/<name>/<version>/` so authors and admins can browse it file by file (hashpass viewer, web
-card), and packs it back into an archive on request (`hashengine source`). A new push replaces
+card), and packs it back into an archive on request (`hashpass clone`). A new push replaces
 the whole tree atomically: unpacked next to it first, then swapped in.
 """
 import io
@@ -78,7 +78,7 @@ class SourceStore:
         return target.read_bytes()
 
     def archive(self, ref: str) -> bytes:
-        """Pack the tree back into a tar.gz (paths relative), as `hashengine source` unpacks it."""
+        """Pack the tree back into a tar.gz (paths relative), as `hashpass clone` unpacks it."""
         base = self._dir(ref)
         if not base.is_dir():
             raise FileNotFoundError(ref)

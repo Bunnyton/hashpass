@@ -221,7 +221,8 @@ def test_cmd_run_unknown_ref_reports_and_exits_1(tmp_path):
 
 @pytest.mark.tier1
 def test_engine_parser_args():
-    p = engine_cli.build_parser()
+    from hashpass import student_cli  # noqa: PLC0415
+    p = student_cli.build_parser()
     assert p.parse_args(["build", "T"]).taskfile == "T"
     assert p.parse_args(["build", "T", "-t", "n:1"]).tag == "n:1"
     assert p.parse_args(["build", "T"]).tag is None
@@ -296,7 +297,7 @@ def test_main_reports_user_error_without_traceback(tmp_path, monkeypatch, capsys
     # a missing/broken Taskfile must exit 1 with a clean message, never a traceback.
     monkeypatch.setenv("HASHPASS_HOME", str(tmp_path / "home"))
     assert engine_cli.main(["build", str(tmp_path / "nope.Taskfile")]) == 1
-    assert capsys.readouterr().err.startswith("hashengine:")
+    assert "hashpass: " in capsys.readouterr().err        # one binary now (spec 2026-10-23 §1)
 
 
 @pytest.mark.tier1
