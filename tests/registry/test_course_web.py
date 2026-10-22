@@ -51,10 +51,11 @@ def test_course_page_for_a_student_and_for_the_owner(pool: _Courses) -> None:
     status, html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")
     assert status == 200  # noqa: PLR2004
     assert "bob/git-init:1_v1" in html and "Пройти курс" in html
-    assert "id='settings'" not in html and "data-layout-url" not in html
+    assert "id='settings-tab'" not in html and "data-layout-url" not in html
+    assert "id='people'" in html                                          # everyone sees who is in
     owner = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
     assert "data-layout-url='/courses/bob/linux/layout'" in owner
-    assert "id='settings'" in owner and "id='members'" in owner
+    assert "id='settings-tab'" in owner and "/members/__LOGIN__" in owner
 
 
 @pytest.mark.tier1

@@ -531,3 +531,10 @@ pre.diff span{display:block}
 pre.diff .add{background:var(--ok-soft);color:var(--ok)}
 pre.diff .del{background:var(--danger-soft);color:var(--danger)}
 pre.diff .hunk{color:var(--accent)}
+/* a course's history */
+ol.history{list-style:none;padding:6px 0;margin:0}
+ol.history li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 18px;border-bottom:1px solid var(--border)}
+ol.history li:last-child{border-bottom:0}
+ol.history .when{color:var(--muted);font-size:13px;min-width:130px;font-variant-numeric:tabular-nums}
+ol.history .who{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--text);font-weight:600}
+ol.history .why{color:var(--muted);font-style:italic}

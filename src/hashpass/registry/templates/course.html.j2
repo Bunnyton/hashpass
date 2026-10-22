@@ -1,5 +1,6 @@
 {% extends 'base.html.j2' %}
 {% from '_files.html.j2' import icon %}
+{% from '_cards.html.j2' import avatar %}
 {% macro act(method, path, label, cls='menu-item', fields={}, confirm='', then='') -%}
 <form class='inline' data-api='{{ method }} {{ path }}'{% if confirm %} data-confirm='{{ confirm }}'{% endif %}{% if then %} data-then='{{ then }}'{% endif %}>
 {%- for k, v in fields.items() %}<input type='hidden' name='{{ k }}' value='{{ v }}'{% if v is sameas true or v is sameas false %} data-type='bool'{% elif v is number %} data-type='int'{% endif %}>{% endfor -%}
@@ -54,7 +55,9 @@
 {% if may.add %}<a href='#students' data-tab>{{ icon('user') }} Студенты <span class='count'>{{ students | length }}</span></a>{% endif %}
 {% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
 {% if may.moderate and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
-{% if may.admin %}<a href='#members-tab' data-tab>Участники</a><a href='#settings-tab' data-tab>Настройки</a>{% endif %}
+<a href='#people' data-tab>{{ icon('user') }} Участники <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
+<a href='#history' data-tab>История</a>
+{% if may.admin %}<a href='#settings-tab' data-tab>Настройки</a>{% endif %}
 </nav>
 <section id='tasks' class='tab-panel' aria-label='Задания'>
 <div class='cat-head'><h2>Задания</h2>
@@ -174,26 +177,49 @@
 {% endif %}
 
 </section>
-<section id='members-tab' class='tab-panel' aria-label='Участники'>
-{% if may.admin %}
-<h2 id='members'>Участники</h2>
+<section id='people' class='tab-panel' aria-label='Участники'>
+<h2>Участники</h2>
 <div class='card'>
+<ul class='people'>
+<li><a class='person' href='/u/{{ ref_parts[0] | q }}'>{{ avatar(ref_parts[0], 'sm') }}<span class='mono'>{{ ref_parts[0] }}</span></a><span class='pill sm author'>владелец</span></li>
+{% for user, role in (c.members or {}).items() %}
+<li><a class='person' href='/u/{{ user | q }}'>{{ avatar(user, 'sm') }}<span class='mono'>{{ user }}</span></a>
+{% if may.admin %}
+<form class='inline row' data-api='PUT {{ api }}/members/{{ user | q }}'>
+<label class='visually-hidden' for='crole-{{ loop.index }}'>Роль {{ user }}</label>
+<select id='crole-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'maintainer'] %}<option value='{{ r }}'{% if r == role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
+<button class='sm ghost' type='submit'>Сохранить</button></form>
+{{ act('DELETE', api ~ '/members/' ~ (user | q), 'Убрать', 'sm danger', confirm='Убрать ' ~ user ~ ' из участников?') }}
+{% else %}<span class='pill sm'>{{ role_ru[role] }}</span>{% endif %}
+</li>
+{% endfor %}
+</ul>
+{% if may.admin %}
+<hr class='divider'>
+<form class='row' data-api='PUT {{ api }}/members/__LOGIN__'>
+<label class='visually-hidden' for='new-cmember'>Логин</label>
+<input id='new-cmember' name='__login' placeholder='логин пользователя' required>
+<label class='visually-hidden' for='new-crole'>Роль</label>
+<select id='new-crole' name='role'><option value='member'>участник — проходит приватный курс</option><option value='author' selected>автор — добавляет задания</option><option value='maintainer'>сопровождающий — решает предложения и заявки</option></select>
+<button class='sm' type='submit'>Добавить</button>
+</form>
 <p class='sub small'>Ссылка-приглашение — кто откроет её и войдёт, станет участником: <code class='copy'>{{ invite_link }}</code></p>
 {{ act('PUT', api, 'Сменить ссылку (старая перестанет работать)', 'sm ghost', {'rotate_invite': true}) }}
-{% if c.members %}
-<table><tr><th>Кто</th><th>Роль</th><th></th></tr>
-{% for user, role in c.members.items() %}
-<tr><td>{{ user }}</td><td>
-<form class='inline row' data-api='PUT {{ api }}/members/{{ user | q }}'>
-<select name='role'>{% for r in ['member', 'author', 'maintainer'] %}<option value='{{ r }}'{% if r == role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
-<button class='sm ghost' type='submit'>Сохранить</button></form></td>
-<td>{{ act('DELETE', api ~ '/members/' ~ (user | q), 'Убрать', 'sm ghost', confirm='Убрать участника?') }}</td></tr>
-{% endfor %}</table>
 {% endif %}
-<p class='sub small'>Автор добавляет задания сам и обновляет свои; сопровождающий ещё решает предложения и заявки, правит блоки и порядок.</p>
+<p class='sub small'>Автор добавляет задания сам и обновляет свои; сопровождающий ещё решает предложения и заявки, правит блоки и порядок; владелец — настройки и участники.</p>
 </div>
-{% endif %}
-
+</section>
+<section id='history' class='tab-panel' aria-label='История'>
+<h2>История изменений</h2>
+{% if c.history %}
+<ol class='history card'>
+{% for h in c.history %}
+<li><span class='when'>{{ ts(h.at) }}</span>
+<a class='who' href='/u/{{ h.by | q }}'>{{ avatar(h.by, 'xs') }}<span class='mono'>{{ h.by }}</span></a>
+<span class='what'>{{ h.what }}</span>{% if h.comment %}<span class='why'>«{{ h.comment }}»</span>{% endif %}</li>
+{% endfor %}
+</ol>
+{% else %}<div class='empty card'><p class='sub'>Изменений пока не было.</p></div>{% endif %}
 </section>
 {% if may.add %}
 <section id='students' class='tab-panel' aria-label='Студенты'>
@@ -225,8 +251,8 @@
 </section>
 {% endif %}
 
-<section id='settings-tab' class='tab-panel' aria-label='Настройки'>
 {% if may.admin %}
+<section id='settings-tab' class='tab-panel' aria-label='Настройки'>
 <h2 id='settings'>Настройки</h2>
 <div class='card'>
 <form data-api='PUT {{ api }}' data-rev='{{ c.rev }}'>
@@ -242,8 +268,8 @@
 <hr class='divider'>
 {{ act('DELETE', api, 'Удалить курс', 'sm danger', confirm='Удалить курс насовсем? Задания и образы останутся — удалится только курс.', then='go:/c') }}
 </div>
-{% endif %}
 </section>
+{% endif %}
 {% endif %}
 <script src='/static/api.js'></script>
 <script src='/static/filter.js'></script>

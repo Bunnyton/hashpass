@@ -2,7 +2,7 @@
 {% from '_files.html.j2' import filebox, icon %}
 {% from '_cards.html.j2' import avatar %}
 {% block main %}
-<p class='crumb'>{% if courses_era %}<a href='/c'>← Курсы</a>{% else %}<a href='/web/images'>← Каталог</a>{% endif %}</p>
+<nav class='crumb' aria-label='Путь'>{% if courses_era %}<a href='/'>← Главная</a> · <a href='/u/{{ repo.split('/')[0] | q }}'>{{ repo.split('/')[0] }}</a>{% else %}<a href='/web/images'>← Каталог</a>{% endif %}</nav>
 <div class='card-hero'>
 <div class='row hero-kind'>
 {% if image.kind == 'task' %}<span class='kind kind-task'>{{ icon('task') }} задание</span>{% else %}<span class='kind kind-image'>{{ icon('image') }} образ</span>{% endif %}

@@ -52,6 +52,7 @@ class Course:
     requests: list[dict] = field(default_factory=list)
     blocks: list[dict] = field(default_factory=list)
     proposals: list[dict] = field(default_factory=list)
+    history: list[dict] = field(default_factory=list)   # spec 2026-10-23 §4: who changed what, why
     created_at: str = ""
     rev: int = 0
 

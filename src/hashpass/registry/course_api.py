@@ -24,6 +24,9 @@ from hashpass.registry.revisions import parse_version
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
 
+_HISTORY_KEEP = 500           # a course remembers this many changes
+_HISTORY_SHOWN = 100
+_ROLE_RU = {"member": "участник", "author": "автор", "maintainer": "сопровождающий", "owner": "владелец"}
 _MAX_TEXT = 2000
 
 
@@ -130,13 +133,24 @@ class CourseApi:
             return None, user, self._err(HTTPStatus.FORBIDDEN, "не хватает прав в этом курсе")
         return course, user, None
 
-    def _edit(self, ref: str, change: Callable[[Course], object]) -> Response | None:
-        """Apply `change` under the course lock (`rev` from the body guards); an error -> a response."""
+    def _edit(self, ref: str, change: Callable[[Course], object], *, by: str = "",
+              what: str | Callable[[Course], str] = "") -> Response | None:
+        """
+        Apply `change` under the course lock (`rev` from the body guards); an error -> a response.
+
+        With `what`: the change goes into the course's history in the same write -- who, what
+        (said in words), the body's `comment` (spec 2026-10-23 §4).
+        """
         body = self._body()
         expect = body.get("rev")
         try:
             with self.courses.edit(ref, expect_rev=int(expect) if isinstance(expect, int) else None) as course:
                 change(course)
+                text = what(course) if callable(what) else what
+                if text:
+                    course.history.append({"at": time.time(), "by": by, "what": text,
+                                           "comment": str(body.get("comment", ""))[:_MAX_TEXT]})
+                    del course.history[:-_HISTORY_KEEP]
         except CourseConflictError as exc:
             return self._err(HTTPStatus.CONFLICT, str(exc))
         except PermissionError as exc:
@@ -183,8 +197,9 @@ class CourseApi:
                               for r, t, n in cm.pending_updates(course, self._latest)]
             out["requests"] = [r for r in course.requests if r["state"] == "open"]
             out["settings"] = {"auto_accept": course.auto_accept, "auto_update": course.auto_update}
+        out["members"] = course.members                 # who is in: everyone who sees the course
+        out["history"] = list(reversed(course.history))[:_HISTORY_SHOWN]
         if can(user, role, course, "admin"):
-            out["members"] = course.members
             out["invite"] = course.invite
         return out
 
@@ -253,7 +268,11 @@ class CourseApi:
                     setattr(c, key, bool(body[key]))
             if body.get("rotate_invite"):
                 cm.rotate_invite(c)
-        err = self._edit(course.ref, change)
+        said = [w for k, w in (("title", "название"), ("description", "описание"), ("visibility", "видимость"),
+                               ("auto_accept", "приём предложений"), ("auto_update", "автообновление"))
+                if k in body]
+        err = self._edit(course.ref, change, by=_user,
+                         what=f"настройки: {', '.join(said)}" if said else "")
         return err or self._json(HTTPStatus.OK, self._summary(self.courses.get(course.ref), _user))
 
     def join(self, owner: str, name: str) -> Response:
@@ -290,34 +309,38 @@ class CourseApi:
             return err
         accept = bool(self._body().get("accept"))
         err = self._edit(course.ref, lambda c: cm.decide_request(c, user, accept=accept, by=actor,
-                                                                 now=time.time()))
+                                                                 now=time.time()),
+                         by=actor, what=f"{'принята' if accept else 'отклонена'} заявка {user}")
         if err is None and accept:
             self.enrollments.enroll(user, course.id)
         return err or self._json(HTTPStatus.OK, {"user": user, "accepted": accept})
 
     def member(self, owner: str, name: str, user: str) -> Response:
-        course, _actor, err = self._load(owner, name, "admin")
+        course, actor, err = self._load(owner, name, "admin")
         if err is not None:
             return err
         if request.method == "DELETE":
-            err = self._edit(course.ref, lambda c: cm.remove_member(c, user))
+            err = self._edit(course.ref, lambda c: cm.remove_member(c, user), by=actor,
+                             what=f"{user} больше не участник")
             return err or self._json(HTTPStatus.OK, {"removed": user})
         if not self.server.users.has(user):
             return self._err(HTTPStatus.NOT_FOUND, f"нет пользователя {user}")
         role = str(self._body().get("role", ""))
-        err = self._edit(course.ref, lambda c: cm.set_member(c, user, role))
+        err = self._edit(course.ref, lambda c: cm.set_member(c, user, role), by=actor,
+                         what=f"{user} — {_ROLE_RU.get(role, role)}")
         return err or self._json(HTTPStatus.OK, {"user": user, "role": role})
 
     def add_block(self, owner: str, name: str) -> Response:
-        course, _actor, err = self._load(owner, name, "moderate")
+        course, actor, err = self._load(owner, name, "moderate")
         if err is not None:
             return err
         made: list[str] = []
-        err = self._edit(course.ref, lambda c: made.append(cm.add_block(c, str(self._body().get("name", "")))))
+        err = self._edit(course.ref, lambda c: made.append(cm.add_block(c, str(self._body().get("name", "")))),
+                         by=actor, what=f"новый блок «{self._body().get('name', '')}»")
         return err or self._json(HTTPStatus.CREATED, {"id": made[0]})
 
     def block(self, owner: str, name: str, block_id: str) -> Response:
-        course, _actor, err = self._load(owner, name, "moderate")
+        course, actor, err = self._load(owner, name, "moderate")
         if err is not None:
             return err
         body = self._body()
@@ -330,17 +353,21 @@ class CourseApi:
                 cm.rename_block(c, block_id, str(body["name"]))
             if "open" in body:
                 cm.set_block_open(c, block_id, open_=bool(body["open"]))
-        err = self._edit(course.ref, change)
+        was = next((b["name"] for b in course.blocks if b["id"] == block_id), block_id)
+        what = (f"удалён блок «{was}»" if request.method == "DELETE"
+                else f"блок «{was}» переименован в «{body['name']}»" if "name" in body and body["name"] != was
+                else (f"блок «{was}» {'открыт' if body.get('open') else 'скрыт'}" if "open" in body else ""))
+        err = self._edit(course.ref, change, by=actor, what=what)
         return err or self._json(HTTPStatus.OK, {"id": block_id})
 
     def layout(self, owner: str, name: str) -> Response:
-        course, _user, err = self._load(owner, name, "moderate")
+        course, actor, err = self._load(owner, name, "moderate")
         if err is not None:
             return err
         blocks = self._body().get("blocks")
         if not isinstance(blocks, list):
             return self._err(HTTPStatus.BAD_REQUEST, "нужен список блоков")
-        err = self._edit(course.ref, lambda c: cm.set_layout(c, blocks))
+        err = self._edit(course.ref, lambda c: cm.set_layout(c, blocks), by=actor, what="порядок заданий и блоков")
         return err or self._json(HTTPStatus.OK, {"rev": self.courses.get(course.ref).rev})
 
     def _revision_ok(self, course: Course, user: str, repo: str, tag: str, n: int | None) -> str | int:
@@ -379,7 +406,10 @@ class CourseApi:
             else:
                 out.append(cm.propose(c, "add", repo, tag, n, bid, by=user,
                                       comment=str(body.get("comment", "")), now=time.time()))
-        err = self._edit(course.ref, change)
+        block_name = lambda c: next((b["name"] for b in c.blocks if b["id"] == block_id), "")  # noqa: E731
+        err = self._edit(course.ref, change, by=user, what=(
+            (lambda c: f"добавлено {repo}:{tag} (версия {n})"
+             + (f" в блок «{block_name(c)}»" if block_name(c) else "")) if direct else ""))
         if err is not None:
             return err
         return self._json(HTTPStatus.CREATED, {"task": out[0]} if direct else {"proposal": out[0]})
@@ -397,7 +427,8 @@ class CourseApi:
         if not moderator and current.get("added_by") != user:
             return self._err(HTTPStatus.FORBIDDEN, "менять чужое задание может сопровождающий курса")
         if request.method == "DELETE":
-            err = self._edit(course.ref, lambda c: cm.remove_task(c, repo, tag))
+            err = self._edit(course.ref, lambda c: cm.remove_task(c, repo, tag), by=user,
+                             what=f"убрано {repo}:{tag}")
             return err or self._json(HTTPStatus.OK, {"removed": f"{repo}:{tag}"})
         body = self._body()
         new_n = None
@@ -419,7 +450,11 @@ class CourseApi:
                     t[key] = bool(body[key])
             if body.get("move") in (-1, 1):
                 cm.move_task(c, repo, tag, int(body["move"]))
-        err = self._edit(course.ref, change)
+        said = ([f"{repo}:{tag} → версия {new_n}"] if new_n is not None else []) + [
+            f"{repo}:{tag} {w}" for k, on, off in (("hidden", "скрыто", "показано"), ("pinned", "закреплено", "откреплено"))
+            if k in body for w in [on if body[k] else off]] + (
+            [f"{repo}:{tag} передвинуто"] if body.get("move") in (-1, 1) else [])
+        err = self._edit(course.ref, change, by=user, what="; ".join(said))
         return err or self._json(HTTPStatus.OK, {"task": self.courses.get(course.ref).find_task(repo, tag)})
 
     def proposal(self, owner: str, name: str, pid: str) -> Response:
@@ -435,7 +470,11 @@ class CourseApi:
             return self._err(HTTPStatus.BAD_REQUEST, "action — accept, reject или withdraw")
         if not can(user, self.server.users.role(user), course, "moderate"):
             return self._err(HTTPStatus.FORBIDDEN, "решает сопровождающий или владелец курса")
+        prop = next((p for p in course.proposals if p.get("id") == pid), {})
         err = self._edit(course.ref, lambda c: cm.decide(c, pid, accept=action == "accept", by=user,
                                                          now=time.time(),
-                                                         reason=str(body.get("reason", ""))))
+                                                         reason=str(body.get("reason", ""))),
+                         by=user, what=(f"{'принято' if action == 'accept' else 'отклонено'} предложение "
+                                        f"{prop.get('by', '')}: {prop.get('repo', '')}:{prop.get('tag', '')}"
+                                        f" (версия {prop.get('n', '')})"))
         return err or self._json(HTTPStatus.OK, {"id": pid, "state": action + "ed"})
