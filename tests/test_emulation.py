@@ -142,3 +142,23 @@ def test_the_failed_services_report_is_read_back(tmp_path) -> None:
         "foo.service loaded failed failed Foo\n## errors\nsomething\n", encoding="utf-8")
     assert failed_units(tmp_path) == ["systemd-journald.service", "foo.service"]
     assert failed_units(tmp_path / "nope") == []
+
+
+@pytest.mark.tier1
+def test_man_runs_without_its_seccomp_sandbox_under_emulation(tmp_path) -> None:
+    """arm64, 2026-10-23: `man man` -- Segmentation fault (man-db's seccomp sandbox under qemu-user)."""
+    from hashpass.emulation import nspawn_emulation_args  # noqa: PLC0415
+    rootfs = tmp_path / "run" / "mnt"
+    (rootfs / "etc").mkdir(parents=True)
+    (rootfs / "etc" / "hp-bashrc").write_text("# the console's bash\nPS1='> '\n", encoding="utf-8")
+    args = nspawn_emulation_args(machine=lambda: "aarch64", rootfs=rootfs)
+    binds = {a.split(":", 1)[1]: Path(a.split("=", 1)[1].split(":", 1)[0]) for a in args if a.startswith("--bind-ro=")}
+    bashrc = binds["/etc/hp-bashrc"].read_text(encoding="utf-8")
+    assert bashrc.startswith("export MAN_DISABLE_SECCOMP=1\n") and "PS1='> '" in bashrc  # every shell
+    wrapper = binds["/usr/local/bin/man"]                                               # sudo man too:
+    assert "MAN_DISABLE_SECCOMP=1 exec /usr/bin/man" in wrapper.read_text(encoding="utf-8")  # secure_path
+    assert wrapper.stat().st_mode & 0o111
+    assert not any(str(p).startswith(str(rootfs)) for p in binds.values())             # host side
+    assert nspawn_emulation_args(machine=lambda: "x86_64", rootfs=rootfs) == []
+    bare = nspawn_emulation_args(machine=lambda: "aarch64", rootfs=tmp_path / "nothing")
+    assert not any(":/etc/hp-bashrc" in a for a in bare)                                # no console rc

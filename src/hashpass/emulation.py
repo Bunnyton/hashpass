@@ -96,15 +96,50 @@ def emulated(machine: Callable[[], str] = platform.machine) -> bool:
     return machine() not in _NATIVE or os.environ.get("HASHPASS_FORCE_EMULATED") == "1"
 
 
-def nspawn_emulation_args(machine: Callable[[], str] = platform.machine) -> list[str]:
+_NO_MAN_SECCOMP = "MAN_DISABLE_SECCOMP=1"
+
+
+def _man_without_seccomp(rootfs: Path) -> list[str]:
+    """
+    Bind a console rc and a `man` wrapper that switch man-db's sandbox off.
+
+    arm64 (2026-10-23): `man man` -- «Segmentation fault». man-db runs its helpers under a seccomp
+    filter, and qemu-user has no seccomp; MAN_DISABLE_SECCOMP=1 is man-db's own switch. Every
+    console shell (and `su -`, `sudo -i`) reads /etc/hp-bashrc; plain `sudo man` resets the
+    environment (and this sudo has no pam_env), but its secure_path finds /usr/local/bin/man
+    first. The copies live next to the rootfs, on the host side.
+    """
+    out_dir = Path(rootfs).parent
+    args = []
+    try:
+        rc = (Path(rootfs) / "etc" / "hp-bashrc").read_text(encoding="utf-8")
+    except OSError:
+        rc = None
+    try:
+        if rc is not None:
+            (out_dir / "hp-emulated-bashrc").write_text(f"export {_NO_MAN_SECCOMP}\n{rc}", encoding="utf-8")
+            args.append(f"--bind-ro={out_dir / 'hp-emulated-bashrc'}:/etc/hp-bashrc")
+        wrapper = out_dir / "hp-emulated-man"
+        wrapper.write_text(f'#!/bin/sh\n# hashpass under qemu: man-db without seccomp\n'
+                           f'{_NO_MAN_SECCOMP} exec /usr/bin/man "$@"\n', encoding="utf-8")
+        wrapper.chmod(0o755)
+        args.append(f"--bind-ro={wrapper}:/usr/local/bin/man")
+    except OSError:
+        return []                                     # no place for the copies: man stays as is
+    return args
+
+
+def nspawn_emulation_args(machine: Callable[[], str] = platform.machine,
+                          rootfs: Path | None = None) -> list[str]:
     """
     Extra `systemd-nspawn -b` arguments for booting an x86_64 image under qemu-user.
 
     A MacBook (ARM, 2026-10-23): «запускается, но часть сервисов failed». qemu-user gives no
     seccomp (systemd: status=228/SECCOMP) and not every namespace set-up (226/NAMESPACE), which
     service sandboxes need. So: `SYSTEMD_SECCOMP=0` for systemd, a drop-in for EVERY service
-    relaxing its sandbox (as runtime 44 did for logind), and a unit writing what still failed
-    to /var/log for the host to show. Nothing changes on x86, and the base image stays as is.
+    relaxing its sandbox (as runtime 44 did for logind), a unit writing what still failed
+    to /var/log for the host to show, and -- given the `rootfs` -- man without its seccomp
+    sandbox. Nothing changes on x86, and the base image stays as is.
     """
     if not emulated(machine):
         return []
@@ -114,7 +149,8 @@ def nspawn_emulation_args(machine: Callable[[], str] = platform.machine) -> list
     return ["--setenv=SYSTEMD_SECCOMP=0",
             f"--bind-ro={dropin}:/etc/systemd/system/service.d/hp-emulated.conf",
             f"--bind-ro={report}:/etc/systemd/system/hp-emulated-report.service",
-            f"--bind-ro={wants}:/etc/systemd/system/multi-user.target.d/hp-emulated-report.conf"]
+            f"--bind-ro={wants}:/etc/systemd/system/multi-user.target.d/hp-emulated-report.conf",
+            *(_man_without_seccomp(rootfs) if rootfs is not None else [])]
 
 
 def failed_units(rootfs: Path) -> list[str]:

@@ -1016,7 +1016,7 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     argv.append(f"--setenv=HP_SUDO={'on' if sudo else 'off'}")
     if grade_port is not None:
         argv.append(f"--setenv=HP_PORT={grade_port}")
-    argv += nspawn_emulation_args()      # x86_64 images on ARM: no seccomp, relaxed sandboxes
+    argv += nspawn_emulation_args(rootfs=Path(runner.rootfs))   # x86_64 images on ARM: no seccomp
     argv += ["-D", str(runner.rootfs)]
     _reap_stale_machines()             # reclaim ptys from any interrupted prior runs
     if hasattr(runner, "live_machine"):
