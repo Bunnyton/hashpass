@@ -6,6 +6,7 @@ import getpass
 import io as _bytes_io
 import json
 import os
+import platform
 import re
 import secrets
 import select
@@ -1041,13 +1042,34 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
         _say_failed_under_emulation(Path(runner.rootfs))
 
 
-def _say_failed_under_emulation(rootfs: Path) -> None:
-    """On ARM (qemu): name the services that still did not start, and where the full report is."""
+_ARM_REPORT = Path.home() / "hashpass-arm-report.txt"
+_SMALL_PAGE = 4096
+
+
+def _say_failed_under_emulation(rootfs: Path, *, keep: Path = _ARM_REPORT,
+                                page_size: int | None = None) -> None:
+    """
+    On ARM (qemu): keep the console's report on the host and name what did not start.
+
+    The rootfs goes away with the console, so the report is copied to `keep` (+ the host's
+    page size: qemu-user on 16K pages -- Linux on Apple Silicon -- is known to crash programs).
+    """
+    try:
+        report = (Path(rootfs) / "var/log/hp-emulated-report.txt").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    pages = page_size or os.sysconf("SC_PAGE_SIZE")
+    with contextlib.suppress(OSError):
+        keep.parent.mkdir(parents=True, exist_ok=True)
+        keep.write_text(f"{report.rstrip()}\n## host\n{platform.platform()}\npage size: {pages}\n",
+                        encoding="utf-8")
     failed = failed_units(rootfs)
     if failed:
-        sys.stderr.write(f"\x1b[33m⚠ под эмуляцией x86 не запустились службы: {', '.join(failed)}\x1b[0m\n"
-                         f"\x1b[2m  подробности: sudo cat {rootfs / 'var/log/hp-emulated-report.txt'} "
-                         "— пришлите их автору hashpass\x1b[0m\n")
+        sys.stderr.write(f"\x1b[33m⚠ под эмуляцией x86 не запустились службы: {', '.join(failed)}\x1b[0m\n")
+    if pages > _SMALL_PAGE:
+        sys.stderr.write(f"\x1b[33m⚠ страницы памяти здесь по {pages // 1024} КБ: эмулятор x86 на таких "
+                         "работает ненадёжно (программы могут падать)\x1b[0m\n")
+    sys.stderr.write(f"\x1b[2m  отчёт эмуляции: {keep} — пришлите его автору hashpass\x1b[0m\n")
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR0913

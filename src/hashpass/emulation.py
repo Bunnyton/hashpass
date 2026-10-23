@@ -146,10 +146,12 @@ def nspawn_emulation_args(machine: Callable[[], str] = platform.machine,
     dropin = _EMULATED / "hp-emulated.conf"
     report = _EMULATED / "hp-emulated-report.service"
     wants = _EMULATED / "hp-emulated-report.conf"
+    script = _EMULATED / "hp-emulated-report.sh"
     return ["--setenv=SYSTEMD_SECCOMP=0",
             f"--bind-ro={dropin}:/etc/systemd/system/service.d/hp-emulated.conf",
             f"--bind-ro={report}:/etc/systemd/system/hp-emulated-report.service",
             f"--bind-ro={wants}:/etc/systemd/system/multi-user.target.d/hp-emulated-report.conf",
+            f"--bind-ro={script}:/usr/local/lib/hp-emulated-report.sh",
             *(_man_without_seccomp(rootfs) if rootfs is not None else [])]
 
 

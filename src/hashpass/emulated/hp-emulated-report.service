@@ -5,7 +5,7 @@ After=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'sleep 20; { echo "## failed units"; systemctl --failed --no-legend --plain; echo "## errors"; journalctl -b -p err --no-pager -n 200; } > /var/log/hp-emulated-report.txt 2>&1'
+ExecStart=-/bin/sh /usr/local/lib/hp-emulated-report.sh
 
 [Install]
 WantedBy=multi-user.target

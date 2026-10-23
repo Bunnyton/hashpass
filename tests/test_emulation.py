@@ -162,3 +162,32 @@ def test_man_runs_without_its_seccomp_sandbox_under_emulation(tmp_path) -> None:
     assert nspawn_emulation_args(machine=lambda: "x86_64", rootfs=rootfs) == []
     bare = nspawn_emulation_args(machine=lambda: "aarch64", rootfs=tmp_path / "nothing")
     assert not any(":/etc/hp-bashrc" in a for a in bare)                                # no console rc
+
+
+@pytest.mark.tier1
+def test_the_report_unit_never_fails_and_checks_man() -> None:
+    """arm64, 2026-10-23: «падает service hp report» -- journalctl without a journal failed the unit."""
+    unit = (Path(__file__).parents[1] / "src/hashpass/emulated/hp-emulated-report.service").read_text(encoding="utf-8")
+    start = next(ln for ln in unit.splitlines() if ln.startswith("ExecStart="))
+    assert start.startswith("ExecStart=-")                       # a report never marks itself failed
+    script = (Path(__file__).parents[1] / "src/hashpass/emulated/hp-emulated-report.sh").read_text(encoding="utf-8")
+    assert "## man" in script and "MAN_DISABLE_SECCOMP=1" in script and "uname -a" in script
+    assert script.rstrip().endswith("exit 0")
+
+
+@pytest.mark.tier1
+def test_the_report_is_kept_on_the_host_with_its_page_size(tmp_path, capsys) -> None:
+    """The rootfs is gone after the console exits -- the report is copied out, host page size added."""
+    from hashpass.cli import _say_failed_under_emulation  # noqa: PLC0415
+    rootfs = tmp_path / "mnt"
+    (rootfs / "var" / "log").mkdir(parents=True)
+    (rootfs / "var/log/hp-emulated-report.txt").write_text(
+        "## failed units\nfoo.service loaded failed failed Foo\n## man\nexit=139\n", encoding="utf-8")
+    keep = tmp_path / "home" / "hashpass-arm-report.txt"
+    _say_failed_under_emulation(rootfs, keep=keep, page_size=16384)
+    text = keep.read_text(encoding="utf-8")
+    assert "exit=139" in text and "## host" in text and "page size: 16384" in text
+    err = capsys.readouterr().err
+    assert "foo.service" in err and str(keep) in err and "16" in err     # 16K pages named
+    _say_failed_under_emulation(tmp_path / "gone", keep=tmp_path / "none.txt", page_size=4096)
+    assert not (tmp_path / "none.txt").exists()
