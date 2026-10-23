@@ -115,6 +115,16 @@ class TaskRow:
     reason: str = ""                # why it was rejected
     expires_at: float | None = None  # when a rejected task is deleted (unix)
     owner: str = ""                 # the author (ref namespace)
+    n: int = 0                      # the course's version of the task (0: a pool without versions)
+    solved_n: int = 0               # the version the credit was earned in (an older one still counts)
+
+    def credit_word(self) -> str:
+        """`зачтено` / `не зачтено`, and which version was solved when the course has moved on."""
+        if self.server != "passed":
+            return "не зачтено"
+        if self.solved_n and self.n and self.solved_n != self.n:
+            return f"зачтено (решалась версия {self.solved_n})"
+        return "зачтено"
 
     def moderation_badge(self) -> str:
         """Moderation state for the staff: на проверке / обновление на проверке / отклонено …."""
@@ -137,7 +147,7 @@ class TaskRow:
             return "закрыто"
         parts = []
         parts.append("решено" if self.local else "не решено")
-        parts.append("зачтено" if self.server == "passed" else "не зачтено")
+        parts.append(self.credit_word())
         return " · ".join([*parts, self.download_word()])
 
     def download_word(self) -> str:
@@ -162,7 +172,7 @@ class TaskRow:
         if self.hidden:
             return "[dim]закрыто[/]"
         local_dot = "[green]●[/] решено" if self.local else "[dim]○ не решено[/]"
-        server_dot = "[green]●[/] зачтено" if self.server == "passed" else "[dim]○ не зачтено[/]"
+        server_dot = f"[green]●[/] {self.credit_word()}" if self.server == "passed" else "[dim]○ не зачтено[/]"
         if self.state == "готово":
             down = "[green]●[/] загружено"
         elif self.state == "грузится":
@@ -178,7 +188,8 @@ class TaskRow:
         badge = self.moderation_badge()
         if self.preview and not badge:
             tail += "   [yellow]· скрыто[/]"
-        return f"{self.ref}{tail}{badge}"
+        version = f" [dim]· версия {self.n}[/]" if self.n else ""
+        return f"{self.ref}{version}{tail}{badge}"
 
 
 class ReasonScreen(ModalScreen[str | None]):
@@ -572,6 +583,7 @@ class PoolTUI(App):
             job = self._jobs.get(ref)
             if job is not None:              # downloading right now: keep the live row object
                 job.number, job.server, job.local = int(e.get("number") or 0), server_status, ref in solved
+                job.n, job.solved_n = int(e.get("n") or 0), int(e.get("solved_n") or 0)
                 rows.append(job)
                 continue
             rows.append(TaskRow(
@@ -585,7 +597,8 @@ class PoolTUI(App):
                 pending_update=bool(e.get("pending_update", False)),
                 reason=str(e.get("reason") or ""),
                 expires_at=float(e["expires_at"]) if e.get("expires_at") else None,
-                owner=str(e.get("owner") or "")))
+                owner=str(e.get("owner") or ""),
+                n=int(e.get("n") or 0), solved_n=int(e.get("solved_n") or 0)))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()

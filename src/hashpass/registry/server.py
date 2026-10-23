@@ -966,6 +966,7 @@ class PoolServer:
         if not can(user, role, course, "view"):
             return []
         staff = can(user, role, course, "moderate")
+        mine = self.progress().get(user)
         rows: list[dict[str, object]] = []
         for block in course.blocks:
             for task in block["tasks"]:
@@ -975,13 +976,24 @@ class PoolServer:
                 latest = self.repo(task["repo"]).latest(task["tag"])
                 n = course_model.effective_n(course, task, latest=latest.n if latest else None)
                 rev = self.repo(task["repo"]).get(task["tag"], n)
+                ref = f"{task['repo']}:{task['tag']}"
+                solved = self._solved_n(mine.get(ref), task["repo"], task["tag"])
                 rows.append({"number": len(rows) + 1, "name": task["repo"], "version": task["tag"],
-                             "ref": f"{task['repo']}:{task['tag']}", "digest": rev.task_digest if rev else "",
+                             "ref": ref, "digest": rev.task_digest if rev else "", "n": n,
                              "block_id": block["id"], "block_name": block["name"],
                              "available": visible, "hidden": task.get("hidden", False),
                              "block_open": block.get("open", True), "course": course.ref}
-                            | ({"preview": True} if staff and not visible else {}))
+                            | ({"preview": True} if staff and not visible else {})
+                            | ({"solved_n": solved} if solved else {}))
         return rows
+
+    def _solved_n(self, rec: object, repo: str, tag: str) -> int | None:
+        """Which version a credited task was solved in: recorded `n`, else found by its digest."""
+        if not isinstance(rec, dict) or rec.get("status") != "passed":
+            return None
+        if rec.get("n"):
+            return int(rec["n"])
+        return next((r.n for r in self.repo(repo).revisions(tag) if r.task_digest == rec.get("digest")), None)
 
     def _catalog_rows(self, user: str) -> list[dict[str, object]]:
         """
@@ -1223,6 +1235,11 @@ class PoolServer:
             return self._json(HTTPStatus.OK, {"status": "passed",
                                               "global_key": global_key(self.secret, user, task_ref)})
         prog = self.progress()
+        older = next((r.n for r in self.repo(repo).revisions(tag)
+                      if r.n < n and digest and r.task_digest == digest), None)
+        if older is not None:                     # a copy from before the course moved on: still a pass
+            n, rev = older, self.repo(repo).get(tag, older)
+            extra = {"course": course.ref, "n": n}
         if rev is None or digest != rev.task_digest:
             prog.record(user, task_ref, status="failed", ts=_now(), digest=digest, history=history,
                         authenticity=authenticity, extra=extra)

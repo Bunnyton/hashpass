@@ -2550,7 +2550,8 @@ def pool_status(env: Home, url: str, token: str, user: str) -> list[dict[str, ob
                      "ref": ref, "local": ref in solved, "server": server,
                      "available": runnable(entry),
                      "preview": bool(entry.get("preview", False)),
-                     "block": str(entry.get("block_name", ""))})
+                     "block": str(entry.get("block_name", "")),
+                     "n": int(entry.get("n") or 0), "solved_n": int(entry.get("solved_n") or 0)})
     return rows
 
 
@@ -2560,7 +2561,8 @@ def _status_badge(row: dict[str, object]) -> str:
     if row.get("preview"):
         return "\x1b[33mскрыто от студентов\x1b[0m"  # author/admin: locked for students, runnable here
     if row.get("server") == "passed":
-        return "\x1b[32mзачтено\x1b[0m"
+        older = row.get("solved_n") and row.get("n") and row["solved_n"] != row["n"]
+        return "\x1b[32mзачтено\x1b[0m" + (f" \x1b[2m(решалась версия {row['solved_n']})\x1b[0m" if older else "")
     if row.get("local"):
         return "\x1b[33mрешено\x1b[0m"
     return "\x1b[2mне начато\x1b[0m"

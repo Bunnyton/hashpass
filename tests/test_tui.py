@@ -101,6 +101,18 @@ def test_task_row_status_labels() -> None:
     assert r.status_label() == "закрыто"
 
 
+def test_task_row_shows_the_version_and_which_one_was_solved() -> None:
+    """User 2026-10-23: versions in the TUI; a credit for an older version stays, with a note."""
+    r = TaskRow(ref="a:1", number=1, block="B", available=True, digest="", n=3)
+    assert "версия 3" in r.tree_label() and "решалась" not in r.tree_label()
+    r.server, r.solved_n = "passed", 3
+    assert "решалась" not in r.status_label()
+    r.solved_n = 2
+    assert "зачтено (решалась версия 2)" in r.status_label()
+    assert "решалась версия 2" in r.tree_label()
+    assert "версия" not in TaskRow(ref="a:1", number=1, block="B", available=True, digest="").tree_label()
+
+
 def _env(tmp_path: Path) -> _StubEnv:
     env = _StubEnv(images=tmp_path / "images", root=tmp_path / "root",
                    registry=tmp_path / "registry")
@@ -521,3 +533,9 @@ def test_admin_moves_a_task_with_shift_j_k(tmp_path: Path) -> None:
             await pilot.press("q")
 
     asyncio.run(_drive())
+
+
+def test_the_plain_task_list_says_which_version_was_solved() -> None:
+    from hashpass.cli import _status_badge  # noqa: PLC0415
+    assert "решалась версия 1" in _status_badge({"server": "passed", "n": 2, "solved_n": 1})
+    assert "решалась" not in _status_badge({"server": "passed", "n": 2, "solved_n": 2})

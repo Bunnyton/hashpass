@@ -116,3 +116,39 @@ def test_search_courses_from_the_terminal_and_add_by_name(pool: _Courses, tmp_pa
     said.clear()
     assert cli.cmd_course_add(env, "bob/git-basics", io) == 0         # a name is enough on this pool
     assert my_courses.current(env.root, pool.url) == "bob/git-basics"
+
+
+@pytest.mark.tier2
+def test_a_credit_stays_when_the_course_moves_to_a_new_version(pool: _Courses, tmp_path: Path) -> None:
+    """User 2026-10-23: «засчитывай, если прошёл одну версию, а потом пришла другая; пиши, какая решалась»."""
+    env = _env(tmp_path, pool)
+    invite = pool.call("GET", "/courses/bob/linux", "bob")[1]["invite"]
+    io = cli.Io(read=lambda _p: "", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux?invite={invite}", io) == 0
+    client, tok = RemoteRegistry(pool.url, token=pool.tok["kid"]), pool.tok["kid"]
+    index = RepoIndex(pool.r.store.root / ".repos", "bob/git-init")
+    v1, v2 = index.get("1", 1).task_digest, index.get("1", 2).task_digest
+    [row] = client.catalog(token=tok)
+    assert (row["n"], row.get("solved_n")) == (1, None)
+    assert client.submit("bob/git-init:1", v1, passed=True, token=tok)["status"] == "passed"
+    pool.call("PUT", "/courses/bob/linux/tasks/bob/git-init:1", "bob", {"n": 2})
+    [row] = client.catalog(token=tok)
+    assert (row["n"], row["solved_n"], row["digest"]) == (2, 1, v2)      # new version, the old credit
+    assert client.progress(token=tok)["kid"]["bob/git-init:1"]["status"] == "passed"
+
+
+@pytest.mark.tier2
+def test_an_older_version_solved_after_the_update_still_counts(pool: _Courses, tmp_path: Path) -> None:
+    """Downloaded v1, the course moved to v2 meanwhile: solving the v1 copy is still a pass."""
+    env = _env(tmp_path, pool)
+    invite = pool.call("GET", "/courses/bob/linux", "bob")[1]["invite"]
+    io = cli.Io(read=lambda _p: "", write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux?invite={invite}", io) == 0
+    client, tok = RemoteRegistry(pool.url, token=pool.tok["kid"]), pool.tok["kid"]
+    v1 = RepoIndex(pool.r.store.root / ".repos", "bob/git-init").get("1", 1).task_digest
+    pool.call("PUT", "/courses/bob/linux/tasks/bob/git-init:1", "bob", {"n": 2})
+    assert client.submit("bob/git-init:1", v1, passed=True, token=tok)["status"] == "passed"
+    assert client.progress(token=tok)["kid"]["bob/git-init:1"]["n"] == 1
+    assert client.catalog(token=tok)[0]["solved_n"] == 1
+    assert client.submit("bob/git-init:1", "sha256:" + "0" * 64, passed=True,
+                         token=pool.tok["max"])["status"] != "passed"   # a foreign digest is not
