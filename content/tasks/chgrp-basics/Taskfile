@@ -4,7 +4,8 @@
 
 image chgrp-basics:1
 
-# data: data/secret/rock.txt — арт из исходника + подпись
+# data: data/secret/rock.txt — эмблема группы из исходника, без фона и подписи: она же и финал
+# (пользователь, 2026-10-23: «эмблема группы — это и будет мем и вывод»)
 copy data/secret /home/student/.secret
 run chown -R student:student /home/student/.secret
 run groupadd -f FiveFingerDeathPunch
@@ -12,7 +13,6 @@ run chown root:FiveFingerDeathPunch /home/student/.secret/rock.txt
 run chmod 640 /home/student/.secret/rock.txt
 run chmod 755 /home/student/.secret
 
-hidden hp
 
 settings
   pager on
@@ -25,10 +25,8 @@ stage
   solve:
     sudo chgrp student /home/student/.secret/rock.txt
     cat /home/student/.secret/rock.txt
-  # прочитал = подпись под артом на экране. Сравнение всего вывода не годится: арт из `.` и `..`,
-  # а они читаются как пути от текущего каталога — `cat rock.txt` из ~/.secret не совпадал с
-  # чтением из ~ (пользователь, 2026-10-23)
-  accept output "Rock never dies"
+  # прочитал = cat этого файла завершился успешно (из любого каталога, любым путём к нему)
+  accept cmd "cat /home/student/.secret/rock.txt" ok
   allow chgrp cat
   neutral ls cd echo pwd
   block cat match "^sudo " say "Команда запрещена"
@@ -40,5 +38,3 @@ stage
   hint output "Operation not permitted" say "Сменить группу чужого файла может только root. А одолжить его права chgrp — можно."
   hint tries 5 say "ls -l .secret/rock.txt — кто владелец, какая группа, что разрешено группе?"
   hint tries 10 say "man chgrp — SYNOPSIS."
-
-exec finale
