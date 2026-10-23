@@ -17,7 +17,6 @@ hidden hp
 settings
   pager on
 
-say "Тварь ты дрожащая или право имеешь?"
 read brief.md
 
 stage
@@ -151,6 +150,6 @@ stage
   observe perms /home/student/test4
   block chmod match " [ugoa]*[-+=][rwxXst]" say "Используй только побитовую запись прав для chmod (chmod 777)"
   neutral ls cat pwd cd
-  on pass say "Тварь я дрожащая или право имею?"
+  on pass say "Тварь ты дрожащая или право имеешь?"
 
 exec finale
