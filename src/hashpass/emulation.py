@@ -7,6 +7,7 @@ with «execv(/usr/lib/systemd/systemd, …) failed: Exec format error» (a stude
 when the binfmt entry carries the F (fix-binary) flag. hashpass installs it at start when needed
 (user: «hashpass пусть устанавливает при запуске, если нужно»).
 """
+import os
 import platform
 import shutil
 import subprocess
@@ -84,3 +85,48 @@ def ensure_x86_emulation(write: Callable[[str], object], *,
     write("\x1b[33m⚠ не удалось включить эмулятор x86: задания не запустятся. Попробуйте "
           "`sudo apt-get install qemu-user qemu-user-binfmt` и перезагрузку.\x1b[0m\n")
     return False
+
+
+_EMULATED = Path(__file__).with_name("emulated")
+_REPORT = "var/log/hp-emulated-report.txt"
+
+
+def emulated(machine: Callable[[], str] = platform.machine) -> bool:
+    """Whether the x86_64 images run here through qemu (HASHPASS_FORCE_EMULATED=1: act as if)."""
+    return machine() not in _NATIVE or os.environ.get("HASHPASS_FORCE_EMULATED") == "1"
+
+
+def nspawn_emulation_args(machine: Callable[[], str] = platform.machine) -> list[str]:
+    """
+    Extra `systemd-nspawn -b` arguments for booting an x86_64 image under qemu-user.
+
+    A MacBook (ARM, 2026-10-23): «запускается, но часть сервисов failed». qemu-user gives no
+    seccomp (systemd: status=228/SECCOMP) and not every namespace set-up (226/NAMESPACE), which
+    service sandboxes need. So: `SYSTEMD_SECCOMP=0` for systemd, a drop-in for EVERY service
+    relaxing its sandbox (as runtime 44 did for logind), and a unit writing what still failed
+    to /var/log for the host to show. Nothing changes on x86, and the base image stays as is.
+    """
+    if not emulated(machine):
+        return []
+    dropin = _EMULATED / "hp-emulated.conf"
+    report = _EMULATED / "hp-emulated-report.service"
+    wants = _EMULATED / "hp-emulated-report.conf"
+    return ["--setenv=SYSTEMD_SECCOMP=0",
+            f"--bind-ro={dropin}:/etc/systemd/system/service.d/hp-emulated.conf",
+            f"--bind-ro={report}:/etc/systemd/system/hp-emulated-report.service",
+            f"--bind-ro={wants}:/etc/systemd/system/multi-user.target.d/hp-emulated-report.conf"]
+
+
+def failed_units(rootfs: Path) -> list[str]:
+    """Return the services the emulated console reported as failed (empty: none, or no report)."""
+    try:
+        text = (Path(rootfs) / _REPORT).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    section, out = "", []
+    for line in text.splitlines():
+        if line.startswith("## "):
+            section = line[3:].strip()
+        elif section == "failed units" and line.strip():
+            out.append(line.split()[0])
+    return out

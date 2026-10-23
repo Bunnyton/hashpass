@@ -1,4 +1,6 @@
 """Tier1: on an ARM machine hashpass makes the kernel run x86 programs (qemu) before a task boots."""
+from pathlib import Path
+
 import pytest
 
 from hashpass.emulation import binfmt_ready, ensure_x86_emulation
@@ -114,3 +116,29 @@ def test_arm_refreshes_package_lists_when_nothing_is_found() -> None:
     assert ensure_x86_emulation(write, machine=lambda: "aarch64", ready=lambda: state["ready"],
                                 run=run, has_apt=lambda: True) is True
     assert ["sudo", "apt-get", "update"] in calls
+
+
+@pytest.mark.tier1
+def test_an_emulated_console_gets_no_seccomp_and_a_relaxed_sandbox_for_every_service() -> None:
+    """ARM MacBook, 2026-10-23: «запускается, но часть сервисов failed» -- qemu-user vs sandboxes."""
+    from hashpass.emulation import nspawn_emulation_args  # noqa: PLC0415
+    assert nspawn_emulation_args(machine=lambda: "x86_64") == []
+    args = nspawn_emulation_args(machine=lambda: "aarch64")
+    assert "--setenv=SYSTEMD_SECCOMP=0" in args
+    binds = {a.split(":", 1)[1]: a.split("=", 1)[1].split(":", 1)[0] for a in args if a.startswith("--bind-ro=")}
+    assert "/etc/systemd/system/service.d/hp-emulated.conf" in binds
+    assert "/etc/systemd/system/multi-user.target.d/hp-emulated-report.conf" in binds   # not .wants
+    for src in binds.values():
+        assert Path(src).is_file()
+
+
+@pytest.mark.tier1
+def test_the_failed_services_report_is_read_back(tmp_path) -> None:
+    from hashpass.emulation import failed_units  # noqa: PLC0415
+    log = tmp_path / "var" / "log"
+    log.mkdir(parents=True)
+    (log / "hp-emulated-report.txt").write_text(
+        "## failed units\nsystemd-journald.service loaded failed failed Journal\n"
+        "foo.service loaded failed failed Foo\n## errors\nsomething\n", encoding="utf-8")
+    assert failed_units(tmp_path) == ["systemd-journald.service", "foo.service"]
+    assert failed_units(tmp_path / "nope") == []

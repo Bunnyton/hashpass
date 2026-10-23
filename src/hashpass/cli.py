@@ -41,6 +41,7 @@ from hashpass.attempts import (
     solution_text,
 )
 from hashpass.build import build, run_image
+from hashpass.emulation import failed_units, nspawn_emulation_args
 from hashpass.image.base import _base_version_current, build_base, runtime_stamp
 from hashpass.imagestore.store import ImageStore, did_you_mean, registry_key
 from hashpass.progress import current_stage
@@ -969,6 +970,7 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     argv.append(f"--setenv=HP_SUDO={'on' if sudo else 'off'}")
     if grade_port is not None:
         argv.append(f"--setenv=HP_PORT={grade_port}")
+    argv += nspawn_emulation_args()      # x86_64 images on ARM: no seccomp, relaxed sandboxes
     argv += ["-D", str(runner.rootfs)]
     _reap_stale_machines()             # reclaim ptys from any interrupted prior runs
     if hasattr(runner, "live_machine"):
@@ -991,6 +993,16 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
         if saved_tty is not None:
             with contextlib.suppress(termios.error, ValueError, OSError):
                 termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved_tty)
+        _say_failed_under_emulation(Path(runner.rootfs))
+
+
+def _say_failed_under_emulation(rootfs: Path) -> None:
+    """On ARM (qemu): name the services that still did not start, and where the full report is."""
+    failed = failed_units(rootfs)
+    if failed:
+        sys.stderr.write(f"\x1b[33m⚠ под эмуляцией x86 не запустились службы: {', '.join(failed)}\x1b[0m\n"
+                         f"\x1b[2m  подробности: sudo cat {rootfs / 'var/log/hp-emulated-report.txt'} "
+                         "— пришлите их автору hashpass\x1b[0m\n")
 
 
 def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR0913

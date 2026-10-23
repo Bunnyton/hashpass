@@ -1,0 +1,11 @@
+# hashpass, x86_64 images on another processor: write what did not start, for the host to show.
+[Unit]
+Description=hashpass: report services that failed under emulation
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'sleep 20; { echo "## failed units"; systemctl --failed --no-legend --plain; echo "## errors"; journalctl -b -p err --no-pager -n 200; } > /var/log/hp-emulated-report.txt 2>&1'
+
+[Install]
+WantedBy=multi-user.target
