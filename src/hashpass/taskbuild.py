@@ -210,8 +210,9 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
     now = datetime.now().astimezone()
     for key, state in canonical.items():
         if state.text and (line := build_stamp(state.text, now)):
-            msg = (f"stage {stage_index}: в эталоне {key} дата сборки — «{line.strip()}»; "
-                   "завтра он не совпадёт. Проверяй то, что от времени не зависит")
+            msg = (f"stage {stage_index}: в эталоне {key} время — «{line.strip()}»: дата сборки "
+                   "или часы из ls -l (через полгода там будет год), он совпадёт не всегда. "
+                   "Проверяй то, что от времени не зависит")
             raise ValueError(msg)
     if not _has_signal(canonical):
         msg = f"stage {stage_index}: no stable discriminating signal (vacuous canonical)"

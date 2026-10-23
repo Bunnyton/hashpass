@@ -15,6 +15,10 @@ _NOW = datetime(2026, 10, 23, 1, 5, tzinfo=UTC)
     "backup-2026-10-23.tar.gz",                                                     # ISO in a name
     "отчёт за 23.10.2026",
     "2026/10/23 01:05 started",
+    # ls -l prints the clock only for files under half a year old, then the year takes its place:
+    # «Oct 14 00:23» becomes «Oct 14  2026» -- even shipped data with a fixed date flips (2027).
+    "drwxrwxr-x 3 student student 4096 Oct 14 00:23 dir",
+    "-rw-r--r-- 1 root root 9 Mar  1 9:07 old.txt",
 ])
 def test_build_moment_in_a_reference_is_found(line):
     assert build_stamp(f"header\n{line}\nfooter\n", _NOW) == line
@@ -22,7 +26,8 @@ def test_build_moment_in_a_reference_is_found(line):
 
 @pytest.mark.tier1
 @pytest.mark.parametrize("text", [
-    "drwxrwxr-x 3 student student 4096 Oct 14 00:23 dir",    # shipped data: a fixed old date
+    "-rw-r--r-- 1 root root 0 Oct 14  2026 old.txt",          # ls -l with a year: stays put
+    "Oct 14 00:23:11 web-02 sshd[812]: accepted",             # syslog in shipped data: fixed text
     "app-2026-10-12.log",
     "walrus-6610",
     "2026",                                                   # a bare year is not a moment
