@@ -949,6 +949,52 @@ def _reap_stale_machines() -> None:
                                check=False, capture_output=True)
 
 
+_TERMINFO_DIRS = ("etc/terminfo", "lib/terminfo", "usr/share/terminfo")
+
+
+def _container_term(rootfs: Path, term: str) -> str:
+    """
+    Return `term` if the image has its terminfo, else xterm-256color.
+
+    The host's TERM goes into the console; one the image cannot describe (kitty's xterm-kitty)
+    breaks every curses program there -- cmatrix: «Error opening terminal: xterm-kitty».
+    """
+    known = term and "/" not in term and not term.startswith(".") and any(
+        (rootfs / base / term[0] / term).exists() for base in _TERMINFO_DIRS)
+    return term if known else _DEFAULT_TERM
+
+
+def _host_terminfo(term: str, environ: Mapping[str, str]) -> Path | None:
+    """Find the host's compiled entry for `term` ($TERMINFO, ~/.terminfo, $TERMINFO_DIRS, system)."""
+    dirs = [environ.get("TERMINFO", ""), str(Path(environ.get("HOME", "~")).expanduser() / ".terminfo"),
+            *environ.get("TERMINFO_DIRS", "").split(":"),
+            "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo", "/usr/lib/terminfo"]
+    for base in filter(None, dirs):
+        for sub in (term[0], f"{ord(term[0]):x}"):              # Linux: x/…, macOS: 78/…
+            entry = Path(base) / sub / term
+            if entry.is_file():
+                return entry
+    return None
+
+
+def _console_term(rootfs: Path, environ: Mapping[str, str]) -> tuple[str, list[str]]:
+    """
+    Return the console's TERM and the nspawn arguments that make the image know it.
+
+    The image's own entry wins; else the host's entry is bound in read-only (kitty, alacritty,
+    foot: keys then mean exactly what the terminal sends -- mc's plain arrows were dead while
+    shift-arrows worked); else xterm-256color.
+    """
+    term = environ.get("TERM", "")
+    if _container_term(rootfs, term) == term:
+        return term, []
+    safe = term and "/" not in term and not term.startswith(".")
+    host = _host_terminfo(term, environ) if safe else None
+    if host is None:
+        return _DEFAULT_TERM, []
+    return term, [f"--bind-ro={host}:/etc/terminfo/{term[0]}/{term}"]
+
+
 def _interactive_console(runner: object, *, user: str | None = None, sudo: bool = True,
                          grade_port: int | None = None) -> None:
     """
@@ -963,8 +1009,8 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     student); `grade_port` is the host loopback port the per-command grade hook connects to.
     """
     machine = f"{_MACHINE_PREFIX}{uuid.uuid4().hex[:_MACHINE_HEX]}"
-    term = os.environ.get("TERM", _DEFAULT_TERM)
-    argv = ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, f"--setenv=TERM={term}"]
+    term, term_args = _console_term(Path(runner.rootfs), os.environ)
+    argv = ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, f"--setenv=TERM={term}", *term_args]
     if user:
         argv.append(f"--setenv=HP_USER={user}")
     argv.append(f"--setenv=HP_SUDO={'on' if sudo else 'off'}")
