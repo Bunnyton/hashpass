@@ -132,6 +132,10 @@ def test_ones_profile_has_the_solved_tasks_and_stats(world: _Courses) -> None:
     html = _page(_browser(world, "kid"), f"{world.url}/u/kid")[1]
     solved = html.split("id='solved'", 1)[1].split("</section>", 1)[0]
     assert "bob/git-init:1" in solved and "/c/bob/linux" in solved and "версия 1" in solved
+    # user 2026-10-23: «не в курсе так себе звучит» -- the courses the task is in, «—» if none;
+    # the date sits small beside the name, as in a GitHub repository list
+    assert "Используется в курсах" in solved and "не в курсе" not in solved and "Когда" not in solved
+    assert "<time class='ts' data-rel datetime=" in solved.split("<tbody>", 1)[1].split("</td>", 1)[0]
     assert "data-tab>" in html and "Решено" in html
     stats = html.split("class='user-stats'", 1)[1].split("</ul>", 1)[0]
     assert "решено" in stats and "<b>1</b>" in stats

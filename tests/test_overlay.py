@@ -73,3 +73,63 @@ def test_a_deep_layer_chain_fits_the_mount_option_limit(tmp_path, monkeypatch):
     overlay.overlay_mount(short, tmp_path / "u", tmp_path / "w", mnt, sudo=False)
     assert calls[-1][calls[-1].index("-o") + 1].startswith(f"lowerdir={short[0]}:{short[1]},")
     assert cwds[-1] is None
+
+
+def _busy(argv: list[str]) -> Exception:
+    from hashpass.overlay import OverlayError  # noqa: PLC0415
+    return OverlayError(32, argv, "", f"umount: {argv[-1]}: target is busy.")
+
+
+@pytest.mark.tier1
+def test_a_busy_mount_right_after_the_console_stops_is_retried(tmp_path, monkeypatch):
+    """
+    Wait for the console's last processes to leave the mount.
+
+    User 2026-10-23: leaving apt-deb said «umount … target is busy» -- `machinectl terminate`
+    returns while the machine's processes are still dying; a moment later the umount succeeds.
+    """
+    from hashpass import overlay  # noqa: PLC0415
+    calls: list[list[str]] = []
+
+    def run(argv, _sudo, cwd=None) -> None:  # noqa: ARG001
+        calls.append(argv)
+        if len(calls) < 3:  # noqa: PLR2004
+            raise _busy(argv)
+
+    monkeypatch.setattr(overlay, "_run", run)
+    monkeypatch.setattr(overlay.time, "sleep", lambda _s: None)
+    overlay.overlay_umount(tmp_path / "mnt", sudo=True)
+    assert calls == [["umount", str(tmp_path / "mnt")]] * 3
+
+
+@pytest.mark.tier1
+def test_a_mount_that_stays_busy_is_detached_lazily(tmp_path, monkeypatch):
+    """A mount still busy after the wait is detached (`umount -l`) instead of failing the exit."""
+    from hashpass import overlay  # noqa: PLC0415
+    calls: list[list[str]] = []
+
+    def run(argv, _sudo, cwd=None) -> None:  # noqa: ARG001
+        calls.append(argv)
+        if "-l" not in argv:
+            raise _busy(argv)
+
+    monkeypatch.setattr(overlay, "_run", run)
+    monkeypatch.setattr(overlay.time, "sleep", lambda _s: None)
+    overlay.overlay_umount(tmp_path / "mnt", sudo=True)
+    assert calls[-1] == ["umount", "-l", str(tmp_path / "mnt")]
+
+
+@pytest.mark.tier1
+def test_an_umount_failing_for_another_reason_still_raises(tmp_path, monkeypatch):
+    """Only «busy» is waited out: any other failure (not mounted, no permission) is reported."""
+    from hashpass import overlay  # noqa: PLC0415
+    calls: list[list[str]] = []
+
+    def run(argv, _sudo, cwd=None) -> None:  # noqa: ARG001
+        calls.append(argv)
+        raise overlay.OverlayError(32, argv, "", "umount: x: not mounted.")
+
+    monkeypatch.setattr(overlay, "_run", run)
+    with pytest.raises(overlay.OverlayError):
+        overlay.overlay_umount(tmp_path / "mnt", sudo=True)
+    assert len(calls) == 1

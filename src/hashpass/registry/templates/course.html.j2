@@ -58,7 +58,7 @@
 {% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
 {% if may.moderate and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
 <a href='#people' data-tab>{{ icon('user') }} Участники <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
-<a href='#history' data-tab>Версии <span class='count'>{{ (c.history or []) | length }}</span></a>
+<a href='#history' data-tab>Изменения <span class='count'>{{ (c.history or []) | length }}</span></a>
 {% if may.admin %}<a href='#settings-tab' data-tab>Настройки</a>{% endif %}
 </nav>
 <section id='tasks' class='tab-panel' aria-label='Задания'>
@@ -114,7 +114,7 @@
 {% for t in b.tasks %}
 <li class='titem{% if t.hidden %} task-hidden{% endif %}' data-ref='{{ t.ref }}'>
 {% if may.moderate %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
-{% set rp = t.revision.rpartition('_v') %}<span class='tref has-tip'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}' aria-describedby='tip-{{ loop.index }}-{{ b.id }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span>{% if t.at %} <span class='small dim' title='последний push'>{{ ts(t.at) }}</span>{% endif %}
+{% set rp = t.revision.rpartition('_v') %}<span class='tref has-tip'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}' aria-describedby='tip-{{ loop.index }}-{{ b.id }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span>{% if t.at %} <span class='small dim'>обновлено {{ ago(t.at) }}</span>{% endif %}
 <span class='tip card' role='tooltip' id='tip-{{ loop.index }}-{{ b.id }}'><span class='kind kind-task'>{{ icon('task') }} задание</span><b class='mono'>{{ rp[0] }}</b><span class='sub small'>{{ t.about or 'без описания' }}</span><a class='small' href='/web/image/{{ t.revision | ref_url }}'>открыть задание →</a></span></span>
 {% if t.hidden %}<span class='pill closed sm'>скрыто</span>{% endif %}
 {% if t.latest and t.latest > t.n %}<span class='pill warn sm'>есть версия {{ t.latest }}</span>{% endif %}
@@ -214,8 +214,8 @@
 <p class='sub small'>Автор добавляет задания сам и обновляет свои; сопровождающий ещё решает предложения и заявки, правит блоки и порядок; владелец — настройки и участники.</p>
 </div>
 </section>
-<section id='history' class='tab-panel' aria-label='Версии'>
-<h2>Версии курса</h2>
+<section id='history' class='tab-panel' aria-label='Изменения в курсе'>
+<h2>Изменения в курсе</h2>
 {% if c.history %}
 <ol class='commits card'>
 {% for h in c.history %}
@@ -224,8 +224,6 @@
 <span class='msg'>{{ h.what }}</span>{% if h.comment %} <span class='why'>«{{ h.comment }}»</span>{% endif %}
 <div class='sub small'><a class='who' href='/u/{{ h.by | q }}'>{{ avatar(h.by, 'xs') }}<span class='mono'>{{ h.by }}</span></a> · {{ ts(h.at) }}</div>
 </div>
-<span class='sp'></span>
-<span class='pill sm ver'>версия {{ h.n }}</span>{% if loop.first %} <span class='pill sm'>текущая</span>{% endif %}
 </li>
 {% endfor %}
 </ol>

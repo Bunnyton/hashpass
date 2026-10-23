@@ -32,12 +32,14 @@ def test_every_change_lands_in_the_history_with_who_and_why(pool: _Courses) -> N
 
 
 @pytest.mark.tier1
-def test_the_history_is_the_courses_versions_tab(pool: _Courses) -> None:
-    """User 2026-10-23: «Версии только можно отдельную вкладочку (это же как коммиты)»."""
+def test_the_history_is_the_courses_changes_tab(pool: _Courses) -> None:
+    """User 2026-10-23: a tab of its own, like commits; «Версии курса можно убрать -- пускай будут просто изменения в курсе»."""
     pool.call("PUT", "/courses/bob/linux/members/eve", "bob", {"role": "author"})
     html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")[1]
-    assert "href='#history' data-tab>Версии" in html
-    assert "class='commits card'" in html and "версия 1" in html
+    assert "href='#history' data-tab>Изменения" in html and "<h2>Изменения в курсе</h2>" in html
+    assert "class='commits card'" in html
+    panel = html.split("id='history'", 1)[1].split("</section>", 1)[0]
+    assert "pill sm ver" not in panel and "текущая" not in panel
 
 
 @pytest.mark.tier1

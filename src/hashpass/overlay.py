@@ -1,4 +1,5 @@
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -13,6 +14,10 @@ class OverlayError(subprocess.CalledProcessError):
 # libmount hands each mount option to the kernel as one fsconfig string, and a value over 256
 # bytes fails the mount («wrong fs type, bad option»): four task layers + the base already did.
 _MAX_LOWERDIR = 200
+# `machinectl terminate` returns while the machine's last processes are still leaving the mount:
+# «target is busy» for a moment (user 2026-10-23, apt-deb). Wait that out, then detach lazily.
+_BUSY_TRIES = 20
+_BUSY_PAUSE = 0.25
 
 
 def _run(argv: list[str], sudo: bool, cwd: Path | None = None) -> None:  # noqa: FBT001
@@ -80,5 +85,17 @@ def overlay_umount(mnt: Path, *, sudo: bool) -> None:
         mnt: Mountpoint to unmount.
         sudo: Whether to unmount via sudo (rootless when False).
 
+    A mount still busy after a few seconds is detached (`umount -l`): the kernel frees it once
+    the last process lets go, and leaving the console must not fail over it.
+
     """
-    _run(["umount", str(mnt)], sudo)
+    for _ in range(_BUSY_TRIES):
+        try:
+            _run(["umount", str(mnt)], sudo)
+        except OverlayError as exc:
+            if "busy" not in (exc.stderr or ""):
+                raise
+            time.sleep(_BUSY_PAUSE)
+        else:
+            return
+    _run(["umount", "-l", str(mnt)], sudo)

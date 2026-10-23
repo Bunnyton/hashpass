@@ -104,11 +104,12 @@ def test_image_card_for_its_owner_and_for_others(pool: _Courses) -> None:
     assert "версия 1" in owner and "Версии" in owner
     assert "евизи" not in owner
     assert "<h2>Файлы</h2>" not in owner and "Прикрепить" not in owner
-    assert "data-api='PUT /revisions/bob/git-init'" in owner             # visibility (owner)
+    assert "href='/web/settings/bob/git-init'" in owner                   # settings: a page of their own
+    assert "data-api='PUT /revisions/bob/git-init'" in _page(_browser(pool, "bob"), f"{pool.url}/web/settings/bob/git-init")[1]
     assert "Используется в" in owner and "/c/bob/linux" in owner
     other = _page(_browser(pool, "eve"), f"{pool.url}/web/image/bob/git-init:1")[1]
     assert "Форкнуть" in other
-    assert "data-api='PUT /revisions/bob/git-init'" not in other
+    assert "/web/settings/" not in other
     pool.push("bob/solo", "1", image="s")
     assert pool.call("PUT", "/revisions/bob/solo", "bob", {"visibility": "private"})[0] == 200  # noqa: PLR2004
     assert _page(_browser(pool, "eve"), f"{pool.url}/web/image/bob/solo:1")[0] == 404  # noqa: PLR2004

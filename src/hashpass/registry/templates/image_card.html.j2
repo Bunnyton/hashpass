@@ -1,7 +1,7 @@
 {% extends 'base.html.j2' %}
 {#- One page like a GitHub repository (user 2026-10-23: «не вкладками, а как на github»): the
     newest version and the files in the middle, README under them; about, commands, courses and
-    people on the side. All versions -- a page of their own, like commits. -#}
+    people on the side. All versions and the settings -- pages of their own, like GitHub. -#}
 {% from '_files.html.j2' import filebox, icon %}
 {% from '_cards.html.j2' import avatar %}
 {% from '_install.html.j2' import cmd %}
@@ -27,6 +27,7 @@
 {% elif image.moderation == 'pending' %}<span class='pill warn'>на проверке</span>
 {% elif image.moderation == 'approved' %}<span class='pill'>одобрено</span>{% endif %}
 {% endif %}
+{% if may_people and repo_info %}<span class='sp'></span><a class='btn sm ghost' href='/web/settings/{{ repo }}'>{{ icon('gear') }} Настройки</a>{% endif %}
 </div>
 </header>
 
@@ -115,6 +116,17 @@
 {{ cmd('hashpass clone ' ~ repo ~ ':' ~ tag) }}
 </section>
 
+{% if people %}
+<section id='people'>
+<h2 class='side-h'>Соавторы <span class='count-pill'>{{ people | length }}</span></h2>
+<ul class='people'>
+{% for p in people %}
+<li><a class='person' href='/u/{{ p.user | q }}'>{{ avatar(p.user, 'sm') }}<span class='mono'>{{ p.user }}</span></a> <span class='pill sm{% if p.role == "owner" %} author{% endif %}'>{{ role_ru[p.role] }}</span></li>
+{% endfor %}
+</ul>
+</section>
+{% endif %}
+
 {% if courses_era %}
 <section id='courses'>
 <h2 class='side-h'>Используется в курсах <span class='count-pill'>{{ used_in | length }}</span></h2>
@@ -137,37 +149,6 @@
 </section>
 {% endif %}
 
-{% if people %}
-<section id='people'>
-<h2 class='side-h'>Участники <span class='count-pill'>{{ people | length }}</span></h2>
-<ul class='people'>
-{% for p in people %}
-<li><a class='person' href='/u/{{ p.user | q }}'>{{ avatar(p.user, 'sm') }}<span class='mono'>{{ p.user }}</span></a>
-{% if may_people and p.role != 'owner' %}
-<form class='inline row' data-api='PUT /repo-members/{{ repo }}/{{ p.user | q }}'>
-<label class='visually-hidden' for='role-{{ loop.index }}'>Роль {{ p.user }}</label>
-<select id='role-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'maintainer'] %}<option value='{{ r }}'{% if r == p.role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
-<button class='sm ghost' type='submit'>Сохранить</button></form>
-<form class='inline' data-api='DELETE /repo-members/{{ repo }}/{{ p.user | q }}' data-confirm='Убрать {{ p.user }} из участников?'><button class='sm danger' type='submit'>Убрать</button></form>
-{% else %}<span class='pill sm{% if p.role == "owner" %} author{% endif %}'>{{ role_ru[p.role] }}</span>{% endif %}
-</li>
-{% endfor %}
-</ul>
-{% if may_people %}
-<details class='side-more'><summary class='small'>Добавить участника…</summary>
-<form data-api='PUT /repo-members/{{ repo }}/__LOGIN__'>
-<label class='visually-hidden' for='new-member'>Логин</label>
-<input id='new-member' name='__login' placeholder='логин пользователя' required>
-<label class='visually-hidden' for='new-role'>Роль</label>
-<select id='new-role' name='role'><option value='member'>участник — видит приватный образ</option><option value='author' selected>автор — публикует версии</option><option value='maintainer'>сопровождающий — принимает предложения, теги</option></select>
-<button class='sm' type='submit'>Добавить</button>
-</form>
-<p class='sub small'>Участник видит приватный образ; автор публикует новые версии; сопровождающий ещё принимает предложения, ставит теги и удаляет версии; владелец — настройки и роли.</p>
-</details>
-{% endif %}
-</section>
-{% endif %}
-
 {% if may_fork %}
 <section id='fork'>
 <h2 class='side-h'>Доработать</h2>
@@ -181,22 +162,6 @@
 </section>
 {% endif %}
 
-{% if owner and repo_info %}
-<section id='settings'>
-<h2 class='side-h'>Настройки</h2>
-<form data-api='PUT /revisions/{{ repo }}'>
-<label>Видимость <select name='visibility'>
-<option value='public'{% if repo_info.visibility == 'public' %} selected{% endif %}>публичный</option>
-<option value='private'{% if repo_info.visibility == 'private' %} selected{% endif %}>приватный</option></select></label>
-<label class='check'><input type='checkbox' name='hide_sources' data-type='bool'{% if repo_info.hide_sources %} checked{% endif %}> скрыть служебные файлы (README виден всегда)</label>
-<button class='sm' type='submit'>Сохранить</button>
-</form>
-{% if n %}<form class='row' data-api='POST /revisions/{{ repo }}/{{ tag }}_v{{ n }}/tag'>
-<input type='hidden' name='from' value='{{ repo }}:{{ tag }}_v{{ n }}'>
-<label class='visually-hidden' for='new-tag'>Новый тег</label>
-<input id='new-tag' name='to' placeholder='новый тег, например stable' required><button class='sm ghost' type='submit'>Навесить тег</button></form>{% endif %}
-</section>
-{% endif %}
 </aside>
 </div>
 <script src='/static/api.js'></script>

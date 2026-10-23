@@ -1,0 +1,58 @@
+{% extends 'base.html.j2' %}
+{#- An image's settings on a page of their own, like GitHub's Settings (user 2026-10-23: «настройки
+    отдельно»): visibility, tags, collaborators and their roles. Owner (and the admin) only. -#}
+{% from '_cards.html.j2' import avatar %}
+{% block main %}
+{% set home = '/web/image/' ~ ((repo ~ ':' ~ (repo_info.tags | list | first)) | ref_url) %}
+<nav class='crumb' aria-label='Путь'><a href='{{ home }}'>← {{ repo }}</a></nav>
+<h1 class='repo-title'>Настройки <a class='mono' href='{{ home }}'>{{ repo }}</a></h1>
+
+<section id='settings' class='card settings-card'>
+<h2>Основное</h2>
+<form data-api='PUT /revisions/{{ repo }}'>
+<label>Видимость <select name='visibility'>
+<option value='public'{% if repo_info.visibility == 'public' %} selected{% endif %}>публичный — видят все</option>
+<option value='private'{% if repo_info.visibility == 'private' %} selected{% endif %}>приватный — только соавторы</option></select></label>
+<label class='check'><input type='checkbox' name='hide_sources' data-type='bool'{% if repo_info.hide_sources %} checked{% endif %}> скрыть служебные файлы (README виден всегда)</label>
+<button class='sm' type='submit'>Сохранить</button>
+</form>
+</section>
+
+<section id='tags' class='card settings-card'>
+<h2>Теги</h2>
+<p class='sub small'>Тег — второе имя версии, например <code>stable</code>: <code>hashpass run {{ repo }}:stable</code>.</p>
+{% for t, revs in repo_info.tags.items() %}{% set newest = revs | sort(attribute='n') | last %}
+<form class='row' data-api='POST /revisions/{{ repo }}/{{ t }}_v{{ newest.n }}/tag'>
+<input type='hidden' name='from' value='{{ repo }}:{{ t }}_v{{ newest.n }}'>
+<span class='mono small'>{{ t }} · версия {{ newest.n }}</span>
+<label class='visually-hidden' for='new-tag-{{ loop.index }}'>Новый тег</label>
+<input id='new-tag-{{ loop.index }}' name='to' placeholder='новый тег' required><button class='sm ghost' type='submit'>Навесить тег</button></form>
+{% endfor %}
+</section>
+
+<section id='people' class='card settings-card'>
+<h2>Соавторы <span class='count-pill'>{{ people | length }}</span></h2>
+<ul class='people'>
+{% for p in people %}
+<li><a class='person' href='/u/{{ p.user | q }}'>{{ avatar(p.user, 'sm') }}<span class='mono'>{{ p.user }}</span></a>
+{% if p.role != 'owner' %}
+<form class='inline row' data-api='PUT /repo-members/{{ repo }}/{{ p.user | q }}'>
+<label class='visually-hidden' for='role-{{ loop.index }}'>Роль {{ p.user }}</label>
+<select id='role-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'maintainer'] %}<option value='{{ r }}'{% if r == p.role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
+<button class='sm ghost' type='submit'>Сохранить</button></form>
+<form class='inline' data-api='DELETE /repo-members/{{ repo }}/{{ p.user | q }}' data-confirm='Убрать {{ p.user }} из соавторов?'><button class='sm danger' type='submit'>Убрать</button></form>
+{% else %}<span class='pill sm author'>{{ role_ru[p.role] }}</span>{% endif %}
+</li>
+{% endfor %}
+</ul>
+<form class='row' data-api='PUT /repo-members/{{ repo }}/__LOGIN__'>
+<label class='visually-hidden' for='new-member'>Логин</label>
+<input id='new-member' name='__login' placeholder='логин пользователя' required>
+<label class='visually-hidden' for='new-role'>Роль</label>
+<select id='new-role' name='role'><option value='member'>участник — видит приватный образ</option><option value='author' selected>автор — публикует версии</option><option value='maintainer'>сопровождающий — принимает предложения, теги</option></select>
+<button class='sm' type='submit'>Добавить</button>
+</form>
+<p class='sub small'>Участник видит приватный образ; автор публикует новые версии; сопровождающий ещё принимает предложения, ставит теги и удаляет версии; владелец — настройки и роли.</p>
+</section>
+<script src='/static/api.js'></script>
+{% endblock %}

@@ -71,7 +71,22 @@ def ts_html(value: object) -> Markup | str:
     return Markup(f"<time class='ts' datetime='{iso}'>{text}</time>")  # noqa: S704  (no user text)
 
 
+def ago_html(value: object) -> Markup | str:
+    """
+    One moment told the GitHub way, «2 дня назад» (static/time.js), the full date in its tooltip.
+
+    Without JS the date stays, as `ts` writes it.
+    """
+    sec = _epoch(value)
+    if sec is None:
+        return "—"
+    iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(sec))
+    text = time.strftime("%d.%m.%Y %H:%M UTC", time.gmtime(sec))
+    return Markup(f"<time class='ts' data-rel datetime='{iso}'>{text}</time>")  # noqa: S704  (no user text)
+
+
 _env.globals["ts"] = ts_html
+_env.globals["ago"] = ago_html
 _env.globals["has_avatar"] = lambda _login: False   # search_web sets the real one
 _env.filters["q"] = lambda v: quote(str(v), safe="")
 _env.filters["ref_url"] = lambda v: quote(str(v), safe="/:")
@@ -587,6 +602,13 @@ def render_image_card(image: dict, **extra: object) -> str:
     return _env.get_template("image_card.html.j2").render(
         title=f"{image.get('ref', '')} — hashpass", nav=True, active="/web/images",
         image=_prepare_image(image), **extra)
+
+
+def render_repo_settings(repo: str, repo_info: dict, *, people: list[dict], role_ru: dict) -> str:
+    """Render an image's settings page: visibility, tags, collaborators (owner only)."""
+    return _env.get_template("repo_settings.html.j2").render(
+        title=f"Настройки {repo} — hashpass", nav=True, active="", repo=repo, repo_info=repo_info,
+        people=people, role_ru=role_ru)
 
 
 def render_versions(repo: str, repo_info: dict, *, owner: bool) -> str:

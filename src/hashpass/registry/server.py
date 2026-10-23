@@ -79,6 +79,7 @@ from hashpass.registry.web import (
     render_install_script,
     render_login,
     render_profile,
+    render_repo_settings,
     render_reset_form,
     render_reset_link,
     render_settings,
@@ -101,6 +102,7 @@ def _time_zones() -> list[str]:
 _MAX_COMMENT = 500
 _MAX_MESSAGE = 2000          # a version's «what changed» (spec 2026-10-23 §3)
 AUTHOR, MAINTAINER, OWNER = 1, 2, 3   # levels in an image (spec 2026-10-23 §2); 0 member, -1 nobody
+_ROLE_RU = {"owner": "владелец", "maintainer": "сопровождающий", "author": "автор", "member": "участник"}
 _MAX_REASON = 500                # a rejection reason, shown to the author
 _REJECTED_BLOCK = "rejected"     # the virtual block of rejected tasks (author + admin)
 _STUDENT_FIELDS = frozenset(("number", "name", "version", "digest", "ref", "block_id",
@@ -622,6 +624,8 @@ class PoolServer:
                          self._web_image_card, methods=["GET"])
         app.add_url_rule("/web/versions/<path:repo>", "web_versions",
                          self._web_versions, methods=["GET"])
+        app.add_url_rule("/web/settings/<path:repo>", "web_repo_settings",
+                         self._web_repo_settings, methods=["GET"])
         app.add_url_rule("/web/images/file", "web_image_file",
                          self._web_image_file, methods=["GET"])
         app.add_url_rule("/web/images/attach", "web_image_attach",
@@ -2555,6 +2559,24 @@ class PoolServer:
             return self._web_not_found(repo)
         return self._html(render_versions(repo, idx.as_dict(), owner=self._may_write(viewer, repo)))
 
+    def _web_repo_settings(self, repo: str) -> Response:
+        """Show an image's settings on a page of their own (owner and the admin only)."""
+        viewer = self._session_user()
+        if viewer is None:
+            return self._redirect(f"/web/login?next={quote('/web/settings/' + repo, safe='')}")
+        idx = self.repo(repo)
+        if not idx.exists or self._repo_level(viewer, repo) < OWNER:
+            return self._web_not_found(repo)
+        return self._html(render_repo_settings(repo, idx.as_dict(), people=self._people(repo, idx),
+                                               role_ru=_ROLE_RU))
+
+    def _people(self, name: str, idx: RepoIndex) -> list[dict]:
+        """Return the owner first, then the collaborators by login."""
+        if not _owner_of(name):
+            return []
+        return [{"user": _owner_of(name), "role": "owner"}] + [
+            {"user": u, "role": r} for u, r in sorted(idx.members.items())]
+
     def _card_extra(self, viewer: str, ref: str) -> dict[str, object]:
         """Revisions, settings, where used, proposals and merges for an image card (spec §11)."""
         name, _, version = ref.partition(":")
@@ -2582,10 +2604,9 @@ class PoolServer:
             "may_fork": self._may_read_sources(viewer, name) and not owner and n is not None,
             "fork_origin": origin if origin and owner else "",
             "merges": open_merges, "viewer": viewer,
-            "people": [{"user": _owner_of(name), "role": "owner"}] + [
-                {"user": u, "role": r} for u, r in sorted(idx.members.items())] if _owner_of(name) else [],
+            "people": self._people(name, idx),
             "may_people": self._repo_level(viewer, name) >= OWNER,
-            "role_ru": {"owner": "владелец", "maintainer": "сопровождающий", "author": "автор", "member": "участник"},
+            "role_ru": _ROLE_RU,
         }
 
     def _web_source_file(self) -> Response:  # noqa: PLR0911  (page / folder / raw / download)

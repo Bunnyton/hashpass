@@ -572,3 +572,17 @@ ol.history .why{color:var(--muted);font-style:italic}
 .commit .sp{flex:1}
 .solved-tiles{margin:0 0 16px}
 @media (max-width:600px){.cmd code{white-space:pre-wrap;overflow-wrap:anywhere;overflow:visible}}
+/* a hovered row (and its block) rises above its neighbours and a hidden one lights up: the task
+   card under the name was covered by the next rows and half-transparent -- seen, but not
+   clickable (user 2026-10-23) */
+.titem:not(.floating):hover,.titem:not(.floating):focus-within{position:relative;z-index:5}
+.block:hover,.block:focus-within{position:relative;z-index:4}
+.task-hidden:hover,.task-hidden:focus-within,.block-hidden:hover,.block-hidden:focus-within{opacity:1}
+/* an image's settings page */
+.settings-card{padding:18px 20px;margin:0 0 16px}
+.settings-card h2{margin:0 0 12px;font-size:16px}
+.settings-card form{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 10px}
+.settings-card form input:not([type=checkbox]),.settings-card form select{width:auto;flex:0 1 260px}
+.settings-card form label{display:flex;gap:8px;align-items:center}
+.settings-card .people{margin:0 0 14px}
+@media(min-width:700px){.titem .tref{flex:0 0 auto;white-space:nowrap}}

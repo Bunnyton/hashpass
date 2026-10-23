@@ -29,18 +29,15 @@
 <section id='solved' class='tab-panel' aria-label='Решено'>
 <div class='stat-tiles solved-tiles'>
 <div class='tile ok'><b>{{ solved.total }}</b><span>решено заданий</span></div>
-<div class='tile'><b>{{ solved.in_courses }}</b><span>в {{ solved.courses | plural('курсе', 'курсах', 'курсах') }}</span></div>
-<div class='tile'><b>{{ solved.outside }}</b><span>не в курсе</span></div>
 <div class='tile'><b>{{ solved.taking }}</b><span>проходит курсов</span></div>
 </div>
 {% if solved.rows %}
 <div class='card table-wrap'>
 <table class='sortable'>
-<thead><tr><th scope='col'>Задание</th><th scope='col'>Где</th><th scope='col'>Когда</th></tr></thead>
+<thead><tr><th scope='col'>Задание</th><th scope='col'>Используется в курсах</th></tr></thead>
 <tbody>
-{% for r in solved.rows %}<tr><td><a class='mono' href='/web/image/{{ r.version_ref | ref_url }}'>{{ r.ref }}</a>{% if r.n %} <span class='pill sm ver'>версия {{ r.n }}</span>{% endif %}</td>
-<td>{% if r.course %}<a href='/c/{{ r.course }}'>{{ r.course_title or r.course }}</a>{% else %}<span class='dim'>не в курсе</span>{% endif %}</td>
-<td data-sort='{{ r.at }}'>{{ ts(r.at) }}</td></tr>{% endfor %}
+{% for r in solved.rows %}<tr><td data-sort='{{ r.at }}'><a class='mono' href='/web/image/{{ r.version_ref | ref_url }}'>{{ r.ref }}</a>{% if r.n %} <span class='pill sm ver'>версия {{ r.n }}</span>{% endif %} <span class='small dim'>решено {{ ago(r.at) }}</span></td>
+<td>{% for c in r.courses %}<a href='/c/{{ c.ref }}'>{{ c.title or c.ref }}</a>{% if not loop.last %}, {% endif %}{% else %}<span class='dim'>—</span>{% endfor %}</td></tr>{% endfor %}
 </tbody></table>
 </div>
 {% else %}<div class='empty card'><p class='sub'>{% if me %}Пока ничего не решено. Найдите курс или задание на <a href='/'>главной</a> — и в терминал: <code>hashpass run …</code>{% else %}Пока ничего не решено.{% endif %}</p></div>{% endif %}

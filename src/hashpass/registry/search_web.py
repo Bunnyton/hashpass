@@ -294,10 +294,12 @@ class SearchWeb:
         """
         Return what `login` has solved, newest first, and a few numbers -- own page and admins.
 
-        Each: the task, the version solved, where (a course, or outside any -- `hashpass run`),
-        when. A task whose repository the viewer may not see is left out.
+        Each: the task, the version solved, when, and the courses it is in (user 2026-10-23: «они в
+        курсе» -- where it stands, not where it was run). A task whose repository the viewer may
+        not see is left out.
         """
         rows = []
+        role = self.server.users.role(viewer) if viewer else None
         for ref, rec in self.server.progress().get(login).items():
             if not isinstance(rec, dict) or rec.get("status") != "passed":
                 continue
@@ -305,15 +307,12 @@ class SearchWeb:
             if not repo or not self.server.repo(repo).exists or not self.server._may_see_repo(viewer, repo):  # noqa: SLF001
                 continue
             n = self.server._solved_n(rec, repo, tag)              # noqa: SLF001
-            course = None if rec.get("outside") else self.server.course_api.courses.get(str(rec.get("course") or ""))
+            used = {u["course"]: u["title"] for u in self.where_used(repo, tag, viewer=viewer, role=role)}
             rows.append({"ref": ref, "repo": repo, "tag": tag, "n": n, "at": rec.get("ts"),
-                         "course": course.ref if course else "", "course_title": course.title if course else "",
+                         "courses": [{"ref": c, "title": t} for c, t in used.items()],
                          "version_ref": f"{repo}:{tag}_v{n}" if n else ref})
         rows.sort(key=lambda r: str(r["at"] or ""), reverse=True)
-        in_courses = sum(1 for r in rows if r["course"])
-        return {"rows": rows, "total": len(rows), "in_courses": in_courses, "outside": len(rows) - in_courses,
-                "courses": len({r["course"] for r in rows if r["course"]}),
-                "taking": len(self._taking(login))}
+        return {"rows": rows, "total": len(rows), "taking": len(self._taking(login))}
 
     def _taking(self, login: str) -> list[dict]:
         """Return the courses `login` takes (enrolled, not staff) with progress -- their own page only."""
