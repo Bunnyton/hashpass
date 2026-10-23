@@ -191,3 +191,29 @@ def test_the_report_is_kept_on_the_host_with_its_page_size(tmp_path, capsys) -> 
     assert "foo.service" in err and str(keep) in err and "16" in err     # 16K pages named
     _say_failed_under_emulation(tmp_path / "gone", keep=tmp_path / "none.txt", page_size=4096)
     assert not (tmp_path / "none.txt").exists()
+
+
+@pytest.mark.tier1
+def test_rosetta_in_a_utm_vm_counts_as_the_x86_emulator(tmp_path) -> None:
+    """Ubuntu arm64 in UTM on macOS (2026-10-23): Rosetta runs x86 better than qemu-user."""
+    from hashpass.emulation import x86_emulator  # noqa: PLC0415
+    assert x86_emulator(tmp_path) is None
+    (tmp_path / "rosetta").write_text("enabled\ninterpreter /media/rosetta/rosetta\nflags: CF\n")
+    (tmp_path / "qemu-x86_64").write_text("enabled\ninterpreter /usr/bin/qemu-x86_64-static\nflags: F\n")
+    assert x86_emulator(tmp_path) == tmp_path / "rosetta"                  # preferred
+    assert binfmt_ready(binfmt_dir=tmp_path) is True
+    (tmp_path / "rosetta").write_text("enabled\ninterpreter /media/rosetta/rosetta\nflags: C\n")
+    assert x86_emulator(tmp_path) == tmp_path / "qemu-x86_64"              # no F: not in containers
+
+
+@pytest.mark.tier1
+def test_the_report_names_the_emulator_and_its_version(tmp_path) -> None:
+    from hashpass.emulation import emulator_description  # noqa: PLC0415
+    qemu = tmp_path / "qemu-x86_64-static"
+    qemu.write_text("#!/bin/sh\necho 'qemu-x86_64 version 6.2.0 (Debian 1:6.2+dfsg-2ubuntu6)'\necho more\n")
+    qemu.chmod(0o755)
+    (tmp_path / "qemu-x86_64").write_text(f"enabled\ninterpreter {qemu}\nflags: F\n")
+    assert emulator_description(tmp_path) == f"qemu-x86_64 ({qemu}): qemu-x86_64 version 6.2.0 (Debian 1:6.2+dfsg-2ubuntu6)"
+    (tmp_path / "rosetta").write_text("enabled\ninterpreter /media/rosetta/rosetta\nflags: CF\n")
+    assert emulator_description(tmp_path).startswith("rosetta (/media/rosetta/rosetta)")
+    assert emulator_description(tmp_path / "none") == "эмулятор x86 не найден"

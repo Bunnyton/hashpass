@@ -42,7 +42,7 @@ from hashpass.attempts import (
     solution_text,
 )
 from hashpass.build import build, run_image
-from hashpass.emulation import failed_units, nspawn_emulation_args
+from hashpass.emulation import emulator_description, failed_units, nspawn_emulation_args
 from hashpass.image.base import _base_version_current, build_base, runtime_stamp
 from hashpass.imagestore.store import ImageStore, did_you_mean, registry_key
 from hashpass.progress import current_stage
@@ -1061,8 +1061,8 @@ def _say_failed_under_emulation(rootfs: Path, *, keep: Path = _ARM_REPORT,
     pages = page_size or os.sysconf("SC_PAGE_SIZE")
     with contextlib.suppress(OSError):
         keep.parent.mkdir(parents=True, exist_ok=True)
-        keep.write_text(f"{report.rstrip()}\n## host\n{platform.platform()}\npage size: {pages}\n",
-                        encoding="utf-8")
+        keep.write_text(f"{report.rstrip()}\n## host\n{platform.platform()}\npage size: {pages}\n"
+                        f"x86: {emulator_description()}\n", encoding="utf-8")
     failed = failed_units(rootfs)
     if failed:
         sys.stderr.write(f"\x1b[33m⚠ под эмуляцией x86 не запустились службы: {', '.join(failed)}\x1b[0m\n")

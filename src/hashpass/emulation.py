@@ -14,7 +14,11 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
-_BINFMT = Path("/proc/sys/fs/binfmt_misc/qemu-x86_64")
+_BINFMT_DIR = Path("/proc/sys/fs/binfmt_misc")
+_BINFMT = _BINFMT_DIR / "qemu-x86_64"
+# Rosetta first: a Linux VM in UTM on a Mac (Ubuntu arm64, 2026-10-23) runs x86 through Apple's
+# translator far more reliably than through qemu-user, where man and some services crashed.
+_EMULATORS = ("rosetta", "qemu-x86_64")
 _NATIVE = ("x86_64", "amd64")
 # Newer releases (Debian 13, recent Ubuntu) split qemu-user-static into qemu-user (static now) +
 # qemu-user-binfmt; older ones still have it. A student got «Для пакета «qemu-user-static» не найден
@@ -22,14 +26,39 @@ _NATIVE = ("x86_64", "amd64")
 _PACKAGE_SETS = (("qemu-user", "qemu-user-binfmt"), ("qemu-user-static", "binfmt-support"))
 
 
-def binfmt_ready(entry: Path = _BINFMT) -> bool:
-    """Whether the kernel runs x86_64 programs via qemu, also inside a container (enabled + F)."""
+def binfmt_ready(entry: Path | None = None, *, binfmt_dir: Path = _BINFMT_DIR) -> bool:
+    """Whether the kernel runs x86_64 programs (Rosetta or qemu), also inside a container (enabled + F)."""
+    if entry is None:
+        return x86_emulator(binfmt_dir) is not None
     try:
         lines = entry.read_text(encoding="utf-8").splitlines()
     except OSError:
         return False
     flags = next((ln.split(":", 1)[1] for ln in lines if ln.startswith("flags:")), "")
     return bool(lines) and lines[0].strip() == "enabled" and "F" in flags
+
+
+def x86_emulator(binfmt_dir: Path = _BINFMT_DIR) -> Path | None:
+    """Return the binfmt entry that runs x86_64 here, Rosetta first; None when there is none."""
+    return next((binfmt_dir / name for name in _EMULATORS if binfmt_ready(binfmt_dir / name)), None)
+
+
+def emulator_description(binfmt_dir: Path = _BINFMT_DIR) -> str:
+    """Name the x86 emulator, its program and its version (for the emulation report)."""
+    entry = x86_emulator(binfmt_dir)
+    if entry is None:
+        return "эмулятор x86 не найден"
+    lines = entry.read_text(encoding="utf-8").splitlines()
+    program = next((ln.split(None, 1)[1] for ln in lines if ln.startswith("interpreter ")), "")
+    said = f"{entry.name} ({program})"
+    if entry.name == "rosetta" or not program:
+        return said
+    try:
+        out = subprocess.run([program, "--version"], capture_output=True, text=True, timeout=10, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return said
+    first = (out.stdout or out.stderr).strip().splitlines()
+    return f"{said}: {first[0]}" if first else said
 
 
 def _installable(pkgs: tuple[str, ...], run: Callable[..., object]) -> bool:
