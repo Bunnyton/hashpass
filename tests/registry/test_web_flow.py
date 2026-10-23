@@ -7,13 +7,14 @@ from http import HTTPStatus
 
 import pytest
 
+from hashpass.registry import era
 from hashpass.registry.remote import RemoteRegistry
 
 
 @pytest.fixture(autouse=True)
 def _pool_without_courses(monkeypatch: pytest.MonkeyPatch) -> None:
     """Run on a pool not on courses: its global progress page, catalog editor and moderation."""
-    monkeypatch.delenv("HASHPASS_COURSES", raising=False)
+    monkeypatch.setattr(era, "COURSES", False)
 
 
 
@@ -68,8 +69,8 @@ def test_login_sets_cookie_and_dashboard_lists_students(registry):
 
 @pytest.mark.tier2
 def test_web_login_rejects_student(registry, monkeypatch):
-    """Without courses the web is for staff only (with HASHPASS_COURSES=1 anyone signs in)."""
-    monkeypatch.delenv("HASHPASS_COURSES", raising=False)
+    """Without courses the web is for staff only (with courses anyone signs in)."""
+    monkeypatch.setattr(era, "COURSES", False)
     registry.users.add("s1", "pw", role="student", group="G")
     status, _, body = _req(_opener(), "POST", f"{registry.base_url}/web/login",
                            data={"user": "s1", "password": "pw"})

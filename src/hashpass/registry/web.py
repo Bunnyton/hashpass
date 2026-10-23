@@ -2,7 +2,6 @@
 import calendar
 import hashlib
 import json
-import os
 import re
 import time
 from pathlib import Path
@@ -12,6 +11,7 @@ from flask import g, has_request_context
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
 
+from hashpass.registry import era
 from hashpass.registry.attempt_store import is_live
 from hashpass.registry.codeview import highlight_lines, render_markdown_html
 from hashpass.registry.reference import normalise as _norm_cmd
@@ -32,7 +32,7 @@ _env.globals["viewer_tz"] = lambda: str(getattr(g, "hp_tz", "")) if has_request_
 # Staff pages (progress, the old catalog) in the nav: admins and authors; no request -> shown (tests).
 _env.globals["viewer_is_staff"] = (lambda: bool(getattr(g, "hp_staff", True))
                                    if has_request_context() else True)
-_env.globals["courses_on"] = lambda: os.environ.get("HASHPASS_COURSES") == "1"
+_env.globals["courses_on"] = era.courses_on
 _env.globals["viewer_login"] = lambda: str(getattr(g, "hp_user", "") or "") if has_request_context() else ""
 
 

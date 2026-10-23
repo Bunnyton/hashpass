@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from hashpass.imagestore.store import ImageStore
+from hashpass.registry import era
 from hashpass.registry.attachments import AttachmentStore
 from hashpass.registry.blob import pack_image_to_file
 from hashpass.registry.catalog import Catalog
@@ -22,7 +23,7 @@ from hashpass.registry.server import _parse_multipart
 @pytest.fixture(autouse=True)
 def _pool_without_courses(monkeypatch: pytest.MonkeyPatch) -> None:
     """Run on a pool not on courses: its global progress page, catalog editor and moderation."""
-    monkeypatch.delenv("HASHPASS_COURSES", raising=False)
+    monkeypatch.setattr(era, "COURSES", False)
 
 
 

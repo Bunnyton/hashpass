@@ -33,6 +33,7 @@ from werkzeug.serving import make_server as _wsgi_make_server
 from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
 from hashpass.registry import courses as course_model
+from hashpass.registry import era
 from hashpass.registry.access import can
 from hashpass.registry.approved import ApprovedStore
 from hashpass.registry.attachments import AttachmentStore, safe_filename
@@ -802,7 +803,7 @@ class PoolServer:
     # -- routes: public / installers ----------------------------------------
 
     def _route_front(self) -> Response:
-        if os.environ.get("HASHPASS_COURSES") == "1":   # the home page is the showcase + search
+        if era.courses_on():   # the home page is the showcase + search
             return self.people.explore()
         return self._html(render_front(self._pool_url()))
 
@@ -923,7 +924,7 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         wanted = request.args.get("course")
-        if wanted and os.environ.get("HASHPASS_COURSES") == "1":    # one course, in catalog rows
+        if wanted and era.courses_on():    # one course, in catalog rows
             picked = self.course_api.courses.get(wanted)
             if picked is None or not can(user, self.users.role(user), picked, "view"):
                 return self._json(HTTPStatus.NOT_FOUND, {"error": f"нет такого курса: {wanted}"})
@@ -944,11 +945,10 @@ class PoolServer:
         """
         Gate the course era: `/courses` only where switched on; old catalog edits 410 after the move.
 
-        `HASHPASS_COURSES=1` switches the courses API on. Off by default, so a pool that follows
-        `main` (prod) does not grow courses before their web and clients are ready.
+        Every pool runs on courses (`era`); only the old catalog's tests switch them off.
         """
         course_era = request.path.startswith(("/courses", "/c/")) or request.path == "/c"
-        if course_era and os.environ.get("HASHPASS_COURSES") != "1":
+        if course_era and not era.courses_on():
             return self._json(HTTPStatus.NOT_FOUND, {"error": "курсы на этом пуле ещё не включены"})
         if request.path not in self._LEGACY_WRITES or self.default_course() is None:
             return None
@@ -2442,7 +2442,7 @@ class PoolServer:
     # -- routes: web dashboard ---------------------------------------------
 
     def _web_dashboard(self) -> Response:
-        if os.environ.get("HASHPASS_COURSES") == "1":   # progress lives in each course now
+        if era.courses_on():   # progress lives in each course now
             return self._redirect("/c")
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
@@ -2483,7 +2483,7 @@ class PoolServer:
         return self._redirect("/web/users")
 
     def _web_images(self) -> Response:
-        if os.environ.get("HASHPASS_COURSES") == "1":   # tasks/images: search and user pages
+        if era.courses_on():   # tasks/images: search and user pages
             return self._redirect("/search?type=tasks")
         if self._session_role(_AUTHOR_ROLES) is None:
             return self._redirect("/web/login")
@@ -2492,7 +2492,7 @@ class PoolServer:
 
     def _web_image_card(self, ref: str) -> Response:
         viewer = self._session_user()
-        courses_on = os.environ.get("HASHPASS_COURSES") == "1"
+        courses_on = era.courses_on()
         if viewer is None or (not courses_on and self.users.role(viewer) not in _AUTHOR_ROLES):
             return self._redirect(f"/web/login?next={quote('/web/image/' + ref, safe='')}")
         ref = self._live_ref(ref)
@@ -2527,7 +2527,7 @@ class PoolServer:
         origin = idx.fork_of.partition(":")[0]
         return {
             "repo": name, "tag": tag, "n": n, "repo_info": idx.as_dict() if idx.exists else None,
-            "owner": owner, "courses_era": os.environ.get("HASHPASS_COURSES") == "1",
+            "owner": owner, "courses_era": era.courses_on(),
             "used_in": self.people.where_used(name, tag, viewer=viewer, role=role,
                                               see_all=owner or role == "admin"),
             "propose_to": [c.ref for c in self.course_api.courses.all() if can(viewer, role, c, "propose")
@@ -2655,7 +2655,7 @@ class PoolServer:
         # Already in, but an admin-only page sent us here: say so, or the form looks like a
         # lost session and the author logs in again -- in circles.
         user = self._session_user()
-        courses = os.environ.get("HASHPASS_COURSES") == "1"
+        courses = era.courses_on()
         next_url = _local_path(request.args.get("next", ""))
         if user is not None and next_url:
             return self._redirect(next_url)
@@ -2665,7 +2665,7 @@ class PoolServer:
 
     def _web_login_post(self) -> Response:
         user = request.form.get("user", "").strip()
-        courses = os.environ.get("HASHPASS_COURSES") == "1"     # with courses anyone signs in
+        courses = era.courses_on()     # with courses anyone signs in
         staff = self.users.role(user) in _AUTHOR_ROLES
         if self.users.verify(user, request.form.get("password", "")) and (staff or courses):
             token = issue_token(self.secret, user, now=time.time())

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from hashpass.registry import era
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.revisions import RepoIndex
 from tests.registry.test_push_commit import _http, _Pool
@@ -144,7 +145,7 @@ def test_stale_rev_is_a_conflict(pool: _Courses) -> None:
 
 @pytest.mark.tier1
 def test_courses_are_off_unless_switched_on(pool: _Courses, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("HASHPASS_COURSES")
+    monkeypatch.setattr(era, "COURSES", False)
     code, body = pool.call("GET", "/courses", "bob")
     assert code == 404 and "не включены" in body["error"]  # noqa: PLR2004
 

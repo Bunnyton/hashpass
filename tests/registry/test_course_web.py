@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from hashpass.registry import era
 from tests.registry.test_course_api import _Courses
 
 
@@ -83,7 +84,7 @@ def test_login_returns_to_the_invite_link(pool: _Courses) -> None:
 
 @pytest.mark.tier1
 def test_course_pages_are_off_without_the_switch(pool: _Courses, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("HASHPASS_COURSES")
+    monkeypatch.setattr(era, "COURSES", False)
     assert _page(_browser(pool, None), f"{pool.url}/c")[0] == 404  # noqa: PLR2004
 
 

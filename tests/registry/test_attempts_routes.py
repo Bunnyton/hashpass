@@ -5,6 +5,7 @@ from http import HTTPStatus
 
 import pytest
 
+from hashpass.registry import era
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.taskdigest import task_digest
 from tests.registry.test_submit import _publish
@@ -71,7 +72,7 @@ def test_attempt_unknown_ref_and_bad_session(registry, tmp_path):
 @pytest.mark.tier2
 def test_teacher_sees_attempts_with_output_on_the_site(registry, tmp_path, monkeypatch):
     from tests.registry.test_images_web import _author_cookie, _req  # noqa: PLC0415
-    monkeypatch.delenv("HASHPASS_COURSES", raising=False)   # the global matrix: a pool not on courses
+    monkeypatch.setattr(era, "COURSES", False)   # the global matrix: a pool not on courses
     _publish(registry, tmp_path)
     sc = RemoteRegistry(registry.base_url)
     tok = sc.register("stud", "pass123!", group="G")

@@ -27,7 +27,6 @@ def _no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("no_proxy", "*")
-    monkeypatch.setenv("HASHPASS_COURSES", "1")          # the courses API is opt-in per pool
 
 
 @dataclass

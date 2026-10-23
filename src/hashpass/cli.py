@@ -1359,7 +1359,7 @@ def cmd_migrate_courses(env: Home, owner: str = "bunnyton", io: Io | None = None
     Move this pool (its data under the hashpass home) to revisions + a default course (spec §13).
 
     Run on the pool machine, with the pool stopped or idle; done once (a second run reports so).
-    The old state is backed up first; the courses API is then switched on by HASHPASS_COURSES=1.
+    The old state is backed up first.
     """
     from hashpass.registry.migrate import migrate_to_courses  # noqa: PLC0415  (rare, heavy)
     io = io or _default_io()
@@ -1379,8 +1379,7 @@ def cmd_migrate_courses(env: Home, owner: str = "bunnyton", io: Io | None = None
         return 0
     io.write(f"готово: образов {report['images']}, заданий в курсе {report['tasks']}, "
              f"предложений {report['proposals']}; курс по умолчанию {server.config.default_course}\n"
-             "резервная копия — в .backup-courses-* рядом с хранилищем; включите курсы: "
-             "HASHPASS_COURSES=1\n")
+             "резервная копия — в .backup-courses-* рядом с хранилищем\n")
     return 0
 
 
