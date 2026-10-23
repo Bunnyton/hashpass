@@ -1,6 +1,6 @@
 # mc — Midnight Commander (исходник it_bastion: base_commands/50_mc «найдите в случайных текстовых
 # файлах пароль; вам теперь доступен midnight commander»). Пароль от Wi-Fi спрятан в одном из
-# сорока пяти файлов notes/ (data/). Из команд доступен только mc: найти (поиск по содержимому) и
+# сорока пяти файлов notes/ (data/). Из команд доступны только mc и mcedit: найти (поиск по содержимому) и
 # записать ответ в ~/answer.txt его редактором; принимается содержимое answer.txt (observe).
 # После находки where называет файл.
 
@@ -22,10 +22,10 @@ say "Сорок пять файлов заметок, и где-то среди 
 read brief.md
 
 stage
-  say "Найди в notes пароль от Wi-Fi и запиши его в ~/answer.txt. Из команд у тебя только mc"
+  say "Найди в notes пароль от Wi-Fi и запиши его в ~/answer.txt. Из команд у тебя только mc и mcedit"
   solve echo walrus-6610 > /home/student/answer.txt
   observe /home/student/answer.txt
-  allow mc
+  allow mc mcedit
   neutral ls cd pwd
   on pass exec where
   hint tries 5 say "Открывать файлы по одному долго. mc умеет искать по содержимому: Alt+? — поле Content."

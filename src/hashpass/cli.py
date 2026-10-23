@@ -467,8 +467,7 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
         store.set_meta_field(ref, "origin", origin)
     if not _uses_local_service(env):
         # A pool is configured: publishing is an explicit `hashpass push` (never automatic).
-        flag = " --task" if task else ""
-        io.write(f"\x1b[2m  сохранено локально — на пул: hashpass push {ref}{flag}\x1b[0m\n")
+        io.write(f"\x1b[2m  сохранено локально — на пул: hashpass push {ref}\x1b[0m\n")
     elif task:
         # The registry blob carries an image's layer, not a task's hidden grader -- keep tasks local.
         io.write("\x1b[2m  задание сохранено локально (на сервис отправляются образы)\x1b[0m\n")
