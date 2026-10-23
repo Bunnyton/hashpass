@@ -68,12 +68,12 @@ from hashpass.registry.passwords import (
 )
 from hashpass.registry.refs import normalize_ref, split_ref
 from hashpass.registry.remote import RemoteRegistry
-from hashpass.registry.revisions import check_tag, human_ref
+from hashpass.registry.revisions import check_tag, human_ref, parse_version
 from hashpass.registry.server import PoolServer, make_server
 from hashpass.registry.token import token_user
 from hashpass.taskbuild import build_task
 from hashpass.taskdigest import task_digest
-from hashpass.taskrun import run_task
+from hashpass.taskrun import run_task, task_goal
 from hashpass.taskstore import task_dir
 from hashpass.version import check_and_update, watch_for_updates
 
@@ -431,6 +431,8 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     """Build an image or a task from a Taskfile, under the owner's namespace (login required)."""
     io = io or _default_io()
     taskfile_path = Path(taskfile)
+    if taskfile_path.is_dir():                           # `hashpass build .` -- the folder's Taskfile
+        taskfile_path /= "Taskfile"
     recipe = load_recipe(taskfile_path)
     recipe = _rebase_paths(recipe, taskfile_path.resolve().parent)   # paths relative to the Taskfile
     name, version = resolve_ref(recipe, tag, taskfile_path)
@@ -468,7 +470,8 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
         store.set_meta_field(ref, "origin", origin)
     if not _uses_local_service(env):
         # A pool is configured: publishing is an explicit `hashpass push` (never automatic).
-        io.write(f"\x1b[2m  сохранено локально — на пул: hashpass push {ref}\x1b[0m\n")
+        io.write(f"\x1b[2m  сохранено на этой машине — запустить: hashpass run {ref}"
+                 f" · на пул: hashpass push {ref}\x1b[0m\n")
     elif task:
         # The registry blob carries an image's layer, not a task's hidden grader -- keep tasks local.
         io.write("\x1b[2m  задание сохранено локально (на сервис отправляются образы)\x1b[0m\n")
@@ -567,9 +570,32 @@ def _announce_stage(session: object, io: Io) -> None:
         return
     message = session.meta.stages[stage].message
     if message:
-        # The task stands apart from the system's talk (thin cyan bar) and from the student's own
-        # input (the plain prompt): a bold yellow bar, a label, air around it.
-        io.write(f"\n{_GOAL_BAR}{_GOAL_STYLE}ЗАДАНИЕ\x1b[0m\n{_GOAL_BAR}\x1b[1m{message}\x1b[0m\n\n")
+        io.write(_goal_block(message))
+
+
+def _goal_block(message: str) -> str:
+    """
+    Return the task as a block of its own.
+
+    It stands apart from the system's talk (thin cyan bar) and from the student's own input (the
+    plain prompt): a bold yellow bar, a label, air around it.
+    """
+    body = "\n".join(f"{_GOAL_BAR}\x1b[1m{line}\x1b[0m" for line in message.splitlines() or [""])
+    return f"\n{_GOAL_BAR}{_GOAL_STYLE}ЗАДАНИЕ\x1b[0m\n{body}\n\n"
+
+
+def _render_readme(session: object, io: Io) -> None:
+    """
+    `readme` in the console: the theory given so far, the last word about the task, the task.
+
+    User 2026-10-23: «не только теорию, но и последнюю вставку про задание и само задание» --
+    all of it whole: Ctrl+C there only skips the typing and the page pauses.
+    """
+    session.replay_theory()
+    session.replay_said()
+    goal = task_goal(session.meta, current_stage(session.progress))
+    if goal:
+        io.write(_goal_block(goal))
 
 
 _SOLVED_BANNER = ("\n\x1b[1;32m╭────────────╮\n"
@@ -919,7 +945,7 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
         if req.startswith("hello"):
             _render_intro(session, readme, io)
         elif req.startswith("readme"):
-            session.replay_theory()
+            _render_readme(session, io)
         elif req.startswith("cmd "):
             with contextlib.suppress(Exception):
                 _render_observe(session, *_parse_cmd_request(req), io, history=history,
@@ -1471,8 +1497,8 @@ def cmd_run_any(env: Home, arg: str, registry: str | None = None, io: Io | None 
     io = io or _default_io()
     if arg.isdigit() or (registry is None and _in_current_course(env, arg)):
         return cmd_pool_run(env, arg, io)
-    io.write(f"\x1b[2m{arg} не из текущего курса — запускаю без зачёта\x1b[0m\n")
-    return cmd_engine_run(env, arg, registry)
+    io.write(f"\x1b[2m{arg} не из текущего курса — без зачёта в курс; решённое с пула запишется в профиль\x1b[0m\n")
+    return cmd_engine_run(env, arg, registry, io)
 
 
 def _in_current_course(env: Home, ref: str) -> bool:
@@ -2004,7 +2030,37 @@ def cmd_engine_run(env: Home, ref: str, registry: str | None = None, io: Io | No
         if not tdir.exists():
             with contextlib.suppress(urllib.error.HTTPError, RuntimeError):   # a plain image
                 client.pull_task(ref, tdir)
-    return cmd_run(env, ref, io)
+    url = _pool_url(env)
+    user = load_pool(env).get("user") if url else None
+    return cmd_run(env, ref, io, student_id=str(user or _DEFAULT_STUDENT),
+                   on_complete=_free_credit(env, ref, store, io))
+
+
+def _free_credit(env: Home, ref: str, store: ImageStore, io: Io) -> Callable[[bool, list[dict[str, object]]], None] | None:
+    """
+    Return what reports a pass outside a course to the pool (user 2026-10-23), or None offline.
+
+    The pool keeps it in the profile and a course holding the task shows it «пройдено не в
+    курсе». Only a version the pool has counts (its digest); a local build is not reported.
+    """
+    url = _pool_url(env)
+    token = _pool_token(env, url) if url else None
+    if not url or not token:
+        return None
+    name, _, version = ref.partition(":")
+    tag_ref = f"{name}:{parse_version(version)[0]}"
+
+    def report(completed: bool, history: list[dict[str, object]]) -> None:  # noqa: FBT001
+        if not completed:
+            return
+        try:
+            result = RemoteRegistry(url).submit(tag_ref, task_digest(task_dir(ref, store)), passed=True,
+                                                token=token, history=history, free=True)
+        except (urllib.error.URLError, RuntimeError, ValueError, OSError):
+            return                                   # offline / an old pool: the run itself is done
+        if result.get("status") == "passed":
+            io.write("\x1b[2mзаписано в профиль на пуле\x1b[0m\n")
+    return report
 
 
 def cmd_tag(env: Home, src: str, to: str, registry: str | None = None, io: Io | None = None) -> int:
@@ -2513,25 +2569,45 @@ def _course_link(env: Home, link: str) -> str:
 
 
 def cmd_course_search(env: Home, query: str = "", io: Io | None = None) -> int:
-    """`hashpass search [запрос]`: find courses on the pool (title, owner, description)."""
+    """
+    `hashpass search [запрос]`: courses, tasks and images -- on the pool and on this machine.
+
+    Each with the command that takes it: `hashpass add` for a course, `hashpass run` for a task
+    or an image (TODO 2026-10-23: «искать по образам всем … и их выполнять»).
+    """
+    from hashpass.library import collect  # noqa: PLC0415
     io = io or _default_io()
     url = _pool_url(env)
     if not url:
         msg = "пул не задан — hashpass login --pool <адрес>"
         raise RuntimeError(msg)
     token = _pool_token(env, url) or ""
-    rows = RemoteRegistry(url, cache=CredentialCache(env.creds)).courses(query, token=token)
-    if rows is None:
-        io.write("на этом пуле курсов нет (они ещё не включены)\n")
-        return 1
-    if not rows:
-        io.write(f"курсов по запросу «{query}» нет\n" if query else "курсов пока нет\n")
+    client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+    courses = client.courses(query, token=token) or []
+    try:
+        repos = client.repos("", token=token or None)
+    except (urllib.error.URLError, RuntimeError, ValueError, OSError):
+        repos = None
+    store = ImageStore(env.images)
+    found = collect([(ref, _kind(store, ref)) for ref in store.list()], repos, query)
+    if not courses and not found:
+        io.write(f"по запросу «{query}» ничего нет\n" if query else "пока пусто\n")
         return 0
-    for r in rows:
+    if courses:
+        io.write("\x1b[1;36mКурсы\x1b[0m\n")
+    for r in courses:
         lock = "  \x1b[33m(приватный — по заявке или приглашению)\x1b[0m" if r.get("visibility") == "private" else ""
         role = f"  \x1b[36m[{r['role']}]\x1b[0m" if r.get("role") else ""
-        io.write(f"\x1b[1m{r.get('title') or r['ref']}\x1b[0m  \x1b[2m{r['ref']}\x1b[0m{lock}{role}\n"
-                 f"   hashpass add {r['ref']}\n")
+        io.write(f"  \x1b[1m{r.get('title') or r['ref']}\x1b[0m  \x1b[2m{r['ref']}\x1b[0m{lock}{role}\n"
+                 f"     hashpass add {r['ref']}\n")
+    section = ""
+    for e in found:
+        if e.section != section:
+            section = e.section
+            io.write(f"\x1b[1;36m{section}\x1b[0m\n")
+        ver = f"  \x1b[2mверсия {e.n}\x1b[0m" if e.n else ""
+        about = f"  \x1b[2m— {e.about[:60]}\x1b[0m" if e.about else ""
+        io.write(f"  \x1b[1m{e.ref}\x1b[0m{ver}{about}\n     hashpass run {e.ref}\n")
     return 0
 
 
@@ -2613,7 +2689,8 @@ def pool_status(env: Home, url: str, token: str, user: str) -> list[dict[str, ob
                      "available": runnable(entry),
                      "preview": bool(entry.get("preview", False)),
                      "block": str(entry.get("block_name", "")),
-                     "n": int(entry.get("n") or 0), "solved_n": int(entry.get("solved_n") or 0)})
+                     "n": int(entry.get("n") or 0), "solved_n": int(entry.get("solved_n") or 0),
+                     "outside": bool(entry.get("outside"))})
     return rows
 
 
@@ -2621,8 +2698,10 @@ def _status_badge(row: dict[str, object]) -> str:
     if not row.get("available", True):
         return "\x1b[2mнедоступно\x1b[0m"          # visible, but locked right now
     if row.get("preview"):
-        return "\x1b[33mскрыто от студентов\x1b[0m"  # author/admin: locked for students, runnable here
+        return "\x1b[33mскрыто от проходящих курс\x1b[0m"  # author/admin: locked for students, runnable here
     if row.get("server") == "passed":
+        if row.get("outside"):
+            return "\x1b[32mзачтено\x1b[0m \x1b[2m(пройдено не в курсе)\x1b[0m"
         older = row.get("solved_n") and row.get("n") and row["solved_n"] != row["n"]
         return "\x1b[32mзачтено\x1b[0m" + (f" \x1b[2m(решалась версия {row['solved_n']})\x1b[0m" if older else "")
     if row.get("local"):
@@ -2722,7 +2801,7 @@ def _run_from_menu(env: Home, ref: str, io: Io) -> None:
     cmd_pool_run(env, ref, io)
 
 
-def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
+def cmd_pool_run(env: Home, arg: str, io: Io | None = None, *, update: bool = True) -> int:
     """
     Student run: resolve a number/ref, run it, submit on completion -- then back to the menu.
 
@@ -2734,7 +2813,7 @@ def cmd_pool_run(env: Home, arg: str, io: Io | None = None) -> int:
     url, user = _require_pool_identity(env, io)
     token = _pool_token(env, url) or ""
     ref = _resolve_pool_ref(RemoteRegistry(url), token, arg)
-    rc, _solved = _run_pool_task(env, url, user, token, ref, io)
+    rc, _solved = _run_pool_task(env, url, user, token, ref, io, update=update)
     return rc
 
 
@@ -2747,8 +2826,27 @@ def _credited_on_pool(client: RemoteRegistry, token: str, user: str, ref: str) -
     return isinstance(rec, dict) and rec.get("status") == "passed"
 
 
+def _fetch_pool_task(client: RemoteRegistry, plain: RemoteRegistry, token: str, ref: str,  # noqa: PLR0913, PLR0917
+                     store: ImageStore, server_digest: str, *, update: bool) -> None:
+    """
+    Get a pool task onto this machine before a run.
+
+    Missing -> download it. A copy already here and `update` off (the student said «нет» to
+    «скачать новую версию?») -> run that copy: a credit for an older version still counts. With
+    `update`: refresh the image if the pool re-published it, and the task bundle when its digest
+    no longer matches the pool's -- else a re-published task is graded against the stale grader
+    and rejected as "digest-mismatch" («перестало принимать»).
+    """
+    if not update and store.exists(ref) and task_dir(ref, store).exists():
+        return
+    client.pull_many([ref], store, workers=4, refresh=True)
+    tdir = task_dir(ref, store)
+    if not tdir.exists() or (server_digest and task_digest(tdir) != server_digest):
+        plain.pull_task(ref, tdir, token=token)
+
+
 def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa: PLR0913, PLR0917
-                   io: Io) -> tuple[int, bool | None]:
+                   io: Io, *, update: bool = True) -> tuple[int, bool | None]:
     """Run ONE pool task; return (exit code, solved) -- None when nothing was graded (locked/failed)."""
     client0 = RemoteRegistry(url)
     entry = next((e for e in client0.catalog(token=token) if str(e["ref"]) == ref), None)
@@ -2761,15 +2859,8 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
     # Fetch the task image if missing, refresh it if the pool re-published it (digest changed).
     # The base is NOT pulled here: ensure_base_image(pool=client) inside _run_task fetches or
     # refreshes it and degrades to a good local base when the download fails or is torn.
-    client.pull_many([ref], store, workers=4, refresh=True)
-    tdir = task_dir(ref, store)
-    server_digest = str(entry.get("digest")) if entry else ""
-    # Re-pull the task bundle if it's missing OR its digest no longer matches the pool's.
-    # Without this a task the teacher re-published (bumped digest) would be graded against the
-    # stale local grader and then rejected server-side ("digest-mismatch") -- exactly the
-    # "перестало принимать" symptom reported by the user for an already-solved task.
-    if not tdir.exists() or (server_digest and task_digest(tdir) != server_digest):
-        RemoteRegistry(url).pull_task(ref, tdir, token=token)
+    _fetch_pool_task(client, RemoteRegistry(url), token, ref, store,
+                     str(entry.get("digest")) if entry else "", update=update)
 
     # The session goes to the pool while it runs: the teacher sees the attempts (spec 2026-10-16).
     # A task the pool has already credited is practice: nothing is sent, the first solution stays
@@ -2806,7 +2897,7 @@ def _run_pool_task(env: Home, url: str, user: str, token: str, ref: str,  # noqa
                      "\x1b[2m  позже нажмите s в меню для самопроверки\x1b[0m\n")
             return
         if result.get("status") == "unavailable" and entry and entry.get("preview"):
-            io.write("\x1b[2mзадание скрыто от студентов — прогон автора не засчитывается\x1b[0m\n")
+            io.write("\x1b[2mзадание скрыто от проходящих курс — прогон автора не засчитывается\x1b[0m\n")
             return
         if result.get("status") != "passed":             # success is silent: «РЕШЕНО» was shown
             io.write(f"\x1b[33mне зачтено: {result.get('reason', result.get('status'))}"

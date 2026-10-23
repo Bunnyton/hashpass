@@ -117,11 +117,14 @@ class TaskRow:
     owner: str = ""                 # the author (ref namespace)
     n: int = 0                      # the course's version of the task (0: a pool without versions)
     solved_n: int = 0               # the version the credit was earned in (an older one still counts)
+    outside: bool = False           # earned outside this course (`hashpass run`, another course)
 
     def credit_word(self) -> str:
         """`зачтено` / `не зачтено`, and which version was solved when the course has moved on."""
         if self.server != "passed":
             return "не зачтено"
+        if self.outside:
+            return "зачтено (пройдено не в курсе)"
         if self.solved_n and self.n and self.solved_n != self.n:
             return f"зачтено (решалась версия {self.solved_n})"
         return "зачтено"
@@ -158,6 +161,8 @@ class TaskRow:
             return f"грузится {self.progress * 100:.0f}%"
         if self.state == "ошибка":
             return "ошибка загрузки"
+        if self.state == "обновление":
+            return f"есть версия {self.n} — скачать?" if self.n else "есть новая версия — скачать?"
         return "в очереди" if self.state == "в очереди" else "не загружено"
 
     def tree_label(self) -> str:
@@ -190,6 +195,11 @@ class TaskRow:
             tail += "   [yellow]· скрыто[/]"
         version = f" [dim]· версия {self.n}[/]" if self.n else ""
         return f"{self.ref}{version}{tail}{badge}"
+
+
+def updates_to_ask(rows: list[TaskRow], *, asked: set[tuple[str, str]]) -> list[TaskRow]:
+    """Rows whose newer version is not downloaded and not asked about yet."""
+    return [r for r in rows if r.state == "обновление" and not r.hidden and (r.ref, r.digest) not in asked]
 
 
 class ReasonScreen(ModalScreen[str | None]):
@@ -266,6 +276,8 @@ class PoolTUI(App):
         Binding("p,P,з,З", "solution", "Решение"),
         Binding("L,Д", "relogin", "Сменить аккаунт"),
         Binding("c,C,с,С", "courses", "Курсы и поиск"),     # a pool with courses (spec 2026-10-21 §9)
+        # user 2026-10-23: search every task and image -- here and on the pool -- and run any
+        Binding("slash,f,F,а,А", "library", "Все задания и образы"),
         # Catalog editing for staff (shown only to them, see check_action): the same rights as
         # the web catalog -- an author hides/shows its own tasks, the admin also moves them.
         Binding("x,X,ч,Ч", "toggle_hidden", "Скрыть/показать"),
@@ -307,6 +319,8 @@ class PoolTUI(App):
         self._stopping = False
         self._paused = False                         # a task console is open: queued pulls wait
         self._autoload = True                        # start downloading everything on launch
+        self._asked: set[tuple[str, str]] = set()     # new versions already asked about (ref, digest)
+        self._picking = False                         # the course picker is open
         self._jobs: dict[str, TaskRow] = {}          # queued or downloading, by ref
         self._active: TaskRow | None = None
         self._layers: dict[str, LayerBar] = {}
@@ -415,6 +429,7 @@ class PoolTUI(App):
         self.courses_mode = listed is not None
         if self.courses_mode:
             if my_courses.activate(self.env.root, self.url) is None and listed:
+                self._picking = True                              # «скачать?» waits for the pick
                 self.call_after_refresh(self.action_courses)      # first time: pick a course
             self._course_title()
         self.refresh_bindings()
@@ -449,14 +464,30 @@ class PoolTUI(App):
         course = my_courses.current(self.env.root, self.url)
         self.title = f"hashpass · {self.user}" + (f" · {course}" if course else "")
 
+    def action_library(self) -> None:
+        """/ or f: every task and image, here and on the pool; Enter runs one (no course credit)."""
+        from hashpass.library import LibraryScreen, run_entry  # noqa: PLC0415
+
+        def _chosen(entry: object) -> None:
+            if entry is None:
+                return
+            with self.suspend(), self.downloads_paused():
+                run_entry(self.env, entry)
+            self._reload_catalog()              # a pass outside the course shows in it now
+            self.action_library()
+        self.push_screen(LibraryScreen(self.env, self.client, self.token), _chosen)
+
     def action_courses(self) -> None:
         """c: pick the course to work in (or paste a course link)."""
+        self._picking = True
         self.push_screen(CoursePicker(self.client, self.token, my_courses.mine(self.env.root, self.url),
                                       my_courses.current(self.env.root, self.url)),
                          callback=self._course_picked)
 
     def _course_picked(self, choice: str | None) -> None:
+        self._picking = False
         if not choice:
+            self._ask_updates()
             return
         if choice.startswith(LINK_PREFIX):
             try:
@@ -573,10 +604,11 @@ class PoolTUI(App):
                 continue
             hidden = not runnable(e)
             digest = str(e.get("digest", ""))
-            ready = False
+            ready = stale = False
             if self.store.exists(ref):
                 tdir = task_dir(ref, self.store)
                 ready = tdir.exists() and task_digest(tdir) == digest
+                stale = tdir.exists() and not ready and bool(digest)    # an older version is here
             server_status = None
             if isinstance(mine.get(ref), dict):
                 server_status = str(mine[ref].get("status") or "") or None
@@ -584,13 +616,14 @@ class PoolTUI(App):
             if job is not None:              # downloading right now: keep the live row object
                 job.number, job.server, job.local = int(e.get("number") or 0), server_status, ref in solved
                 job.n, job.solved_n = int(e.get("n") or 0), int(e.get("solved_n") or 0)
+                job.outside = bool(e.get("outside"))
                 rows.append(job)
                 continue
             rows.append(TaskRow(
                 ref=ref, number=int(e.get("number") or 0), block=str(e.get("block_name", "")),
                 available=bool(e.get("available", True)), digest=digest,
                 server=server_status, local=ref in solved,
-                state="готово" if ready else "ожидает", hidden=hidden,
+                state="готово" if ready else ("обновление" if stale else "ожидает"), hidden=hidden,
                 preview=bool(e.get("preview", False)), task_hidden=bool(e.get("hidden", False)),
                 block_id=str(e.get("block_id", "")), block_open=bool(e.get("block_open", True)),
                 moderation=str(e.get("state") or "approved"),
@@ -598,12 +631,31 @@ class PoolTUI(App):
                 reason=str(e.get("reason") or ""),
                 expires_at=float(e["expires_at"]) if e.get("expires_at") else None,
                 owner=str(e.get("owner") or ""),
-                n=int(e.get("n") or 0), solved_n=int(e.get("solved_n") or 0)))
+                n=int(e.get("n") or 0), solved_n=int(e.get("solved_n") or 0),
+                outside=bool(e.get("outside"))))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
         if self._autoload:
             self._autoqueue()
+        self._ask_updates()
+
+    def _ask_updates(self) -> None:
+        """Ask once «скачать?» about new versions of downloaded tasks (TODO 2026-10-22) -- never silently."""
+        todo = updates_to_ask(self.rows, asked=self._asked)
+        if not todo or self._picking or len(self.screen_stack) > 1:
+            return                       # another window is open (the course picker): ask on the next reload
+        self._asked.update((r.ref, r.digest) for r in todo)
+        names = ", ".join(f"{r.ref} (версия {r.n})" if r.n else r.ref for r in todo[:5])
+        more = f" и ещё {len(todo) - 5}" if len(todo) > 5 else ""  # noqa: PLR2004
+
+        def _done(yes: bool | None) -> None:  # noqa: FBT001
+            if yes:
+                for row in todo:
+                    self._enqueue(row)
+        self.push_screen(ConfirmScreen(f"Вышли новые версии: {escape(names)}{more}. Скачать?\n"
+                                       "[dim]нет — останутся загруженные; решённое в них засчитывается[/]"),
+                         _done)
 
     def _enqueue(self, row: TaskRow, *, first: bool = False) -> None:
         """Queue a task for background download (one task at a time); `first` jumps the queue."""
@@ -780,7 +832,7 @@ class PoolTUI(App):
             head = (f"[b cyan]{block}[/]  "
                     f"[dim]{visible_open}/{len(block_rows)} готово[/]")
             if not block_rows[0].block_open:
-                head += "   [yellow]· закрыт для студентов[/]"
+                head += "   [yellow]· закрыт для проходящих курс[/]"
             b_node = tree.root.add(head, expand=True, data=block_rows[0].block_id or None)
             for row in block_rows:
                 self._leaf_nodes[row.ref] = b_node.add_leaf(row.tree_label(), data=row)
@@ -795,6 +847,8 @@ class PoolTUI(App):
             return False                                  # signed out: only the login form
         if action == "courses":
             return self.courses_mode
+        if self.courses_mode and action in _WEB_ONLY:
+            return False                                  # a course is arranged on the web (TODO 2026-10-23)
         if action in ("toggle_hidden", "toggle_block"):
             return self.role in ("author", "admin")
         if action == "move":
@@ -902,7 +956,7 @@ class PoolTUI(App):
             self.notify(str(exc), severity="error", timeout=5)
             return
         self._after_edit(row.ref)
-        self._flash(f"{row.ref}: {'скрыто от студентов' if hide else 'показано студентам'}")
+        self._flash(f"{row.ref}: {'скрыто от проходящих курс' if hide else 'показано проходящим курс'}")
 
     def action_toggle_block(self) -> None:
         """o: open or close for students the block under the cursor (or the cursor task's block)."""
@@ -917,7 +971,7 @@ class PoolTUI(App):
         if current is None:
             return
         if block_id == "rejected":
-            self.notify("«Отклонённые» — служебный блок: студентам он не показывается.",
+            self.notify("«Отклонённые» — служебный блок: проходящим курс он не показывается.",
                         severity="warning", timeout=5)
             return
         open_ = not current.block_open
@@ -927,7 +981,7 @@ class PoolTUI(App):
             self.notify(str(exc), severity="error", timeout=5)
             return
         self._after_edit(current.ref)
-        self._flash(f"блок «{current.block}»: {'открыт' if open_ else 'закрыт'} для студентов")
+        self._flash(f"блок «{current.block}»: {'открыт' if open_ else 'закрыт'} для проходящих курс")
 
     def action_move(self, step: int) -> None:
         """Shift+↑/↓: move a task one place; at a block's edge it crosses into the next block."""
@@ -971,10 +1025,25 @@ class PoolTUI(App):
             self._enqueue(row, first=True)
             self._flash(f"{row.ref} — следующим в загрузке")
             return
+        if row.state == "обновление":   # an older copy is here: download the new one or run this
+            def _chosen(yes: bool | None) -> None:  # noqa: FBT001
+                if yes:
+                    self._enqueue(row, first=True)
+                    self._flash(f"Загружаю новую версию {row.ref} в фоне")
+                else:
+                    self._run_row(row, update=False)
+            self.push_screen(ConfirmScreen(
+                f"У [b]{escape(row.ref)}[/] есть версия {row.n}. Скачать?\n"
+                "[dim]нет — пройти уже загруженную (зачёт за неё тоже засчитывается)[/]"), _chosen)
+            return
         if row.state != "готово":   # ожидает / ошибка -> download in the background, UI stays live
             self._enqueue(row, first=True)
             self._flash(f"Загружаю {row.ref} в фоне — можно выбирать другие задания")
             return
+        self._run_row(row)
+
+    def _run_row(self, row: TaskRow, *, update: bool = True) -> None:
+        """Run a downloaded task in the real terminal; `update` off -- the copy here, as it is."""
         from hashpass.cli import Io, _now_iso, cmd_pool_run  # noqa: PLC0415
         # The run happens inside suspend(), where the real terminal is visible: messages go to
         # sys.stdout so the student sees «пул недоступен …» / «собираю локально» before a long
@@ -987,7 +1056,7 @@ class PoolTUI(App):
                 clock=_now_iso)
         with self.suspend(), self.downloads_paused():
             self._task_frame_start(row)
-            cmd_pool_run(self.env, row.ref, io)
+            cmd_pool_run(self.env, row.ref, io, update=update)
         # Textual's alt-screen buffer resumes on __exit__ — TUI is instantly back
         self._reload_catalog()
 
@@ -1017,6 +1086,11 @@ class PoolTUI(App):
         self._flash("\n".join(buf).strip() or "готово")
         self._reload_catalog()
 
+
+# Editing a course (hide, move, open blocks, moderate) is the web's job on a pool with courses:
+# the client keeps solving, searching and running (user 2026-10-23: «остальное всё только через веб»).
+_WEB_ONLY = frozenset({"toggle_hidden", "toggle_block", "move", "approve", "reject", "delete_task",
+                       "toggle_rejected"})
 
 # The catalog's own keys (not Textual's tab / quit): off while signed out (spec 2026-10-16).
 _CATALOG_ACTIONS = frozenset(

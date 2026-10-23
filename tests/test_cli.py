@@ -660,3 +660,37 @@ def test_the_goal_comes_back_after_a_theory_dose(monkeypatch, dose, expected):
     monkeypatch.setattr(cli, "_announce_stage", lambda _s, _io: writes.append("<announce>"))
     cli._render_observe(session, "cat x", "", None, None, io)  # noqa: SLF001
     assert writes == expected
+
+
+@pytest.mark.tier1
+def test_readme_shows_the_theory_then_the_last_word_then_the_task(monkeypatch):
+    """User 2026-10-23: readme -- not only the theory but the last insert about the task and the task."""
+    writes: list[str] = []
+    io = cli.Io(read=lambda _p: None, write=writes.append, clock=lambda: "t")
+    session = SimpleNamespace(
+        progress=object(), meta=SimpleNamespace(stages=[SimpleNamespace(message="goal 0")], intro=()),
+        replay_theory=lambda: writes.append("<theory>"), replay_said=lambda: writes.append("<said>"))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: 0)
+    cli._render_readme(session, io)  # noqa: SLF001
+    assert writes[:2] == ["<theory>", "<said>"]
+    assert "ЗАДАНИЕ" in writes[2] and "goal 0" in writes[2]
+
+
+@pytest.mark.tier1
+def test_a_task_with_a_local_copy_is_not_updated_without_a_yes(tmp_path):
+    """User 2026-10-22 (TODO): new versions of course tasks download only after «скачать?» -- yes."""
+    calls: list[str] = []
+
+    class Pool:
+        def pull_many(self, _refs: list, _store: object, **_kw: object) -> None:
+            calls.append("image")
+
+        def pull_task(self, _ref: str, _tdir: object, **_kw: object) -> None:
+            calls.append("task")
+
+    (tmp_path / "task").mkdir()
+    store = SimpleNamespace(exists=lambda _r: True, get=lambda _r: SimpleNamespace(layer=tmp_path / "layer"))
+    cli._fetch_pool_task(Pool(), Pool(), "", "a/b:1", store, "sha256:new", update=False)  # noqa: SLF001
+    assert calls == []                                       # the copy here runs as it is
+    cli._fetch_pool_task(Pool(), Pool(), "", "a/b:1", store, "sha256:new", update=True)  # noqa: SLF001
+    assert calls == ["image", "task"]

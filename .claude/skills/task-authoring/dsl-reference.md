@@ -211,7 +211,7 @@ hint idle 240  say "Долгая пауза. Перечитай задание: 
 ```bash
 cd content/tasks/<id> && hashpass build Taskfile      # собрать (деривация в nspawn; apt-задания — минуты)
 hashpass run <id>:1                                    # живая консоль студента (exit — выйти)
-hashpass images                                      # что собрано
+hashpass search <id>                                 # что собрано здесь и что есть на пуле
 python3 -m pytest tests/content/test_bundled_taskfiles_parse.py -q   # все Taskfile парсятся, ссылки на файлы целы
 content/tasks/deploy.sh --dry                          # собрать ВСЕ задания без пуша
 hashpass push base                                   # базовый образ этого runtime на пул

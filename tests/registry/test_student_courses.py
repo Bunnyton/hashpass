@@ -113,6 +113,8 @@ def test_search_courses_from_the_terminal_and_add_by_name(pool: _Courses, tmp_pa
     text = "".join(said)
     assert "bob/git-basics" in text and "Основы Git" in text and "hashpass add bob/git-basics" in text
     assert "bob/linux" not in text                                    # not matching «git»
+    # user 2026-10-23: tasks and images too -- on the pool and here -- each with how to run it
+    assert "Задания на пуле" in text and "hashpass run bob/git-init:1" in text
     said.clear()
     assert cli.cmd_course_add(env, "bob/git-basics", io) == 0         # a name is enough on this pool
     assert my_courses.current(env.root, pool.url) == "bob/git-basics"
@@ -152,3 +154,48 @@ def test_an_older_version_solved_after_the_update_still_counts(pool: _Courses, t
     assert client.catalog(token=tok)[0]["solved_n"] == 1
     assert client.submit("bob/git-init:1", "sha256:" + "0" * 64, passed=True,
                          token=pool.tok["max"])["status"] != "passed"   # a foreign digest is not
+
+
+@pytest.mark.tier2
+def test_a_task_passed_outside_the_course_counts_there_marked_so(pool: _Courses, tmp_path: Path) -> None:
+    """Count a pass outside the course in it, marked so (user 2026-10-23: «пишется, что пройден не в курсе»)."""
+    _env(tmp_path, pool)
+    tok = pool.tok["kid"]
+    use_course(pool.url, None)
+    free = RemoteRegistry(pool.url, token=tok)
+    v2 = RepoIndex(pool.r.store.root / ".repos", "bob/git-init").get("1", 2).task_digest
+    assert free.submit("bob/git-init:1", "sha256:" + "0" * 64, passed=True, token=tok,
+                       free=True)["status"] != "passed"                 # a foreign digest is not
+    assert free.submit("bob/git-init:1", v2, passed=True, token=tok, free=True)["status"] == "passed"
+    rec = free.progress(token=tok)["kid"]["bob/git-init:1"]
+    assert (rec["status"], rec.get("outside"), rec.get("course"), rec["n"]) == ("passed", True, None, 2)
+    invite = pool.call("GET", "/courses/bob/linux", "bob")[1]["invite"]
+    assert pool.call("POST", "/courses/bob/linux/join", "kid", {"invite": invite})[0] == 200  # noqa: PLR2004
+    use_course(pool.url, "bob/linux")
+    in_course = RemoteRegistry(pool.url, token=tok)
+    [row] = in_course.catalog(token=tok)
+    assert (row["solved_n"], row["outside"]) == (2, True)
+    from tests.registry.test_course_web import _browser, _page  # noqa: PLC0415
+    html = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
+    assert "решено не в курсе" in html
+    page = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux/u/kid")[1]
+    assert "не в курсе" in page
+
+
+@pytest.mark.tier2
+def test_hashpass_run_outside_a_course_reports_the_pass_to_the_profile(pool: _Courses, tmp_path: Path) -> None:
+    """`hashpass run <ref>` not from the current course: no course credit, but a free one."""
+    env = _env(tmp_path, pool)
+    use_course(pool.url, None)
+    store = ImageStore(env.images)
+    client = RemoteRegistry(pool.url, token=pool.tok["kid"])
+    client.pull("bob/git-init:1", store)
+    client.pull_task("bob/git-init:1", store.get("bob/git-init:1").layer.parent / "task", token=pool.tok["kid"])
+    said: list[str] = []
+    io = cli.Io(read=lambda _p: "", write=said.append, clock=lambda: "")
+    report = cli._free_credit(env, "bob/git-init:1", store, io)  # noqa: SLF001
+    assert report is not None
+    report(True, [])  # noqa: FBT003
+    rec = client.progress(token=pool.tok["kid"])["kid"]["bob/git-init:1"]
+    assert (rec["status"], rec["outside"]) == ("passed", True)
+    assert "профиль" in "".join(said)

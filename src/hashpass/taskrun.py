@@ -448,6 +448,20 @@ def theory_actions(meta: TaskMeta, *, stage: int | None,
     return out
 
 
+def task_goal(meta: TaskMeta, stage: int | None) -> str:
+    """
+    Return the task as it stands for `stage` -- what `readme` repeats after the theory.
+
+    A step without its own text continues the one before it; a task whose goal is said before
+    the steps (one-step tasks: `say` + `read brief.md`) has that `say` as its goal.
+    """
+    last = len(meta.stages) - 1 if stage is None else stage
+    for sm in reversed(meta.stages[:last + 1]):
+        if sm.message:
+            return sm.message
+    return "\n".join(a.text for a in meta.intro if isinstance(a, SayAction))
+
+
 class TaskSession:
     """One student's live task run: a /hp-free student container + per-session hidden /hp."""
 
@@ -473,6 +487,7 @@ class TaskSession:
         self._last_progress_ts: str | None = None
         self._cwd: str | None = None    # where the student's last command ran (console runtime >= 43)
         self.pause: Callable[[], bool | None] = _no_pause   # pager pause (True = skip the rest)
+        self.last_said = ""          # the last `say` heard (intro, step, hint) -- `readme` repeats it
 
     def _record(self, command: str) -> None:
         """
@@ -507,9 +522,23 @@ class TaskSession:
 
     def _perform_all(self, actions: tuple[Action, ...], ctx: HandlerContext) -> list[str]:
         """Render a list of delegated actions; collect the text each produced."""
-        return [perform_action(a, ctx, render=self.render, runner=self.student,
-                               hp_dir=self.hp_dir, workdir=self.meta.settings.workdir,
-                               pause=self.pause) for a in actions]
+        out = [perform_action(a, ctx, render=self.render, runner=self.student,
+                              hp_dir=self.hp_dir, workdir=self.meta.settings.workdir,
+                              pause=self.pause) for a in actions]
+        self._remember_said(actions)
+        return out
+
+    def _remember_said(self, actions: tuple[Action, ...] | list[Action]) -> None:
+        """Keep the last `say` the student heard -- `readme` repeats it beside the task."""
+        said = [a.text for a in actions if isinstance(a, SayAction)]
+        if said:
+            self.last_said = "\n".join(said)
+
+    def replay_said(self) -> None:
+        """`readme`: the last word about the task, whole (it is no new typing, Ctrl+C cuts nothing)."""
+        goal = task_goal(self.meta, current_stage(self.progress))
+        if self.last_said and self.last_said.strip() != goal.strip():
+            self.render.render("\n" + _narrate(self.last_said, wrap=True), mode="instant")
 
     def enter(self) -> list[str]:
         """Fire session `voice hello` (first call) then the current stage's `on_enter`; return their text."""
@@ -552,8 +581,7 @@ class TaskSession:
         """`readme` in the console: show the theory given so far once more (paged, no typing)."""
         acts = theory_actions(self.meta, stage=current_stage(self.progress), fired=self._fired)
         if not acts:
-            self.render.render(_narrate("Теории у этого задания нет — всё сказано в цели."),
-                               mode="instant")
+            self.render.render(_narrate("Теории у этого задания нет."), mode="instant")
             return
         self._perform_all(acts, self._ctx("", 0, current_stage(self.progress) or 0))
 
@@ -640,6 +668,7 @@ class TaskSession:
             if action is not None:
                 hint = perform_action(action, ctx, render=self.render, runner=self.student,
                                       hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
+                self._remember_said([action])
                 dose = isinstance(action, ReadAction)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint, dose=dose)
 
@@ -679,6 +708,7 @@ class TaskSession:
             if action is not None:
                 hint = perform_action(action, ctx, render=self.render, runner=self.student,
                                       hp_dir=self.hp_dir, workdir=self.meta.settings.workdir)
+                self._remember_said([action])
                 dose = isinstance(action, ReadAction)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint, dose=dose)
 

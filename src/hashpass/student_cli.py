@@ -42,8 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_sol.add_argument("task", help="номер из каталога (напр. 1) или ref (имя:версия)")
     p_add = sub.add_parser("add", help="добавить курс: ссылка со страницы курса или владелец/курс")
     p_add.add_argument("link", help="ссылка вида https://<пул>/c/<владелец>/<курс>")
-    p_search = sub.add_parser("search", help="найти курсы на пуле: hashpass search git")
-    p_search.add_argument("query", nargs="?", default="", help="что искать (пусто — все курсы)")
+    p_search = sub.add_parser("search", help="найти курсы, задания и образы — на пуле и здесь: hashpass search git")
+    p_search.add_argument("query", nargs="?", default="", help="что искать (пусто — всё)")
     p_courses = sub.add_parser("courses", help="мои курсы; с именем — сделать курс текущим")
     p_courses.add_argument("course", nargs="?", help="владелец/курс")
     p_cfg = sub.add_parser("config", help="показать/задать настройки (адрес пула)")
@@ -51,6 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_cfg_pool = cfg_sub.add_parser("pool", help="показать или задать адрес пула")
     p_cfg_pool.add_argument("url", nargs="?", help="новый адрес пула (без него — показать текущий)")
     add_author_commands(sub)
+    # argparse lists a SUPPRESSed sub-command as «==SUPPRESS==» -- drop it from the help instead
+    sub._choices_actions = [a for a in sub._choices_actions if a.help != argparse.SUPPRESS]  # noqa: SLF001
     return parser
 
 

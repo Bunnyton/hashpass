@@ -69,6 +69,21 @@ def test_cmd_build_with_a_pool_configured_hints_push_and_never_pushes_locally(tm
     io = cli.Io(read=lambda _p: None, write=out.append, clock=lambda: "")
     assert cli.cmd_build(env, str(imf), io=io) == 0
     assert any("hashpass push bunnyton/tool:1" in s for s in out)
+    assert any("hashpass run bunnyton/tool:1" in s for s in out)       # runs here at once (TODO 2026-10-23)
+
+
+@pytest.mark.tier1
+def test_cmd_build_takes_the_folder_of_a_taskfile(tmp_path, monkeypatch):
+    _fake_build_pipeline(monkeypatch, tmp_path)
+    monkeypatch.setenv("HASHPASS_POOL", "http://pool.example:8080")
+    monkeypatch.setattr(cli, "_author_identity", lambda _env, _io: "bunnyton")
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
+    (tmp_path / "lab").mkdir()
+    (tmp_path / "lab" / "Taskfile").write_text(_IMAGE, encoding="utf-8")
+    out: list[str] = []
+    assert cli.cmd_build(env, str(tmp_path / "lab"), io=cli.Io(read=lambda _p: None, write=out.append,
+                                                                 clock=lambda: "")) == 0
+    assert any("bunnyton/tool:1" in s for s in out)
 
 
 @pytest.mark.tier1

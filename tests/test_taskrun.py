@@ -560,3 +560,21 @@ def test_output_checks_compare_files_not_spellings():
     assert got_checks.canonical[OUTPUT_KEY].text == got_out
     plain = StageChecks(canonical={"/home/student/f": FileState("file", "x")})
     assert normalize_output_checks(plain, "out", cwd="/", workdir="/", exists=fs.__contains__) == (plain, "out")
+
+
+@pytest.mark.tier1
+def test_the_task_readme_repeats_is_the_steps_goal_else_the_words_before_the_steps():
+    """A step without its own text continues the one before; a one-step task's goal is its `say`."""
+    from hashpass.taskrun import task_goal  # noqa: PLC0415
+    from hashpass.taskstore import StageMeta, TaskMeta  # noqa: PLC0415
+
+    def stage(message: str) -> StageMeta:
+        return StageMeta(message=message, neutral=(), check=None, on_enter=(), on_pass=(),
+                         acceptance="command", hints=())
+
+    meta = TaskMeta(image_ref="t:1", intro=(SayAction("Спроси у системы, кто ты?"),),
+                    stages=(stage(""), stage("Сделай файл"), stage("")))
+    assert task_goal(meta, 0) == "Спроси у системы, кто ты?"
+    assert task_goal(meta, 1) == "Сделай файл"
+    assert task_goal(meta, 2) == "Сделай файл"
+    assert task_goal(meta, None) == "Сделай файл"

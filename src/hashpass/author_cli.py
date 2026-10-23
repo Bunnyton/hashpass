@@ -14,9 +14,10 @@ POOL_HELP = "адрес пула (по умолчанию — сохранённ
 
 def add_author_commands(sub: argparse._SubParsersAction) -> None:
     """Add build/push/clone/serve/... to the `hashpass` parser."""
-    sub.add_parser("work", help="рабочий экран автора: локальные образы и пул")
-    p_build = sub.add_parser("build", help="собрать образ/задание из Taskfile")
-    p_build.add_argument("taskfile")
+    sub.add_parser("work", help=argparse.SUPPRESS)                   # the list of everything (also `/` in hashpass)
+    p_build = sub.add_parser("build", help="собрать из Taskfile: со stage — задание, без — образ; "
+                                           "сразу можно запустить: hashpass run <имя>")
+    p_build.add_argument("taskfile", help="Taskfile или папка с ним")
     p_build.add_argument("-t", "--tag", help="имя[:тег] (переопределяет строку image в Taskfile)")
     p_push = sub.add_parser("push", help="отправить новую версию образа/задания на пул "
                                          "(без прав на чужой образ — предложение владельцу)")
@@ -27,7 +28,7 @@ def add_author_commands(sub: argparse._SubParsersAction) -> None:
     p_push.add_argument("--block", help=argparse.SUPPRESS)
     p_push.add_argument("--force", action="store_true",
                         help="отправить даже без изменений (студенты скачают заново)")
-    p_clone = sub.add_parser("clone", help="скачать исходники задания с пула в папку")
+    p_clone = sub.add_parser("clone", help="скачать файлы задания с пула в папку — чтобы править")
     p_clone.add_argument("ref", help="задание на пуле, например alice/lab:1")
     p_clone.add_argument("dest", nargs="?", help="куда (по умолчанию ./<имя задания>)")
     p_clone.add_argument("--registry", help=POOL_HELP)
@@ -35,20 +36,21 @@ def add_author_commands(sub: argparse._SubParsersAction) -> None:
     p_source.add_argument("ref")
     p_source.add_argument("dest", nargs="?")
     p_source.add_argument("--registry")
-    p_tag = sub.add_parser("tag", help="навесить тег на свою версию на пуле")
+    # tags, forks, removing a version, visibility, people -- on the image's web page now
+    p_tag = sub.add_parser("tag", help=argparse.SUPPRESS)
     p_tag.add_argument("src", help="версия x:1_v3 или тег x:1 (= последняя)")
     p_tag.add_argument("to", help="новый тег, например stable")
     p_tag.add_argument("--registry", help=POOL_HELP)
-    p_rm = sub.add_parser("rm", help="удалить версию с пула (x:1_v3) или локальную копию (--local)")
+    p_rm = sub.add_parser("rm", help=argparse.SUPPRESS)                # --local still removes a copy here
     p_rm.add_argument("ref")
     p_rm.add_argument("--local", action="store_true", help="удалить только с этой машины")
     p_rm.add_argument("--registry", help=POOL_HELP)
-    p_fork = sub.add_parser("fork", help="форкнуть чужое задание в своё пространство имён")
+    p_fork = sub.add_parser("fork", help=argparse.SUPPRESS)
     p_fork.add_argument("src", help="версия или тег, например alice/lab:1")
     p_fork.add_argument("name", nargs="?", help="имя форка (по умолчанию — как у исходного)")
     p_fork.add_argument("--registry", help=POOL_HELP)
-    sub.add_parser("images", help="образы и задания на этой машине")
-    p_remote = sub.add_parser("remote", help="образы и задания на пуле")
+    sub.add_parser("images", help=argparse.SUPPRESS)                 # `hashpass search` / `/` in hashpass
+    p_remote = sub.add_parser("remote", help=argparse.SUPPRESS)
     p_remote.add_argument("registry", nargs="?", help=POOL_HELP)
     p_serve = sub.add_parser("serve", help="запустить пул (реестр + веб)")
     p_serve.add_argument("--host", help="адрес привязки (по умолчанию 127.0.0.1 или $HASHPASS_REGISTRY; "
@@ -60,8 +62,7 @@ def add_author_commands(sub: argparse._SubParsersAction) -> None:
                          help="HTTPS с самоподписанным сертификатом (создастся при первом запуске)")
     p_serve.add_argument("--reset-admin", action="store_true",
                          help="сгенерировать новый пароль администратора")
-    p_mig = sub.add_parser("migrate-courses", help="перевести этот пул на версии и курсы "
-                                                   "(один раз, на машине пула)")
+    p_mig = sub.add_parser("migrate-courses", help=argparse.SUPPRESS)  # once, on an old pool's machine
     p_mig.add_argument("--owner", default="bunnyton", help="владелец курса по умолчанию (администратор)")
     p_cat = sub.add_parser("catalog", help=argparse.SUPPRESS)        # a pool not on courses only
     p_cat.add_argument("action", choices=["layout"])
@@ -69,12 +70,12 @@ def add_author_commands(sub: argparse._SubParsersAction) -> None:
     p_cat.add_argument("--registry")
 
 
-def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # noqa: PLR0911
+def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # noqa: PLR0911, C901
     """Run an author/pool command; None -- not one of them."""
     command = args.command
     if command == "work":
-        from hashengine.tui import run_engine_tui  # noqa: PLC0415
-        return run_engine_tui(env)
+        from hashpass.library import run_library  # noqa: PLC0415
+        return run_library(env)
     if command == "build":
         return cli.cmd_build(env, args.taskfile, args.tag)
     if command == "push":
@@ -93,13 +94,30 @@ def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # n
         return cli.cmd_catalog_layout(env, args.specs, args.registry)
     if command == "images":
         return cli.cmd_images(env)
-    simple = {
-        "tag": lambda: cli.cmd_tag(env, args.src, args.to, args.registry),
-        "rm": lambda: cli.cmd_rm(env, args.ref, args.registry, local=args.local),
-        "fork": lambda: cli.cmd_fork(env, args.src, args.name, args.registry),
-        "migrate-courses": lambda: cli.cmd_migrate_courses(env, args.owner),
-    }
-    return simple[command]() if command in simple else None
+    if command == "rm" and args.local:
+        return cli.cmd_rm(env, args.ref, args.registry, local=True)
+    if command in ("tag", "fork", "rm"):
+        return _on_the_web(env, command, args)
+    if command == "migrate-courses":
+        return cli.cmd_migrate_courses(env, args.owner)
+    return None
+
+
+def _on_the_web(env: cli.Home, command: str, args: argparse.Namespace) -> int:
+    """
+    Point a tag / fork / removal of a pool version to the web page doing it (user 2026-10-23).
+
+    The client builds and pushes; the rest of the work with an image is on its page.
+    """
+    ref = args.src if command in ("tag", "fork") else args.ref
+    url = (args.registry or cli._pool_url(env) or "<адрес пула>").rstrip("/")   # noqa: SLF001
+    if command == "rm":
+        page, what = f"{url}/web/versions/{ref.partition(':')[0]}", "удалить версию"
+    else:
+        page, what = f"{url}/web/image/{ref}", {"tag": "навесить тег", "fork": "форкнуть"}[command]
+    sys.stdout.write(f"{what} — теперь на странице образа в вебе:\n  {page}\n"
+                     "\x1b[2mв терминале остались build и push (и clone, pull, run)\x1b[0m\n")
+    return 1
 
 
 def _say_no_more_flags(args: argparse.Namespace) -> None:

@@ -539,3 +539,22 @@ def test_the_plain_task_list_says_which_version_was_solved() -> None:
     from hashpass.cli import _status_badge  # noqa: PLC0415
     assert "решалась версия 1" in _status_badge({"server": "passed", "n": 2, "solved_n": 1})
     assert "решалась" not in _status_badge({"server": "passed", "n": 2, "solved_n": 2})
+
+
+def test_a_pass_outside_the_course_is_marked_in_it() -> None:
+    """User 2026-10-23: passed outside the course -- passed in it too, «пройдено не в курсе»."""
+    from hashpass.cli import _status_badge  # noqa: PLC0415
+    r = TaskRow(ref="a:1", number=1, block="B", available=True, digest="", n=3, solved_n=3, outside=True)
+    r.server = "passed"
+    assert "зачтено (пройдено не в курсе)" in r.status_label()
+    assert "пройдено не в курсе" in _status_badge({"server": "passed", "n": 3, "solved_n": 3, "outside": True})
+
+
+def test_a_new_version_waits_for_a_yes() -> None:
+    """A task with an older copy here says so and is not queued by itself (TODO: спрашивать «скачать?»)."""
+    from hashpass.tui import updates_to_ask  # noqa: PLC0415
+    old = TaskRow(ref="a:1", number=1, block="B", available=True, digest="d2", n=2, state="обновление")
+    new = TaskRow(ref="b:1", number=2, block="B", available=True, digest="d1", n=1, state="ожидает")
+    assert "есть версия 2" in old.download_word()
+    assert updates_to_ask([old, new], asked=set()) == [old]
+    assert updates_to_ask([old, new], asked={("a:1", "d2")}) == []

@@ -89,3 +89,29 @@ def test_one_binary_has_every_command():
     for cmd in (["work"], ["build", "T"], ["serve"], ["tag", "x:1", "s"], ["rm", "x:1_v1"], ["fork", "a/b:1"],
                 ["images"], ["remote"], ["migrate-courses"], ["search", "git"], ["add", "a/b"]):
         assert p.parse_args(cmd).command == cmd[0]
+
+
+@pytest.mark.tier1
+def test_the_help_names_only_what_the_client_does(capsys):
+    """User 2026-10-23: from the authoring commands only build and push stay; the rest is the web."""
+    with pytest.raises(SystemExit):
+        student_cli.build_parser().parse_args(["--help"])
+    shown = capsys.readouterr().out
+    assert "SUPPRESS" not in shown
+    for visible in ("build", "push", "clone", "pull", "run", "search", "add"):
+        assert f"    {visible} " in shown
+    for hidden in ("tag", "rm", "fork", "images", "remote", "work", "source", "catalog", "migrate-courses"):
+        assert f"    {hidden} " not in shown
+
+
+@pytest.mark.tier1
+def test_tag_fork_and_a_pool_rm_point_to_the_web(tmp_path, monkeypatch, capsys):
+    from hashpass import author_cli, cli  # noqa: PLC0415
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path)}, default_home=tmp_path)
+    monkeypatch.setattr(cli, "_pool_url", lambda _e, *_a: "https://pool.example")
+    p = student_cli.build_parser()
+    for argv, where in ((["tag", "bob/lab:1_v2", "stable"], "https://pool.example/web/image/bob/lab:1_v2"),
+                        (["fork", "bob/lab:1"], "https://pool.example/web/image/bob/lab:1"),
+                        (["rm", "bob/lab:1_v2"], "https://pool.example/web/versions/bob/lab")):
+        assert author_cli.dispatch_author(env, p.parse_args(argv)) == 1
+        assert where in capsys.readouterr().out
