@@ -25,7 +25,10 @@ stage
   solve:
     sudo chgrp student /home/student/.secret/rock.txt
     cat /home/student/.secret/rock.txt
-  observe output
+  # прочитал = подпись под артом на экране. Сравнение всего вывода не годится: арт из `.` и `..`,
+  # а они читаются как пути от текущего каталога — `cat rock.txt` из ~/.secret не совпадал с
+  # чтением из ~ (пользователь, 2026-10-23)
+  accept output "Rock never dies"
   allow chgrp cat
   neutral ls cd echo pwd
   block cat match "^sudo " say "Команда запрещена"
