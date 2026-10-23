@@ -202,17 +202,17 @@ def _derive_stage(factory: Callable[[], NspawnRunner], deriv_task: TaskCode,  # 
     canonical = canonicalize(observations)
     for key in observations[0].keys() - canonical.keys():      # differs run to run: time, pid, random
         _report(progress, f"    ! {key}: меняется от прогона к прогону — не проверяется")
+    if not keep_output:
+        # `observe <path>` grades FILES only. Drop the captured stdout: live grading compares
+        # against a noisy terminal recording, never the clean solve stdout, so keeping OUTPUT_KEY
+        # here would make every filesystem stage fail live. `observe output` keeps it (the signal).
+        canonical.pop(OUTPUT_KEY, None)
     now = datetime.now().astimezone()
     for key, state in canonical.items():
         if state.text and (line := build_stamp(state.text, now)):
             msg = (f"stage {stage_index}: в эталоне {key} дата сборки — «{line.strip()}»; "
                    "завтра он не совпадёт. Проверяй то, что от времени не зависит")
             raise ValueError(msg)
-    if not keep_output:
-        # `observe <path>` grades FILES only. Drop the captured stdout: live grading compares
-        # against a noisy terminal recording, never the clean solve stdout, so keeping OUTPUT_KEY
-        # here would make every filesystem stage fail live. `observe output` keeps it (the signal).
-        canonical.pop(OUTPUT_KEY, None)
     if not _has_signal(canonical):
         msg = f"stage {stage_index}: no stable discriminating signal (vacuous canonical)"
         raise ValueError(msg)

@@ -243,3 +243,16 @@ def test_derive_reports_paths_that_change_between_runs(monkeypatch):
     checks = tb._derive_stage(_Runner, object(), 0, (), 3, progress=said.append)  # noqa: SLF001
     assert "home/student/stamp.txt" not in checks.canonical
     assert any("home/student/stamp.txt" in s and "не проверяется" in s for s in said)
+
+
+@pytest.mark.tier1
+def test_derive_ignores_the_date_in_output_it_does_not_grade(monkeypatch):
+    # links stage 1: `ls -l` in solve shows today's date, but `observe <files>` drops the output --
+    # the date there is never compared, so the build must not fail on it.
+    from datetime import datetime  # noqa: PLC0415
+    now = datetime.now().astimezone()
+    listing = f"drwxrwxr-x 3 student student 4096 {now:%b} {now.day:>2} {now:%H:%M} dir\n"
+    monkeypatch.setattr(tb, "run_stage", lambda *_a, **_k: {
+        "<output>": FileState("file", listing), "home/student/a": FileState("file", "x")})
+    checks = tb._derive_stage(_Runner, object(), 0, (), 3)  # noqa: SLF001
+    assert "<output>" not in checks.canonical
