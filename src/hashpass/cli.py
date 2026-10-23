@@ -1790,32 +1790,33 @@ def _built_on_base(store: ImageStore, ref: str) -> str | None:
     return base_ref()
 
 
-def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0913
-             publish: bool = False, force: bool = False, block: str | None = None,
-             io: Io | None = None, message: str = "") -> int:
+def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR0913
+             force: bool = False, io: Io | None = None, message: str = "") -> int:
     """
-    Push a ref (+ its `from` closure); with `publish`, also add it to the catalog.
+    Push one's own build of a ref (+ its `from` closure) as a new version.
 
-    A newly published task lands HIDDEN (the author tests it first, then shows it), in `block`
-    when given (created if missing); a re-publish keeps its place and state.
+    A Taskfile makes it a task (its `task/` goes along); where it sits in a course is set in
+    the web (user 2026-10-23: the client keeps only build and push). A copy `run`/`pull` laid
+    over the tag is not sent -- the pool already has it.
 
     Resolves the registry (explicit → saved) and logs in inline if there is no cached token.
     `force=True` re-uploads even layers the server already holds (needed to overwrite a
     contaminated server-side blob that HEAD would otherwise dedup-skip).
     """
     io = io or _default_io()
-    store = ImageStore(env.images)
-    if not store.exists(ref):                 # before any login prompt: nothing to push
-        raise RuntimeError(_no_such_image(store, ref))
+    pulled = ImageStore(env.images)
+    if not pulled.exists(ref):                # before any login prompt: nothing to push
+        raise RuntimeError(_no_such_image(pulled, ref))
     check_tag(split_ref(ref)[1])
+    store = pulled.builds_only()              # one's own build, not a copy `run`/`pull` laid over it
+    if not store.exists(ref):
+        msg = (f"{ref} здесь — только скачанная с пула версия ({human_ref(pulled.alias_of(ref) or ref)}); "
+               f"отправить можно свою сборку: hashpass build <Taskfile>")
+        raise RuntimeError(msg)
     tdir = task_dir(ref, store)
-    if publish and not tdir.exists():
-        msg = f"{ref} — не задание (нет артефактов task/); публиковать нечего"
-        raise ValueError(msg)
     url = _ensure_registry_login(env, registry, io)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     _push_call(client.push, store, ref, force=force, task_dir=tdir if tdir.exists() else None,
-               publish=publish, block=block,
                extras=lambda staging: _attach_taskfile(client, store, ref, io, staging),
                base=_built_on_base(store, ref), message=message, origin=_push_origin(store, ref))
     for done in client.last_push:
@@ -1828,11 +1829,6 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,   # noqa: PLR0
             sys.stdout.write(f"без изменений: {human_ref(done['ref'])} уже на пуле\n")
         else:
             sys.stdout.write(f"отправлено {human_ref(done['ref'])}\n")
-    if publish and not all(done["unchanged"] for done in client.last_push):
-        where = f" (блок «{block}»)" if block else ""
-        sys.stdout.write(f"опубликовано в каталог{where}: {ref} — студенты увидят эту версию, когда "
-                         "её одобрит администратор (новое задание ещё и скрыто, пока вы его не "
-                         "покажете: x в hashpass)\n")
     return 0
 
 
@@ -1861,7 +1857,7 @@ def cmd_push_base(env: Home, registry: str | None = None, *, force: bool = False
             io.write(f"\x1b[33mна пуле база {ref}, загруженная с другой машины — оставляю; "
                      f"перезаписать: hashpass push base --force\x1b[0m\n")
             return 0
-    return cmd_push(env, ref, url, publish=False, force=True, io=io)
+    return cmd_push(env, ref, url, force=True, io=io)
 
 
 def parse_layout_specs(specs: list[str], owner: str) -> list[dict[str, object]]:

@@ -128,3 +128,49 @@ def test_a_clone_goes_back_as_a_proposal_or_as_a_version(registry, tmp_path, mon
     cli.cmd_push(kid, "kid/lab:1", registry.base_url, message="ещё лучше")
     rev = RepoIndex(registry.store.root / ".repos", "bob/lab").latest("1")
     assert (rev.n, rev.by, rev.message) == (2, "kid", "ещё лучше")
+
+
+@pytest.mark.tier2
+def test_push_after_run_sends_ones_own_build_not_the_pulled_copy(registry, tmp_path, monkeypatch, capsys):
+    """2026-10-23: `run` pulled x:1_v2 over the build x:1; `push x:1` sent the pulled copy -> 400."""
+    env = _login(registry, tmp_path, monkeypatch, "bob", "bob")
+    local = ImageStore(env.images)
+    _seed(local, tmp_path, "bob/lab", "one")
+    assert cli.cmd_push(env, "bob/lab:1", registry.base_url) == 0
+    _seed(local, tmp_path, "bob/lab", "two")
+    assert cli.cmd_push(env, "bob/lab:1", registry.base_url) == 0
+    assert cli.cmd_pull(env, "bob/lab:1", registry.base_url) == 0     # what `run` does
+    assert local.alias_of("bob/lab:1") == "bob/lab:1_v2"
+    capsys.readouterr()
+    assert cli.cmd_push(env, "bob/lab:1", registry.base_url, force=True) == 0
+    assert "без изменений: bob/lab:1, версия 2" in capsys.readouterr().out   # the build is v2: no 400
+    assert local.alias_of("bob/lab:1") == "bob/lab:1_v2"                # `run` keeps its copy
+    _seed(local, tmp_path, "bob/lab", "three")
+    local.set_alias("bob/lab:1", "bob/lab:1_v2")                         # pulled again over the new build
+    assert cli.cmd_push(env, "bob/lab:1", registry.base_url) == 0
+    assert "отправлено bob/lab:1, версия 3" in capsys.readouterr().out
+
+
+@pytest.mark.tier2
+def test_push_of_a_pulled_copy_only_asks_for_a_build(registry, tmp_path, monkeypatch):
+    env = _login(registry, tmp_path, monkeypatch, "bob", "bob")
+    _seed(ImageStore(env.images), tmp_path, "bob/lab", "one")
+    assert cli.cmd_push(env, "bob/lab:1", registry.base_url) == 0
+    other = _login(registry, tmp_path, monkeypatch, "ann", "ann")
+    assert cli.cmd_pull(other, "bob/lab:1", registry.base_url) == 0
+    with pytest.raises(RuntimeError, match="hashpass build"):
+        cli.cmd_push(other, "bob/lab:1", registry.base_url)
+
+
+@pytest.mark.tier2
+def test_task_and_block_flags_are_no_longer_needed(registry, tmp_path, monkeypatch, capsys):
+    """User 2026-10-23: a Taskfile makes it a task; where it goes in a course is the web's job."""
+    from hashpass.student_cli import main  # noqa: PLC0415
+    env = _login(registry, tmp_path, monkeypatch, "bob", "bob")
+    _seed(ImageStore(env.images), tmp_path, "bob/lab", "one")
+    monkeypatch.setenv("HASHPASS_HOME", str(env.root))
+    monkeypatch.setenv("HASHPASS_NO_UPDATE", "1")
+    assert main(["push", "bob/lab:1", registry.base_url, "--task", "--block", "Файлы"]) == 0
+    out, err = capsys.readouterr()
+    assert "отправлено bob/lab:1, версия 1" in out and "каталог" not in out
+    assert "больше не нужны" in err

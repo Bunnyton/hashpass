@@ -150,6 +150,13 @@ class ImageStore:
 
         """
         self._root = Path(root)
+        self._follow_aliases = True
+
+    def builds_only(self) -> "ImageStore":
+        """Return this store where a tag means one's own build, never a revision pulled over it (push)."""
+        view = ImageStore(self._root)
+        view._follow_aliases = False
+        return view
 
     @property
     def root(self) -> Path:
@@ -197,7 +204,7 @@ class ImageStore:
         The last action wins: a pull sets the alias (over a local build of the same tag), a
         build or save of the tag drops it again.
         """
-        target = self._aliases().get(f"{name}:{version}")
+        target = self._aliases().get(f"{name}:{version}") if self._follow_aliases else None
         if target:
             t_name, t_version = _split_ref(target)
             if (self._dir(t_name, t_version) / "meta.json").exists():

@@ -23,7 +23,7 @@ def add_author_commands(sub: argparse._SubParsersAction) -> None:
     p_push.add_argument("ref", help="образ/задание, или `base` — базовый образ этого runtime")
     p_push.add_argument("registry", nargs="?", help=POOL_HELP)
     p_push.add_argument("-m", "--message", default="", help="что поменялось в этой версии")
-    p_push.add_argument("--task", action="store_true", help=argparse.SUPPRESS)   # old catalog publish
+    p_push.add_argument("--task", action="store_true", help=argparse.SUPPRESS)   # no longer needed: ignored
     p_push.add_argument("--block", help=argparse.SUPPRESS)
     p_push.add_argument("--force", action="store_true",
                         help="отправить даже без изменений (студенты скачают заново)")
@@ -80,8 +80,8 @@ def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # n
     if command == "push":
         if args.ref == "base":
             return cli.cmd_push_base(env, args.registry, force=args.force)
-        return cli.cmd_push(env, args.ref, args.registry, publish=args.task, force=args.force,
-                            block=args.block, message=args.message)
+        _say_no_more_flags(args)
+        return cli.cmd_push(env, args.ref, args.registry, force=args.force, message=args.message)
     if command in ("clone", "source"):
         return cli.cmd_source(env, args.ref, args.dest, args.registry)
     if command == "serve":
@@ -100,6 +100,12 @@ def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # n
         "migrate-courses": lambda: cli.cmd_migrate_courses(env, args.owner),
     }
     return simple[command]() if command in simple else None
+
+
+def _say_no_more_flags(args: argparse.Namespace) -> None:
+    if args.task or args.block:
+        sys.stderr.write("\x1b[2m--task и --block больше не нужны: задание — то, что собрано из "
+                         "Taskfile, место в курсе задаётся в вебе.\x1b[0m\n")
 
 
 def say_moved(old: str) -> None:
