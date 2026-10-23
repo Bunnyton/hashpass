@@ -11,6 +11,7 @@ from urllib.parse import quote
 from flask import Flask, Response, request
 
 from hashpass.registry.access import can
+from hashpass.registry.progress_store import outside_course
 from hashpass.registry.web import _env, render_profile
 
 if TYPE_CHECKING:
@@ -126,6 +127,8 @@ class CourseWeb:
             for i, r in enumerate(refs, 1):
                 status = (progress.get(r) or {}).get("status", "")
                 mark, word = ("✓", "решено") if status == "passed" else (("◐", "начато") if status else ("·", "не начато"))
+                if status == "passed" and outside_course(progress.get(r), course.ref):
+                    word = "решено не в курсе"
                 cells.append({"n": i, "ref": r, "mark": mark, "word": word, "cls": status or "none",
                               "about": about[r]})
             rows.append({"user": student, "comment": profile.get("comment", ""),

@@ -217,14 +217,32 @@ def remove_block(course: Course, block_id: str) -> None:
     course.blocks = [b for b in course.blocks if b["id"] != block_id]
 
 
-def add_task(course: Course, repo: str, tag: str, n: int, block_id: str, *, by: str) -> dict:  # noqa: PLR0913
-    """Put task `repo:tag` (revision `n`) at the end of a block."""
+def add_task(course: Course, repo: str, tag: str, n: int, block_id: str, *, by: str,  # noqa: PLR0913
+             after: str = "") -> dict:
+    """
+    Put task `repo:tag` (revision `n`) where the person puts it (user 2026-10-23).
+
+    `after` -- "" the end of the block, "^" its start, "owner/x:tag" right after that task.
+    """
     if course.find_task(repo, tag) is not None:
         msg = f"{repo}:{tag} уже в курсе"
         raise ValueError(msg)
     task = {"repo": repo, "tag": tag, "n": int(n), "pinned": False, "hidden": False, "added_by": by}
-    _block(course, block_id)["tasks"].append(task)
+    tasks = _block(course, block_id)["tasks"]
+    refs = [f"{t['repo']}:{t['tag']}" for t in tasks]
+    if after == "^":
+        tasks.insert(0, task)
+    elif after in refs:
+        tasks.insert(refs.index(after) + 1, task)
+    else:
+        tasks.append(task)
     return task
+
+
+def parse_place(place: str) -> tuple[str, str]:
+    """Split a form's `place` -- "<block id>" or "<block id>|^" or "<block id>|owner/x:tag"."""
+    block_id, _, after = str(place).partition("|")
+    return block_id, after
 
 
 def remove_task(course: Course, repo: str, tag: str) -> bool:
@@ -293,7 +311,7 @@ def _open_proposal(course: Course, repo: str, tag: str) -> dict | None:
 
 
 def propose(course: Course, kind: str, repo: str, tag: str, n: int, block_id: str, *,  # noqa: PLR0913, PLR0917
-            by: str, comment: str, now: float) -> dict:
+            by: str, comment: str, now: float, after: str = "") -> dict:
     """Propose a change for `repo:tag` (one open per tag: a new one refreshes it); auto_accept takes it."""
     if kind not in KINDS:
         msg = f"неизвестный вид предложения: {kind}"
@@ -304,7 +322,7 @@ def propose(course: Course, kind: str, repo: str, tag: str, n: int, block_id: st
                 "state": "open", "reason": "", "decided_by": "", "decided_at": 0.0}
         course.proposals.append(prop)
     prop.update({"kind": kind, "n": int(n), "block_id": block_id, "by": by,
-                 "comment": comment[:500], "at": now})
+                 "comment": comment[:500], "at": now} | ({"after": after} if after else {}))
     if course.auto_accept:
         decide(course, prop["id"], accept=True, by="auto", now=now)
     return prop
@@ -325,7 +343,8 @@ def decide(course: Course, proposal_id: str, *, accept: bool, by: str, now: floa
             block_id = prop.get("block_id") or ""
             if not any(b["id"] == block_id for b in course.blocks):
                 block_id = course.blocks[0]["id"] if course.blocks else add_block(course, "Задания")
-            add_task(course, prop["repo"], prop["tag"], prop["n"], block_id, by=prop["by"])
+            add_task(course, prop["repo"], prop["tag"], prop["n"], block_id, by=prop["by"],
+                     after=str(prop.get("after", "")))
     prop.update({"state": "accepted" if accept else "rejected", "reason": reason[:500],
                  "decided_by": by, "decided_at": now})
     return prop

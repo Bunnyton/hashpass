@@ -1,0 +1,31 @@
+{% extends 'base.html.j2' %}
+{#- Every version of one repository, newest first -- GitHub's commit list. -#}
+{% from '_cards.html.j2' import avatar %}
+{% block main %}
+{% set home = '/web/image/' ~ ((repo ~ ':' ~ (repo_info.tags | list | first)) | ref_url) %}
+<nav class='crumb' aria-label='Путь'><a href='{{ home }}'>← {{ repo }}</a></nav>
+<h1 class='repo-title'>Версии <a class='mono' href='{{ home }}'>{{ repo }}</a></h1>
+<section id='revisions' aria-label='Версии'>
+{% for t, revs in repo_info.tags.items() %}{% set ordered = revs | sort(attribute='n') | reverse | list %}
+<h2 class='small'>тег <span class='mono'>{{ t }}</span> · {{ ordered | length | plural('версия', 'версии', 'версий') }}</h2>
+<ol class='commits card'>
+{% for r in ordered %}
+<li class='commit'>
+<div class='commit-main'>
+<a class='msg' href='/web/image/{{ (repo ~ ":" ~ t ~ "_v" ~ r.n) | ref_url }}'>{{ r.message or 'без комментария' }}</a>
+<div class='sub small'><a class='who' href='/u/{{ r.by | q }}'>{{ avatar(r.by, 'xs') }}<span class='mono'>{{ r.by }}</span></a>
+{% if r.accepted_by %} · принял <a href='/u/{{ r.accepted_by | q }}'>{{ r.accepted_by }}</a>{% endif %}
+{% if r.merged_from %} · предложение из {{ r.merged_from | ver }}{% endif %} · {{ ts(r.at) }}</div>
+</div>
+<span class='sp'></span>
+<span class='mono small dim'>{{ t }}_v{{ r.n }}</span>
+<span class='pill sm ver'>версия {{ r.n }}</span>{% if loop.first %} <span class='pill sm'>последняя</span>{% endif %}
+{% if not loop.last %}<a class='btn sm ghost' href='/web/compare/{{ repo }}?from={{ t }}_v{{ ordered[loop.index].n }}&to={{ t }}_v{{ r.n }}'>сравнить с предыдущей</a>{% endif %}
+{% if owner %}<form class='inline' data-api='DELETE /revisions/{{ repo }}/{{ t }}/{{ r.n }}' data-confirm='Удалить версию {{ r.n }} тега {{ t }}? Если она стоит в чужих курсах, удаление подождёт решения администратора.'><button class='sm ghost' type='submit'>удалить</button></form>{% endif %}
+</li>
+{% endfor %}
+</ol>
+{% endfor %}
+</section>
+<script src='/static/api.js'></script>
+{% endblock %}

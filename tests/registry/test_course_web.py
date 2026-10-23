@@ -91,7 +91,14 @@ def test_course_pages_are_off_without_the_switch(pool: _Courses, monkeypatch: py
 @pytest.mark.tier1
 def test_image_card_for_its_owner_and_for_others(pool: _Courses) -> None:
     owner = _page(_browser(pool, "bob"), f"{pool.url}/web/image/bob/git-init:1")[1]
-    assert "id='revisions'" in owner and "1_v1" in owner
+    # user 2026-10-23: «не вкладками, а как на github» -- one page, the versions a page of their own
+    assert "data-tab" not in owner and "class='repo-grid'" in owner
+    assert "href='/web/versions/bob/git-init'" in owner
+    for cmd in ("hashpass run bob/git-init:1", "hashpass pull bob/git-init:1", "hashpass clone bob/git-init:1"):
+        assert cmd in owner
+    assert "hpcopy(this)" in owner
+    versions = _page(_browser(pool, "bob"), f"{pool.url}/web/versions/bob/git-init")[1]
+    assert "id='revisions'" in versions and "1_v1" in versions and "версия 1" in versions
     # user 2026-10-22: «не ревизия, а версия» (the `_vN` tag stays under the hood, shown as a
     # version beside the tag); «файлы и исходники одно и то же» -- one sources box
     assert "версия 1" in owner and "Версии" in owner

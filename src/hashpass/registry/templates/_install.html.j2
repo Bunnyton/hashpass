@@ -1,19 +1,14 @@
-{# The «prepare the system + run install.sh» steps (apt/pacman tabs), shared by the front pages. #}
-{% macro install_steps(prepare, flags, url) -%}
-{%- for pm, _label, _cmds in prepare %}
-<input class='pm-r' type='radio' name='pm' id='pm-{{ pm }}'{% if loop.first %} checked{% endif %}>
-{%- endfor %}
-<div class='seg' role='group' aria-label='Пакетный менеджер'>
-{%- for pm, label, _cmds in prepare %}
-<label for='pm-{{ pm }}'>{{ label }}</label>
-{%- endfor %}
+{# Copyable shell commands. One install link (user 2026-10-23): the script checks and installs
+   the dependencies itself, for the host's package manager and CPU. #}
+{% macro cmd(text) -%}
+<div class='cmd'><span class='prompt' aria-hidden='true'>$</span><code>{{ text }}</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div>
+{%- endmacro %}
+{% macro install_cmd(flags, url, course='') -%}
+{{ cmd('curl ' ~ flags ~ ' ' ~ url ~ '/install.sh | bash' ~ ((' -s -- ' ~ course) if course else '')) }}
+{%- endmacro %}
+{% macro install_steps(flags, url) -%}
+<div class='install-one'>
+{{ install_cmd(flags, url) }}
+<p class='sub small'>Скрипт сам проверит систему и поставит, чего не хватает: Python, git, systemd-nspawn, а на ARM — эмулятор x86. Debian, Ubuntu, Arch, Fedora; sudo спросит пароль.</p>
 </div>
-{%- for pm, _label, cmds in prepare %}
-<ol class='steps {{ "pm-" ~ pm }}'>
-{%- for cmd in cmds %}
-<li><span class='step-n'>{{ loop.index }}</span><div class='cmd'><span class='prompt'>$</span><code>{{ cmd }}</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div></li>
-{%- endfor %}
-<li><span class='step-n'>{{ cmds|length + 1 }}</span><div class='cmd'><span class='prompt'>$</span><code>curl {{ flags }} {{ url }}/install.sh | bash</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div></li>
-</ol>
-{%- endfor %}
 {%- endmacro %}

@@ -148,7 +148,8 @@ class CourseApi:
                 change(course)
                 text = what(course) if callable(what) else what
                 if text:
-                    course.history.append({"at": time.time(), "by": by, "what": text,
+                    last = course.history[-1].get("n", len(course.history)) if course.history else 0
+                    course.history.append({"at": time.time(), "by": by, "what": text, "n": int(last) + 1,
                                            "comment": str(body.get("comment", ""))[:_MAX_TEXT]})
                     del course.history[:-_HISTORY_KEEP]
         except CourseConflictError as exc:
@@ -182,8 +183,10 @@ class CourseApi:
                     continue
                 latest = self._latest(task["repo"], task["tag"])
                 n = cm.effective_n(course, task, latest=latest)
+                rev = self.server.repo(task["repo"]).get(task["tag"], n)
                 row = {"repo": task["repo"], "tag": task["tag"], "ref": f"{task['repo']}:{task['tag']}",
-                       "n": n, "revision": f"{task['repo']}:{task['tag']}_v{n}"}
+                       "n": n, "revision": f"{task['repo']}:{task['tag']}_v{n}",
+                       "at": rev.at if rev else ""}       # when this version was pushed
                 if staff or task.get("added_by") == user:
                     row |= {"pinned": task.get("pinned", False), "hidden": task.get("hidden", False),
                             "latest": latest, "added_by": task.get("added_by", "")}
@@ -198,7 +201,9 @@ class CourseApi:
             out["requests"] = [r for r in course.requests if r["state"] == "open"]
             out["settings"] = {"auto_accept": course.auto_accept, "auto_update": course.auto_update}
         out["members"] = course.members                 # who is in: everyone who sees the course
-        out["history"] = list(reversed(course.history))[:_HISTORY_SHOWN]
+        # each change is a version of the course, numbered once (entries from before had no number)
+        out["history"] = [h if "n" in h else h | {"n": i}
+                          for i, h in reversed(list(enumerate(course.history, 1)))][:_HISTORY_SHOWN]
         if can(user, role, course, "admin"):
             out["invite"] = course.invite
         return out
@@ -393,7 +398,7 @@ class CourseApi:
         n = self._revision_ok(course, user, repo, tag, int(body["n"]) if body.get("n") else None)
         if isinstance(n, str):
             return self._err(HTTPStatus.BAD_REQUEST, n)
-        block_id = str(body.get("block_id", ""))
+        block_id, after = cm.parse_place(body["place"]) if body.get("place") else (str(body.get("block_id", "")), "")
         role = self.server.users.role(user)
         direct = can(user, role, course, "add")
         out: list[dict] = []
@@ -402,10 +407,10 @@ class CourseApi:
             bid = block_id if any(b["id"] == block_id for b in c.blocks) else (
                 c.blocks[0]["id"] if c.blocks else cm.add_block(c, "Задания"))
             if direct:
-                out.append(cm.add_task(c, repo, tag, n, bid, by=user))
+                out.append(cm.add_task(c, repo, tag, n, bid, by=user, after=after))
             else:
                 out.append(cm.propose(c, "add", repo, tag, n, bid, by=user,
-                                      comment=str(body.get("comment", "")), now=time.time()))
+                                      comment=str(body.get("comment", "")), now=time.time(), after=after))
         block_name = lambda c: next((b["name"] for b in c.blocks if b["id"] == block_id), "")  # noqa: E731
         err = self._edit(course.ref, change, by=user, what=(
             (lambda c: f"добавлено {repo}:{tag} (версия {n})"
@@ -445,6 +450,7 @@ class CourseApi:
                 raise KeyError(msg)
             if new_n is not None:
                 t["n"] = new_n
+                t["pinned"] = False         # no pinning by hand (user 2026-10-23): follow the course setting
             for key in ("hidden", "pinned"):
                 if key in body:
                     t[key] = bool(body[key])

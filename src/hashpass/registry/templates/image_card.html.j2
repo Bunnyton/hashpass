@@ -1,44 +1,51 @@
 {% extends 'base.html.j2' %}
+{#- One page like a GitHub repository (user 2026-10-23: «не вкладками, а как на github»): the
+    newest version and the files in the middle, README under them; about, commands, courses and
+    people on the side. All versions -- a page of their own, like commits. -#}
 {% from '_files.html.j2' import filebox, icon %}
 {% from '_cards.html.j2' import avatar %}
+{% from '_install.html.j2' import cmd %}
 {% block main %}
-<nav class='crumb' aria-label='Путь'>{% if courses_era %}<a href='/'>← Главная</a> · <a href='/u/{{ repo.split('/')[0] | q }}'>{{ repo.split('/')[0] }}</a>{% else %}<a href='/web/images'>← Каталог</a>{% endif %}</nav>
-<div class='card-hero'>
-<div class='row hero-kind'>
-{% if image.kind == 'task' %}<span class='kind kind-task'>{{ icon('task') }} задание</span>{% else %}<span class='kind kind-image'>{{ icon('image') }} образ</span>{% endif %}
-{% if repo_info and repo_info.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
-</div>
-<h1 class='mono ref-title'>{{ image.ref | ver }}</h1>
-{% if image.about[0] or image.about[1] %}<p class='lead'>{{ image.about[0] or image.about[1][0] }}</p>{% endif %}
+{% set owner_login = repo.split('/')[0] %}
+{% set revs = (repo_info.tags[tag] if repo_info and tag in repo_info.tags else []) | sort(attribute='n') | reverse | list %}
+{% set newest = revs[0] if revs else none %}
+{% set shown = (revs | selectattr('n', 'equalto', n) | first) if n else newest %}
+{% set n_versions = repo_info.tags.values() | map('length') | sum if repo_info else 0 %}
+<nav class='crumb' aria-label='Путь'>{% if courses_era %}<a href='/'>← Главная</a>{% else %}<a href='/web/images'>← Каталог</a>{% endif %}</nav>
+
+<header class='repo-head'>
 <div class='row'>
-<span class='sub small'>владелец <a href='/u/{{ repo.split('/')[0] | q }}'>{{ repo.split('/')[0] }}</a></span>
+{% if image.kind == 'task' %}<span class='kind kind-task'>{{ icon('task') }} задание</span>{% else %}<span class='kind kind-image'>{{ icon('image') }} образ</span>{% endif %}
+<h1 class='repo-title mono'><a href='/u/{{ owner_login | q }}'>{{ owner_login }}</a><span class='dim'> / </span><b>{{ repo.split('/', 1)[1] if '/' in repo else repo }}</b><span class='dim'>:{{ tag }}</span></h1>
+{% if repo_info and repo_info.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% elif repo_info %}<span class='pill open sm'>публичный</span>{% endif %}
+{% if repo_info and repo_info.fork_of %}<span class='pill sm'>форк <a href='/web/image/{{ repo_info.fork_of | ref_url }}'>{{ repo_info.fork_of }}</a></span>{% endif %}
 {% if not courses_era %}
 {% if image.block_name %}<span class='pill'>блок «{{ image.block_name }}»</span>{% endif %}
 {% if image.hidden %}<span class='pill closed'>скрыт</span>{% endif %}
-{% endif %}
-{% if courses_era %}{% elif image.moderation == 'rejected' %}<span class='pill no'>отклонено{% if image.reason %}: {{ image.reason }}{% endif %}</span>
+{% if image.moderation == 'rejected' %}<span class='pill no'>отклонено{% if image.reason %}: {{ image.reason }}{% endif %}</span>
 {% elif image.pending_update %}<span class='pill warn'>обновление на проверке</span>
 {% elif image.moderation == 'pending' %}<span class='pill warn'>на проверке</span>
 {% elif image.moderation == 'approved' %}<span class='pill'>одобрено</span>{% endif %}
+{% endif %}
 </div>
+</header>
+
+<div class='repo-grid'>
+<div class='repo-main'>
+{% if repo_info %}
+<div class='commit-bar'>
+{% if shown %}
+<a class='who' href='/u/{{ shown.by | q }}'>{{ avatar(shown.by, 'xs') }}<b class='mono'>{{ shown.by }}</b></a>
+<span class='msg'>{{ shown.message or 'без комментария' }}</span>
+{% if shown.accepted_by %}<span class='sub small'>принял {{ shown.accepted_by }}</span>{% endif %}
+<span class='sp'></span>
+<span class='pill sm ver'>версия {{ shown.n }}</span>{% if newest and shown.n != newest.n %}<a class='pill warn sm' href='/web/image/{{ (repo ~ ":" ~ tag) | ref_url }}'>есть версия {{ newest.n }}</a>{% endif %}
+<span class='small dim'>{{ ts(shown.at) }}</span>
+{% else %}<span class='sp'></span>{% endif %}
+<a class='versions-link small' href='/web/versions/{{ repo }}'>{{ icon('history') }} Версии <span class='count-pill'>{{ n_versions }}</span></a>
 </div>
-<nav class='tabs' aria-label='Разделы'>
-<a href='#about-tab' data-tab>Описание</a>
-<a href='#sources-tab' data-tab>{{ icon('dir') }} Исходники</a>
-{% if repo_info %}<a href='#revisions' data-tab>Версии <span class='count'>{{ repo_info.tags.values() | map('length') | sum }}</span></a>{% endif %}
-{% if courses_era %}<a href='#courses' data-tab>{{ icon('course') }} Используется в курсах <span class='count'>{{ used_in | length }}</span></a>{% endif %}
-{% if people %}<a href='#people' data-tab>{{ icon('user') }} Участники <span class='count'>{{ people | length }}</span></a>{% endif %}
-{% if merges or may_fork or (fork_origin and n) %}<a href='#changes-tab' data-tab>Предложения{% if merges %} <span class='count'>{{ merges | selectattr('state', 'equalto', 'open') | list | length }}</span>{% endif %}</a>{% endif %}
-</nav>
-<section id='about-tab' class='tab-panel' aria-label='Описание'>
-<div class='card'>
-<h2>Описание</h2>
-{% if image.description %}<div class='about'>{% if image.about[0] %}<h3>{{ image.about[0] }}</h3>{% endif %}{% for p in image.about[1] %}<p>{{ p }}</p>{% endfor %}</div>{% else %}<p class='sub'>Описания нет.</p>{% endif %}
-{% if owner %}<p class='sub small'>Описание — это файл <code>README.md</code> рядом с Taskfile: правится в задании и публикуется с <code>hashpass push</code>.</p>{% endif %}
-</div>
-</section>
-<section id='sources-tab' class='tab-panel' aria-label='Исходники'>
-<h2>Исходники</h2>
+{% endif %}
+
 {% if image.sources %}
 {{ filebox(image.sources) }}
 {% elif image.files %}
@@ -50,119 +57,19 @@
 </table>
 </div>
 {% else %}
-<div class='card'><p class='sub'>Исходников нет — они публикуются вместе с заданием (<code>hashpass push</code>).</p></div>
-{% endif %}
-</section>
-
-{% if repo_info %}
-<section id='revisions' class='tab-panel' aria-label='Версии'>
-<h2>Версии</h2>
-<div class='card'>
-<div class='row'>
-{% if repo_info.visibility == 'private' %}<span class='pill closed'>приватный</span>{% else %}<span class='pill open'>публичный</span>{% endif %}
-{% if repo_info.hide_sources %}<span class='pill sm'>служебные файлы скрыты</span>{% endif %}
-{% if repo_info.fork_of %}<span class='pill sm'>форк <a href='/web/image/{{ repo_info.fork_of | ref_url }}'>{{ repo_info.fork_of }}</a></span>{% endif %}
-</div>
-<table>
-<tr><th>Тег</th><th>Версия</th><th>Что поменялось</th><th>Когда</th><th>Автор</th><th></th></tr>
-{% for t, revs in repo_info.tags.items() %}{% set ordered = revs | sort(attribute='n') %}{% for r in ordered | reverse %}
-<tr{% if t == tag and r.n == n %} class='on'{% endif %}><td class='mono'>{{ t }}</td>
-<td class='mono'><a href='/web/image/{{ (repo ~ ":" ~ t ~ "_v" ~ r.n) | ref_url }}'>версия {{ r.n }}</a>{% if loop.first %} <span class='pill sm'>последняя</span>{% endif %}</td>
-<td class='small'>{{ r.message or '—' }}{% if r.merged_from %}<div class='dim'>предложение из {{ r.merged_from | ver }}</div>{% endif %}
-{% if not loop.last %}<div><a href='/web/compare/{{ repo }}?from={{ t }}_v{{ (ordered | reverse | list)[loop.index].n }}&to={{ t }}_v{{ r.n }}'>сравнить с предыдущей</a></div>{% endif %}</td>
-<td>{{ ts(r.at) }}</td><td><a href='/u/{{ r.by | q }}'>{{ r.by }}</a>{% if r.accepted_by %}<div class='sub small'>принял <a href='/u/{{ r.accepted_by | q }}'>{{ r.accepted_by }}</a></div>{% endif %}</td>
-<td>{% if owner %}<form class='inline' data-api='DELETE /revisions/{{ repo }}/{{ t }}/{{ r.n }}' data-confirm='Удалить версию {{ r.n }} тега {{ t }}? Если она стоит в чужих курсах, удаление подождёт решения администратора.'><button class='sm ghost' type='submit'>удалить</button></form>{% endif %}</td></tr>
-{% endfor %}{% endfor %}
-</table>
-{% if owner %}
-<hr class='divider'>
-<form class='row' data-api='PUT /revisions/{{ repo }}'>
-<label>Видимость <select name='visibility'>
-<option value='public'{% if repo_info.visibility == 'public' %} selected{% endif %}>публичный</option>
-<option value='private'{% if repo_info.visibility == 'private' %} selected{% endif %}>приватный</option></select></label>
-<label class='check'><input type='checkbox' name='hide_sources' data-type='bool'{% if repo_info.hide_sources %} checked{% endif %}> скрыть служебные файлы (README виден всегда)</label>
-<button class='sm' type='submit'>Сохранить</button>
-</form>
-{% if n %}<form class='row' data-api='POST /revisions/{{ repo }}/{{ tag }}_v{{ n }}/tag'>
-<input type='hidden' name='from' value='{{ repo }}:{{ tag }}_v{{ n }}'>
-<input name='to' placeholder='новый тег, например stable' required><button class='sm ghost' type='submit'>Навесить тег</button></form>{% endif %}
-{% endif %}
-</div>
-</section>
+<div class='filebox empty-box'><p class='sub'>Исходников нет — они публикуются вместе с заданием (<code>hashpass push</code>).</p></div>
 {% endif %}
 
-{% if courses_era %}
-<section id='courses' class='tab-panel' aria-label='Используется в курсах'>
-<h2>Используется в курсах</h2>
-<div class='card'>
-{% if used_in %}
-<table class='places'>
-<thead><tr><th scope='col'>Курс</th><th scope='col'>Блок</th><th scope='col'>Версия у студентов</th></tr></thead>
-<tbody>
-{% for u in used_in %}<tr><td><a href='/c/{{ u.course }}'>{{ u.title or u.course }}</a> <span class='mono small dim'>{{ u.course }}</span>{% if u.visibility == 'private' %} <span class='pill closed sm'>приватный</span>{% endif %}</td>
-<td>{{ u.block or '—' }}{% if u.hidden %} <span class='pill closed sm'>скрыто</span>{% endif %}</td>
-<td><a class='mono' href='/web/image/{{ (u.repo ~ ":" ~ u.tag ~ "_v" ~ u.n) | ref_url }}'>{{ u.tag }}</a> <span class='pill sm ver'>версия {{ u.n }}</span>{% if u.pinned %} <span class='pill sm'>закреплена</span>{% endif %}</td></tr>{% endfor %}
-</tbody></table>
-{% else %}<p class='sub'>Пока ни в одном курсе.</p>{% endif %}
-{% if propose_to and n %}
-<form class='row' data-api='POST /courses/__COURSE__/tasks' data-course-select>
-<select name='__course'>{% for c in propose_to %}<option value='{{ c }}'>{{ c }}</option>{% endfor %}</select>
-<input type='hidden' name='repo' value='{{ repo }}'><input type='hidden' name='tag' value='{{ tag }}'>
-<input type='hidden' name='n' value='{{ n }}' data-type='int'>
-<input name='comment' placeholder='комментарий (для предложения)'>
-<button class='sm' type='submit'>Предложить в курс</button>
-</form>
-{% endif %}
-</div>
-</section>
-{% endif %}
-{% if people %}
-<section id='people' class='tab-panel' aria-label='Участники'>
-<h2>Участники</h2>
-<div class='card'>
-<ul class='people'>
-{% for p in people %}
-<li><a class='person' href='/u/{{ p.user | q }}'>{{ avatar(p.user, 'sm') }}<span class='mono'>{{ p.user }}</span></a>
-{% if may_people and p.role != 'owner' %}
-<form class='inline row' data-api='PUT /repo-members/{{ repo }}/{{ p.user | q }}'>
-<label class='visually-hidden' for='role-{{ loop.index }}'>Роль {{ p.user }}</label>
-<select id='role-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'maintainer'] %}<option value='{{ r }}'{% if r == p.role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
-<button class='sm ghost' type='submit'>Сохранить</button></form>
-<form class='inline' data-api='DELETE /repo-members/{{ repo }}/{{ p.user | q }}' data-confirm='Убрать {{ p.user }} из участников?'><button class='sm danger' type='submit'>Убрать</button></form>
-{% else %}<span class='pill sm{% if p.role == "owner" %} author{% endif %}'>{{ role_ru[p.role] }}</span>{% endif %}
-</li>
-{% endfor %}
-</ul>
-{% if may_people %}
-<hr class='divider'>
-<form class='row' data-api='PUT /repo-members/{{ repo }}/__LOGIN__'>
-<label class='visually-hidden' for='new-member'>Логин</label>
-<input id='new-member' name='__login' placeholder='логин пользователя' required>
-<label class='visually-hidden' for='new-role'>Роль</label>
-<select id='new-role' name='role'><option value='member'>участник — видит приватный образ</option><option value='author' selected>автор — публикует версии</option><option value='maintainer'>сопровождающий — принимает предложения, теги</option></select>
-<button class='sm' type='submit'>Добавить</button>
-</form>
-{% endif %}
-<p class='sub small'>Участник видит приватный образ; автор публикует новые версии; сопровождающий ещё принимает предложения, ставит теги и удаляет версии; владелец — настройки и роли.</p>
-</div>
-</section>
-{% endif %}
-<section id='changes-tab' class='tab-panel' aria-label='Предложения'>
+<article class='readme card' aria-label='README'>
+<div class='readme-head'>{{ icon('file') }} README.md</div>
+{% if image.description %}<div class='about'>{% if image.about[0] %}<h3>{{ image.about[0] }}</h3>{% endif %}{% for p in image.about[1] %}<p>{{ p }}</p>{% endfor %}</div>{% else %}<p class='sub'>Описания нет.</p>{% endif %}
+{% if owner %}<p class='sub small'>Описание — файл <code>README.md</code> рядом с Taskfile: правится в задании и публикуется с <code>hashpass push</code>.</p>{% endif %}
+</article>
 
-{% if may_fork %}
-<h2 id='fork'>Форк</h2>
-<div class='card'>
-<p class='sub'>Форк — копия задания в вашем пространстве имён: доработайте её (<code>hashpass clone</code> → правка → <code>build</code> → <code>push</code>) и предложите автору.</p>
-<form class='row' data-api='POST /revisions/{{ viewer }}/__FORKNAME__/fork' data-fork-name data-then='go:/web/image/{ref}'>
-<input type='hidden' name='from' value='{{ image.ref }}'>
-<input name='__forkname' value='{{ repo.rpartition("/")[2] }}' required>
-<button class='sm' type='submit'>Форкнуть</button>
-</form>
-</div>
-{% endif %}
-
+{% if merges or may_fork or (fork_origin and n) %}
+<section id='changes' class='repo-section' aria-label='Предложения'>
+<h2>Предложения{% if merges %} <span class='count-pill'>{{ merges | selectattr('state', 'equalto', 'open') | list | length }}</span>{% endif %}</h2>
 {% if fork_origin and n %}
-<h2>Предложить автору</h2>
 <div class='card'>
 <form class='row' data-api='POST /revisions/{{ fork_origin }}/merges'>
 <input type='hidden' name='from' value='{{ image.ref }}'>
@@ -171,9 +78,6 @@
 </form>
 </div>
 {% endif %}
-
-{% if merges %}
-<h2 id='merges'>Запросы на слияние</h2>
 {% for m in merges | reverse %}
 <div class='card'>
 <div class='row'><span class='mono'>{{ m['from'] | ver }} → {{ repo }}:{{ m.to_tag }}</span>
@@ -190,7 +94,110 @@
 </div>{% endif %}
 </div>
 {% endfor %}
+</section>
+{% endif %}
+</div>
+
+<aside class='repo-side' aria-label='О {{ "задании" if image.kind == "task" else "образе" }}'>
+<section>
+<h2 class='side-h'>О {{ 'задании' if image.kind == 'task' else 'образе' }}</h2>
+{% if image.about[1] or image.about[0] %}<p>{{ image.about[1][0] if image.about[1] else image.about[0] }}</p>{% else %}<p class='sub small'>Описания нет.</p>{% endif %}
+{% if repo_info and repo_info.tags | length > 1 %}<p class='small'>Теги: {% for t in repo_info.tags %}<a class='pill sm{% if t == tag %} on{% endif %}' href='/web/image/{{ (repo ~ ":" ~ t) | ref_url }}'>{{ t }}</a> {% endfor %}</p>{% endif %}
+</section>
+
+<section class='side-cmds'>
+<h2 class='side-h'>В терминале</h2>
+<p class='sub small'>{{ 'Пройти' if image.kind == 'task' else 'Запустить' }}:</p>
+{{ cmd('hashpass run ' ~ repo ~ ':' ~ tag) }}
+<p class='sub small'>Скачать образ на эту машину:</p>
+{{ cmd('hashpass pull ' ~ repo ~ ':' ~ tag) }}
+<p class='sub small'>Файлы {{ 'задания' if image.kind == 'task' else 'образа' }} — в папку, чтобы править:</p>
+{{ cmd('hashpass clone ' ~ repo ~ ':' ~ tag) }}
+</section>
+
+{% if courses_era %}
+<section id='courses'>
+<h2 class='side-h'>Используется в курсах <span class='count-pill'>{{ used_in | length }}</span></h2>
+{% if used_in %}
+<ul class='side-list'>
+{% for u in used_in %}<li><a href='/c/{{ u.course }}'>{{ u.title or u.course }}</a>{% if u.visibility == 'private' %} <span class='pill closed sm'>приватный</span>{% endif %}
+<div class='sub small'>{% if u.block %}{{ u.block }} · {% endif %}<a href='/web/image/{{ (u.repo ~ ":" ~ u.tag ~ "_v" ~ u.n) | ref_url }}'>версия {{ u.n }}</a> в курсе{% if u.hidden %} · скрыто{% endif %}</div></li>{% endfor %}
+</ul>
+{% else %}<p class='sub small'>Пока ни в одном курсе.</p>{% endif %}
+{% if propose_to and n %}
+<details class='side-more'><summary class='small'>Добавить в курс…</summary>
+<form data-api='POST /courses/__COURSE__/tasks' data-course-select>
+<select name='__course' aria-label='Курс'>{% for c in propose_to %}<option value='{{ c }}'>{{ c }}</option>{% endfor %}</select>
+<input type='hidden' name='repo' value='{{ repo }}'><input type='hidden' name='tag' value='{{ tag }}'>
+<input type='hidden' name='n' value='{{ n }}' data-type='int'>
+<input name='comment' placeholder='комментарий (для предложения)' aria-label='Комментарий'>
+<button class='sm' type='submit'>Добавить в курс</button>
+</form></details>
 {% endif %}
 </section>
+{% endif %}
+
+{% if people %}
+<section id='people'>
+<h2 class='side-h'>Участники <span class='count-pill'>{{ people | length }}</span></h2>
+<ul class='people'>
+{% for p in people %}
+<li><a class='person' href='/u/{{ p.user | q }}'>{{ avatar(p.user, 'sm') }}<span class='mono'>{{ p.user }}</span></a>
+{% if may_people and p.role != 'owner' %}
+<form class='inline row' data-api='PUT /repo-members/{{ repo }}/{{ p.user | q }}'>
+<label class='visually-hidden' for='role-{{ loop.index }}'>Роль {{ p.user }}</label>
+<select id='role-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'maintainer'] %}<option value='{{ r }}'{% if r == p.role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
+<button class='sm ghost' type='submit'>Сохранить</button></form>
+<form class='inline' data-api='DELETE /repo-members/{{ repo }}/{{ p.user | q }}' data-confirm='Убрать {{ p.user }} из участников?'><button class='sm danger' type='submit'>Убрать</button></form>
+{% else %}<span class='pill sm{% if p.role == "owner" %} author{% endif %}'>{{ role_ru[p.role] }}</span>{% endif %}
+</li>
+{% endfor %}
+</ul>
+{% if may_people %}
+<details class='side-more'><summary class='small'>Добавить участника…</summary>
+<form data-api='PUT /repo-members/{{ repo }}/__LOGIN__'>
+<label class='visually-hidden' for='new-member'>Логин</label>
+<input id='new-member' name='__login' placeholder='логин пользователя' required>
+<label class='visually-hidden' for='new-role'>Роль</label>
+<select id='new-role' name='role'><option value='member'>участник — видит приватный образ</option><option value='author' selected>автор — публикует версии</option><option value='maintainer'>сопровождающий — принимает предложения, теги</option></select>
+<button class='sm' type='submit'>Добавить</button>
+</form>
+<p class='sub small'>Участник видит приватный образ; автор публикует новые версии; сопровождающий ещё принимает предложения, ставит теги и удаляет версии; владелец — настройки и роли.</p>
+</details>
+{% endif %}
+</section>
+{% endif %}
+
+{% if may_fork %}
+<section id='fork'>
+<h2 class='side-h'>Доработать</h2>
+<p class='sub small'>Форк — копия в вашем пространстве имён: <code>hashpass clone</code> → правка → <code>build</code> → <code>push</code>, потом предложите автору. Или сразу <code>hashpass push</code> — без прав это и есть предложение.</p>
+<form class='row' data-api='POST /revisions/{{ viewer }}/__FORKNAME__/fork' data-fork-name data-then='go:/web/image/{ref}'>
+<input type='hidden' name='from' value='{{ image.ref }}'>
+<label class='visually-hidden' for='fork-name'>Имя форка</label>
+<input id='fork-name' name='__forkname' value='{{ repo.rpartition("/")[2] }}' required>
+<button class='sm' type='submit'>Форкнуть</button>
+</form>
+</section>
+{% endif %}
+
+{% if owner and repo_info %}
+<section id='settings'>
+<h2 class='side-h'>Настройки</h2>
+<form data-api='PUT /revisions/{{ repo }}'>
+<label>Видимость <select name='visibility'>
+<option value='public'{% if repo_info.visibility == 'public' %} selected{% endif %}>публичный</option>
+<option value='private'{% if repo_info.visibility == 'private' %} selected{% endif %}>приватный</option></select></label>
+<label class='check'><input type='checkbox' name='hide_sources' data-type='bool'{% if repo_info.hide_sources %} checked{% endif %}> скрыть служебные файлы (README виден всегда)</label>
+<button class='sm' type='submit'>Сохранить</button>
+</form>
+{% if n %}<form class='row' data-api='POST /revisions/{{ repo }}/{{ tag }}_v{{ n }}/tag'>
+<input type='hidden' name='from' value='{{ repo }}:{{ tag }}_v{{ n }}'>
+<label class='visually-hidden' for='new-tag'>Новый тег</label>
+<input id='new-tag' name='to' placeholder='новый тег, например stable' required><button class='sm ghost' type='submit'>Навесить тег</button></form>{% endif %}
+</section>
+{% endif %}
+</aside>
+</div>
 <script src='/static/api.js'></script>
 {% endblock %}

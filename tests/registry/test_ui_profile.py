@@ -124,3 +124,16 @@ def test_a_profile_photo(world: _Courses) -> None:
                                         headers={"Content-Type": f"multipart/form-data; boundary={b}"}))
     with urllib.request.urlopen(f"{world.url}/u/kid/avatar") as resp:      # noqa: S310
         assert resp.read() == png                                           # not an image: refused
+
+
+@pytest.mark.tier1
+def test_ones_profile_has_the_solved_tasks_and_stats(world: _Courses) -> None:
+    """User 2026-10-23: «в профиле есть выполненные (статистика и т.д.)» -- one's own, like «Прохожу»."""
+    html = _page(_browser(world, "kid"), f"{world.url}/u/kid")[1]
+    solved = html.split("id='solved'", 1)[1].split("</section>", 1)[0]
+    assert "bob/git-init:1" in solved and "/c/bob/linux" in solved and "версия 1" in solved
+    assert "data-tab>" in html and "Решено" in html
+    stats = html.split("class='user-stats'", 1)[1].split("</ul>", 1)[0]
+    assert "решено" in stats and "<b>1</b>" in stats
+    other = _page(_browser(world, "eve"), f"{world.url}/u/kid")[1]
+    assert "id='solved'" not in other                                    # progress is private

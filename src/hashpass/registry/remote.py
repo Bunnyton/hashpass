@@ -764,10 +764,18 @@ class RemoteRegistry:
     def submit(self, task_ref: str, digest: str, *, passed: bool,  # noqa: PLR0913
                history: list[dict[str, object]] | None = None,
                authenticity: dict[str, object] | None = None,
-               token: str | None = None, session_id: str | None = None) -> dict[str, object]:
-        """Submit a task result (+ optional command history / anti-bot signal); returns {status,...}."""
+               token: str | None = None, session_id: str | None = None,
+               free: bool = False) -> dict[str, object]:
+        """
+        Submit a task result (+ optional command history / anti-bot signal); returns {status,...}.
+
+        `free` -- solved outside any course (`hashpass run <ref>`): the pool keeps it in the
+        profile, and a course holding the task shows it «пройдено не в курсе».
+        """
         payload: dict[str, object] = {"task_ref": task_ref, "digest": digest, "passed": passed}
-        if self.course:
+        if free:
+            payload["free"] = True
+        elif self.course:
             payload["course"] = self.course
         if session_id:
             payload["session_id"] = session_id   # the console session this pass closes
@@ -796,6 +804,20 @@ class RemoteRegistry:
         query = f"?q={urllib.parse.quote(q)}" if q else ""
         try:
             return list(self._get_json(f"/courses{query}", token=self._auth_token(token or self.token))["courses"])
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.NOT_FOUND:
+                return None
+            raise
+
+    def repos(self, q: str = "", *, token: str | None = None) -> list[dict[str, object]] | None:
+        """
+        Tasks and images on the pool the caller may see, whose name holds `q` (None: an old pool).
+
+        Each: name, task (bool), about, visibility, updated, tags [{tag, n, ref, task, at}].
+        """
+        query = f"?q={urllib.parse.quote(q)}" if q else ""
+        try:
+            return list(self._get_json(f"/repos{query}", token=self._auth_token(token or self.token))["repos"])
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.NOT_FOUND:
                 return None

@@ -14,6 +14,7 @@ from markupsafe import Markup
 from hashpass.registry import era
 from hashpass.registry.attempt_store import is_live
 from hashpass.registry.codeview import highlight_lines, render_markdown_html
+from hashpass.registry.progress_store import outside_course
 from hashpass.registry.reference import normalise as _norm_cmd
 from hashpass.version import TRUSTED_HOSTS
 
@@ -71,6 +72,7 @@ def ts_html(value: object) -> Markup | str:
 
 
 _env.globals["ts"] = ts_html
+_env.globals["has_avatar"] = lambda _login: False   # search_web sets the real one
 _env.filters["q"] = lambda v: quote(str(v), safe="")
 _env.filters["ref_url"] = lambda v: quote(str(v), safe="/:")
 _VERSION_REF = re.compile(r"^(?P<base>.+:.+)_v(?P<n>[1-9][0-9]*)$")
@@ -102,12 +104,26 @@ def plural(n: object, one: str, few: str, many: str) -> str:
 _env.filters["plural"] = plural
 
 
+def taking(n: object) -> str:
+    """«проходит курс» / «проходят курс» after a count (user 2026-10-23: not «студенты»)."""
+    k = int(n or 0)
+    return "проходит курс" if k % 10 == 1 and k % 100 != 11 else "проходят курс"  # noqa: PLR2004
+
+
+_env.filters["taking"] = taking
+
+
 _INSTALL_TEMPLATE = """\
 #!/usr/bin/env bash
 # hashpass __ROLE__ installer -- served by the pool at __POOL__
 set -euo pipefail
 POOL="__POOL__"
-echo "Установка hashpass (__ROLE__); пул: $POOL"
+echo "Установка hashpass; пул: $POOL"
+if [ "$(uname -s)" = Darwin ]; then
+  echo "hashpass работает в Linux: задания -- это контейнеры systemd-nspawn." >&2
+  echo "На Mac поставьте Linux-виртуалку (например, Ubuntu в UTM) и запустите эту команду в ней." >&2
+  exit 1
+fi
 # sudo/apt read the password and answers from the terminal, not from the `curl |` pipe; with no
 # controlling terminal (ssh without -t, su -, CI) /dev/tty does not open -> /dev/null instead.
 TTY=/dev/tty; ( : </dev/tty ) 2>/dev/null || TTY=/dev/null
@@ -118,14 +134,17 @@ if command -v pacman >/dev/null 2>&1; then
   # -Syu, not -Sy + -S: a partial upgrade is unsupported on Arch
   PKG_REFRESH=":"; PKG_INSTALL="sudo pacman -Syu --needed --noconfirm"
   P_PY=python; P_PIP=python-pip; P_NSPAWN=systemd
+  P_QEMU="qemu-user-static qemu-user-static-binfmt"
 elif command -v dnf >/dev/null 2>&1; then
   PKG_REFRESH=":"; PKG_INSTALL="sudo dnf install -y"
   P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
+  P_QEMU="qemu-user-static-x86"
 else
   # A fresh Debian/Ubuntu has stale package lists -> «Unable to locate package» without an update.
   # noninteractive: tzdata/needrestart must not stop the install with a dialog
   PKG_REFRESH="sudo apt update"; PKG_INSTALL="sudo env DEBIAN_FRONTEND=noninteractive apt install -y"
   P_PY=python3; P_PIP=python3-pip; P_NSPAWN=systemd-container
+  P_QEMU="qemu-user-static binfmt-support"
 fi
 missing=""
 command -v python3 >/dev/null 2>&1 || missing="$missing $P_PY"
@@ -136,6 +155,19 @@ command -v curl >/dev/null 2>&1 || missing="$missing curl"
 if ! command -v systemd-nspawn >/dev/null 2>&1 || ! command -v machinectl >/dev/null 2>&1; then
   missing="$missing $P_NSPAWN"
 fi
+# The task images are x86_64 Debian. Another CPU (arm64: a Raspberry Pi, a Linux VM on a Mac)
+# runs them through an x86 emulator registered in binfmt_misc: Rosetta (UTM / Apple
+# Virtualization with «Enable Rosetta») when the VM has it, else qemu-user.
+ARCH="$(uname -m)"
+EMULATED=""
+case "$ARCH" in
+  x86_64|amd64) ;;
+  *) EMULATED=1
+     if [ ! -e /proc/sys/fs/binfmt_misc/rosetta ] && [ ! -e /proc/sys/fs/binfmt_misc/qemu-x86_64 ]; then
+       echo "процессор $ARCH: задания x86_64 пойдут через эмулятор x86"
+       missing="$missing $P_QEMU"
+     fi ;;
+esac
 if [ -n "$missing" ]; then
   # Install them right here (sudo asks for the password on the terminal, so `curl | bash` works).
   echo "ставлю недостающие пакеты:$missing"
@@ -146,6 +178,11 @@ if [ -n "$missing" ]; then
     echo "поставьте вручную и повторите:  $PKG_INSTALL$missing" >&2
     exit 1
   fi
+fi
+if [ -n "$EMULATED" ] && [ ! -e /proc/sys/fs/binfmt_misc/rosetta ] && [ ! -e /proc/sys/fs/binfmt_misc/qemu-x86_64 ]; then
+  # a fresh qemu package registers itself at the next boot; register it now
+  sudo systemctl restart systemd-binfmt <"$TTY" 2>/dev/null || sudo update-binfmts --enable qemu-x86_64 <"$TTY" 2>/dev/null || true
+  [ -e /proc/sys/fs/binfmt_misc/qemu-x86_64 ] || echo "эмулятор x86 не включился -- перезагрузите машину и повторите" >&2
 fi
 # A school network may intercept TLS with a self-signed cert: then git/pip refuse GitHub, and
 # the second try skips verification for exactly the hosts the install talks to.
@@ -259,9 +296,6 @@ __EXTRA__
 echo "Готово. __NEXT__"
 """
 
-_ENGINE_ACTIVATE = 'mkdir -p "$HOME/.hashengine" && touch "$HOME/.hashengine/engine.enabled"'
-
-
 def _install_script(pool_url: str, *, role: str, nxt: str, extra: str = ":") -> str:
     return (_INSTALL_TEMPLATE
             .replace("__POOL__", pool_url.rstrip("/"))
@@ -287,32 +321,21 @@ def render_install_script(pool_url: str) -> str:
 
 
 def render_engine_install_script(pool_url: str) -> str:
-    """Return the author-gated engine install script (installs + activates hashengine here)."""
-    return _install_script(pool_url, role="engine", nxt="hashengine установлен.",
-                           extra=_ENGINE_ACTIVATE)
+    """Return the installer the old author link serves: the one installer (user 2026-10-23)."""
+    return render_install_script(pool_url)
 
 
 _PW_HINT = "Не короче 8 символов, минимум одна буква, одна цифра и один спецсимвол."
 
 
-# What the front page has the student run BEFORE install.sh, per package manager (the script
-# re-checks and installs anything still missing). systemd-nspawn ships in Arch's base `systemd`.
-PREPARE = (
-    ("apt", "apt (Debian, Ubuntu)",
-     ("sudo apt update", "sudo apt install -y curl git python3-pip systemd-container")),
-    ("pacman", "pacman (Arch)",
-     ("sudo pacman -Syu --needed --noconfirm curl git python python-pip",)),
-)
-
-
 def render_front(pool_url: str) -> str:
-    """Public front page: what the pool is + prepare-the-system steps (apt/pacman) + install.sh."""
+    """Public front page: what the pool is + the one install command."""
     url = pool_url.rstrip("/")
     # A self-signed HTTPS pool needs curl -k to fetch the installer (the pip step uses GitHub's
     # real cert, so it is unaffected); a plain-http pool does not.
     flags = "-fsSLk" if pool_url.startswith("https://") else "-fsSL"
     return _env.get_template("front.html.j2").render(
-        title="hashpass", nav=False, active="", url=url, flags=flags, prepare=PREPARE)
+        title="hashpass", nav=False, active="", url=url, flags=flags)
 
 
 def render_login(error: str = "", *, signed_in: str = "", role: str = "", next_url: str = "",
@@ -566,6 +589,13 @@ def render_image_card(image: dict, **extra: object) -> str:
         image=_prepare_image(image), **extra)
 
 
+def render_versions(repo: str, repo_info: dict, *, owner: bool) -> str:
+    """Render all versions of one repository (its own page, like GitHub's commits)."""
+    return _env.get_template("versions.html.j2").render(
+        title=f"Версии {repo} — hashpass", nav=True, active="", repo=repo, repo_info=repo_info,
+        owner=owner)
+
+
 def _children(sources: list[dict], folder: str) -> list[dict]:
     """Direct entries of one folder of a task's sources: folders first, then files, by name."""
     prefix = f"{folder}/" if folder else ""
@@ -695,6 +725,9 @@ def render_profile(profile: dict, entries: list[dict], progress: dict[str, dict]
         rows = rows[:len(entries)]
     for r in rows:
         r["about"] = (about or {}).get(r["ref"], "")
+        if course is not None and r["cell"]["mark"].startswith("✓") and outside_course(
+                progress.get(r["ref"]), str(course.get("ref", ""))):
+            r["status"] += " не в курсе"            # solved by `hashpass run` or in another course
         r["state"] = "passed" if r["cell"]["mark"].startswith("✓") else ("started" if r["cell"]["mark"] else "none")
     started = sum(1 for r in rows if r["state"] == "started")
     stats = {"passed": passed, "started": started, "none": len(rows) - passed - started,

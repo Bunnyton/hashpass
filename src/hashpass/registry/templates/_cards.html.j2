@@ -17,7 +17,7 @@
 {%- endmacro %}
 
 {% macro repo_card(r) -%}
-<article class='card item-card' data-name='{{ r.name }}' data-at='{{ r.tags | map(attribute="at") | max }}' data-owner='{{ r.name.split("/")[0] }}'>
+<article class='card item-card' data-name='{{ r.name }}' data-at='{{ r.updated or (r.tags | map(attribute="at") | max) }}' data-pub='{{ r.published }}' data-owner='{{ r.name.split("/")[0] }}'>
 <div class='item-head'>
 {% if r.task %}<span class='kind kind-task'>{{ icon('task') }} задание</span>{% else %}<span class='kind kind-image'>{{ icon('image') }} образ</span>{% endif %}
 {% if r.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% endif %}
@@ -26,6 +26,7 @@
 </div>
 <a class='item-title mono stretched' href='/web/image/{{ r.tags[0].ref | ref_url }}'>{{ r.name }}</a>
 {% if r.about %}<p class='sub small clamp'>{{ r.about }}</p>{% else %}<p class='sub small dim'>без описания</p>{% endif %}
+<p class='small dim item-when'>обновлено {{ ts(r.updated or (r.tags | map(attribute="at") | max)) }}</p>
 <div class='item-tags'>{% for t in r.tags %}<a class='tagchip' href='/web/image/{{ t.ref | ref_url }}' title='тег {{ t.tag }}, последняя версия {{ t.n }}'><span class='mono'>:{{ t.tag }}</span> <span class='ver'>· версия {{ t.n }}</span></a>{% endfor %}</div>
 </article>
 {%- endmacro %}
@@ -37,8 +38,10 @@
 {% macro sort_bar(kind) -%}
 <div class='sort-bar'><label for='sort-{{ kind }}'>Сортировать</label>
 <select id='sort-{{ kind }}' data-sort-for='[data-sortable]'>
+{% if kind != 'courses' %}<option value='-at' selected>недавно обновлённые</option>
+<option value='-pub'>по дате публикации</option>{% endif %}
 <option value='name'>по названию</option>
-{% if kind == 'courses' %}<option value='-tasks'>по числу заданий</option>{% else %}<option value='-at'>сначала новые</option>{% endif %}
+{% if kind == 'courses' %}<option value='-tasks'>по числу заданий</option>{% endif %}
 <option value='owner'>по автору</option>
 </select></div>
 {%- endmacro %}

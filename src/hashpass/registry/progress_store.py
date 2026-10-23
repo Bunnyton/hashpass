@@ -50,3 +50,10 @@ class ProgressStore:
             for path in sorted(self._root.glob("*.json")):
                 result[path.stem] = json.loads(path.read_text(encoding="utf-8"))
         return result
+
+
+def outside_course(rec: object, course_ref: str) -> bool:
+    """Whether a record was earned outside `course_ref` -- `hashpass run`, or another course."""
+    if not isinstance(rec, dict):
+        return False
+    return bool(rec.get("outside")) or (bool(rec.get("course")) and rec.get("course") != course_ref)

@@ -6,6 +6,7 @@ from http import HTTPStatus
 import pytest
 
 from hashpass.imagestore.store import ImageStore
+from hashpass.registry import era
 from hashpass.registry.catalog import Catalog
 from hashpass.registry.remote import RemoteRegistry
 from tests.registry.test_moderation_routes import _http, _Pool
@@ -25,11 +26,13 @@ def test_closure_and_images_do_not_reveal_unapproved_tasks(registry, tmp_path):
 
 
 @pytest.mark.tier2
-def test_a_task_outside_the_catalog_is_not_served_to_others(registry, tmp_path):
+def test_a_task_outside_the_catalog_is_not_served_to_others(registry, tmp_path, monkeypatch):
     pool = _Pool(registry, tmp_path)
     pool.push("bob/lab", "v1")
     pool.post("/catalog/approve", "root", {"ref": "bob/lab:1"})
     Catalog(registry.catalog_path).remove_task("bob/lab:1")          # dropped by a layout
+    assert pool.task_marker("bob/lab:1", "kid") == "v1"              # courses: a public task to anyone
+    monkeypatch.setattr(era, "COURSES", False)                       # the old catalog-only pool
     assert pool.task_marker("bob/lab:1", "kid") is None
     assert pool.task_marker("bob/lab:1", "bob") == "v1"
 

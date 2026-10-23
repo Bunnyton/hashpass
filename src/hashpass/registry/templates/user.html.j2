@@ -8,6 +8,8 @@
 <h1 class='mono user-login'>{{ login }}</h1>
 {% if created %}<p class='sub small'>с нами с {{ ts(created) }}</p>{% endif %}
 <ul class='user-stats'>
+{% if solved %}<li><a href='#solved'>решено <b>{{ solved.total }}</b></a></li>
+<li><a href='/c'>проходит <b>{{ solved.taking | plural('курс', 'курса', 'курсов') }}</b></a></li>{% endif %}
 <li><a href='#courses'>ведёт <b>{{ courses | length | plural('курс', 'курса', 'курсов') }}</b></a></li>
 <li><a href='#tasks'><b>{{ tasks | length | plural('задание', 'задания', 'заданий') }}</b></a></li>
 <li><a href='#images'><b>{{ images | length | plural('образ', 'образа', 'образов') }}</b></a></li>
@@ -17,11 +19,33 @@
 </aside>
 <div class='user-main'>
 <nav class='tabs' aria-label='Разделы профиля'>
+{% if solved %}<a href='#solved' data-tab>✓ Решено <span class='count'>{{ solved.total }}</span></a>{% endif %}
 <a href='#courses' data-tab>{{ icon('course') }} Курсы <span class='count'>{{ courses | length }}</span></a>
 <a href='#tasks' data-tab>{{ icon('task') }} Задания <span class='count'>{{ tasks | length }}</span></a>
 <a href='#images' data-tab>{{ icon('image') }} Образы <span class='count'>{{ images | length }}</span></a>
 <a href='#used' data-tab>{{ icon('course') }} Используется в курсах <span class='count'>{{ used | length }}</span></a>
 </nav>
+{% if solved %}
+<section id='solved' class='tab-panel' aria-label='Решено'>
+<div class='stat-tiles solved-tiles'>
+<div class='tile ok'><b>{{ solved.total }}</b><span>решено заданий</span></div>
+<div class='tile'><b>{{ solved.in_courses }}</b><span>в {{ solved.courses | plural('курсе', 'курсах', 'курсах') }}</span></div>
+<div class='tile'><b>{{ solved.outside }}</b><span>не в курсе</span></div>
+<div class='tile'><b>{{ solved.taking }}</b><span>проходит курсов</span></div>
+</div>
+{% if solved.rows %}
+<div class='card table-wrap'>
+<table class='sortable'>
+<thead><tr><th scope='col'>Задание</th><th scope='col'>Где</th><th scope='col'>Когда</th></tr></thead>
+<tbody>
+{% for r in solved.rows %}<tr><td><a class='mono' href='/web/image/{{ r.version_ref | ref_url }}'>{{ r.ref }}</a>{% if r.n %} <span class='pill sm ver'>версия {{ r.n }}</span>{% endif %}</td>
+<td>{% if r.course %}<a href='/c/{{ r.course }}'>{{ r.course_title or r.course }}</a>{% else %}<span class='dim'>не в курсе</span>{% endif %}</td>
+<td data-sort='{{ r.at }}'>{{ ts(r.at) }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+{% else %}<div class='empty card'><p class='sub'>{% if me %}Пока ничего не решено. Найдите курс или задание на <a href='/'>главной</a> — и в терминал: <code>hashpass run …</code>{% else %}Пока ничего не решено.{% endif %}</p></div>{% endif %}
+</section>
+{% endif %}
 <section id='courses' class='tab-panel' aria-label='Курсы'>
 {% if courses %}{{ sort_bar('courses') }}<div class='grid' data-sortable>{% for r in courses %}{{ course_card(r, role_ru) }}{% endfor %}</div>
 {% else %}<div class='empty card'><p class='sub'>{% if me %}Вы пока не ведёте курсов. <a href='/c'>Создать курс →</a>{% else %}Не ведёт курсов.{% endif %}</p></div>{% endif %}

@@ -20,11 +20,10 @@
 </div>
 <details class='install card'>
 <summary><b>Установить hashpass</b> <span class='sub small'>— одна команда в терминале</span></summary>
-{{ install_steps(prepare, flags, url) }}
+{{ install_steps(flags, url) }}
 </details>
 {% endif %}
 </section>
 <div id='results' aria-live='polite'>{% include '_results.html.j2' %}</div>
-<script src='/static/copy.js'></script>
 <script src='/static/live.js'></script>
 {% endblock %}

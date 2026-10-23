@@ -50,5 +50,5 @@ def test_two_versions_compare_like_github(lab: _Courses) -> None:
     lab.push("bob/lab", "1", image="two", task="t2")
     status, html = _page(_browser(lab, "bob"), f"{lab.url}/web/compare/bob/lab?from=1_v1&to=1_v2")
     assert status == 200 and "Сравнение версий" in html  # noqa: PLR2004
-    card = _page(_browser(lab, "bob"), f"{lab.url}/web/image/bob/lab:1")[1]
-    assert "/web/compare/bob/lab?from=1_v1&to=1_v2" in card
+    versions = _page(_browser(lab, "bob"), f"{lab.url}/web/versions/bob/lab")[1]   # the commit list
+    assert "/web/compare/bob/lab?from=1_v1&to=1_v2" in versions

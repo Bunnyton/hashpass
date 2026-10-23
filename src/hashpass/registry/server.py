@@ -53,7 +53,7 @@ from hashpass.registry.passwords import (
     validate_password,
 )
 from hashpass.registry.pool_settings import PoolSettings
-from hashpass.registry.progress_store import ProgressStore
+from hashpass.registry.progress_store import ProgressStore, outside_course
 from hashpass.registry.reference import reference_commands
 from hashpass.registry.refs import closure_refs
 from hashpass.registry.revisions import (
@@ -84,6 +84,7 @@ from hashpass.registry.web import (
     render_settings,
     render_source_file,
     render_users,
+    render_versions,
 )
 from hashpass.taskdigest import task_digest
 
@@ -346,9 +347,10 @@ class PoolServer:
         """
         Which stored revision `user` gets for `name:version`, or None (not found / not for them).
 
-        Its author and admins get what they ask for (a tag -> its newest revision); everyone else
-        gets the approved revision of a catalogued tag, any revision of a plain image (a base),
-        and nothing of a task outside the catalog.
+        Its author and admins get what they ask for (a tag -> its newest revision). On courses:
+        a course's revision through the course; a public repository -- any revision to anyone; a
+        private one -- its people and whoever takes a course built on it. A pool not on courses:
+        the approved revision of a catalogued tag, any revision of a plain image (a base).
         """
         resolved = self.resolve(name, version)
         if resolved is None:
@@ -361,12 +363,17 @@ class PoolServer:
             ref = f"{name}:{revision_version(tag, hit[1])}"
             return ref if self.store.exists(ref) else None
         if self.repo(name).visibility == "private":
-            return resolved if self._reachable_in_course(user, resolved) else None
-        if self.default_course() is not None:      # moved to courses: no catalog any more
-            is_task = (self.store.get(resolved).layer.parent / "task").exists()
-            return None if is_task else resolved
+            return resolved if (self._may_see_repo(user, name)
+                                or self._reachable_in_course(user, resolved)) else None
+        # A public image or task, any version, to anyone: search it, run it, solve it outside a
+        # course (user 2026-10-23) -- the course credit still goes only through a course. A tag
+        # still under the old catalog's moderation (a pool not moved to courses) keeps it.
+        if self.default_course() is not None:
+            return resolved
         entry = self.catalog().find(f"{name}:{tag}")
         if entry is None:
+            if era.courses_on():
+                return resolved
             return None if (self.store.get(resolved).layer.parent / "task").exists() else resolved
         approved = self._approved_rev(entry)
         if n is not None:
@@ -613,6 +620,8 @@ class PoolServer:
         app.add_url_rule("/web/images", "web_images", self._web_images, methods=["GET"])
         app.add_url_rule("/web/image/<path:ref>", "web_image_card",
                          self._web_image_card, methods=["GET"])
+        app.add_url_rule("/web/versions/<path:repo>", "web_versions",
+                         self._web_versions, methods=["GET"])
         app.add_url_rule("/web/images/file", "web_image_file",
                          self._web_image_file, methods=["GET"])
         app.add_url_rule("/web/images/attach", "web_image_attach",
@@ -811,8 +820,7 @@ class PoolServer:
         return self._serve_script(render_install_script(self._pool_url()))
 
     def _route_install_engine_sh(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._redirect("/web/login")
+        """Serve the one installer at the old author link (old instructions keep working)."""
         return self._serve_script(render_engine_install_script(self._pool_url()))
 
     # -- routes: API auth --------------------------------------------------
@@ -984,7 +992,8 @@ class PoolServer:
                              "available": visible, "hidden": task.get("hidden", False),
                              "block_open": block.get("open", True), "course": course.ref}
                             | ({"preview": True} if staff and not visible else {})
-                            | ({"solved_n": solved} if solved else {}))
+                            | ({"solved_n": solved} if solved else {})
+                            | ({"outside": True} if solved and outside_course(mine.get(ref), course.ref) else {}))
         return rows
 
     def _solved_n(self, rec: object, repo: str, tag: str) -> int | None:
@@ -1186,6 +1195,9 @@ class PoolServer:
         passed = bool(data.get("passed", False))
         history = _sanitize_history(data.get("history"))
         authenticity = _sanitize_authenticity(data.get("authenticity"))
+        if data.get("free"):                         # solved outside any course (new clients)
+            return self._free_submit(user, task_ref, digest, passed=passed, history=history,
+                                     authenticity=authenticity)
         if not data.get("course") and self.default_course() is not None:
             data = data | {"course": self.config.default_course}
         if data.get("course"):
@@ -1215,6 +1227,31 @@ class PoolServer:
         gkey = global_key(self.secret, user, task_ref)   # bound to the authenticated principal
         prog.record(user, task_ref, status="passed", ts=_now(), global_key=gkey, digest=digest,
                     history=history, authenticity=authenticity)
+        return self._json(HTTPStatus.OK, {"status": "passed", "global_key": gkey})
+
+    def _free_submit(self, user: str, task_ref: str, digest: str, *, passed: bool,  # noqa: PLR0913
+                     history: list | None, authenticity: dict | None) -> Response:
+        """
+        Credit a task solved outside a course (user 2026-10-23): any version of it, by its digest.
+
+        It lands in the profile; a course holding the task shows it «пройдено не в курсе». A
+        failed run records nothing -- it must not touch the course's own progress.
+        """
+        repo, _, tag = task_ref.partition(":")
+        if not repo or not tag or not self.repo(repo).exists or not self._may_see_repo(user, repo):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        if self._credited(user, task_ref):
+            return self._json(HTTPStatus.OK, {"status": "passed",
+                                              "global_key": global_key(self.secret, user, task_ref)})
+        rev = next((r for r in self.repo(repo).revisions(tag) if digest and r.task_digest == digest), None)
+        if rev is None:
+            return self._json(HTTPStatus.OK, {"status": "failed", "reason": "digest-mismatch"})
+        if not passed:
+            return self._json(HTTPStatus.OK, {"status": "failed"})
+        gkey = global_key(self.secret, user, task_ref)
+        self.progress().record(user, task_ref, status="passed", ts=_now(), global_key=gkey, digest=digest,
+                               history=history, authenticity=authenticity,
+                               extra={"n": rev.n, "outside": True})
         return self._json(HTTPStatus.OK, {"status": "passed", "global_key": gkey})
 
     def _course_submit(self, user: str, data: dict, task_ref: str, digest: str,  # noqa: PLR0913, PLR0917
@@ -2507,6 +2544,16 @@ class PoolServer:
                **({"state": entry.state, "reason": entry.reason,
                    "pending_update": entry.as_dict()["pending_update"]} if entry else {})}
         return self._html(render_image_card(row, **self._card_extra(viewer, ref)))
+
+    def _web_versions(self, repo: str) -> Response:
+        """Every version of one repository, newest first -- like GitHub's commit list."""
+        viewer = self._session_user()
+        if viewer is None:
+            return self._redirect(f"/web/login?next={quote('/web/versions/' + repo, safe='')}")
+        idx = self.repo(repo)
+        if not idx.exists or not self._may_see_repo(viewer, repo):
+            return self._web_not_found(repo)
+        return self._html(render_versions(repo, idx.as_dict(), owner=self._may_write(viewer, repo)))
 
     def _card_extra(self, viewer: str, ref: str) -> dict[str, object]:
         """Revisions, settings, where used, proposals and merges for an image card (spec §11)."""

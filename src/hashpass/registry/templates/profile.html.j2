@@ -1,7 +1,7 @@
 {% extends 'base.html.j2' %}
 {% from '_cards.html.j2' import avatar %}
 {% block main %}
-<nav class='crumb' aria-label='Путь'>{% if course %}<a href='/c/{{ course.ref }}#students'>← {{ course.title or course.ref }} · студенты</a>{% else %}<a href='/web'>← Прогресс</a>{% if viewer_is_admin() %} · <a href='/web/users'>пользователи</a>{% endif %}{% endif %}</nav>
+<nav class='crumb' aria-label='Путь'>{% if course %}<a href='/c/{{ course.ref }}#students'>← {{ course.title or course.ref }} · проходят курс</a>{% else %}<a href='/web'>← Прогресс</a>{% if viewer_is_admin() %} · <a href='/web/users'>пользователи</a>{% endif %}{% endif %}</nav>
 {% set pct = (100 * passed / total) | round | int if total else 0 %}
 <div class='card-hero student-hero'>
 <div class='row'>

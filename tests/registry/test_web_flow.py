@@ -88,18 +88,12 @@ def test_install_sh_is_public(registry):
 
 
 @pytest.mark.tier2
-def test_engine_install_requires_author(registry):
-    status, headers, _ = _req(_opener(), "GET", f"{registry.base_url}/install-engine.sh")
-    assert status == HTTPStatus.SEE_OTHER            # anonymous -> login
-    assert headers["Location"] == "/web/login"
-    registry.users.add("admin", "pw", role="admin", group="")
-    opener = _opener()
-    _, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
-                         data={"user": "admin", "password": "pw"})
-    cookie = headers["Set-Cookie"].split(";")[0]
-    status, _, body = _req(opener, "GET", f"{registry.base_url}/install-engine.sh", cookie=cookie)
+def test_engine_install_is_the_open_install_script(registry):
+    """The old author link stays working for old instructions -- it is the one installer now."""
+    status, _, body = _req(_opener(), "GET", f"{registry.base_url}/install-engine.sh")
     assert status == HTTPStatus.OK
-    assert "engine" in body
+    _, _, plain = _req(_opener(), "GET", f"{registry.base_url}/install.sh")
+    assert body == plain
 
 
 @pytest.mark.tier2

@@ -26,19 +26,32 @@ def test_front_shows_install_command():
 
 
 @pytest.mark.tier1
-def test_front_prepares_the_system_before_the_script_apt_or_pacman():
-    """The page installs every dependency BEFORE install.sh (which re-checks); apt/pacman toggle."""
+def test_front_has_one_install_command_and_no_manual_preparation():
+    """One link (user 2026-10-23): the script itself checks and installs the dependencies."""
     html = render_front("http://pool.example/")
-    assert "sudo apt update" in html
-    assert "sudo apt install -y curl git python3-pip systemd-container" in html
-    assert "sudo pacman -Syu --needed --noconfirm curl git python python-pip" in html
-    assert "id='pm-apt'" in html
-    assert "id='pm-pacman'" in html
-    assert html.index("id='pm-apt'") < html.index("checked")      # apt is the default
-    for pm in ("pm-apt", "pm-pacman"):                            # each list ends with the script
-        block = html[html.index(f"class='steps {pm}'"):]
-        block = block[:block.index("</ol>")]
-        assert "curl -fsSL http://pool.example/install.sh | bash" in block
+    assert html.count("install.sh | bash") == 1
+    assert "sudo apt install" not in html
+    assert "pacman" not in html
+    assert "hpcopy(this)" in html                                  # one-click copy
+
+
+@pytest.mark.tier1
+def test_install_script_brings_an_x86_emulator_on_other_architectures():
+    """Tasks are x86_64 Debian: on arm64 the script installs qemu-user unless Rosetta is there."""
+    script = render_install_script("http://pool.example/")
+    assert 'ARCH="$(uname -m)"' in script
+    assert "/proc/sys/fs/binfmt_misc/rosetta" in script
+    assert "/proc/sys/fs/binfmt_misc/qemu-x86_64" in script
+    assert 'P_QEMU="qemu-user-static binfmt-support"' in script            # Debian/Ubuntu
+    assert 'P_QEMU="qemu-user-static qemu-user-static-binfmt"' in script   # Arch
+    assert script.index('ARCH="$(uname -m)"') < script.index("ставлю недостающие пакеты")
+
+
+@pytest.mark.tier1
+def test_install_script_stops_on_macos_with_a_pointer_to_a_linux_vm():
+    script = render_install_script("http://pool.example/")
+    assert '"$(uname -s)" = Darwin' in script
+    assert "UTM" in script
 
 
 @pytest.mark.tier1
@@ -126,10 +139,9 @@ def test_install_script_targets_pool_and_pip():
 
 
 @pytest.mark.tier1
-def test_engine_install_script_mentions_engine():
-    script = render_engine_install_script("http://p")
-    assert "engine" in script
-    assert "pip install" in script
+def test_engine_install_script_is_the_one_install_script():
+    """One link everywhere: the old author link serves the same installer."""
+    assert render_engine_install_script("http://p") == render_install_script("http://p")
 
 
 @pytest.mark.tier1

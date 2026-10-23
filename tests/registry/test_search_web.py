@@ -38,3 +38,41 @@ def test_users_are_found_by_login_and_their_private_comment_never_shows(pool: _C
         assert "староста" not in html
     html = _page(_browser(pool, "eve"), f"{pool.url}/search?q=%D0%98%D0%A2-21&type=users")[1]
     assert _tabs(html)["users"] == 0                       # a comment does not give a user away
+
+
+def _set_times(pool: _Courses, repo: str, *stamps: str) -> None:
+    """Give `repo`'s versions of tag 1 these push moments (oldest first)."""
+    import json  # noqa: PLC0415
+    index = pool.r.store.root / ".repos" / repo / "repo.json"
+    data = json.loads(index.read_text())
+    for rev, at in zip(data["tags"]["1"]["revisions"], stamps, strict=False):
+        rev["at"] = at
+    index.write_text(json.dumps(data))
+
+
+@pytest.mark.tier1
+def test_tasks_show_their_last_push_newest_first_and_sort_by_publication(pool: _Courses) -> None:
+    """User 2026-10-23: update date on tasks, recently pushed on top, a sort by publication date."""
+    pool.push("bob/old", "1", image="o", task="to")
+    pool.push("bob/old", "1", image="o2", task="to2")                   # published long ago, pushed today
+    pool.push("bob/new", "1", image="n", task="tn")                     # published yesterday, once
+    _set_times(pool, "bob/old", "2026-01-01T10:00:00Z", "2026-10-23T09:00:00Z")
+    _set_times(pool, "bob/new", "2026-10-22T09:00:00Z")
+    html = _page(_browser(pool, "eve"), f"{pool.url}/?type=tasks")[1]
+    assert html.index("bob/old") < html.index("bob/new")                # the last push on top
+    assert "data-pub='2026-01-01T10:00:00Z'" in html and "data-at='2026-10-23T09:00:00Z'" in html
+    assert "обновлено" in html and "datetime='2026-10-23T09:00:00Z'" in html
+    assert "value='-pub'" in html and "по дате публикации" in html
+
+
+@pytest.mark.tier1
+def test_the_client_searches_tasks_and_images_through_the_api(pool: _Courses) -> None:
+    """The terminal searches the pool like the web (TODO 2026-10-23): what the caller may see."""
+    from hashpass.registry.remote import RemoteRegistry  # noqa: PLC0415
+    pool.push("bob/solo", "1", image="s")
+    assert pool.call("PUT", "/revisions/bob/solo", "bob", {"visibility": "private"})[0] == 200  # noqa: PLR2004
+    rows = RemoteRegistry(pool.url).repos("", token=pool.tok["eve"])
+    names = {r["name"]: r for r in rows}
+    assert "bob/git-init" in names and "bob/solo" not in names              # a private image stays hidden
+    assert names["bob/git-init"]["task"] is True and names["bob/git-init"]["tags"][0]["ref"] == "bob/git-init:1_v1"
+    assert [r["name"] for r in RemoteRegistry(pool.url).repos("solo", token=pool.tok["bob"])] == ["bob/solo"]

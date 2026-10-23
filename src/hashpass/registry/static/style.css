@@ -91,15 +91,8 @@ code,.mono{font-family:var(--mono);font-size:.92em}
 .hero .sub{margin:14px auto 0;font-size:17px;max-width:56ch}
 .steps{list-style:none;margin:26px auto 20px;padding:0;max-width:640px;display:flex;flex-direction:column;gap:10px;text-align:left}
 .steps li{display:flex;gap:12px;align-items:center}
-/* apt/pacman toggle on the front page: pure CSS (radio + :checked), works without JS */
-.pm-r{position:absolute;opacity:0;pointer-events:none}
-.seg{display:inline-flex;gap:2px;margin-top:22px;padding:3px;border-radius:10px;background:var(--surface2);border:1px solid var(--border)}
-.seg label{padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;color:var(--muted)}
-.steps.pm-pacman{display:none}
-#pm-pacman:checked~.steps.pm-apt{display:none}
-#pm-pacman:checked~.steps.pm-pacman{display:flex}
-#pm-apt:checked~.seg label[for=pm-apt],#pm-pacman:checked~.seg label[for=pm-pacman]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-#pm-apt:focus-visible~.seg label[for=pm-apt],#pm-pacman:focus-visible~.seg label[for=pm-pacman]{outline:2px solid var(--accent)}
+.install-one{max-width:680px;margin:22px auto 14px;text-align:left}
+.install-one .sub{margin-top:8px}
 .steps .step-n{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
   font-weight:700;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
 .steps .cmd{flex:1;margin:0}
@@ -538,3 +531,44 @@ ol.history li:last-child{border-bottom:0}
 ol.history .when{color:var(--muted);font-size:13px;min-width:130px;font-variant-numeric:tabular-nums}
 ol.history .who{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--text);font-weight:600}
 ol.history .why{color:var(--muted);font-style:italic}
+/* image/task page like a GitHub repository (user 2026-10-23): no tabs, files + README, a sidebar */
+.repo-head{margin:6px 0 18px}
+.repo-head .row{gap:10px;flex-wrap:wrap;align-items:center}
+.repo-title{font-size:22px;font-weight:400;margin:0;letter-spacing:-.01em}
+.repo-title a{color:var(--accent);text-decoration:none}
+.repo-title b{font-weight:700}
+.repo-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:28px;align-items:start}
+@media (max-width:880px){.repo-grid{grid-template-columns:minmax(0,1fr)}}
+.commit-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);
+  border:1px solid var(--border-strong);border-bottom:0;border-radius:var(--radius-sm) var(--radius-sm) 0 0;font-size:14px}
+.commit-bar .who{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--text)}
+.commit-bar .msg{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46ch}
+.commit-bar .sp{flex:1}
+.commit-bar+.filebox{border-top-left-radius:0;border-top-right-radius:0}
+.versions-link{display:inline-flex;align-items:center;gap:5px;font-weight:600;color:var(--text);text-decoration:none}
+.versions-link:hover{color:var(--accent)}
+.empty-box{padding:18px 20px}
+.readme{margin-top:18px;padding:0;overflow:hidden}
+.readme-head{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px}
+.readme .about,.readme>.sub{padding:4px 20px 16px}
+.repo-section{margin-top:22px}
+.repo-side section{padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}
+.repo-side section:last-child{border-bottom:0}
+.side-h{font-size:15px;font-weight:600;margin:0 0 10px}
+.side-cmds .cmd{padding:3px 4px 3px 10px;margin:4px 0 10px;box-shadow:none}
+.side-cmds .cmd code{font-size:12.5px;padding:6px 0;white-space:pre-wrap;overflow-wrap:anywhere;overflow:visible}
+.side-cmds .cmd button{padding:5px 9px;font-size:12px}
+.side-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.side-more{margin-top:10px}
+.side-more form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.repo-side .people .person{min-width:0}
+.commits{list-style:none;margin:0 0 22px;padding:0}
+.commit{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.commit:last-child{border-bottom:0}
+.commit .commit-main{min-width:0}
+.commit .msg{font-weight:600;color:var(--text);text-decoration:none}
+.commit .msg:hover{color:var(--accent);text-decoration:underline}
+.commit .who{display:inline-flex;align-items:center;gap:5px;color:var(--text);text-decoration:none}
+.commit .sp{flex:1}
+.solved-tiles{margin:0 0 16px}
+@media (max-width:600px){.cmd code{white-space:pre-wrap;overflow-wrap:anywhere;overflow:visible}}

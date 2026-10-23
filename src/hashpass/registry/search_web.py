@@ -21,7 +21,7 @@ from flask import Flask, Response, current_app, has_app_context, request, send_f
 from hashpass.registry import courses as course_model
 from hashpass.registry.access import can
 from hashpass.registry.revisions import revision_version
-from hashpass.registry.web import PREPARE, _env
+from hashpass.registry.web import _env
 
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
@@ -51,6 +51,9 @@ def _has_avatar(login: object) -> bool:
     return people is not None and people._avatar_file(str(login)) is not None  # noqa: SLF001
 
 
+_env.globals["has_avatar"] = _has_avatar
+
+
 class SearchWeb:
     """The search and user pages, bound to a PoolServer."""
 
@@ -60,12 +63,12 @@ class SearchWeb:
 
     def register(self, app: Flask) -> None:
         app.add_url_rule("/search", "web_search", self.search, methods=["GET"])
+        app.add_url_rule("/repos", "api_repos", self.repos_api, methods=["GET"])
         app.add_url_rule("/u/<login>", "web_user_page", self.user_page, methods=["GET"])
         app.add_url_rule("/u/<login>/avatar", "web_user_avatar", self.avatar, methods=["GET"])
         app.add_url_rule("/web/avatar", "web_avatar_put", self.avatar_put, methods=["POST"])
         app.add_url_rule("/web/avatar/delete", "web_avatar_delete", self.avatar_delete, methods=["POST"])
         app.config["hp_people"] = self                # templates ask the app serving this request
-        _env.globals["has_avatar"] = _has_avatar
 
     # -- profile photo (user 2026-10-23: «фотку в профиль хочу добавлять») --------
 
@@ -134,6 +137,13 @@ class SearchWeb:
         return {"users": self._users(q), "courses": self._courses(user, role, q),
                 "tasks": [r for r in repos if r["task"]], "images": [r for r in repos if not r["task"]]}
 
+    def repos_api(self) -> Response:
+        """`GET /repos?q=` -- the client's search: tasks and images the caller may see (JSON)."""
+        user = self.server._token_user() or self.server._session_user()   # noqa: SLF001
+        rows = self.repos(user, request.args.get("q", "").strip())
+        keep = ("name", "task", "about", "visibility", "updated", "published", "tags", "fork_of")
+        return self.server._json(HTTPStatus.OK, {"repos": [{k: r[k] for k in keep} for r in rows]})  # noqa: SLF001
+
     def user_page(self, login: str) -> Response:
         """Show a user's page (see the module docstring); one's own page is home."""
         user, role = self._viewer()
@@ -158,6 +168,7 @@ class SearchWeb:
             tasks=[r for r in repos if r["task"]], images=[r for r in repos if not r["task"]],
             used=sorted(used.values(), key=lambda r: r["course"]),
             taking=[],
+            solved=self._solved(login, viewer=user) if see_all else None,
             created=(self.server.users.get(login) or {}).get("created_at"), role_ru=_ROLE_RU)
         return self.server._html(html)               # noqa: SLF001
 
@@ -188,7 +199,7 @@ class SearchWeb:
         html = _env.get_template("explore.html.j2").render(
             title="hashpass — задания по Linux" if not q else f"{q} — поиск — hashpass", nav=True,
             active="/", url=pool, flags="-fsSLk" if pool.startswith("https://") else "-fsSL",
-            prepare=PREPARE, **ctx)
+            **ctx)
         return self.server._html(html)               # noqa: SLF001
 
     # -- data -------------------------------------------------------------------
@@ -207,8 +218,9 @@ class SearchWeb:
         """
         Return the repositories `user` may see whose name contains `q`.
 
-        Each: the newest version per tag, task or image, a README line. With `member`: also the
-        images where that login has a role (its `role`).
+        Each: the newest version per tag, task or image, a README line, the last push
+        (`updated`) and the first one (`published`); the recently pushed first. With `member`:
+        also the images where that login has a role (its `role`).
         """
         root = Path(self.server.store.root) / ".repos"
         att = self.server.attachments()
@@ -223,11 +235,13 @@ class SearchWeb:
             role = "" if not member or ns == member else repo.members.get(member, "")
             if member and ns != member and not role:
                 continue
-            tags, about = [], ""
+            tags, about, published = [], "", ""
             for tag in repo.tags():
                 latest = repo.latest(tag)
                 if latest is None:
                     continue
+                first = min((r.at for r in repo.revisions(tag)), default=latest.at)
+                published = min(published, first) if published else first
                 ref = f"{name}:{revision_version(tag, latest.n)}"
                 task = self.server.store.exists(ref) and (self.server.store.get(ref).layer.parent / "task").exists()
                 tags.append({"tag": tag, "n": latest.n, "ref": ref, "task": task, "at": latest.at})
@@ -235,8 +249,10 @@ class SearchWeb:
             if tags:
                 rows.append({"name": name, "visibility": repo.visibility, "fork_of": repo.fork_of,
                              "tags": tags, "task": any(t["task"] for t in tags), "about": about,
-                             "role": role, "role_ru": _ROLE_RU.get(role, "")})
-        return rows
+                             "role": role, "role_ru": _ROLE_RU.get(role, ""),
+                             "updated": max(t["at"] for t in tags), "published": published})
+        # recently pushed on top (user 2026-10-23); `at` is ISO UTC, so text order is time order
+        return sorted(rows, key=lambda r: (r["updated"], r["name"]), reverse=True)
 
     def about(self, ref: str, att: object = None) -> str:
         """One line about `ref` from its README (attached, or in the sources for older pushes)."""
@@ -273,6 +289,31 @@ class SearchWeb:
                              "block": block.get("name", ""), "repo": repo, "tag": task["tag"], "n": n,
                              "pinned": bool(task.get("pinned")), "hidden": bool(task.get("hidden"))})
         return rows
+
+    def _solved(self, login: str, *, viewer: str | None) -> dict:
+        """
+        Return what `login` has solved, newest first, and a few numbers -- own page and admins.
+
+        Each: the task, the version solved, where (a course, or outside any -- `hashpass run`),
+        when. A task whose repository the viewer may not see is left out.
+        """
+        rows = []
+        for ref, rec in self.server.progress().get(login).items():
+            if not isinstance(rec, dict) or rec.get("status") != "passed":
+                continue
+            repo, _, tag = ref.partition(":")
+            if not repo or not self.server.repo(repo).exists or not self.server._may_see_repo(viewer, repo):  # noqa: SLF001
+                continue
+            n = self.server._solved_n(rec, repo, tag)              # noqa: SLF001
+            course = None if rec.get("outside") else self.server.course_api.courses.get(str(rec.get("course") or ""))
+            rows.append({"ref": ref, "repo": repo, "tag": tag, "n": n, "at": rec.get("ts"),
+                         "course": course.ref if course else "", "course_title": course.title if course else "",
+                         "version_ref": f"{repo}:{tag}_v{n}" if n else ref})
+        rows.sort(key=lambda r: str(r["at"] or ""), reverse=True)
+        in_courses = sum(1 for r in rows if r["course"])
+        return {"rows": rows, "total": len(rows), "in_courses": in_courses, "outside": len(rows) - in_courses,
+                "courses": len({r["course"] for r in rows if r["course"]}),
+                "taking": len(self._taking(login))}
 
     def _taking(self, login: str) -> list[dict]:
         """Return the courses `login` takes (enrolled, not staff) with progress -- their own page only."""

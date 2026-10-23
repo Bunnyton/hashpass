@@ -134,7 +134,8 @@ def test_anonymous_pulls_of_a_public_course_still_work(legacy: PoolServer) -> No
     closure = client.get("/closure/bob/lab/1?revisions=1")
     assert closure.status_code == 200 and closure.get_json()["refs"][-1] == "bob/lab:1_v1"  # noqa: PLR2004
     assert client.get("/image/bob/lab/1").status_code == 200  # noqa: PLR2004
-    assert client.get("/closure/bob/new/1?revisions=1").status_code == 404  # noqa: PLR2004  (a proposal)
+    # a public image outside any course is public too (user 2026-10-23: search and run any)
+    assert client.get("/closure/bob/new/1?revisions=1").status_code == 200  # noqa: PLR2004
 
 
 @pytest.mark.tier1

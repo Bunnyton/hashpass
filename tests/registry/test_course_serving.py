@@ -41,8 +41,10 @@ def _digest(pool: _Courses, n: int) -> str:
 def test_a_member_gets_the_courses_revision(pool: _Courses) -> None:
     code, headers = _get(f"{pool.url}/task/bob/git-init/1?course=bob/linux", pool.tok["kid"])
     assert (code, headers["X-Image-Ref"]) == (200, "bob/git-init:1_v1")       # pinned to v1
-    assert _get(f"{pool.url}/task/bob/git-init/1_v2", pool.tok["kid"])[0] == 404  # noqa: PLR2004
-    assert _get(f"{pool.url}/task/bob/git-init/1", pool.tok["max"])[0] == 404     # not a member  # noqa: PLR2004
+    # user 2026-10-23 («искать по образам всем … и их выполнять»): a public task, any version,
+    # to anyone -- run outside the course; the course's credit still needs the course's version
+    assert _get(f"{pool.url}/task/bob/git-init/1_v2", pool.tok["kid"])[0] == 200  # noqa: PLR2004
+    assert _get(f"{pool.url}/task/bob/git-init/1", pool.tok["max"])[0] == 200     # not a member  # noqa: PLR2004
 
 
 @pytest.mark.tier1

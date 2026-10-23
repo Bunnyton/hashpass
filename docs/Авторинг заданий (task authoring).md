@@ -261,10 +261,10 @@ react on command exec watch.sh   # (перехватчик на каждую к�
 ```bash
 # автор (hashpass):
 hashpass build <Taskfile> [-t name:ver]        # собрать; имя: -t > image-строка > каталог
-hashpass images                                # список собранного (name:ver + kind: task|image)
+hashpass search [запрос]                       # собранное здесь + задания и образы пула (как запустить)
 hashpass login <registry-url> [--if-needed]    # логин/пароль → токен (кэш 7 дней)
 hashpass logout <registry-url>                 # забыть токен (адрес пула остаётся сохранён)
-hashpass push <name:ver> --task <N> --title "…"  # опубликовать задание в пул под номером N
+hashpass push <name:ver> [-m "что поменялось"]  # новая версия на пул; место в курсе — в вебе
 hashpass push base [--force]  # базовый образ этого runtime на пул (студенты его скачивают, а не собирают)
                                 # deploy.sh шлёт базу БЕЗ --force (новый стамп = новый ref); --force — только вручную:
                                 # перезалитую базу заново скачивает каждый студент (~57 МБ)
