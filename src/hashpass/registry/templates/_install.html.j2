@@ -10,5 +10,6 @@
 <div class='install-one'>
 {{ install_cmd(flags, url) }}
 <p class='sub small'>Скрипт сам проверит систему и поставит, чего не хватает: Python, git, systemd-nspawn, а на ARM — эмулятор x86. Debian, Ubuntu, Arch, Fedora; sudo спросит пароль.</p>
+<p class='sub small'>Нет интернета на нужной машине? Скачайте <a href='/offline'>офлайн-установщик</a> (x86_64, ~200 МБ: внутри Python, задания и курсы) и запустите там: <code>bash hashpass-offline-x86_64.run</code>.</p>
 </div>
 {%- endmacro %}

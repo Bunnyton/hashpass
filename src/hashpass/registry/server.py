@@ -26,7 +26,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from flask import Flask, Response, g, request, send_file
+from flask import Flask, Response, g, redirect, request, send_file
 from werkzeug.serving import WSGIRequestHandler
 from werkzeug.serving import make_server as _wsgi_make_server
 
@@ -90,6 +90,9 @@ from hashpass.registry.web import (
 from hashpass.taskdigest import task_digest
 
 _BEARER = "Bearer "
+# The offline installer (scripts/offline): a pool hands out its own copy, else the latest release.
+OFFLINE_BUNDLE = "hashpass-offline-x86_64.run"
+OFFLINE_RELEASE_URL = f"https://github.com/Bunnyton/hashpass/releases/latest/download/{OFFLINE_BUNDLE}"
 _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
 _USER_RE = LOGIN_RE  # safe as a login + a per-user progress filename
 _AUTHOR_ROLES = ("author", "admin")
@@ -301,10 +304,13 @@ class PoolServer:
             return f"{name}:{version}"
         return None
 
+    def _settings_dir(self) -> Path:
+        """Return the registry directory: the catalog, pool settings and the offline bundle."""
+        return (self.catalog_path or (Path(self.store.root) / "catalog.json")).parent
+
     def pool_settings(self) -> PoolSettings:
         """Pool-wide switches (auto-approval), next to the catalog."""
-        return PoolSettings((self.catalog_path or (Path(self.store.root) / "catalog.json")).parent
-                            / "pool-settings.json")
+        return PoolSettings(self._settings_dir() / "pool-settings.json")
 
     def _fresh_for(self, user: str | None, name: str) -> bool:
         """Whether `user` gets a task's latest push: its people (spec 2026-10-23 §2) or an admin."""
@@ -530,6 +536,7 @@ class PoolServer:
         app.add_url_rule("/install.sh", "install_sh", self._route_install_sh, methods=["GET"])
         app.add_url_rule("/install-engine.sh", "install_engine_sh",
                          self._route_install_engine_sh, methods=["GET"])
+        app.add_url_rule("/offline", "offline", self._route_offline, methods=["GET"])
         # bearer-token endpoints for the student/author client
         app.add_url_rule("/login", "login", self._route_login, methods=["POST"])
         app.add_url_rule("/register", "register", self._route_register, methods=["POST"])
@@ -826,6 +833,18 @@ class PoolServer:
     def _route_install_engine_sh(self) -> Response:
         """Serve the one installer at the old author link (old instructions keep working)."""
         return self._serve_script(render_engine_install_script(self._pool_url()))
+
+    def _route_offline(self) -> Response:
+        """
+        Serve the offline installer from `<registry>/offline/`, else send to the latest release.
+
+        `scripts/offline/build.sh` makes the bundle; the operator copies it next to the catalog.
+        """
+        bundle = self._settings_dir() / "offline" / OFFLINE_BUNDLE
+        if bundle.is_file():
+            return send_file(bundle, mimetype="application/octet-stream", as_attachment=True,
+                             download_name=OFFLINE_BUNDLE, conditional=True)
+        return redirect(OFFLINE_RELEASE_URL, code=HTTPStatus.FOUND)
 
     # -- routes: API auth --------------------------------------------------
 

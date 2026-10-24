@@ -74,8 +74,10 @@ hashpass push <логин>/showcase:1 --task 1 --title "Первое задан�
 - Студент — с сайта пула (см. выше). Данные и кэш в `~/.hashpass`.
 - Автор — `make install` (ставит обе команды и активирует `hashpass`); `make uninstall` — удалить.
 - Без установки: `python3 -m hashpass <команда>`. Старое имя `hashengine` — псевдоним `hashpass`.
-- Без сети — один файл `hashpass-offline-x86_64.run`: `bash hashpass-offline-x86_64.run` от
-  пользователя, который будет решать задания. Внутри всё нужное:
+- Без сети — один файл `hashpass-offline-x86_64.run` ([последний релиз](https://github.com/Bunnyton/hashpass/releases/latest/download/hashpass-offline-x86_64.run);
+  пул отдаёт его по ссылке `/offline` на главной странице). Скачать на машине с интернетом,
+  перенести и запустить `bash hashpass-offline-x86_64.run` от пользователя, который будет решать
+  задания. Внутри всё нужное:
   - свой Python 3.13 и hashpass с зависимостями;
   - копия пула (задания, курсы, каталог; без аккаунтов и прогресса). hashpass сам поднимает её
     на `127.0.0.1:47080` при каждом запуске;
@@ -84,6 +86,8 @@ hashpass push <логин>/showcase:1 --task 1 --title "Первое задан�
 
   Нужны x86_64, systemd и sudo. Собирается на Debian 13 командой `scripts/offline/build.sh`
   (`--pool-data <каталог данных пула>`, иначе копия читается с прод-пула по ssh).
+  Пул раздаёт свой экземпляр из `<registry>/offline/hashpass-offline-x86_64.run`, а без него
+  отправляет на релиз GitHub.
 
 ## Дальше
 
