@@ -251,3 +251,17 @@ def test_install_script_gives_the_new_python_its_own_pip():
     assert "ensurepip --user --upgrade" in script
     boot = script[script.index("ensurepip"):script.index("SHA=")]
     assert boot.count("-m pip --version") >= 2 and "exit 1" in boot  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_install_script_raises_the_inotify_limit_for_many_consoles():
+    """
+    Each console's systemd takes ~4 of root's inotify instances (128 by default).
+
+    2026-10-24: the 31st console on one machine died «Failed to create control group inotify
+    object: Too many open files». The install raises it for good in /etc/sysctl.d.
+    """
+    script = render_install_script("http://pool.example/")
+    assert "/etc/sysctl.d/60-hashpass.conf" in script
+    assert "fs.inotify.max_user_instances = 8192" in script
+    assert "fs.inotify.max_user_watches = 1048576" in script

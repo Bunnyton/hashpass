@@ -199,6 +199,13 @@ if [ -n "$EMULATED" ] && [ ! -e /proc/sys/fs/binfmt_misc/rosetta ] && [ ! -e /pr
   sudo systemctl restart systemd-binfmt <"$TTY" 2>/dev/null || sudo update-binfmts --enable qemu-x86_64 <"$TTY" 2>/dev/null || true
   [ -e /proc/sys/fs/binfmt_misc/qemu-x86_64 ] || echo "эмулятор x86 не включился -- перезагрузите машину и повторите" >&2
 fi
+# Many consoles on one machine (a server): each console's systemd takes ~4 of root's inotify
+# instances, 128 by default -- the 31st console died «Too many open files». Raise it for good.
+if [ "$(cat /proc/sys/fs/inotify/max_user_instances 2>/dev/null || echo 0)" -lt 8192 ]; then
+  echo "поднимаю лимит inotify ядра: много консолей hashpass на одной машине"
+  sudo sh -c 'printf "fs.inotify.max_user_instances = 8192\nfs.inotify.max_user_watches = 1048576\n" > /etc/sysctl.d/60-hashpass.conf && sysctl -q -p /etc/sysctl.d/60-hashpass.conf' <"$TTY" \
+    || echo "не удалось поднять лимит inotify -- не больше ~30 консолей одновременно" >&2
+fi
 # A school network may intercept TLS with a self-signed cert: then git/pip refuse GitHub, and
 # the second try skips verification for exactly the hosts the install talks to.
 TRUSTED="__TRUSTED__"

@@ -33,6 +33,7 @@ from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 
+from hashpass import machines
 from hashpass.account import current as account_current
 from hashpass.attempts import (
     AttemptUploader,
@@ -635,8 +636,6 @@ def _advance_and_announce(session: object, io: Io) -> bool:
     return True
 
 
-_MACHINE_PREFIX = "hp-"   # hostname-valid machine-name prefix for the interactive boot
-_MACHINE_HEX = 12         # hex chars of uuid entropy in the machine name
 _DEFAULT_TERM = "xterm-256color"
 _GRADE_HOST = "127.0.0.1"  # per-command grade server binds loopback (shared with the container)
 _ACCEPT_POLL = 0.3         # accept() timeout so the grade thread can notice `stop`
@@ -956,25 +955,6 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
         session.render.skip = lambda: False
 
 
-def _reap_stale_machines() -> None:
-    """
-    Terminate leftover hashpass containers (hp-*) from interrupted prior runs, reclaiming ptys.
-
-    A clean run powers its machine off; an interrupted one (Ctrl-C, a closed terminal) leaks it,
-    and every leaked machine holds ptys against kernel.pty.max. Enough of them and script(1) (live
-    output capture) -- or even a fresh boot -- fails with "No space left on device". Reaping our
-    OWN orphaned machines before a boot reclaims those ptys. Assumes one hashpass run at a time.
-    """
-    with contextlib.suppress(Exception):
-        out = subprocess.run(["machinectl", "list", "--no-legend"],
-                             capture_output=True, text=True, check=False).stdout
-        for line in out.splitlines():
-            parts = line.split()
-            if parts and parts[0].startswith(_MACHINE_PREFIX):
-                subprocess.run(["sudo", "machinectl", "terminate", parts[0]],
-                               check=False, capture_output=True)
-
-
 _TERMINFO_DIRS = ("etc/terminfo", "lib/terminfo", "usr/share/terminfo")
 
 
@@ -1034,7 +1014,7 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     grading proceeds. `user` is the console login user (a task's `settings user`, default
     student); `grade_port` is the host loopback port the per-command grade hook connects to.
     """
-    machine = f"{_MACHINE_PREFIX}{uuid.uuid4().hex[:_MACHINE_HEX]}"
+    machine = machines.machine_name()
     term, term_args = _console_term(Path(runner.rootfs), os.environ)
     argv = ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, f"--setenv=TERM={term}", *term_args]
     if user:
@@ -1044,7 +1024,9 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
         argv.append(f"--setenv=HP_PORT={grade_port}")
     argv += nspawn_emulation_args(rootfs=Path(runner.rootfs))   # x86_64 images on ARM: no seccomp
     argv += ["-D", str(runner.rootfs)]
-    _reap_stale_machines()             # reclaim ptys from any interrupted prior runs
+    machines.reap_orphans()            # ptys of interrupted runs; live consoles of other runs stay
+    if (full := machines.no_room()) is not None:   # the kernel would kill its systemd cryptically
+        raise RuntimeError(full)
     if hasattr(runner, "live_machine"):
         runner.live_machine = machine  # `apply` actions now run inside this console's machine
     try:

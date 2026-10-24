@@ -1,3 +1,4 @@
+import os
 import re
 
 import pytest
@@ -25,8 +26,7 @@ def test_capture_files_parses_rc_and_passes_streams_verbatim():
 def test_machine_name_is_valid_and_unique():
     name = _machine_name()
     assert name.startswith("hp-")
-    assert re.fullmatch(r"hp-[0-9a-f]{12}", name) is not None
-    assert len(name) == 15                       # noqa: PLR2004
+    assert re.fullmatch(rf"hp-{os.getpid()}-[0-9a-f]{{8}}", name) is not None   # owned: see machines.py
     assert len(name) <= 64                        # noqa: PLR2004
     assert name[0] != "-" and name[-1] != "-"
     assert len({_machine_name() for _ in range(2000)}) == 2000  # noqa: PLR2004

@@ -14,6 +14,7 @@ from pathlib import Path
 from hashpass.image.base import build_base
 from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore, StoredImage
+from hashpass.machines import machine_name
 from hashpass.overlay import overlay_mount, overlay_umount
 from hashpass.recipe.model import CopyStep, Recipe, RunStep
 from hashpass.runner.nspawn import NspawnRunner
@@ -147,7 +148,7 @@ def build(  # noqa: PLR0913
             else:
                 if progress is not None:
                     progress(f"{label}: выполняю: {step.cmd}")
-                subprocess.run(["sudo", "systemd-nspawn", "-q", "--register=no",
+                subprocess.run(["sudo", "systemd-nspawn", "-q", "--register=no", "-M", machine_name(),
                                 "-D", str(mnt), "sh", "-c", step.cmd], check=True)
     finally:
         overlay_umount(mnt, sudo=sudo)

@@ -5,6 +5,7 @@ import time
 import uuid
 from pathlib import Path
 
+from hashpass.machines import machine_name
 from hashpass.overlay import overlay_mount, overlay_umount
 
 from .base import RunResult
@@ -102,7 +103,7 @@ class NspawnRunner:
             # defaults to --console=interactive and ALLOCATES A PTY per run; derivation does dozens
             # of these per build, so the ptys pile up against the global kernel.pty.max and later
             # starve the interactive console's script(1) ("No space left on device").
-            ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no",
+            ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no", "-M", machine_name(),
              *user_flag, "-D", str(self._mnt), *argv],
             capture_output=True,
             text=True,
@@ -188,7 +189,7 @@ class NspawnRunner:
             p = subprocess.run(
                 # --console=pipe: no per-run pty (see the note in run()); handlers run dozens of
                 # times too, so this keeps them off the kernel.pty.max budget.
-                ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no",
+                ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no", "-M", machine_name(),
                  *extra, "-D", str(mnt), *argv],
                 capture_output=True,
                 text=True,

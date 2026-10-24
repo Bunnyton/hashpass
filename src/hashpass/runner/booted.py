@@ -26,14 +26,13 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from hashpass.machines import machine_name
 from hashpass.overlay import overlay_mount, overlay_umount
 from hashpass.runner.nspawn import NspawnRunner
 
 from .base import RunResult
 
 _RC_ON_MISSING = 1        # exit code when the container never wrote a parseable rc
-_MACHINE_PREFIX = "hp-"   # systemd machine-name prefix (hostname-valid)
-_MACHINE_HEX = 12         # hex chars of uuid entropy per machine name
 _RUN_DIR = ".hp-run"      # overlay-root dot-dir for per-run out/err/rc (hidden from a plain `ls /`)
 _BOOT_TIMEOUT = 30        # seconds to wait for machined registration (~2s typical)
 _READY_TIMEOUT = 30       # seconds to wait for machinectl-shell/session readiness after boot
@@ -54,8 +53,8 @@ def _capture_files(out_text: str, err_text: str, rc_text: str) -> RunResult:
 
 
 def _machine_name() -> str:
-    """Return a unique, hostname-valid machine name for one booted runner (avoids -M collisions)."""
-    return f"{_MACHINE_PREFIX}{uuid4().hex[:_MACHINE_HEX]}"
+    """Return a unique, hostname-valid machine name for one booted runner (owned by this process)."""
+    return machine_name()
 
 
 def _read(path: Path) -> str:
@@ -161,7 +160,7 @@ class BootedNspawnRunner(NspawnRunner):
             # derived here match what `wc -m`/`grep -i` print there on Cyrillic data.
             extra += [f"--setenv={key}={val}" for key, val in {"LANG": "C.UTF-8", **setenv}.items()]
             proc = subprocess.run(
-                ["sudo", "systemd-nspawn", "-q", "--register=no",
+                ["sudo", "systemd-nspawn", "-q", "--register=no", "-M", machine_name(),
                  *extra, "-D", str(mnt), *argv],
                 capture_output=True, text=True, encoding="utf-8", check=False,
             )
