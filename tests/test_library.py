@@ -88,3 +88,44 @@ def test_a_push_choice_runs_push_with_the_message_asked(monkeypatch, tmp_path) -
     library.run_entry(Home(tmp_path), library.Entry("Задания на этой машине", "bob/lab:1", "task",
                                                     local=True, action="push"))
     assert calls == [("bob/lab:1", "новый шаг")]
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("key", ["P", "з", "З"])
+def test_any_case_and_layout_of_p_sends_to_the_pool(monkeypatch, tmp_path, key) -> None:
+    """User 2026-10-25: «если нажать на p … открывается выбранное в курс» -- P was the app's «Решение»."""
+    chosen = _pick(monkeypatch, tmp_path, key, "bob/lab:1")
+    assert chosen is not None and (chosen.ref, chosen.action) == ("bob/lab:1", "push")
+
+
+@pytest.mark.tier1
+def test_the_list_opens_on_the_first_build_of_this_machine(monkeypatch, tmp_path) -> None:
+    """«Не вижу возможность запушить»: the cursor stands on a local row, p is in the footer at once."""
+    import asyncio  # noqa: PLC0415
+
+    from textual.app import App  # noqa: PLC0415
+    from textual.widgets import Tree  # noqa: PLC0415
+
+    from hashpass import library  # noqa: PLC0415
+    from hashpass.cli import Home  # noqa: PLC0415
+    monkeypatch.setattr(library.LibraryScreen, "_local", lambda _self: [("bob/lab:1", "task")])
+    got: list[object] = []
+
+    class _Host(App):
+        def on_mount(self) -> None:
+            self.push_screen(library.LibraryScreen(Home(tmp_path), _Pool(), "tok"), got.append)
+
+    async def drive() -> None:
+        app = _Host()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            tree = app.screen.query_one("#lib-tree", Tree)
+            assert tree.has_focus
+            assert tree.cursor_node is not None and tree.cursor_node.data.ref == "bob/lab:1"
+            keys = {k for k, b in app.screen.active_bindings.items() if b.binding.show}
+            assert "p" in keys
+            await pilot.press("p")
+            await pilot.pause()
+    asyncio.run(drive())
+    assert got and got[0].action == "push"

@@ -842,7 +842,14 @@ class PoolTUI(App):
     # -- catalog editing (staff) ------------------------------------------
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:  # noqa: PLR0911
-        """Editing keys exist only for staff: hide/show for an author, moving too for the admin."""
+        """
+        Editing keys exist only for staff: hide/show for an author, moving too for the admin.
+
+        Under another screen (the list of every task, a form) the main keys sleep: P there
+        opened the course task's solution behind it (user 2026-10-25).
+        """
+        if len(self.screen_stack) > 1 and action in _MAIN_ACTIONS:
+            return False
         if not self.token and action in _CATALOG_ACTIONS:
             return False                                  # signed out: only the login form
         if action == "courses":
@@ -1095,6 +1102,9 @@ _WEB_ONLY = frozenset({"toggle_hidden", "toggle_block", "move", "approve", "reje
 # The catalog's own keys (not Textual's tab / quit): off while signed out (spec 2026-10-16).
 _CATALOG_ACTIONS = frozenset(
     b.action.split("(")[0] for b in PoolTUI.BINDINGS if b.action != "quit")
+
+# Every key of the main window: asleep while another screen is on top (see check_action).
+_MAIN_ACTIONS = _CATALOG_ACTIONS | {"quit"}
 
 
 def failure_note(ref: str, exc: BaseException) -> str:

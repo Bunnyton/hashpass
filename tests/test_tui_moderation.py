@@ -169,3 +169,26 @@ def test_o_on_the_rejected_block_explains_instead_of_failing(tmp_path):
 
     client = _run(tmp_path, "root", "admin", steps)
     assert ("block", "rejected") not in client.calls
+
+
+@pytest.mark.tier1
+def test_the_main_keys_sleep_under_another_screen(tmp_path):
+    """User 2026-10-25: P in the list of every task opened the course task's solution behind it."""
+    from hashpass.library import LibraryScreen  # noqa: PLC0415
+    seen: list[str] = []
+
+    async def steps(app, pilot) -> None:
+        app.action_solution = lambda: seen.append("solution")
+        app.action_resync = lambda: seen.append("resync")
+        app.push_screen(LibraryScreen(app.env, None, "tok"))
+        await pilot.pause()
+        for key in ("P", "s", "c", "x"):
+            await pilot.press(key)
+            await pilot.pause()
+        shown = {b.binding.description for b in app.screen.active_bindings.values() if b.binding.show}
+        assert not shown & {"Решение", "Самопроверка", "Курсы и поиск", "Выход"}
+        app.pop_screen()
+        await pilot.pause()
+
+    _run(tmp_path, "admin", "admin", steps)
+    assert seen == []

@@ -89,7 +89,7 @@ class LibraryScreen(Screen["Entry | None"]):
     BINDINGS = [  # noqa: RUF012
         Binding("escape", "back", "Назад"),
         Binding("f5", "reload", "Обновить"),
-        Binding("p,з", "push", "На пул"),
+        Binding("p,P,з,З", "push", "На пул"),   # every case and layout: P was the app's «Решение»
         Binding("slash,f,F,а,А", "search", "Поиск", show=False),   # not the app's «open the list» again
     ]
     DEFAULT_CSS = """
@@ -116,8 +116,22 @@ class LibraryScreen(Screen["Entry | None"]):
         """Paint what is here at once; the pool arrives in the background."""
         self.query_one("#lib-tree", Tree).show_root = False
         self._paint()
-        self.query_one("#lib-q", Input).focus()
+        self.query_one("#lib-tree", Tree).focus()
+        self.call_after_refresh(self._to_first_row)     # the tree knows its lines after a paint
         self.action_reload()
+
+    def _to_first_row(self) -> None:
+        """
+        Put the cursor on the first row and the focus on the list: Enter and p work at once.
+
+        User 2026-10-25: «не вижу возможность запушить» -- in the search line p was a letter of
+        the query and the footer hid it. / and f go to the search.
+        """
+        tree = self.query_one("#lib-tree", Tree)
+        for section in tree.root.children:
+            if section.children:
+                tree.move_cursor(section.children[0])
+                return
 
     def action_reload(self) -> None:
         """F5: ask the pool again (a fresh push of someone else shows up)."""
