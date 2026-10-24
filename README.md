@@ -74,6 +74,16 @@ hashpass push <логин>/showcase:1 --task 1 --title "Первое задан�
 - Студент — с сайта пула (см. выше). Данные и кэш в `~/.hashpass`.
 - Автор — `make install` (ставит обе команды и активирует `hashpass`); `make uninstall` — удалить.
 - Без установки: `python3 -m hashpass <команда>`. Старое имя `hashengine` — псевдоним `hashpass`.
+- Без сети — один файл `hashpass-offline-x86_64.run`: `bash hashpass-offline-x86_64.run` от
+  пользователя, который будет решать задания. Внутри всё нужное:
+  - свой Python 3.13 и hashpass с зависимостями;
+  - копия пула (задания, курсы, каталог; без аккаунтов и прогресса). hashpass сам поднимает её
+    на `127.0.0.1:47080` при каждом запуске;
+  - для систем без `systemd-container` или `rsync`: `systemd-nspawn`, `machinectl`, `machined`
+    и `rsync` со своими библиотеками (ставятся в `/opt/hashpass-sys`).
+
+  Нужны x86_64, systemd и sudo. Собирается на Debian 13 командой `scripts/offline/build.sh`
+  (`--pool-data <каталог данных пула>`, иначе копия читается с прод-пула по ssh).
 
 ## Дальше
 

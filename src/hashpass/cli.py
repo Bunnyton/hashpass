@@ -93,6 +93,7 @@ _POOL_NAME = "pool.json"             # student: saved {url, user}
 # (no 185.x). A fixed URL keeps the login token cache stable across invocations.
 _DEFAULT_REGISTRY = "http://127.0.0.1:8080"
 _REGISTRY_START_TRIES = 50   # poll the auto-started service ~5s (50 x 0.1s) before giving up
+_LOCAL_POOL_START_TRIES = 300   # an offline install's pool: up to ~30 s on a slow disk
 _BASE_IMAGE = "debian:trixie-slim"  # slim boots + runs machinectl-shell commands reliably;
 # full debian:trixie breaks command execution in the booted machine (and adds no ps/systemd).
 _BASE_OWNER = "bunnyton"   # the base image lives in its author's namespace, like any image
@@ -1283,6 +1284,31 @@ def _ensure_registry(env: Home, io: Io) -> str:
     raise RuntimeError(msg)
 
 
+def ensure_local_pool(env: Home) -> None:
+    """
+    Start the pool of an offline install when it is not running (pool.json `"local": true`).
+
+    The offline bundle (scripts/offline) puts a copy of the pool into this home and points
+    pool.json at it on 127.0.0.1; the student never starts a server by hand.
+    """
+    pool = load_pool(env)
+    url = str(pool.get("url") or "")
+    if not pool.get("local") or not url or _registry_reachable(url):
+        return
+    host, port = _registry_host_port(url)
+    env.registry.mkdir(parents=True, exist_ok=True)
+    with (env.registry / "serve.log").open("ab") as log:
+        subprocess.Popen(  # detached: outlives this launch and keeps serving
+            [sys.executable, "-m", "hashpass", "--no-update", "serve", "--host", host, "--port", str(port)],
+            stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+            start_new_session=True, env={**os.environ, _ENV_HOME: str(env.root)},
+        )
+    for _ in range(_LOCAL_POOL_START_TRIES):
+        if _registry_reachable(url):
+            return
+        time.sleep(0.1)
+
+
 def _uses_local_service(env: Home) -> bool:
     """Whether authoring is offline (no pool configured) -- only then the local registry service is used."""
     return _pool_url(env) is None
@@ -2175,9 +2201,13 @@ def load_pool(env: Home) -> dict[str, str]:
 
 
 def save_pool(env: Home, url: str, user: str) -> None:
-    """Persist the pool URL + login so later runs need no re-typing."""
+    """Persist the pool URL + login so later runs need no re-typing (a local pool stays local)."""
     env.root.mkdir(parents=True, exist_ok=True)
-    _pool_path(env).write_text(json.dumps({"url": url, "user": user}, indent=2), encoding="utf-8")
+    data: dict[str, object] = {"url": url, "user": user}
+    old = load_pool(env)
+    if old.get("local") and old.get("url") == url:
+        data["local"] = True
+    _pool_path(env).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def _pool_url(env: Home, explicit: str | None = None) -> str | None:

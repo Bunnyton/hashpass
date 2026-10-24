@@ -38,3 +38,6 @@ src/*.egg-info/
 .venv/
 /build/
 content/tasks/*/reports/
+
+# the offline installer (scripts/offline/build.sh)
+dist/

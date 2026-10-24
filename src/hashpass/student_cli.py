@@ -59,6 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
 def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911, PLR0912, C901
     """Route a parsed student sub-command (no sub-command → pool home: pull + list)."""
     command = args.command
+    if isinstance(env, cli.Home) and command != "serve":   # an offline install: its own pool
+        cli.ensure_local_pool(env)
     if isinstance(env, cli.Home):                 # tasks come through the current course
         my_courses.activate(env.root, cli._pool_url(env) or "")   # noqa: SLF001
     if command in _NEEDS_SUDO:   # ask for the password HERE, in the plain terminal, not under the TUI
