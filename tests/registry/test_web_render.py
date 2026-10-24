@@ -250,4 +250,4 @@ def test_install_script_gives_the_new_python_its_own_pip():
     script = render_install_script("http://pool.example/")
     assert "ensurepip --user --upgrade" in script
     boot = script[script.index("ensurepip"):script.index("SHA=")]
-    assert boot.count('-m pip --version') >= 2 and "exit 1" in boot  # noqa: PLR2004
+    assert boot.count("-m pip --version") >= 2 and "exit 1" in boot  # noqa: PLR2004
