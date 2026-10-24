@@ -236,14 +236,22 @@ if [ -z "$PY" ] || ! py_ok "$PY"; then
   exit 1
 fi
 echo "Python: $PY ($("$PY" --version))"
-if ! "$PY" -m pip --version >/dev/null 2>&1; then   # deadsnakes/uv Pythons come without pip
-  if ! "$PY" -m ensurepip --user >/dev/null 2>&1; then
+# deadsnakes/uv Pythons come without pip -- and on Ubuntu 22.04 python3.13 even sees the system
+# pip 22.0 (built for 3.10), which dies on `import distutils`. A plain `ensurepip --user` calls
+# that one «already satisfied» and installs nothing: `--upgrade` puts a pip of its own into ~/.local.
+if ! "$PY" -m pip --version >/dev/null 2>&1; then
+  "$PY" -m ensurepip --user --upgrade >/dev/null 2>&1 || true
+  if ! "$PY" -m pip --version >/dev/null 2>&1; then
     GETPIP="$(mktemp)"
     curl -fsSL -o "$GETPIP" https://bootstrap.pypa.io/get-pip.py \
       || curl -kfsSL -o "$GETPIP" https://bootstrap.pypa.io/get-pip.py
     "$PY" "$GETPIP" --user --break-system-packages \
       || PIP_TRUSTED_HOST="$TRUSTED" "$PY" "$GETPIP" --user --break-system-packages
     rm -f "$GETPIP"
+  fi
+  if ! "$PY" -m pip --version >/dev/null 2>&1; then
+    echo "не удалось поставить pip для $PY -- поставьте его вручную ($PY -m ensurepip --user --upgrade) и повторите" >&2
+    exit 1
   fi
 fi
 # Install ONE commit's tarball, not a `git+` URL: a git clone drags the whole history

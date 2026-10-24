@@ -236,3 +236,18 @@ def test_install_script_adds_a_course_given_as_its_argument():
     script = render_install_script("http://pool:8080")
     assert 'COURSE="${1:-}"' in script
     assert '"$BIN/hashpass" --no-update add "$COURSE"' in script
+
+
+@pytest.mark.tier1
+def test_install_script_gives_the_new_python_its_own_pip():
+    """
+    Ubuntu 22.04: python3.13 imports the system pip 22.0 (for 3.10) and dies on `distutils`.
+
+    `ensurepip --user` then says «Requirement already satisfied … dist-packages» and installs
+    nothing (checked in ubuntu:22.04 + deadsnakes, 2026-10-24); `--upgrade` puts a pip into
+    ~/.local. If pip still does not run, the script stops with a clear message.
+    """
+    script = render_install_script("http://pool.example/")
+    assert "ensurepip --user --upgrade" in script
+    boot = script[script.index("ensurepip"):script.index("SHA=")]
+    assert boot.count('-m pip --version') >= 2 and "exit 1" in boot  # noqa: PLR2004
