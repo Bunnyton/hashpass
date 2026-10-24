@@ -51,6 +51,39 @@ def read_state(p: Path, inside: str | None = None) -> FileState:
     return FileState("absent", None)
 
 
+_MAX_LINKS = 40   # as the kernel's ELOOP limit
+
+
+def resolve_inside(rootfs: Path, path: str) -> Path | None:
+    """
+    Resolve `path` of the student's system as that system would: links followed inside `rootfs`.
+
+    A target from the root (`/home/student/logs/a.log`) and `..` above `/` stay inside, as under
+    chroot. None for a link loop. The result may not exist (a dangling link).
+    """
+    parts = [p for p in path.split("/") if p not in ("", ".")]
+    done: list[str] = []
+    hops = 0
+    while parts:
+        part = parts.pop(0)
+        if part == "..":
+            if done:
+                done.pop()
+            continue
+        here = rootfs.joinpath(*done, part)
+        if not here.is_symlink():
+            done.append(part)
+            continue
+        hops += 1
+        if hops > _MAX_LINKS:
+            return None
+        target = str(here.readlink())
+        if target.startswith("/"):
+            done = []
+        parts = [p for p in target.split("/") if p not in ("", ".")] + parts
+    return rootfs.joinpath(*done)
+
+
 def capture(rootfs: Path, observe: list[str], *, output_path: str | None = None,
             bool_observe: list[str] | None = None) -> Observation:
     rootfs = Path(rootfs)

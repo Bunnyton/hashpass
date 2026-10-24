@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
+from hashpass.canon.capture import resolve_inside
 from hashpass.cmd import Cmd
 from hashpass.grade import grade_stage
 from hashpass.handler import HandlerContext, run_handler
@@ -507,9 +508,10 @@ class TaskSession:
             return False
 
     def _read_file(self, path: str) -> str | None:
-        """Read a text file of the student's system (`accept file`); None if it is not there."""
+        """Read a text file of the student's system (`accept file`), links followed inside it; None if not there."""
         try:
-            return (Path(self.student.rootfs) / path.lstrip("/")).read_text(encoding="utf-8")
+            real = resolve_inside(Path(self.student.rootfs), path)
+            return None if real is None else real.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError, AttributeError, TypeError):
             return None
 
