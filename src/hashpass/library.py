@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from rich.markup import escape
@@ -41,6 +41,7 @@ class Entry:
     n: int = 0               # the pool's newest version (pool rows)
     about: str = ""
     local: bool = False      # a copy is on this machine
+    action: str = "run"      # what the list asks for: "run", or "push" (a build of this machine)
 
     def label(self) -> str:
         """Return the row as the tree shows it (Rich markup)."""
@@ -88,6 +89,7 @@ class LibraryScreen(Screen["Entry | None"]):
     BINDINGS = [  # noqa: RUF012
         Binding("escape", "back", "Назад"),
         Binding("f5", "reload", "Обновить"),
+        Binding("p,з", "push", "На пул"),
         Binding("slash,f,F,а,А", "search", "Поиск", show=False),   # not the app's «open the list» again
     ]
     DEFAULT_CSS = """
@@ -133,8 +135,8 @@ class LibraryScreen(Screen["Entry | None"]):
 
     def _loaded(self, rows: list[dict] | None, note: str) -> None:
         self.pool = rows
-        self.query_one("#lib-head", Label).update(note or "Enter — запустить · задание с пула решается без зачёта в курс, "
-                                                          "но попадает в профиль")
+        self.query_one("#lib-head", Label).update(note or "Enter — запустить · p — свою сборку на пул · задание с пула "
+                                                          "решается без зачёта в курс, но попадает в профиль")
         self._paint()
 
     def _local(self) -> list[tuple[str, str]]:
@@ -167,6 +169,16 @@ class LibraryScreen(Screen["Entry | None"]):
         if isinstance(event.node.data, Entry):
             self.dismiss(event.node.data)
 
+    def action_push(self) -> None:
+        """P: send a build of this machine to the pool (user 2026-10-24: «из интерфейса запушить»)."""
+        tree = self.query_one("#lib-tree", Tree)
+        row = tree.cursor_node.data if tree.cursor_node is not None else None
+        if not isinstance(row, Entry) or row.section not in _SECTIONS[:2]:
+            self.notify("На пул отправляется сборка этой машины — выберите строку из «… на этой машине»",
+                        severity="warning")
+            return
+        self.dismiss(replace(row, action="push"))
+
     def action_search(self) -> None:
         """/ or f: back to the search line."""
         self.query_one("#lib-q", Input).focus()
@@ -180,15 +192,22 @@ class LibraryScreen(Screen["Entry | None"]):
 
 
 def run_entry(env: Home, entry: Entry) -> None:
-    """Run a chosen row in the real terminal: a task to solve, an image's shell."""
-    from hashpass.cli import Io, _now_iso, cmd_engine_run  # noqa: PLC0415
+    """Do the chosen row in the real terminal: solve a task, an image's shell, or push a build."""
+    from hashpass import cli  # noqa: PLC0415
     from hashpass.tui import _read_line  # noqa: PLC0415
-    io = Io(read=_read_line, write=lambda s: sys.stdout.write(s), clock=_now_iso)  # noqa: PLW0108
+    io = cli.Io(read=_read_line, write=lambda s: sys.stdout.write(s), clock=cli._now_iso)  # noqa: PLW0108, SLF001
     sys.stdout.write("\x1b[2J\x1b[H")
     try:
-        cmd_engine_run(env, entry.ref, None, io)
+        if entry.action == "push":
+            message = io.read(f"{entry.ref} -> на пул. Что поменялось (Enter -- без комментария): ").strip()
+            cli.cmd_push(env, entry.ref, io=io, message=message)
+            with contextlib.suppress(EOFError, KeyboardInterrupt):
+                input("Enter — назад к списку ")
+        else:
+            cli.cmd_engine_run(env, entry.ref, None, io)
     except Exception as exc:                              # noqa: BLE001  (say it, back to the list)
-        sys.stdout.write(f"\x1b[31mне удалось запустить {entry.ref}: {exc}\x1b[0m\n")
+        what = "отправить" if entry.action == "push" else "запустить"
+        sys.stdout.write(f"\x1b[31mне удалось {what} {entry.ref}: {exc}\x1b[0m\n")
         with contextlib.suppress(EOFError, KeyboardInterrupt):
             input("Enter — назад к списку ")
 
