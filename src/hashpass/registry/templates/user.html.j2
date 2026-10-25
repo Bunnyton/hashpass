@@ -36,7 +36,7 @@
 <table class='sortable'>
 <thead><tr><th scope='col'>Задание</th><th scope='col'>Используется в курсах</th></tr></thead>
 <tbody>
-{% for r in solved.rows %}<tr><td data-sort='{{ r.at }}'><a class='mono' href='/web/image/{{ r.version_ref | ref_url }}'>{{ r.ref }}</a>{% if r.n %} <span class='pill sm ver'>версия {{ r.n }}</span>{% endif %} <span class='small dim'>решено {{ ago(r.at) }}</span></td>
+{% for r in solved.rows %}<tr><td data-sort='{{ r.at }}'><a class='mono' href='/web/image/{{ r.version_ref | ref_url }}'>{{ r.ref }}</a>{% if r.n %} <span class='pill sm ver'>версия {{ r.n }}</span>{% endif %} <span class='small dim'>решено {{ ago(r.at) }}</span> <a class='small' href='{{ r.solution }}'>решение</a></td>
 <td>{% for c in r.courses %}<a href='/c/{{ c.ref }}'>{{ c.title or c.ref }}</a>{% if not loop.last %}, {% endif %}{% else %}<span class='dim'>—</span>{% endfor %}</td></tr>{% endfor %}
 </tbody></table>
 </div>

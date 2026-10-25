@@ -73,7 +73,7 @@ def test_profile_lists_every_catalog_task_with_status_attempts_and_times():
     assert "Иван" in html                                   # the private comment, to staff
     assert "1 / 2" in html                                     # passed / catalog tasks
     assert "href='/web/image/lab/one:1'" in html             # task name -> card
-    assert "href='/web/history?user=s1&amp;ref=lab%2Fone%3A1'" in html
+    assert "href='/web/history?user=s1&amp;ref=lab%2Fone%3A1#solution'" in html
     assert "datetime='2026-10-21T10:00:00Z'" in html         # credited at
     assert "lab/two:1" in html                               # untouched task is listed too
     assert "old/gone:1" in html                              # off-catalog progress is not lost

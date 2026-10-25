@@ -12,7 +12,7 @@ from flask import Flask, Response, request
 
 from hashpass.registry.access import can
 from hashpass.registry.progress_store import outside_course
-from hashpass.registry.web import _env, render_profile
+from hashpass.registry.web import _env, history_href, render_profile
 
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
@@ -131,7 +131,9 @@ class CourseWeb:
                 if status == "passed" and outside_course(progress.get(r), course.ref):
                     word = "решено не в курсе"
                 cells.append({"n": i, "ref": r, "mark": mark, "word": word, "cls": status or "none",
-                              "about": about[r]})
+                              "about": about[r],
+                              "href": history_href(student, r, solved=status == "passed") if status
+                              else f"/c/{course.ref}/u/{quote(student, safe='')}#t{i}"})
             rows.append({"user": student, "comment": profile.get("comment", ""),
                          "done": len(done), "total": len(refs),
                          "pct": round(100 * len(done) / len(refs)) if refs else 0, "cells": cells})

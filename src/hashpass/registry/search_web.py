@@ -21,7 +21,7 @@ from flask import Flask, Response, current_app, has_app_context, request, send_f
 from hashpass.registry import courses as course_model
 from hashpass.registry.access import can
 from hashpass.registry.revisions import revision_version
-from hashpass.registry.web import _env
+from hashpass.registry.web import _env, history_href
 
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
@@ -310,7 +310,8 @@ class SearchWeb:
             used = {u["course"]: u["title"] for u in self.where_used(repo, tag, viewer=viewer, role=role)}
             rows.append({"ref": ref, "repo": repo, "tag": tag, "n": n, "at": rec.get("ts"),
                          "courses": [{"ref": c, "title": t} for c, t in used.items()],
-                         "version_ref": f"{repo}:{tag}_v{n}" if n else ref})
+                         "version_ref": f"{repo}:{tag}_v{n}" if n else ref,
+                         "solution": history_href(login, ref, solved=True)})
         rows.sort(key=lambda r: str(r["at"] or ""), reverse=True)
         return {"rows": rows, "total": len(rows), "taking": len(self._taking(login))}
 

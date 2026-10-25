@@ -142,3 +142,20 @@ def test_ones_profile_has_the_solved_tasks_and_stats(world: _Courses) -> None:
     assert "решено" in stats and "<b>1</b>" in stats
     other = _page(_browser(world, "eve"), f"{world.url}/u/kid")[1]
     assert "id='solved'" not in other                                    # progress is private
+
+
+@pytest.mark.tier1
+def test_a_progress_mark_opens_the_solution(world: _Courses) -> None:
+    """User 2026-10-25: «после нажатия на прогресс (галочку и остальное) хочу сразу решение»."""
+    history = "/web/history?user=kid&amp;ref=bob%2Fgit-init%3A1#solution"
+    course = _page(_browser(world, "bunnyton"), f"{world.url}/c/bob/linux")[1]
+    cells = course.split("id='student-rows'", 1)[1].split("</tbody>", 1)[0]
+    assert f"href='{history}'" in cells
+    student = _page(_browser(world, "bunnyton"), f"{world.url}/c/bob/linux/u/kid")[1]
+    assert f"href='{history}'" in student
+    mine = _page(_browser(world, "kid"), f"{world.url}/u/kid")[1]
+    assert f"href='{history}'" in mine                          # one's own solved list
+    assert "#solution" not in _page(_browser(world, "eve"), f"{world.url}/u/kid")[1]
+    status, _page_html = _page(_browser(world, "kid"), world.url + history.replace("&amp;", "&").split("#")[0])
+    assert status == 200  # noqa: PLR2004                       # one's own work: open
+    assert _page(_browser(world, "eve"), world.url + history.replace("&amp;", "&").split("#")[0])[0] == 403  # noqa: PLR2004

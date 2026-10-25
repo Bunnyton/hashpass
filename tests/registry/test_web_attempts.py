@@ -36,7 +36,7 @@ def test_history_solution_and_attempts_with_output():
     sessions = [_session("b" * 32, "passed", 200.0, [("ls -l", "total 0\n")]),
                 _session("a" * 32, "abandoned", 100.0, [("lss", "bash: lss: command not found\n")])]
     html = render_history("s1", "lab:1", {"status": "passed"}, sessions=sessions, now=10_000.0)
-    assert "✓ решение" in html
+    assert "✓ решение" in html and "id='solution'" in html   # the ✓ link lands right here
     assert html.index("ls -l") < html.index("<details")      # the solution comes first, open
     assert "total 0" in html
     assert "bash: lss: command not found" in html            # failed attempts keep their output

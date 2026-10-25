@@ -404,6 +404,16 @@ def render_reset_link(user: str, link: str) -> str:
         title="Сброс пароля — hashpass", nav=True, active="", user=user, link=link)
 
 
+def history_href(user: str, ref: str, *, solved: bool) -> str:
+    """
+    Return the page of `user`'s work on `ref`; a solved one opens right at the solution.
+
+    User 2026-10-25: «после нажатия на прогресс (галочку и остальное) хочу сразу решение».
+    """
+    href = f"/web/history?user={quote(user, safe='')}&ref={quote(ref, safe='')}"
+    return f"{href}#solution" if solved else href
+
+
 def _cell(user: str, ref: str, record: dict | None, summary: dict | None = None) -> dict:
     """
     One matrix cell (spec 2026-10-16): `·` not run, `◐` in progress, `✓` passed.
@@ -413,12 +423,12 @@ def _cell(user: str, ref: str, record: dict | None, summary: dict | None = None)
     """
     status = (record or {}).get("status")
     summary = summary or {}
-    href = f"/web/history?user={quote(user, safe='')}&ref={quote(ref, safe='')}"
+    href = history_href(user, ref, solved=False)
     if status == "passed" or summary.get("passed"):
         verdict = ((record or {}).get("authenticity") or {}).get("verdict")
         pasted = verdict == "pasted"
         return {"mark": "✓⚠" if pasted else "✓", "cls": "c no" if pasted else "c ok",
-                "href": href, "title": "зачтено" + (" (вставки)" if pasted else ""),
+                "href": history_href(user, ref, solved=True), "title": "зачтено" + (" (вставки)" if pasted else ""),
                 "rank": 2 if pasted else 3}
     if status == "failed" or summary.get("sessions"):
         live = bool(summary.get("live"))

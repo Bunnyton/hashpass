@@ -247,7 +247,7 @@
 <tr data-text='{{ s.user }} {{ s.comment }}'>
 <td><a class='mono' href='/c/{{ c.ref }}/u/{{ s.user | q }}'>{{ s.user }}</a>{% if s.comment %}<div class='sub small'>{{ s.comment }}</div>{% endif %}</td>
 <td data-sort='{{ s.done }}'><div class='progress' role='progressbar' aria-valuemin='0' aria-valuemax='{{ s.total }}' aria-valuenow='{{ s.done }}' aria-label='решено {{ s.done }} из {{ s.total }}'><span style='width:{{ s.pct }}%'></span></div><span class='small num'>{{ s.done }} / {{ s.total }}</span></td>
-<td><div class='cells'>{% for x in s.cells %}<a class='cell {{ x.cls }}' href='/c/{{ c.ref }}/u/{{ s.user | q }}#t{{ x.n }}' title='№{{ x.n }} {{ x.ref }} — {{ x.word }}{% if x.about %}. {{ x.about }}{% endif %}' aria-label='задание {{ x.n }}, {{ x.ref }}: {{ x.word }}'>{{ x.mark }}</a>{% endfor %}</div></td>
+<td><div class='cells'>{% for x in s.cells %}<a class='cell {{ x.cls }}' href='{{ x.href }}' title='№{{ x.n }} {{ x.ref }} — {{ x.word }}{% if x.about %}. {{ x.about }}{% endif %}' aria-label='задание {{ x.n }}, {{ x.ref }}: {{ x.word }}'>{{ x.mark }}</a>{% endfor %}</div></td>
 </tr>
 {% endfor %}
 </tbody>

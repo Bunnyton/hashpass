@@ -23,7 +23,7 @@
 «Дословно эталон» — команда совпадает с solve-командой из Taskfile.
 «Сверх эталона» — команды, которых нет в solve (шум или исследование).</p>
 {% if solution %}
-<section class='session solution' id='s-{{ solution.id }}'>
+<section class='session solution' id='solution'>
 <h2><span class='ok'>✓ решение</span> <span class='sub small'>{{ solution.when }} · {{ solution.duration }} · команд: {{ solution.rows|length }}</span></h2>
 {{ commands(solution.rows) }}
 {% if solution.truncated %}<p class='sub small'>дальше сессия обрезана (лимит размера)</p>{% endif %}
