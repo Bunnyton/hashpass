@@ -94,10 +94,10 @@ def test_dashboard_rows_cells_and_group_filter():
 @pytest.mark.tier1
 def test_users_toggle_and_inline_controls():
     profiles = [{"user": "s1", "role": "student", "group": "G", "comment": ""}]
-    html = render_users(profiles, registration_open=True)
+    html = render_users(profiles, registration_open=True, boxes=frozenset({"admins", "people"}))
     assert "Закрыть регистрацию" in html
     assert "Открыть регистрацию" in render_users(profiles, registration_open=False)
-    assert "/web/users/role" in html          # inline per-user role change
+    assert "/web/users/role" in html          # «Сделать админом» (the `admins` box, 2026-10-25)
     assert "/web/users/reset" in html         # per-user reset link
     assert "ссылка сброса" in html
 
