@@ -15,6 +15,7 @@ grep -q '^student:' /etc/subgid || echo student:100000:65536 >> /etc/subgid
 mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/student
 install -D -m 644 /var/tmp/hp-docker/user/docker.service /etc/systemd/user/docker.service
 install -D -m 755 /var/tmp/hp-docker/bin/load-images /usr/local/lib/hp-docker/load-images
+install -D -m 755 /var/tmp/hp-docker/bin/runc /usr/local/lib/hp-docker/bin/runc
 mkdir -p /home/student/.config/systemd/user/default.target.wants
 ln -sf /etc/systemd/user/docker.service /home/student/.config/systemd/user/default.target.wants/docker.service
 # Консоль запрещает keyctl (связки ключей не разделены между контейнерами и хостом), а runc по

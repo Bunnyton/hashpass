@@ -1,0 +1,10 @@
+money
+table
+colors
+plural
+dates
+units
+discounts
+receipts
+barcode
+tax

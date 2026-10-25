@@ -4,7 +4,8 @@
 Description=Docker Application Container Engine (rootless)
 
 [Service]
-Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
+# первым — обёртка runc: сборке (RUN в Dockerfile) нужна --no-new-keyring, см. bin/runc
+Environment=PATH=/usr/local/lib/hp-docker/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # /proc/sys в консоли только для чтения: выключить IPv6 на интерфейсе контейнера нельзя — и не нужно
 Environment=DOCKER_ALLOW_IPV6_ON_IPV4_INTERFACE=1
 ExecStart=/usr/share/docker.io/contrib/dockerd-rootless.sh

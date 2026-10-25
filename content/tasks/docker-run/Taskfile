@@ -18,6 +18,7 @@ settings
   pager on
 
 say "Docker запускает программы в контейнерах: своя система, свои файлы — и поднимается за секунду."
+read theory.md
 read brief.md
 
 stage

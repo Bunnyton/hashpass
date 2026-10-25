@@ -21,6 +21,7 @@ settings
   pager on
 
 say "Скрипты в ~/scripts ты правишь давно. А что в них было неделю назад — уже не вспомнить."
+read theory.md
 read brief.md
 
 stage

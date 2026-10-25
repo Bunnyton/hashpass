@@ -1,0 +1,74 @@
+# docker-layers — слои образа и кэш сборки: docker history → собрать лавку (библиотеки ставятся
+# ~20 секунд) → поправить цену и пересобрать (снова 20 секунд: COPY . стоит выше RUN; доза
+# cache.md на этом месте) → переставить Dockerfile так, чтобы правка цен собиралась из кэша.
+# Продолжает docker-build; образы busybox и wiki уже в машине, сеть сборке не нужна.
+# Последний шаг проверяет пробная сборка: копия ~/shop с новой строкой в prices.txt должна
+# собраться без установки библиотек (в выводе нет «ставлю») и показать новую строку.
+
+image docker-layers:1
+from docker-build:1
+
+# data: data/shop — руками (Dockerfile, deps.txt, install-deps.sh, app.sh, prices.txt)
+copy data/shop /home/student/shop
+run chown -R student:student /home/student/shop
+
+hidden hp
+
+settings
+  pager on
+
+say "Лавка «У дома» показывает прайс из контейнера. Сборка у неё почему-то идёт почти полминуты."
+read brief.md
+
+stage
+  say "Посмотри, из каких слоёв состоит образ wiki"
+  solve docker history wiki
+  accept cmd "docker history" ok
+  accept cmd "docker image history" ok
+  accept output "COPY www"
+  neutral ls cat pwd cd
+  on pass say "Внизу — слои busybox, над ними COPY с сайтом. Busybox на машине хранится один раз, сколько бы образов на нём ни стояло."
+  hint output "No such image" say "Какие образы есть на машине, покажет docker images."
+  hint tries 5 say "Команда та же, что в теории, — только с именем wiki."
+
+stage
+  say "Собери из ~/shop образ shop и посмотри прайс"
+  solve:
+    docker build -t shop /home/student/shop
+    docker run --rm shop
+  accept cmd "docker run" ok
+  accept output "Лавка «У дома»"
+  check live docker image inspect shop
+  neutral ls cat pwd cd
+  on pass say "Запомни, сколько шла сборка. Почти всё время ушло на установку библиотек."
+  hint output "Unable to find image" say "Сначала образ надо собрать — так же, как greeter."
+  hint tries 5 say "docker build -t, имя и каталог с Dockerfile; потом docker run с этим именем."
+
+stage
+  say "Молоко стоит 89, а не 98. Исправь цену в ~/shop/prices.txt — и чтобы образ shop показывал новую"
+  solve:
+    sed -i 's/^Молоко;98$/Молоко;89/' /home/student/shop/prices.txt
+    docker build -t shop /home/student/shop
+    docker run --rm shop
+  accept cmd "docker run" ok
+  accept output "Молоко — 89"
+  check live docker run --rm shop | grep -q "Молоко — 89"
+  neutral ls cat pwd cd
+  on pass read cache.md
+  hint output "Молоко — 98" say "Образ — снимок: правка файла попадёт в него только после сборки."
+  hint tries 5 say "Поправь строку с молоком в prices.txt, пересобери shop и запусти."
+
+stage
+  say "Переставь инструкции в ~/shop/Dockerfile так, чтобы после правки цен образ собирался за пару секунд"
+  solve:
+    printf '%s\n' 'FROM busybox' 'COPY deps.txt install-deps.sh /app/' 'RUN sh /app/install-deps.sh' 'COPY . /app' 'CMD ["sh", "/app/app.sh"]' > /home/student/shop/Dockerfile
+    docker build -t shop /home/student/shop
+  accept cmd "docker build" ok
+  check live d=$(mktemp -d) && cp -a /home/student/shop/. "$d" && echo "Проверка;1" >> "$d/prices.txt" && out=$(docker build --progress=plain -t shop-probe "$d" 2>&1) && docker run --rm shop-probe | grep -q "Проверка" && ! printf '%s' "$out" | grep -q "ставлю"; rc=$?; docker rmi -f shop-probe >/dev/null 2>&1; rm -rf "$d"; exit $rc
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Теперь правка цен — пара секунд: библиотеки лежат в слое, который не меняется."
+  hint output "ставлю" say "Библиотеки опять ставились. Сразу после перестановки так и будет — кэша для нового порядка ещё нет: поправь цену и собери снова. А если Dockerfile прежний — что в нём стоит выше RUN?"
+  hint output "deps.txt: nonexistent|can't open '/app/deps.txt'|install-deps.sh: not found|No such file" say "Установщик читает /app/deps.txt, а сам лежит в /app/install-deps.sh: оба файла должны оказаться в образе раньше, чем RUN."
+  hint tries 6 say "Что нужно для RUN с установкой? Только deps.txt и install-deps.sh. Положи в образ их, поставь библиотеки, а остальное — после."
+
+exec finale

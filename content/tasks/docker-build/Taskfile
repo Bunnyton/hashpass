@@ -36,11 +36,11 @@ stage
   accept cmd "docker run" ok
   accept output "Hello, world"
   neutral ls cat pwd cd
-  on pass say "CMD из Dockerfile — команда по умолчанию. Напиши свою после имени образа, и она её заменит."
+  on pass say "Контейнер выполнил CMD из Dockerfile — то, что образ делает, когда его просто запускают по имени."
   hint tries 5 say "Запускают образ так же, как alpine и wiki, — по имени."
 
 stage
-  say "Пусть greeter здоровается не с миром, а с hashpass"
+  say "Пусть сам образ greeter здоровается не с миром, а с hashpass — по обычному docker run greeter"
   solve:
     sed -i 's/name="world"/name="hashpass"/' /home/student/greeter/greet.sh
     docker build -t greeter /home/student/greeter
@@ -51,6 +51,8 @@ stage
   neutral ls cat pwd cd
   on pass say "Тот же Dockerfile на любой машине соберёт тот же образ — поэтому его и кладут в репозиторий рядом с кодом."
   hint output "Hello, world" read rebuild.md
+  hint output "executable file not found" say "После имени образа docker ждёт команду — её он выполнит вместо CMD. Программы hashpass в контейнере нет. С кем здороваться, решает greet.sh внутри образа."
+  hint output "Hello, hashpass" say "Так ты подменил команду на один запуск, а сам образ по-прежнему здоровается с миром — проверь: docker run greeter. Меняй программу, из которой собран образ."
   hint tries 5 say "Кто именно здоровается — написано в greet.sh."
 
 exec finale

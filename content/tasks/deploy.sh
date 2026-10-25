@@ -39,7 +39,7 @@ BLOCKS=(
     'Редактор и текст: vim-intro vim-more fruit-store'
     'Скрипты: my-command'
     'Git: git-init git-log git-branch git-remote'
-    'Docker: docker-run docker-web docker-volume docker-build'
+    'Docker: docker-run docker-web docker-volume docker-build docker-layers'
     'Призы: star-wars moria'
     'Архив: first-steps showcase'
 )

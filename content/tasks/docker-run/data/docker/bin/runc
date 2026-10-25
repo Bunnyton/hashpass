@@ -1,0 +1,14 @@
+#!/bin/sh
+# runc для docker в консоли: консоль запрещает keyctl, и runc с новой связкой ключей не стартует.
+# Рантайм демона это учитывает (daemon.json: NoNewKeyring), а сборка (RUN в Dockerfile) зовёт
+# runc сама — ей ключ --no-new-keyring добавляет эта обёртка.
+added=""
+for arg in "$@"; do
+    shift
+    set -- "$@" "$arg"
+    if [ -z "$added" ] && { [ "$arg" = run ] || [ "$arg" = create ]; }; then
+        set -- "$@" --no-new-keyring
+        added=1
+    fi
+done
+exec /usr/sbin/runc "$@"
