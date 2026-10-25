@@ -1,33 +1,46 @@
 """
-Who may do what in a course (spec 2026-10-21 §5).
+Who may do what in a course (spec 2026-10-21 §5; roles and boxes 2026-10-25 §3).
 
-`can(user, server_role, course, action)` is the one answer every route asks. Actions, each
-including the ones before it for a member: `view` (see the course), `play` (run its tasks, get
-credit), `propose` (suggest a change) -- for anyone signed in on a public course, members on a
-private one; `add` (add tasks directly, update one's own) -- author; `moderate` (decide
-proposals and requests, arrange, hide, remove) -- maintainer; `admin` (settings, roles,
-invite, delete) -- owner. The server admin may do everything. An outsider of a private course
-gets only `peek`: its title and description, to ask for access.
+`can(user, pool, course, action)` is the one answer every route asks; `pool` is the caller's
+permission boxes on the pool (empty for anyone but a pool admin). Course roles: `member`
+(plays a private course), `author` (adds tasks at once), `admin` (the boxes in
+`course.perms`, DEFAULT when unset), `owner` (all boxes). `peek` -- a private course's title,
+for an access request; `view`/`play`; `propose` -- anyone signed in on a public course, anyone
+in a private one; `add` -- straight in, no proposal; `content`, `people`, `progress`, `admins`
+-- the boxes; `delete` -- the owner. A pool admin sees every course and acts in it with its
+own pool boxes.
 """
+from hashpass.registry import perms
 from hashpass.registry.courses import Course
 
-ACTIONS = ("peek", "view", "play", "propose", "add", "moderate", "admin")
-_LEVEL = {"member": 0, "author": 1, "maintainer": 2, "owner": 3}
-_NEEDS = {"add": 1, "moderate": 2, "admin": 3}
+ACTIONS = ("peek", "view", "play", "propose", "add", "content", "people", "progress", "admins", "delete")
 
 
-def can(user: str | None, server_role: str | None, course: Course, action: str) -> bool:
-    """Whether `user` (server role `server_role`) may do `action` in `course`."""
+def course_perms(course: Course, user: str | None) -> frozenset[str]:
+    """Return `user`'s boxes in `course`: ALL for the owner, the stored ones for an admin, none else."""
+    role = course.role_of(user)
+    if role == "owner":
+        return perms.ALL
+    if role == "admin":
+        return perms.clean(course.perms.get(user or ""), default=perms.DEFAULT)
+    return frozenset()
+
+
+def can(user: str | None, pool: frozenset[str], course: Course, action: str) -> bool:
+    """Whether `user` (pool boxes `pool`) may do `action` in `course`."""
     if action not in ACTIONS:
         msg = f"unknown action: {action}"
         raise ValueError(msg)
     if action == "peek":
         return True
-    if server_role == "admin":
-        return True
     role = course.role_of(user)
-    if action in _NEEDS:
-        return role is not None and _LEVEL[role] >= _NEEDS[action]
+    boxes = course_perms(course, user) | pool
+    if action in perms.KEYS:
+        return action in boxes
+    if action == "delete":
+        return role == "owner" or "content" in pool
+    if action == "add":
+        return role == "author" or "content" in boxes
     if action == "view":
-        return course.visibility == "public" or role is not None
-    return user is not None and (course.visibility == "public" or role is not None)
+        return course.visibility == "public" or role is not None or bool(pool)
+    return user is not None and (course.visibility == "public" or role is not None or bool(pool))

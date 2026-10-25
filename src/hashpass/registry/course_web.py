@@ -17,7 +17,7 @@ from hashpass.registry.web import _env, history_href, render_profile
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
 
-_ROLE_RU = {"owner": "владелец", "maintainer": "сопровождающий", "author": "автор", "member": "участник"}
+_ROLE_RU = {"owner": "владелец", "admin": "админ", "author": "автор", "member": "участник"}
 
 
 def render_courses(rows: list[dict], *, q: str, signed_in: str | None, message: str = "") -> str:  # noqa: ARG001
@@ -81,7 +81,7 @@ class CourseWeb:
             return self.server._redirect("/web/login?next=%2Fc")              # noqa: SLF001
         people = self.server.people
         runs = [people._course_row(c, role_of=user) for c in self.server.course_api.courses.all()  # noqa: SLF001
-                if c.role_of(user) in ("owner", "maintainer", "author")]
+                if c.role_of(user) in ("owner", "admin", "author")]
         return self.server._html(_env.get_template("courses.html.j2").render(  # noqa: SLF001
             title="Мои курсы — hashpass", nav=True, active="/c", signed_in=user, role_ru=_ROLE_RU,
             taking=people._taking(user), runs=sorted(runs, key=lambda r: r["ref"]),  # noqa: SLF001
@@ -95,7 +95,9 @@ class CourseWeb:
             return self.server._html(  # noqa: SLF001
                 render_courses([], q="", signed_in=user, message=f"Курса {owner}/{name} нет."),
                 status=HTTPStatus.NOT_FOUND)
-        may = {a: can(user, role, course, a) for a in ("view", "play", "propose", "add", "moderate", "admin")}
+        pool = self.server.pool_perms(user)
+        may = {a: can(user, pool, course, a)
+               for a in ("view", "play", "propose", "add", "content", "people", "progress", "admins", "delete")}
         may["students"] = role == "admin"     # user 2026-10-25: not the course's staff, the admin only
         view = api._view(course, user, role) if may["view"] else api._peek(course, user)  # noqa: SLF001
         for block in view.get("blocks") or []:        # «what is this task» for the hover card
@@ -103,7 +105,7 @@ class CourseWeb:
                 task["about"] = self.server.people.about(str(task.get("revision") or task["ref"]))
         pool = self.server._pool_url()                                         # noqa: SLF001
         link = f"{pool}/c/{course.ref}"
-        invite_link = f"{link}?invite={quote(course.invite)}" if may["admin"] else ""
+        invite_link = f"{link}?invite={quote(course.invite)}" if may["people"] else ""
         students = self._students(course) if may["students"] else []
         joined = user is not None and course.id in api.enrollments.of(user)
         return self.server._html(render_course(  # noqa: SLF001
@@ -119,7 +121,7 @@ class CourseWeb:
         about = {r: self.server.people.about(self.server._live_ref(r)) for r in refs}  # noqa: SLF001
         rows = []
         for student in api.enrollments.users_of(course.id):
-            if course.role_of(student) in ("owner", "maintainer", "author"):
+            if course.role_of(student) in ("owner", "admin", "author"):
                 continue                                  # staff are not students of their course
             progress = self.server.progress().get(student)
             done = [r for r in refs if (progress.get(r) or {}).get("status") == "passed"]

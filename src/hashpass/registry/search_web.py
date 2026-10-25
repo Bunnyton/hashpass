@@ -27,9 +27,9 @@ if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
 
 _LIMIT = 200
-_STAFF_ROLES = ("owner", "maintainer", "author")   # a student's own enrolments stay private
+_STAFF_ROLES = ("owner", "admin", "author")   # a student's own enrolments stay private
 _KINDS = (("users", "Пользователи"), ("courses", "Курсы"), ("tasks", "Задания"), ("images", "Образы"))
-_ROLE_RU = {"owner": "владелец", "maintainer": "сопровождающий", "author": "автор", "member": "участник"}
+_ROLE_RU = {"owner": "владелец", "admin": "админ", "author": "автор", "member": "участник"}
 _SUMMARY_MAX = 140
 _AVATAR_MAX = 2 * 1024 * 1024
 _AVATAR_KINDS = ((b"\x89PNG\r\n\x1a\n", "png", "image/png"), (b"\xff\xd8\xff", "jpg", "image/jpeg"),
@@ -153,7 +153,7 @@ class SearchWeb:
                 kind="users", kinds=[], rows=[], more=0, role_ru=_ROLE_RU, missing=login),
                 status=HTTPStatus.NOT_FOUND)
         api = self.server.course_api
-        viewable = [c for c in api.courses.all() if can(user, role, c, "view")]
+        viewable = [c for c in api.courses.all() if can(user, self.server.pool_perms(user), c, "view")]
         runs = [self._course_row(c, role_of=login) for c in viewable if c.role_of(login) in _STAFF_ROLES]
         repos = self.repos(user, "", member=login)          # own + those one contributes to
         see_all = user == login or role == "admin"
@@ -210,7 +210,7 @@ class SearchWeb:
 
     def _courses(self, user: str | None, role: str | None, q: str) -> list[dict]:
         rows = [self._course_row(c, role_of=user) for c in self.server.course_api.courses.all()
-                if can(user, role, c, "view")
+                if can(user, self.server.pool_perms(user), c, "view")
                 and q.casefold() in f"{c.ref} {c.title} {c.description}".casefold()]
         return sorted(rows, key=lambda r: (r["role"] is None, r["ref"]))
 
@@ -278,7 +278,7 @@ class SearchWeb:
         rows = []
         latest_of = self.server.repo(repo)
         for course in self.server.course_api.courses.all():
-            if not see_all and not can(viewer, role, course, "view"):
+            if not see_all and not can(viewer, self.server.pool_perms(viewer), course, "view"):
                 continue
             for block, task in course.tasks():
                 if task["repo"] != repo or (tag is not None and task["tag"] != tag):

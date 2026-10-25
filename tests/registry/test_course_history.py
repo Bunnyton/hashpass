@@ -25,7 +25,7 @@ def test_every_change_lands_in_the_history_with_who_and_why(pool: _Courses) -> N
     pool.call("PUT", "/courses/bob/linux/members/eve", "bob", {"role": "maintainer"})
     history = pool.call("GET", "/courses/bob/linux", "kid")[1]["history"]
     assert [h["by"] for h in history[:2]] == ["bob", "bob"]               # newest first
-    assert "eve" in history[0]["what"] and "сопровождающий" in history[0]["what"]
+    assert "eve" in history[0]["what"] and "админ" in history[0]["what"]   # was «сопровождающий»
     assert "bob/regex:1" in history[1]["what"] and history[1]["comment"] == "нужно про регулярки"
     html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")[1]
     assert "id='history'" in html and "нужно про регулярки" in html

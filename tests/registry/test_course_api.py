@@ -105,7 +105,8 @@ def test_members_and_roles(pool: _Courses) -> None:
     assert pool.call("PUT", f"{path}/members/ann", "max", {"role": "maintainer"})[0] == 403  # noqa: PLR2004
     assert pool.call("PUT", f"{path}/members/ann", "bob", {"role": "maintainer"})[0] == 200  # noqa: PLR2004
     assert pool.call("POST", f"{path}/blocks", "ann", {"name": "B"})[0] == 201  # noqa: PLR2004
-    assert pool.call("PUT", path, "ann", {"title": "x"})[0] == 403    # settings: owner only  # noqa: PLR2004
+    assert pool.call("PUT", path, "ann", {"title": "x"})[0] == 200    # settings: the `content` box  # noqa: PLR2004
+    assert pool.call("DELETE", path, "ann")[0] == 403                 # deleting: the owner only  # noqa: PLR2004
     assert pool.call("PUT", f"{path}/members/nobody", "bob", {"role": "member"})[0] == 404  # noqa: PLR2004
 
 

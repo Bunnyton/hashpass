@@ -34,7 +34,7 @@
   {% elif c.access == 'requested' %}
   <p class='sub'><span class='pill warn'>заявка отправлена</span> — владелец курса её рассмотрит.</p>
   {% else %}
-  <p class='sub'>Курс закрытый. Попросите доступ — владелец или сопровождающий рассмотрят заявку.</p>
+  <p class='sub'>Курс закрытый. Попросите доступ — владелец или админ курса рассмотрят заявку.</p>
   <form class='row' data-api='POST {{ api }}/requests'>
   <input name='comment' placeholder='кто вы, зачем курс (необязательно)'>
   <button type='submit'>Запросить доступ</button>
@@ -56,10 +56,10 @@
 <a href='#tasks' data-tab>{{ icon('task') }} Задания <span class='count'>{{ n_tasks }}</span></a>
 {% if may.students %}<a href='#students' data-tab>{{ icon('user') }} Проходят курс <span class='count'>{{ students | length }}</span></a>{% endif %}
 {% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
-{% if may.moderate and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
+{% if may.people and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
 <a href='#people' data-tab>{{ icon('user') }} Участники <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
 <a href='#history' data-tab>Изменения <span class='count'>{{ (c.history or []) | length }}</span></a>
-{% if may.admin %}<a href='#settings-tab' data-tab>Настройки</a>{% endif %}
+{% if may.content %}<a href='#settings-tab' data-tab>Настройки</a>{% endif %}
 </nav>
 <section id='tasks' class='tab-panel' aria-label='Задания'>
 <div class='cat-head'><h2>Задания</h2>
@@ -77,10 +77,10 @@
 <option value='{{ b.id }}'{% if outer.last %} selected{% endif %}>в конец блока</option>
 </optgroup>{% endfor %}</select></label>{% endif %}
 {% if not may.add %}<label>Комментарий<input name='comment' placeholder='почему это задание'></label>{% endif %}
-<p class='sub small'>По умолчанию — последняя версия.{% if not may.add %} Это предложение: решит сопровождающий курса.{% endif %}</p>
+<p class='sub small'>По умолчанию — последняя версия.{% if not may.add %} Это предложение: решит админ курса.{% endif %}</p>
 <button type='submit'>{% if may.add %}Добавить{% else %}Предложить{% endif %}</button>
 </form>
-{% if may.moderate %}
+{% if may.content %}
 <hr class='divider'>
 <form data-api='POST {{ api }}/blocks'>
 <label>Новый блок<input name='name' placeholder='например, Git'></label>
@@ -92,17 +92,17 @@
 {% endif %}
 </div>
 {% if c.blocks %}
-<div id='cat'{% if may.moderate %} data-layout-url='{{ api }}/layout' data-rev='{{ c.rev }}'{% endif %}>
+<div id='cat'{% if may.content %} data-layout-url='{{ api }}/layout' data-rev='{{ c.rev }}'{% endif %}>
 {% for b in c.blocks %}
 <div class='block card{% if not b.open %} block-hidden{% endif %}' data-block-id='{{ b.id }}'>
 <div class='block-head'>
-{% if may.moderate %}
+{% if may.content %}
 <form class='inline block-rename' data-api='PUT {{ api }}/blocks/{{ b.id }}'>
 <input name='name' value='{{ b.name }}' class='block-name-input'></form>
 {% else %}<b>{{ b.name }}</b>{% endif %}
 {% if not b.open %}<span class='pill closed'>скрыт</span>{% endif %}
 <span class='sp'></span>
-{% if may.moderate %}
+{% if may.content %}
 <details class='menu block-menu'><summary class='menu-dot' title='действия с блоком'>⋯</summary>
 <div class='menu-list card'>
 {{ act('PUT', api ~ '/blocks/' ~ b.id, 'Сделать доступным' if not b.open else 'Скрыть от проходящих курс', fields={'open': not b.open}) }}
@@ -113,22 +113,22 @@
 <ul class='tasklist' data-block-id='{{ b.id }}'>
 {% for t in b.tasks %}
 <li class='titem{% if t.hidden %} task-hidden{% endif %}' data-ref='{{ t.ref }}'>
-{% if may.moderate %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
+{% if may.content %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
 {% set rp = t.revision.rpartition('_v') %}<span class='tref has-tip'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}' aria-describedby='tip-{{ loop.index }}-{{ b.id }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span>{% if t.at %} <span class='small dim'>обновлено {{ ago(t.at) }}</span>{% endif %}
 <span class='tip card' role='tooltip' id='tip-{{ loop.index }}-{{ b.id }}'><span class='kind kind-task'>{{ icon('task') }} задание</span><b class='mono'>{{ rp[0] }}</b><span class='sub small'>{{ t.about or 'без описания' }}</span><a class='small' href='/web/image/{{ t.revision | ref_url }}'>открыть задание →</a></span></span>
 {% if t.hidden %}<span class='pill closed sm'>скрыто</span>{% endif %}
 {% if t.latest and t.latest > t.n %}<span class='pill warn sm'>есть версия {{ t.latest }}</span>{% endif %}
 <span class='sp'></span>
-{% if may.moderate or (may.add and t.added_by == signed_in) %}
+{% if may.content or (may.add and t.added_by == signed_in) %}
 <details class='menu task-menu'><summary class='menu-dot' title='действия'>⋯</summary>
 <div class='menu-list card'>
-{% if may.moderate %}
+{% if may.content %}
 {{ act('PUT', api ~ '/tasks/' ~ t.ref, '↑ Выше', fields={'move': -1}) }}
 {{ act('PUT', api ~ '/tasks/' ~ t.ref, '↓ Ниже', fields={'move': 1}) }}
 {{ act('PUT', api ~ '/tasks/' ~ t.ref, 'Показать' if t.hidden else 'Скрыть', fields={'hidden': not t.hidden}) }}
 {% endif %}
 {% if t.latest and t.latest > t.n %}{{ act('PUT', api ~ '/tasks/' ~ t.ref, 'Обновить до v' ~ t.latest, fields={'n': t.latest}) }}{% endif %}
-{% if may.moderate %}{{ act('DELETE', api ~ '/tasks/' ~ t.ref, 'Убрать из курса', 'menu-item danger', confirm='Убрать задание из курса?') }}{% endif %}
+{% if may.content %}{{ act('DELETE', api ~ '/tasks/' ~ t.ref, 'Убрать из курса', 'menu-item danger', confirm='Убрать задание из курса?') }}{% endif %}
 </div></details>
 {% endif %}
 </li>
@@ -158,7 +158,7 @@
 <td>{{ p.by }}</td><td class='sub small'>{{ p.comment }}{% if p.reason %}<br>причина: {{ p.reason }}{% endif %}</td>
 <td>{% if p.state == 'open' %}<span class='pill warn sm'>открыто</span>{% elif p.state == 'accepted' %}<span class='pill open sm'>принято</span>{% elif p.state == 'rejected' %}<span class='pill no sm'>отклонено</span>{% else %}<span class='pill sm'>отозвано</span>{% endif %}</td>
 <td class='row'>{% if p.state == 'open' %}
-{% if may.moderate %}{{ act('POST', api ~ '/proposals/' ~ p.id, 'Принять', 'sm', {'action': 'accept'}) }}
+{% if may.content %}{{ act('POST', api ~ '/proposals/' ~ p.id, 'Принять', 'sm', {'action': 'accept'}) }}
 <form class='inline row' data-api='POST {{ api }}/proposals/{{ p.id }}'><input type='hidden' name='action' value='reject'>
 <input name='reason' placeholder='причина' class='sm'><button class='sm ghost' type='submit'>Отклонить</button></form>{% endif %}
 {% if p.by == signed_in %}{{ act('POST', api ~ '/proposals/' ~ p.id, 'Отозвать', 'sm ghost', {'action': 'withdraw'}) }}{% endif %}
@@ -170,7 +170,7 @@
 
 </section>
 <section id='requests-tab' class='tab-panel' aria-label='Заявки'>
-{% if may.moderate and c.requests %}
+{% if may.people and c.requests %}
 <h2 id='requests'>Заявки на доступ</h2>
 <div class='card'><table>
 <tr><th>Кто</th><th>Комментарий</th><th>Когда</th><th></th></tr>
@@ -189,29 +189,29 @@
 <li><a class='person' href='/u/{{ ref_parts[0] | q }}'>{{ avatar(ref_parts[0], 'sm') }}<span class='mono'>{{ ref_parts[0] }}</span></a><span class='pill sm author'>владелец</span></li>
 {% for user, role in (c.members or {}).items() %}
 <li><a class='person' href='/u/{{ user | q }}'>{{ avatar(user, 'sm') }}<span class='mono'>{{ user }}</span></a>
-{% if may.admin %}
+{% if may.people %}
 <form class='inline row' data-api='PUT {{ api }}/members/{{ user | q }}'>
 <label class='visually-hidden' for='crole-{{ loop.index }}'>Роль {{ user }}</label>
-<select id='crole-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'maintainer'] %}<option value='{{ r }}'{% if r == role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
+<select id='crole-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'admin'] %}<option value='{{ r }}'{% if r == role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
 <button class='sm ghost' type='submit'>Сохранить</button></form>
 {{ act('DELETE', api ~ '/members/' ~ (user | q), 'Убрать', 'sm danger', confirm='Убрать ' ~ user ~ ' из участников?') }}
 {% else %}<span class='pill sm'>{{ role_ru[role] }}</span>{% endif %}
 </li>
 {% endfor %}
 </ul>
-{% if may.admin %}
+{% if may.people %}
 <hr class='divider'>
 <form class='row' data-api='PUT {{ api }}/members/__LOGIN__'>
 <label class='visually-hidden' for='new-cmember'>Логин</label>
 <input id='new-cmember' name='__login' placeholder='логин пользователя' required>
 <label class='visually-hidden' for='new-crole'>Роль</label>
-<select id='new-crole' name='role'><option value='member'>участник — проходит приватный курс</option><option value='author' selected>автор — добавляет задания</option><option value='maintainer'>сопровождающий — решает предложения и заявки</option></select>
+<select id='new-crole' name='role'><option value='member'>участник — проходит приватный курс</option><option value='author' selected>автор — добавляет задания</option><option value='admin'>админ — управляет курсом</option></select>
 <button class='sm' type='submit'>Добавить</button>
 </form>
 <p class='sub small'>Ссылка-приглашение — кто откроет её и войдёт, станет участником: <code class='copy'>{{ invite_link }}</code></p>
 {{ act('PUT', api, 'Сменить ссылку (старая перестанет работать)', 'sm ghost', {'rotate_invite': true}) }}
 {% endif %}
-<p class='sub small'>Автор добавляет задания сам и обновляет свои; сопровождающий ещё решает предложения и заявки, правит блоки и порядок; владелец — настройки и участники.</p>
+<p class='sub small'>Участник проходит приватный курс и предлагает задания; автор добавляет задания сам и обновляет свои; админ управляет курсом в пределах своих прав; владелец может всё.</p>
 </div>
 </section>
 <section id='history' class='tab-panel' aria-label='Изменения в курсе'>
@@ -259,7 +259,7 @@
 </section>
 {% endif %}
 
-{% if may.admin %}
+{% if may.content %}
 <section id='settings-tab' class='tab-panel' aria-label='Настройки'>
 <h2 id='settings'>Настройки</h2>
 <div class='card'>
@@ -273,13 +273,13 @@
 <label class='check'><input type='checkbox' name='auto_accept' data-type='bool'{% if c.settings.auto_accept %} checked{% endif %}> Принимать предложения сразу</label>
 <button type='submit'>Сохранить</button>
 </form>
-<hr class='divider'>
-{{ act('DELETE', api, 'Удалить курс', 'sm danger', confirm='Удалить курс насовсем? Задания и образы останутся — удалится только курс.', then='go:/c') }}
+{% if may.delete %}<hr class='divider'>
+{{ act('DELETE', api, 'Удалить курс', 'sm danger', confirm='Удалить курс насовсем? Задания и образы останутся — удалится только курс.', then='go:/c') }}{% endif %}
 </div>
 </section>
 {% endif %}
 {% endif %}
 <script src='/static/api.js'></script>
 <script src='/static/filter.js'></script>
-{% if may.moderate %}<script src='/static/catalog.js'></script>{% endif %}
+{% if may.content %}<script src='/static/catalog.js'></script>{% endif %}
 {% endblock %}

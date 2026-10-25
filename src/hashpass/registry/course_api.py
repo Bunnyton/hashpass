@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from flask import Flask, Response, request
 
 from hashpass.registry import courses as cm
-from hashpass.registry.access import can
+from hashpass.registry.access import can, course_perms
 from hashpass.registry.courses import Course, CourseConflictError, CourseStore
 from hashpass.registry.revisions import parse_version
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 _HISTORY_KEEP = 500           # a course remembers this many changes
 _HISTORY_SHOWN = 100
-_ROLE_RU = {"member": "участник", "author": "автор", "maintainer": "сопровождающий", "owner": "владелец"}
+_ROLE_RU = {"member": "участник", "author": "автор", "admin": "админ", "owner": "владелец"}
 _MAX_TEXT = 2000
 
 
@@ -122,12 +122,12 @@ class CourseApi:
 
     def _load(self, owner: str, name: str, action: str) -> tuple[Course | None, str | None, Response | None]:
         """Return the course + caller, or an error: 404/401 when it may not be seen, 403 otherwise."""
-        user, role = self._caller()
+        user, _role = self._caller()
         course = self.courses.get(f"{owner}/{name}")
         if course is None:
             return None, user, self._err(HTTPStatus.NOT_FOUND, f"нет такого курса: {owner}/{name}")
-        if not can(user, role, course, action):
-            if not can(user, role, course, "view"):
+        if not can(user, self.server.pool_perms(user), course, action):
+            if not can(user, self.server.pool_perms(user), course, "view"):
                 status = HTTPStatus.UNAUTHORIZED if user is None else HTTPStatus.FORBIDDEN
                 return None, user, self._err(status, "курс закрыт — попросите доступ")
             return None, user, self._err(HTTPStatus.FORBIDDEN, "не хватает прав в этом курсе")
@@ -169,9 +169,9 @@ class CourseApi:
                 "title": course.title, "description": course.description,
                 "visibility": course.visibility, "role": course.role_of(user)}
 
-    def _view(self, course: Course, user: str | None, role: str | None) -> dict:
+    def _view(self, course: Course, user: str | None, _role: str | None) -> dict:
         """Return the course as `user` may see it."""
-        staff = can(user, role, course, "moderate")
+        staff = can(user, self.server.pool_perms(user), course, "content")
         out = self._summary(course, user) | {"rev": course.rev}
         blocks = []
         for block in course.blocks:
@@ -198,14 +198,15 @@ class CourseApi:
         if staff:
             out["updates"] = [{"repo": r, "tag": t, "latest": n}
                               for r, t, n in cm.pending_updates(course, self._latest)]
-            out["requests"] = [r for r in course.requests if r["state"] == "open"]
             out["settings"] = {"auto_accept": course.auto_accept, "auto_update": course.auto_update}
         out["members"] = course.members                 # who is in: everyone who sees the course
         # each change is a version of the course, numbered once (entries from before had no number)
         out["history"] = [h if "n" in h else h | {"n": i}
                           for i, h in reversed(list(enumerate(course.history, 1)))][:_HISTORY_SHOWN]
-        if can(user, role, course, "admin"):
+        if can(user, self.server.pool_perms(user), course, "people"):
             out["invite"] = course.invite
+            out["requests"] = [r for r in course.requests if r["state"] == "open"]
+        out["perms"] = {u: sorted(course_perms(course, u)) for u, r in course.members.items() if r == "admin"}
         return out
 
     def _peek(self, course: Course, user: str | None) -> dict:
@@ -217,11 +218,11 @@ class CourseApi:
     # -- routes ---------------------------------------------------------------
 
     def list_or_create(self) -> Response:
-        user, role = self._caller()
+        user, _role = self._caller()
         if request.method == "GET":
             q = request.args.get("q", "").casefold()
             rows = [self._summary(c, user) for c in self.courses.all()
-                    if can(user, role, c, "view")
+                    if can(user, self.server.pool_perms(user), c, "view")
                     and (not q or q in f"{c.ref} {c.title} {c.description}".casefold())]
             return self._json(HTTPStatus.OK, {"courses": rows})
         if user is None:
@@ -242,10 +243,10 @@ class CourseApi:
             course = self.courses.get(f"{owner}/{name}")
             if course is None:
                 return self._err(HTTPStatus.NOT_FOUND, f"нет такого курса: {owner}/{name}")
-            if not can(user, role, course, "view"):
+            if not can(user, self.server.pool_perms(user), course, "view"):
                 return self._json(HTTPStatus.OK, self._peek(course, user))
             return self._json(HTTPStatus.OK, self._view(course, user, role))
-        course, _user, err = self._load(owner, name, "admin")
+        course, _user, err = self._load(owner, name, "delete" if request.method == "DELETE" else "content")
         if err is not None:
             return err
         if request.method == "DELETE":
@@ -281,13 +282,13 @@ class CourseApi:
         return err or self._json(HTTPStatus.OK, self._summary(self.courses.get(course.ref), _user))
 
     def join(self, owner: str, name: str) -> Response:
-        user, role = self._caller()
+        user, _role = self._caller()
         if user is None:
             return self._err(HTTPStatus.UNAUTHORIZED, "войдите, чтобы пройти курс")
         course = self.courses.get(f"{owner}/{name}")
         if course is None:
             return self._err(HTTPStatus.NOT_FOUND, f"нет такого курса: {owner}/{name}")
-        if not can(user, role, course, "play"):
+        if not can(user, self.server.pool_perms(user), course, "play"):
             joined: list[bool] = []
             err = self._edit(course.ref, lambda c: joined.append(
                 cm.join_by_invite(c, user, str(self._body().get("invite", "")))))
@@ -309,7 +310,7 @@ class CourseApi:
         return err or self._json(HTTPStatus.CREATED, {"requested": f"{owner}/{name}"})
 
     def decide_request(self, owner: str, name: str, user: str) -> Response:
-        course, actor, err = self._load(owner, name, "moderate")
+        course, actor, err = self._load(owner, name, "people")
         if err is not None:
             return err
         accept = bool(self._body().get("accept"))
@@ -321,7 +322,7 @@ class CourseApi:
         return err or self._json(HTTPStatus.OK, {"user": user, "accepted": accept})
 
     def member(self, owner: str, name: str, user: str) -> Response:
-        course, actor, err = self._load(owner, name, "admin")
+        course, actor, err = self._load(owner, name, "people")
         if err is not None:
             return err
         if request.method == "DELETE":
@@ -331,12 +332,13 @@ class CourseApi:
         if not self.server.users.has(user):
             return self._err(HTTPStatus.NOT_FOUND, f"нет пользователя {user}")
         role = str(self._body().get("role", ""))
+        role = "admin" if role == "maintainer" else role               # old clients
         err = self._edit(course.ref, lambda c: cm.set_member(c, user, role), by=actor,
                          what=f"{user} — {_ROLE_RU.get(role, role)}")
         return err or self._json(HTTPStatus.OK, {"user": user, "role": role})
 
     def add_block(self, owner: str, name: str) -> Response:
-        course, actor, err = self._load(owner, name, "moderate")
+        course, actor, err = self._load(owner, name, "content")
         if err is not None:
             return err
         made: list[str] = []
@@ -345,7 +347,7 @@ class CourseApi:
         return err or self._json(HTTPStatus.CREATED, {"id": made[0]})
 
     def block(self, owner: str, name: str, block_id: str) -> Response:
-        course, actor, err = self._load(owner, name, "moderate")
+        course, actor, err = self._load(owner, name, "content")
         if err is not None:
             return err
         body = self._body()
@@ -366,7 +368,7 @@ class CourseApi:
         return err or self._json(HTTPStatus.OK, {"id": block_id})
 
     def layout(self, owner: str, name: str) -> Response:
-        course, actor, err = self._load(owner, name, "moderate")
+        course, actor, err = self._load(owner, name, "content")
         if err is not None:
             return err
         blocks = self._body().get("blocks")
@@ -399,8 +401,7 @@ class CourseApi:
         if isinstance(n, str):
             return self._err(HTTPStatus.BAD_REQUEST, n)
         block_id, after = cm.parse_place(body["place"]) if body.get("place") else (str(body.get("block_id", "")), "")
-        role = self.server.users.role(user)
-        direct = can(user, role, course, "add")
+        direct = can(user, self.server.pool_perms(user), course, "add")
         out: list[dict] = []
 
         def change(c: Course) -> None:
@@ -425,12 +426,12 @@ class CourseApi:
         if err is not None:
             return err
         role = self.server.users.role(user)
-        moderator = can(user, role, course, "moderate")
+        moderator = can(user, self.server.pool_perms(user), course, "content")
         current = course.find_task(repo, tag)
         if current is None:
             return self._err(HTTPStatus.NOT_FOUND, f"в курсе нет {repo}:{tag}")
         if not moderator and current.get("added_by") != user:
-            return self._err(HTTPStatus.FORBIDDEN, "менять чужое задание может сопровождающий курса")
+            return self._err(HTTPStatus.FORBIDDEN, "менять чужое задание может админ курса")
         if request.method == "DELETE":
             err = self._edit(course.ref, lambda c: cm.remove_task(c, repo, tag), by=user,
                              what=f"убрано {repo}:{tag}")
@@ -474,8 +475,8 @@ class CourseApi:
             return err or self._json(HTTPStatus.OK, {"id": pid, "state": "withdrawn"})
         if action not in ("accept", "reject"):
             return self._err(HTTPStatus.BAD_REQUEST, "action — accept, reject или withdraw")
-        if not can(user, self.server.users.role(user), course, "moderate"):
-            return self._err(HTTPStatus.FORBIDDEN, "решает сопровождающий или владелец курса")
+        if not can(user, self.server.pool_perms(user), course, "content"):
+            return self._err(HTTPStatus.FORBIDDEN, "решает админ или владелец курса")
         prop = next((p for p in course.proposals if p.get("id") == pid), {})
         err = self._edit(course.ref, lambda c: cm.decide(c, pid, accept=action == "accept", by=user,
                                                          now=time.time(),

@@ -16,11 +16,13 @@ import re
 import secrets
 import tempfile
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-ROLES = ("member", "author", "maintainer", "owner")
+from hashpass.registry import perms
+
+ROLES = ("member", "author", "admin", "owner")   # `maintainer` (before 2026-10-25) reads as `admin`
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 VISIBILITIES = ("public", "private")
 KINDS = ("add", "update", "restore")
@@ -53,8 +55,19 @@ class Course:
     blocks: list[dict] = field(default_factory=list)
     proposals: list[dict] = field(default_factory=list)
     history: list[dict] = field(default_factory=list)   # spec 2026-10-23 §4: who changed what, why
+    perms: dict[str, list[str]] = field(default_factory=dict)   # spec 2026-10-25 §3: admins' boxes
     created_at: str = ""
     rev: int = 0
+
+    @classmethod
+    def from_raw(cls, raw: dict) -> "Course":
+        """Build a course from its stored JSON; a `maintainer` of old is an `admin`."""
+        known = set(cls.__dataclass_fields__)
+        course = cls(**{k: v for k, v in raw.items() if k in known})
+        course.members = {u: ("admin" if r == "maintainer" else r) for u, r in course.members.items()}
+        course.perms = {u: list(b) for u, b in (course.perms or {}).items()
+                        if course.members.get(u) == "admin" and isinstance(b, list)}
+        return course
 
     @property
     def ref(self) -> str:
@@ -79,8 +92,7 @@ class Course:
 
 
 def _course(raw: dict) -> Course:
-    known = set(Course.__dataclass_fields__)
-    return Course(**{k: v for k, v in raw.items() if k in known})
+    return Course.from_raw(raw)
 
 
 class CourseStore:
@@ -364,7 +376,9 @@ def withdraw(course: Course, proposal_id: str, *, by: str) -> None:
 
 # -- members, requests, invites ----------------------------------------------
 
-def set_member(course: Course, user: str, role: str) -> None:
+def set_member(course: Course, user: str, role: str, boxes: Iterable[str] | None = None) -> None:
+    """Give `user` a role here; an admin's boxes are `boxes`, or kept, or DEFAULT."""
+    role = "admin" if role == "maintainer" else role       # old clients
     if role not in ROLES[:-1]:
         msg = f"роль — {', '.join(ROLES[:-1])}"
         raise ValueError(msg)
@@ -372,10 +386,15 @@ def set_member(course: Course, user: str, role: str) -> None:
         msg = "владелец остаётся владельцем"
         raise ValueError(msg)
     course.members[user] = role
+    if role != "admin":
+        course.perms.pop(user, None)
+    elif boxes is not None:
+        course.perms[user] = sorted(perms.clean(list(boxes), default=perms.DEFAULT))
 
 
 def remove_member(course: Course, user: str) -> None:
     course.members.pop(user, None)
+    course.perms.pop(user, None)
 
 
 def request_access(course: Course, user: str, comment: str, *, now: float) -> dict:

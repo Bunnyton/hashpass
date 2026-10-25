@@ -106,7 +106,7 @@ def _time_zones() -> list[str]:
 _MAX_COMMENT = 500
 _MAX_MESSAGE = 2000          # a version's «what changed» (spec 2026-10-23 §3)
 AUTHOR, MAINTAINER, OWNER = 1, 2, 3   # levels in an image (spec 2026-10-23 §2); 0 member, -1 nobody
-_ROLE_RU = {"owner": "владелец", "maintainer": "сопровождающий", "author": "автор", "member": "участник"}
+_ROLE_RU = {"owner": "владелец", "admin": "админ", "author": "автор", "member": "участник"}
 _MAX_REASON = 500                # a rejection reason, shown to the author
 _REJECTED_BLOCK = "rejected"     # the virtual block of rejected tasks (author + admin)
 _STUDENT_FIELDS = frozenset(("number", "name", "version", "digest", "ref", "block_id",
@@ -411,7 +411,7 @@ class PoolServer:
         candidates = [c for c in ([store.get(wanted)] if wanted else store.courses_with(repo, tag)) if c]
         for course in candidates:
             task = course.find_task(repo, tag)
-            if task is None or not can(user, role, course, action):
+            if task is None or not can(user, self.pool_perms(user), course, action):
                 continue
             latest = self.repo(repo).latest(tag)
             eff = course_model.effective_n(course, task, latest=latest.n if latest else None)
@@ -423,7 +423,7 @@ class PoolServer:
         """Whether a private image `ref` is a parent/base of a task `user` gets through a course."""
         role = self.users.role(user) if user else None
         for course in self.course_api.courses.all():
-            if not can(user, role, course, "play"):
+            if not can(user, self.pool_perms(user), course, "play"):
                 continue
             for _block, task in course.tasks():
                 latest = self.repo(task["repo"]).latest(task["tag"])
@@ -989,7 +989,7 @@ class PoolServer:
         wanted = request.args.get("course")
         if wanted and era.courses_on():    # one course, in catalog rows
             picked = self.course_api.courses.get(wanted)
-            if picked is None or not can(user, self.users.role(user), picked, "view"):
+            if picked is None or not can(user, self.pool_perms(user), picked, "view"):
                 return self._json(HTTPStatus.NOT_FOUND, {"error": f"нет такого курса: {wanted}"})
             return self._json(HTTPStatus.OK, {"catalog": self._course_rows(picked, user)})
         course = self.default_course()
@@ -1026,9 +1026,9 @@ class PoolServer:
     def _course_rows(self, course: "course_model.Course", user: str) -> list[dict[str, object]]:
         """Return the default course in the old `/catalog` row shape, as `user` may see it."""
         role = self.users.role(user)
-        if not can(user, role, course, "view"):
+        if not can(user, self.pool_perms(user), course, "view"):
             return []
-        staff = can(user, role, course, "moderate")
+        staff = can(user, self.pool_perms(user), course, "content")
         mine = self.progress().get(user)
         rows: list[dict[str, object]] = []
         for block in course.blocks:
@@ -1365,7 +1365,7 @@ class PoolServer:
             course = self.course_api.courses.get(str(data["course"]))
             repo, _, tag = task_ref.partition(":")
             if course is None or course.find_task(repo, tag) is None or not can(
-                    user, self.users.role(user), course, "play"):
+                    user, self.pool_perms(user), course, "play"):
                 return self._empty(HTTPStatus.NOT_FOUND)
             self.course_api.enrollments.enroll(user, course.id)
             meta = {"course": course.ref}
@@ -2177,7 +2177,7 @@ class PoolServer:
     def _course_names(self, found: list["course_model.Course"], user: str) -> list[str]:
         """Course names for `user`: private courses they are not in stay unnamed."""
         role = self.users.role(user)
-        named = [c.ref for c in found if can(user, role, c, "view")]
+        named = [c.ref for c in found if can(user, self.pool_perms(user), c, "view")]
         hidden = len(found) - len(named)
         return named + ([f"ещё приватных курсов: {hidden}"] if hidden else [])
 
@@ -2634,7 +2634,7 @@ class PoolServer:
             "owner": owner, "courses_era": era.courses_on(),
             "used_in": self.people.where_used(name, tag, viewer=viewer, role=role,
                                               see_all=owner or role == "admin"),
-            "propose_to": [c.ref for c in self.course_api.courses.all() if can(viewer, role, c, "propose")
+            "propose_to": [c.ref for c in self.course_api.courses.all() if can(viewer, self.pool_perms(viewer), c, "propose")
                            and c.find_task(name, tag) is None],
             "may_fork": self._may_read_sources(viewer, name) and not owner and n is not None,
             "fork_origin": origin if origin and owner else "",
