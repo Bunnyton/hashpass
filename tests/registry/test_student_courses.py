@@ -176,9 +176,9 @@ def test_a_task_passed_outside_the_course_counts_there_marked_so(pool: _Courses,
     [row] = in_course.catalog(token=tok)
     assert (row["solved_n"], row["outside"]) == (2, True)
     from tests.registry.test_course_web import _browser, _page  # noqa: PLC0415
-    html = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
+    html = _page(_browser(pool, "bunnyton"), f"{pool.url}/c/bob/linux")[1]
     assert "решено не в курсе" in html
-    page = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux/u/kid")[1]
+    page = _page(_browser(pool, "bunnyton"), f"{pool.url}/c/bob/linux/u/kid")[1]
     assert "не в курсе" in page
 
 

@@ -1375,13 +1375,12 @@ class PoolServer:
         return self._json(HTTPStatus.OK, {"solutions": self.attempts().solutions(user)})
 
     def _route_solution(self, ref: str) -> Response:
-        """One saved solution: your own, or -- for an author/admin -- any student's (`?user=`)."""
+        """One saved solution: your own, or -- for the admin -- any student's (`?user=`)."""
         user = self._token_user()
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         target = request.args.get("user") or user
-        if (target != user and self.users.role(user) not in _AUTHOR_ROLES
-                and ref not in self._course_students(user).get(target, set())):
+        if target != user and self.users.role(user) != "admin":
             return self._empty(HTTPStatus.FORBIDDEN)
         sol = self.attempts().solution(target, ref)
         if sol is None:
@@ -1393,25 +1392,10 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         store = self.progress()
-        if self.users.role(user) in _AUTHOR_ROLES:     # admins (and legacy authors): everyone
+        # user 2026-10-25: other people's progress -- the admin only, not a course's staff
+        if self.users.role(user) == "admin":
             return self._json(HTTPStatus.OK, {"progress": store.all()})
-        payload = {user: store.get(user)}
-        for student, refs in self._course_students(user).items():
-            mine = store.get(student)
-            payload.setdefault(student, {}).update({r: v for r, v in mine.items() if r in refs})
-        return self._json(HTTPStatus.OK, {"progress": payload})
-
-    def _course_students(self, staff: str) -> dict[str, set[str]]:
-        """Students who started a course `staff` authors or runs -> that course's task refs (spec §7)."""
-        role = self.users.role(staff)
-        out: dict[str, set[str]] = {}
-        for course in self.course_api.courses.all():
-            if not can(staff, role, course, "add"):
-                continue
-            refs = {f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()}
-            for student in self.course_api.enrollments.users_of(course.id):
-                out.setdefault(student, set()).update(refs)
-        return out
+        return self._json(HTTPStatus.OK, {"progress": {user: store.get(user)}})
 
     def _pool_image_rows(self) -> list[dict[str, object]]:
         """One row per stored revision: its tag's catalog place, description, digest, newest-or-not."""
@@ -2510,7 +2494,7 @@ class PoolServer:
     def _web_dashboard(self) -> Response:
         if era.courses_on():   # progress lives in each course now
             return self._redirect("/c")
-        if self._session_role(_AUTHOR_ROLES) is None:
+        if self._session_role(("admin",)) is None:   # everyone's progress: the admin only
             return self._redirect("/web/login")
         group = request.args.get("group") or None
         profiles = self.users.all_users()
@@ -2681,30 +2665,22 @@ class PoolServer:
         resp.headers["Content-Disposition"] = f'attachment; filename="{name}.tar.gz"'
         return resp
 
-    def _may_watch(self, viewer: str | None, student: str, ref: str) -> bool:
+    def _may_watch(self, viewer: str | None, student: str) -> bool:
         """
-        Tell whether `viewer` may read `student`'s commands on `ref`.
+        Tell whether `viewer` may read `student`'s commands: one's own, or the admin.
 
-        Staff (old roles) may, and whoever adds tasks to a course `student` takes that holds
-        `ref` -- work with the course.
+        User 2026-10-25: other people's work is the admin's, not a course's staff.
         """
         if viewer is None:
             return False
-        role = self.users.role(viewer)
-        if role in _AUTHOR_ROLES:
-            return True
-        repo, _, tag = ref.partition(":")
-        api = self.course_api
-        taken = api.enrollments.of(student)
-        return any(c.id in taken and c.find_task(repo, tag) is not None and can(viewer, role, c, "add")
-                   for c in api.courses.all())
+        return viewer == student or self.users.role(viewer) == "admin"
 
     def _web_history(self) -> Response:
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
         viewer = self._session_user()
         if viewer is None:
             return self._redirect("/web/login")
-        if not self._may_watch(viewer, user, ref):
+        if not self._may_watch(viewer, user):
             return self._empty(HTTPStatus.FORBIDDEN)
         record = self.progress().get(user).get(ref, {}) if user else {}
         sessions = self.attempts().sessions(user, ref) if user and ref else []
@@ -2719,7 +2695,7 @@ class PoolServer:
         The page asks every few seconds with the signature it has; a student typing changes it.
         """
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
-        if not self._may_watch(self._session_user(), user, ref):
+        if not self._may_watch(self._session_user(), user):
             return self._empty(HTTPStatus.UNAUTHORIZED)
         record = self.progress().get(user).get(ref, {}) if user else {}
         sessions = self.attempts().sessions(user, ref) if user and ref else []
@@ -2815,7 +2791,7 @@ class PoolServer:
 
     def _web_user_profile(self, login: str) -> Response:
         """One user's profile: every catalog task with status, tries, time -- authors/admins."""
-        if self._session_role(_AUTHOR_ROLES) is None:
+        if self._session_role(("admin",)) is None:   # everyone's progress: the admin only
             return self._redirect("/web/login")
         profile = self.users.get(login)
         if profile is None:

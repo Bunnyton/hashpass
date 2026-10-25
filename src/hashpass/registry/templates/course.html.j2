@@ -20,7 +20,7 @@
 <div class='row hero-meta'>
 <a class='owner' href='/u/{{ ref_parts[0] | q }}'><span class='avatar xs' aria-hidden='true'>{{ ref_parts[0][:1] | upper }}</span><span class='mono'>{{ ref_parts[0] }}</span></a><span class='mono dim'>/ {{ ref_parts[1] }}</span>
 {% if c.blocks is defined %}<span class='dim'>·</span><span class='small'>{{ n_tasks | plural('задание', 'задания', 'заданий') }} в {{ (c.blocks | length) | plural('блоке', 'блоках', 'блоках') }}</span>{% endif %}
-{% if may.add %}<span class='dim'>·</span><a class='small' href='#students'>{{ students | length }} {{ students | length | taking }}</a>{% endif %}
+{% if may.students %}<span class='dim'>·</span><a class='small' href='#students'>{{ students | length }} {{ students | length | taking }}</a>{% endif %}
 </div>
 </div>
 
@@ -54,7 +54,7 @@
 {% if may.view %}
 <nav class='tabs' aria-label='Разделы курса'>
 <a href='#tasks' data-tab>{{ icon('task') }} Задания <span class='count'>{{ n_tasks }}</span></a>
-{% if may.add %}<a href='#students' data-tab>{{ icon('user') }} Проходят курс <span class='count'>{{ students | length }}</span></a>{% endif %}
+{% if may.students %}<a href='#students' data-tab>{{ icon('user') }} Проходят курс <span class='count'>{{ students | length }}</span></a>{% endif %}
 {% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
 {% if may.moderate and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
 <a href='#people' data-tab>{{ icon('user') }} Участники <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
@@ -229,7 +229,7 @@
 </ol>
 {% else %}<div class='empty card'><p class='sub'>Изменений пока не было.</p></div>{% endif %}
 </section>
-{% if may.add %}
+{% if may.students %}
 <section id='students' class='tab-panel' aria-label='Проходят курс'>
 <div class='cat-head'><h2>Проходят курс <span class='count-pill'>{{ students | length }}</span></h2></div>
 {% if students %}

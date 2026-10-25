@@ -130,6 +130,20 @@ def test_admin_users_page_searches_and_lists_deletion_requests(pool: _Courses) -
 @pytest.mark.tier1
 def test_staff_are_not_listed_as_students(pool: _Courses) -> None:
     pool.call("POST", "/courses/bob/linux/join", "kid", {})
-    html = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
+    html = _page(_browser(pool, "bunnyton"), f"{pool.url}/c/bob/linux")[1]
     students = html.split("id='students'", 1)[1].split("</table>", 1)[0]
     assert ">kid<" in students and ">bob<" not in students
+
+
+@pytest.mark.tier1
+def test_only_the_admin_sees_who_takes_the_course(pool: _Courses) -> None:
+    """User 2026-10-25: «список студентов, проходящих курс, должен быть виден только администратору»."""
+    pool.call("POST", "/courses/bob/linux/join", "kid", {})
+    owner = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
+    assert "id='students'" not in owner and "#students" not in owner and ">kid<" not in owner
+    assert _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux/u/kid")[0] == 403  # noqa: PLR2004
+    assert _page(_browser(pool, "bunnyton"), f"{pool.url}/c/bob/linux/u/kid")[0] == 200  # noqa: PLR2004
+    # the same students through the API: the owner gets only its own progress
+    assert set(pool.call("GET", "/progress", "bob")[1]["progress"]) == {"bob"}
+    assert pool.call("GET", "/solution/bob/git-init:1?user=kid", "bob")[0] == 403  # noqa: PLR2004
+    assert _page(_browser(pool, "bob"), f"{pool.url}/web/history?user=kid&ref=bob/git-init:1")[0] == 403  # noqa: PLR2004

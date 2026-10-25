@@ -47,14 +47,14 @@ class CourseWeb:
         app.add_url_rule("/c/<owner>/<name>/u/<login>", "web_course_student", self.student, methods=["GET"])
 
     def student(self, owner: str, name: str, login: str) -> Response:
-        """One student inside a course: its tasks with status, tries, time -- the course's staff."""
+        """One student inside a course: its tasks with status, tries, time -- for the admin."""
         user, role = self._viewer()
         course = self.server.course_api.courses.get(f"{owner}/{name}")
         if course is None or not self.server.users.has(login):
             return self.server._empty(HTTPStatus.NOT_FOUND)                     # noqa: SLF001
         if user is None:
             return self.server._redirect(f"/web/login?next={quote(request.path, safe='')}")  # noqa: SLF001
-        if not can(user, role, course, "add"):
+        if role != "admin":            # user 2026-10-25: who takes a course -- the admin only
             return self.server._empty(HTTPStatus.FORBIDDEN)                     # noqa: SLF001
         entries = [{"ref": f"{t['repo']}:{t['tag']}", "number": i}
                    for i, (_b, t) in enumerate(course.tasks(), 1)]
@@ -96,6 +96,7 @@ class CourseWeb:
                 render_courses([], q="", signed_in=user, message=f"Курса {owner}/{name} нет."),
                 status=HTTPStatus.NOT_FOUND)
         may = {a: can(user, role, course, a) for a in ("view", "play", "propose", "add", "moderate", "admin")}
+        may["students"] = role == "admin"     # user 2026-10-25: not the course's staff, the admin only
         view = api._view(course, user, role) if may["view"] else api._peek(course, user)  # noqa: SLF001
         for block in view.get("blocks") or []:        # «what is this task» for the hover card
             for task in block.get("tasks", []):
@@ -103,7 +104,7 @@ class CourseWeb:
         pool = self.server._pool_url()                                         # noqa: SLF001
         link = f"{pool}/c/{course.ref}"
         invite_link = f"{link}?invite={quote(course.invite)}" if may["admin"] else ""
-        students = self._students(course) if may["add"] else []
+        students = self._students(course) if may["students"] else []
         joined = user is not None and course.id in api.enrollments.of(user)
         return self.server._html(render_course(  # noqa: SLF001
             view, may=may, signed_in=user, link=link, invite_link=invite_link, pool=pool,
