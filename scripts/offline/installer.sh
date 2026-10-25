@@ -19,13 +19,10 @@ die() { printf 'hashpass: %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -m)" = x86_64 ] || die "этот установщик для x86_64, а процессор $(uname -m)"
 [ -d /run/systemd/system ] || die "нужна система с systemd: консоли заданий — машины systemd-nspawn"
-if [ "$(id -u)" = 0 ]; then
-  SUDO=""
-  [ -n "${SUDO_USER:-}" ] && die "запустите без sudo, от своего пользователя: bash $0"
-else
-  command -v sudo >/dev/null 2>&1 || die "нет sudo: hashpass запускает консоли через sudo"
-  SUDO=sudo
-fi
+# as root everything would land in ~root, where the student's `hashpass` never looks
+[ "$(id -u)" != 0 ] || die "не запускайте от root или через sudo: войдите пользователем, который будет решать задания, и запустите без sudo: bash $0"
+command -v sudo >/dev/null 2>&1 || die "нет sudo: hashpass запускает консоли через sudo"
+SUDO=sudo
 command -v tar >/dev/null 2>&1 || die "нет tar"
 
 TMP="$(mktemp -d "${TMPDIR:-/var/tmp}/hashpass-offline.XXXXXX")"

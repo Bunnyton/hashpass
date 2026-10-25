@@ -29,7 +29,7 @@ def test_front_shows_install_command():
 def test_front_has_one_install_command_and_no_manual_preparation():
     """One link (user 2026-10-23): the script itself checks and installs the dependencies."""
     html = render_front("http://pool.example/")
-    assert html.count("install.sh | bash") == 1
+    assert html.count("/install.sh | bash") == 1
     assert "sudo apt install" not in html
     assert "pacman" not in html
     assert "hpcopy(this)" in html                                  # one-click copy
@@ -265,3 +265,37 @@ def test_install_script_raises_the_inotify_limit_for_many_consoles():
     assert "/etc/sysctl.d/60-hashpass.conf" in script
     assert "fs.inotify.max_user_instances = 8192" in script
     assert "fs.inotify.max_user_watches = 1048576" in script
+
+
+@pytest.mark.tier1
+def test_install_script_puts_its_own_deps_over_the_system_ones():
+    """
+    The deps go into ~/.local even when the system has a copy.
+
+    Ubuntu 24.04: deadsnakes python3.13 sees /usr/lib/python3/dist-packages, where apt's
+    typing_extensions 4.10 «satisfies» textual -- pip installs nothing, and 4.10 dies on 3.13
+    («'__default__' of 'typing.ParamSpec' objects is not writable»).
+    """
+    script = render_install_script("http://pool.example/")
+    deps = next(line for line in script.splitlines() if '"textual>=1.0"' in line)
+    assert "--ignore-installed" in deps
+
+
+@pytest.mark.tier1
+def test_install_script_refuses_root():
+    """
+    User 2026-10-25: installing as root breaks a lot (~root/.local, a root-owned ~/.hashpass).
+
+    The check comes before anything is installed.
+    """
+    script = render_install_script("http://pool.example/")
+    check = script.index('if [ "$(id -u)" = 0 ]')
+    assert check < script.index("missing=")
+    assert "без sudo" in script[check:check + 400]
+
+
+@pytest.mark.tier1
+def test_install_block_shows_the_uninstall_command():
+    from hashpass.registry.web import render_front  # noqa: PLC0415
+    page = render_front("http://pool.example/")
+    assert "http://pool.example/uninstall.sh | bash" in page

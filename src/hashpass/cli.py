@@ -2804,6 +2804,29 @@ def _resync(env: Home, url: str, user: str, token: str, io: Io) -> None:
     io.write(f"\x1b[36mсамопроверка: зачтено {sent}\x1b[0m\n")
 
 
+def _load_tui(io: Io) -> Callable[..., int] | None:
+    """
+    Return the TUI's entry point, or None after saying why the text menu opens instead.
+
+    A broken install fails with more than ImportError: Ubuntu 24.04's typing_extensions 4.10,
+    seen by python3.13 from /usr/lib/python3/dist-packages, raised AttributeError inside textual.
+    """
+    try:
+        from hashpass.tui import run_tui  # noqa: PLC0415  (optional dep)
+    except ImportError:
+        io.write("\x1b[33m⚠ textual не установлен — открываю текстовое меню.\x1b[0m\n"
+                 "\x1b[2m  Полноэкранный интерфейс включится после установки:\n"
+                 "  pip install --user --break-system-packages textual\x1b[0m\n")
+        return None
+    except Exception as exc:  # noqa: BLE001  (any breakage of a third-party import)
+        io.write(f"\x1b[33m⚠ textual сломан ({type(exc).__name__}: {exc}) — открываю текстовое меню.\x1b[0m\n"
+                 "\x1b[2m  Почините так (или повторите команду установки с сайта пула):\n"
+                 f"  {sys.executable} -m pip install --user --break-system-packages --upgrade "
+                 "--ignore-installed textual flask\x1b[0m\n")
+        return None
+    return run_tui
+
+
 def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY branch + text menu)
     """Student no-arg: full-screen Textual TUI on a TTY, else the plain-text menu below."""
     # Interactive = launched from the shell (no explicit io from tests / other callers).
@@ -2813,13 +2836,8 @@ def cmd_pool_home(env: Home, io: Io | None = None) -> int:  # noqa: C901  (TTY b
     io = io or _default_io()
     if interactive:
         tty = sys.stdout.isatty() and sys.stdin.isatty()
-        try:
-            from hashpass.tui import run_tui  # noqa: PLC0415  (optional dep)
-        except ImportError:
-            io.write("\x1b[33m⚠ textual не установлен — открываю текстовое меню.\x1b[0m\n"
-                     "\x1b[2m  Полноэкранный интерфейс включится после установки:\n"
-                     "  pip install --user --break-system-packages textual\x1b[0m\n")
-        else:
+        run_tui = _load_tui(io)
+        if run_tui is not None:
             if tty:
                 # Signed out (or the account is gone) -> the TUI's own login form, not a prompt
                 # here (spec 2026-10-16).
@@ -2999,8 +3017,9 @@ def run_main(parser: argparse.ArgumentParser,
     including how a missing sub-command is handled.
     """
     real_argv = list(argv) if argv is not None else sys.argv[1:]
-    with contextlib.suppress(Exception):   # self-update is best-effort; never block the CLI
-        check_and_update(parser.prog, real_argv)
+    if real_argv[:1] != ["uninstall"]:     # no point in updating what is about to go
+        with contextlib.suppress(Exception):   # self-update is best-effort; never block the CLI
+            check_and_update(parser.prog, real_argv)
     args = parser.parse_args(argv)
     try:
         env = build_env()

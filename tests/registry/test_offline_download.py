@@ -57,3 +57,10 @@ def test_the_install_block_links_the_offline_bundle(registry, monkeypatch, cours
     page = body.decode("utf-8")
     assert "/install.sh" in page
     assert "href='/offline'" in page
+
+
+@pytest.mark.tier2
+def test_the_pool_serves_the_uninstaller(registry) -> None:
+    status, _, body = _get(f"{registry.base_url}/uninstall.sh")
+    assert status == HTTPStatus.OK
+    assert body.startswith(b"#!/usr/bin/env bash") and "hashpass удалён".encode() in body

@@ -88,6 +88,7 @@ from hashpass.registry.web import (
     render_versions,
 )
 from hashpass.taskdigest import task_digest
+from hashpass.uninstall import text as uninstall_text
 
 _BEARER = "Bearer "
 # The offline installer (scripts/offline): a pool hands out its own copy, else the latest release.
@@ -537,6 +538,7 @@ class PoolServer:
         app.add_url_rule("/install-engine.sh", "install_engine_sh",
                          self._route_install_engine_sh, methods=["GET"])
         app.add_url_rule("/offline", "offline", self._route_offline, methods=["GET"])
+        app.add_url_rule("/uninstall.sh", "uninstall_sh", self._route_uninstall_sh, methods=["GET"])
         # bearer-token endpoints for the student/author client
         app.add_url_rule("/login", "login", self._route_login, methods=["POST"])
         app.add_url_rule("/register", "register", self._route_register, methods=["POST"])
@@ -829,6 +831,10 @@ class PoolServer:
 
     def _route_install_sh(self) -> Response:
         return self._serve_script(render_install_script(self._pool_url()))
+
+    def _route_uninstall_sh(self) -> Response:
+        """Serve the uninstaller: `curl …/uninstall.sh | bash` works even with a broken `hashpass`."""
+        return self._serve_script(uninstall_text())
 
     def _route_install_engine_sh(self) -> Response:
         """Serve the one installer at the old author link (old instructions keep working)."""

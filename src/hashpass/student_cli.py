@@ -3,7 +3,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from hashpass import cli, my_courses, version
+from hashpass import cli, my_courses, uninstall, version
 from hashpass.author_cli import add_author_commands, dispatch_author
 from hashpass.emulation import ensure_x86_emulation
 from hashpass.sudo import ensure_sudo
@@ -50,6 +50,8 @@ def build_parser() -> argparse.ArgumentParser:
     cfg_sub = p_cfg.add_subparsers(dest="config_key")
     p_cfg_pool = cfg_sub.add_parser("pool", help="показать или задать адрес пула")
     p_cfg_pool.add_argument("url", nargs="?", help="новый адрес пула (без него — показать текущий)")
+    p_un = sub.add_parser("uninstall", help="удалить hashpass с этой машины (аккаунт на пуле останется)")
+    p_un.add_argument("-y", "--yes", action="store_true", help="не спрашивать подтверждения")
     add_author_commands(sub)
     # argparse lists a SUPPRESSed sub-command as «==SUPPRESS==» -- drop it from the help instead
     sub._choices_actions = [a for a in sub._choices_actions if a.help != argparse.SUPPRESS]  # noqa: SLF001
@@ -59,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
 def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911, PLR0912, C901
     """Route a parsed student sub-command (no sub-command → pool home: pull + list)."""
     command = args.command
+    if command == "uninstall":                    # before the local pool starts or courses load
+        return uninstall.run(yes=args.yes)
     if isinstance(env, cli.Home) and command != "serve":   # an offline install: its own pool
         cli.ensure_local_pool(env)
     if isinstance(env, cli.Home):                 # tasks come through the current course

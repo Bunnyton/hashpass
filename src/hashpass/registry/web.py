@@ -139,6 +139,13 @@ if [ "$(uname -s)" = Darwin ]; then
   echo "На Mac поставьте Linux-виртуалку (например, Ubuntu в UTM) и запустите эту команду в ней." >&2
   exit 1
 fi
+# As root everything lands in ~root (~/.local, ~/.hashpass) and the student's own `hashpass`
+# finds nothing, or a root-owned home it cannot write (user 2026-10-25: «ломает много что»).
+if [ "$(id -u)" = 0 ]; then
+  echo "Не запускайте установку от root или через sudo: hashpass ставится в домашний каталог" >&2
+  echo "пользователя, который будет решать задания. Войдите им и повторите команду без sudo." >&2
+  exit 1
+fi
 # sudo/apt read the password and answers from the terminal, not from the `curl |` pipe; with no
 # controlling terminal (ssh without -t, su -, CI) /dev/tty does not open -> /dev/null instead.
 TTY=/dev/tty; ( : </dev/tty ) 2>/dev/null || TTY=/dev/null
@@ -289,7 +296,10 @@ pip_install() {   # pip_install ARGS... -- retry trusting the hosts above on a T
 # --no-deps avoids touching flask/textual/etc. (installed by the next line).
 pip_install --upgrade --force-reinstall --no-deps \
     "https://github.com/__REPO__/archive/$SHA.tar.gz"
-pip_install --upgrade "flask>=3.0" "textual>=1.0"
+# `--ignore-installed`: deadsnakes' python3.13 sees /usr/lib/python3/dist-packages, and pip took
+# apt's typing_extensions 4.10 (Ubuntu 24.04) as installed -- it dies on 3.13, so did textual.
+# Every dependency goes into ~/.local, which comes first on sys.path.
+pip_install --upgrade --ignore-installed "flask>=3.0" "textual>=1.0"
 # `pip --user` puts the commands into ~/.local/bin. Ubuntu's ~/.profile adds that dir to PATH
 # only if it ALREADY existed at login, Arch never does -- so `hashpass` was «command not found».
 # Persist it for bash (~/.bashrc + ~/.profile), zsh (~/.zshrc) and fish (conf.d), idempotently,

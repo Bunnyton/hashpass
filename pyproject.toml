@@ -32,6 +32,7 @@ where = ["src"]
     "runtime/**/*",
     "runtime/**/.*",
     "runtime/.hash/.keep",
+    "uninstall.sh",
 ]
 
 
