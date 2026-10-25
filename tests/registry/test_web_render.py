@@ -96,7 +96,7 @@ def test_users_toggle_and_inline_controls():
     profiles = [{"user": "s1", "role": "student", "group": "G", "comment": ""}]
     html = render_users(profiles, registration_open=True, boxes=frozenset({"admins", "people"}))
     assert "Закрыть регистрацию" in html
-    assert "Открыть регистрацию" in render_users(profiles, registration_open=False)
+    assert "Открыть регистрацию" in render_users(profiles, registration_open=False, boxes=frozenset({"people"}))
     assert "/web/users/role" in html          # «Сделать админом» (the `admins` box, 2026-10-25)
     assert "/web/users/reset" in html         # per-user reset link
     assert "ссылка сброса" in html
@@ -106,7 +106,7 @@ def test_users_toggle_and_inline_controls():
 def test_users_self_row_has_no_role_or_delete():
     profiles = [{"user": "admin", "role": "admin", "group": "", "comment": ""},
                 {"user": "s1", "role": "student", "group": "G", "comment": ""}]
-    html = render_users(profiles, registration_open=True, current_user="admin")
+    html = render_users(profiles, registration_open=True, current_user="admin", boxes=frozenset({"people"}))
     assert "/web/users/delete" in html   # a delete control exists (for s1)
     assert "вы" in html                  # the admin's own row shows "вы", not controls
 

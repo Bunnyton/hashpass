@@ -32,9 +32,12 @@ def test_a_box_one_lacks_cannot_be_given(pool: _Courses) -> None:
     pool.call("PUT", f"{path}/members/ann", "bob", {"role": "admin", "perms": ["admins", "content"]})
     code, body = pool.call("PUT", f"{path}/members/kid", "ann", {"role": "admin", "perms": ["progress"]})
     assert code == _FORBIDDEN and "прав" in body["error"]
-    # taking an admin away is the `admins` box too: ann (no `people`) still may
-    pool.call("PUT", f"{path}/members/max", "bob", {"role": "admin"})
+    # taking an admin away is the `admins` box too: ann (no `people`) still may -- one whose
+    # boxes are all ann's; one with more is not ann's to unmake (review I1)
+    pool.call("PUT", f"{path}/members/max", "bob", {"role": "admin", "perms": ["content"]})
     assert pool.call("PUT", f"{path}/members/max", "ann", {"role": "member"})[0] == _OK
+    pool.call("PUT", f"{path}/members/max", "bob", {"role": "admin"})
+    assert pool.call("PUT", f"{path}/members/max", "ann", {"role": "member"})[0] == _FORBIDDEN
 
 
 @pytest.mark.tier1

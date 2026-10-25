@@ -52,7 +52,8 @@ def test_a_former_author_keeps_its_own_images(registry, tmp_path) -> None:
 @pytest.mark.tier2
 @pytest.mark.parametrize(("box", "path"), [("people", "/web/users"), ("progress", "/web/user/admin")])
 def test_a_page_needs_its_box(registry, box: str, path: str) -> None:
-    others = [k for k in ("admins", "content", "people", "progress") if k != box]
+    # «Пользователи» open for `admins` too (it manages admins there, review I3)
+    others = [k for k in ("admins", "content", "people", "progress") if k not in (box, "admins" if box == "people" else "")]
     opener, cookie = _admin(registry, "without", others)
     assert _status(registry, opener, cookie, path) != HTTPStatus.OK
     opener, cookie = _admin(registry, "with", [box])

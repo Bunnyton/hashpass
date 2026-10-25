@@ -342,9 +342,19 @@ class CourseApi:
             return self._err(HTTPStatus.FORBIDDEN, "свою роль не меняют")
         if ("admins" if admin_change else "people") not in held:
             return self._err(HTTPStatus.FORBIDDEN, "не хватает прав в этом курсе")
-        wanted = perms.clean(boxes, default=perms.DEFAULT) if role == "admin" else frozenset()
-        if request.method != "DELETE" and not perms.subset(wanted, held):
-            return self._err(HTTPStatus.FORBIDDEN, "нельзя выдать права, которых нет у вас")
+        # boxes the caller lacks are neither given nor taken (as on the pool; review I1, I4)
+        current = course_perms(course, user) if course.role_of(user) == "admin" else frozenset()
+        if (request.method == "DELETE" or role != "admin") and not perms.subset(current, held):
+            return self._err(HTTPStatus.FORBIDDEN, "у этого админа есть права, которых нет у вас")
+        if role != "admin":
+            wanted = frozenset()
+        elif boxes is None:                               # an old client: keep, or the default
+            wanted = current if course.role_of(user) == "admin" else perms.DEFAULT & held
+        else:
+            wanted = perms.clean(boxes, default=frozenset())
+            if not perms.subset(wanted - current, held):
+                return self._err(HTTPStatus.FORBIDDEN, "нельзя выдать права, которых нет у вас")
+            wanted = (wanted & held) | (current - held)
         if request.method == "DELETE":
             err = self._edit(course.ref, lambda c: cm.remove_member(c, user), by=actor,
                              what=f"{user} больше не участник")

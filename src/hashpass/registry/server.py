@@ -796,12 +796,24 @@ class PoolServer:
         return user
 
     def pool_owner(self) -> str | None:
-        """Return the pool's owner (spec 2026-10-25 §2): all boxes, nobody takes them."""
-        return perms.pool_owner(self.users, self.config.owner)
+        """
+        Return the pool's owner (spec 2026-10-25 §2): all boxes, nobody takes them.
+
+        Settled once: the first answer goes into config.json, so promoting an older user later
+        never moves the ownership (the review of 2026-10-25, C2).
+        """
+        if not self.config.owner:
+            found = perms.pool_owner(self.users, "")
+            if found is None:
+                return None
+            self.config.owner = found
+            if self.config_path is not None:
+                save_config(self.config_path, self.config)
+        return self.config.owner
 
     def pool_perms(self, user: str | None) -> frozenset[str]:
         """Return `user`'s permission boxes on the pool -- empty for anyone but an admin."""
-        return perms.pool_perms(self.users, self.config.owner, user)
+        return perms.pool_perms(self.users, self.pool_owner() or "", user)
 
     def _perm(self, user: str | None, key: str) -> bool:
         return key in self.pool_perms(user)
@@ -845,6 +857,23 @@ class PoolServer:
             if not perms.subset(wanted - current, held):     # giving one it lacks; keeping is fine
                 return "нельзя выдать права, которых нет у вас"
             self.users.set_perms(target, (wanted & held) | (current - held))
+        return None
+
+    def _may_manage(self, actor: str, target: str) -> str | None:
+        """
+        Tell why `actor` may not reset, delete or edit `target`, or None when it may.
+
+        Never oneself, never the pool's owner; an admin -- with the `admins` box, and only one
+        whose boxes all are the actor's too (the review of 2026-10-25, C3).
+        """
+        if target == actor:
+            return "себя так не меняют"
+        if target == self.pool_owner():
+            return "владельца пула не меняют"
+        if self.users.role(target) == "admin":
+            held = self.pool_perms(actor)
+            if "admins" not in held or not perms.subset(self.pool_perms(target), held):
+                return "это админ с правами, которых у вас нет"
         return None
 
     def _web_need(self, key: str) -> tuple[str | None, Response | None]:
@@ -1484,7 +1513,8 @@ class PoolServer:
                 continue
             refs = {f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()}
             for student in self.course_api.enrollments.users_of(course.id):
-                out.setdefault(student, set()).update(refs)
+                if course.role_of(student) not in ("owner", "admin", "author"):   # staff are not students
+                    out.setdefault(student, set()).update(refs)
         return out
 
     def _pool_image_rows(self) -> list[dict[str, object]]:
@@ -1745,7 +1775,7 @@ class PoolServer:
         intent = st.intent
         if not st.exists() or (intent.get("name"), intent.get("tag")) != (name, tag):
             return None, self._json(HTTPStatus.NOT_FOUND, {"error": "черновик отправки не найден — начните push заново"})
-        if intent.get("owner") != user and self.users.role(user) != "admin":
+        if intent.get("owner") != user and not self._perm(user, "content"):
             return None, self._empty(HTTPStatus.FORBIDDEN)
         return st, None
 
@@ -1865,7 +1895,7 @@ class PoolServer:
         intent = st.intent
         if not st.exists() or (intent.get("name"), intent.get("tag")) != (name, tag):
             return self._json(HTTPStatus.NOT_FOUND, {"error": "черновик отправки не найден — начните push заново"})
-        if intent.get("owner") != user and self.users.role(user) != "admin":
+        if intent.get("owner") != user and not self._perm(user, "content"):
             return self._empty(HTTPStatus.FORBIDDEN)
         message = str(data.get("message", "")).strip()[:_MAX_MESSAGE] if isinstance(data, dict) else ""
         target = str(intent.get("propose_to") or "")
@@ -2106,7 +2136,7 @@ class PoolServer:
                 "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их",
                 "dependents": dependents})
         foreign = self._foreign_courses(name, tag, n)
-        if foreign and self.users.role(user) != "admin":
+        if foreign and not self._perm(user, "content"):
             req = self.deletions().open(ref, by=user, courses=[c.ref for c in foreign])
             return self._json(HTTPStatus.ACCEPTED, {
                 "request": req["id"], "courses": self._course_names(foreign, user),
@@ -2597,8 +2627,9 @@ class PoolServer:
 
     def _web_users(self) -> Response:
         actor, denied = self._web_need("people")
-        if denied is not None:
+        if denied is not None and self._session_perm("admins") is None:
             return denied
+        actor = self._session_user()
         q = request.args.get("q", "").strip()
         return self._html(render_users(
             [p | {"perms": sorted(self.pool_perms(str(p["user"])))}
@@ -2719,11 +2750,14 @@ class PoolServer:
 
         `raw=1` sends the file as plain text, `dl=1` as a download (GitHub's Raw / Download).
         """
-        if self._session_user() is None:
+        viewer = self._session_user()
+        if viewer is None:
             return self._redirect("/web/login")
         ref, path = self._live_ref(request.args.get("ref", "")), request.args.get("path", "").strip("/")
         if not self._sources_ready(ref):
             return self._empty(HTTPStatus.NOT_FOUND)
+        if not self._may_read_sources(viewer, ref.partition(":")[0], path):   # review C1
+            return self._empty(HTTPStatus.FORBIDDEN)
         listing = self.sources().listing(ref)
         if not path or any(f["dir"] and f["path"] == path for f in listing):
             return self._html(render_source_file(ref, path, None, 0, sources=listing, is_dir=True))
@@ -2748,9 +2782,12 @@ class PoolServer:
 
     def _web_source_archive(self) -> Response:
         """Send the task's sources as one tar.gz download -- authors/admins."""
-        if self._session_user() is None:
+        viewer = self._session_user()
+        if viewer is None:
             return self._redirect("/web/login")
         ref = self._live_ref(request.args.get("ref", ""))
+        if not self._may_read_sources(viewer, ref.partition(":")[0], "Taskfile"):   # review C1
+            return self._empty(HTTPStatus.FORBIDDEN)
         try:
             blob = self.sources().archive(ref)
         except (ValueError, FileNotFoundError, OSError):
@@ -2989,6 +3026,9 @@ class PoolServer:
         target = request.form.get("user", "")
         if not self.users.has(target):
             return self._redirect("/web/users")
+        why = self._may_manage(_who or "", target)
+        if why is not None:
+            return self._html(f"<p>{html.escape(why)}.</p>", status=HTTPStatus.FORBIDDEN)
         token = issue_token(self.secret, _RESET_PREFIX + target,
                             now=time.time(), ttl=_RESET_TTL)
         return self._html(
@@ -2999,7 +3039,10 @@ class PoolServer:
         if denied is not None:
             return denied
         target = request.form.get("user", "").strip()
-        if target and target != actor:                 # never delete yourself
+        why = self._may_manage(actor or "", target) if target else "нет логина"
+        if why is not None:
+            return self._html(f"<p>{html.escape(why)}.</p>", status=HTTPStatus.FORBIDDEN)
+        if target:
             self.users.delete(target)
             self.progress().delete(target)
             self.attempts().delete_user(target)
@@ -3014,7 +3057,7 @@ class PoolServer:
             prog = self.progress()
             for profile in self.users.all_users():
                 user = str(profile["user"])
-                if str(profile.get("group", "")) == group and user != actor:
+                if str(profile.get("group", "")) == group and self._may_manage(actor or "", user) is None:
                     self.users.delete(user)
                     prog.delete(user)
                     self.attempts().delete_user(user)
@@ -3079,9 +3122,12 @@ class PoolServer:
         return self._redirect(self._card_url(ref))
 
     def _web_image_file(self) -> Response:
-        if self._session_user() is None:
+        viewer = self._session_user()
+        if viewer is None:
             return self._redirect("/web/login")
         ref, name = self._live_ref(request.args.get("ref", "")), request.args.get("name", "")
+        if not self._may_see_repo(viewer, ref.partition(":")[0]):              # review C1
+            return self._empty(HTTPStatus.FORBIDDEN)
         try:
             blob = self.attachments().read_file(ref, name)
             safe = safe_filename(name)
