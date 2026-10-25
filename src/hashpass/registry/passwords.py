@@ -5,8 +5,11 @@ import json
 import re
 import secrets
 import time
+from collections.abc import Iterable
 from functools import cache
 from pathlib import Path
+
+from hashpass.registry.perms import DEFAULT, clean
 
 _PW_SCHEME = "pbkdf2_sha256"
 _PW_ALGO = "sha256"
@@ -14,7 +17,8 @@ _PW_ITERATIONS = 600_000
 _SALT_BYTES = 16
 _PW_FIELDS = 4
 
-ROLES = ("student", "author", "admin", "user")   # "user": the course-era role (spec 2026-10-21 §3)
+ROLES = ("user", "admin")   # spec 2026-10-25 §2: `student` and `author` are gone -- read as `user`
+_LEGACY = {"student": "user", "author": "user"}
 
 MIN_PASSWORD_LEN = 8
 # safe as a login AND as a per-user progress filename
@@ -101,20 +105,26 @@ def _decoy_record() -> str:
 
 
 def _record(pw_hash: str, role: str, group: str, comment: str,  # noqa: PLR0913
-            created_at: float, *, auto_approve: bool = False, tz: str = "") -> dict[str, object]:
-    return {"pw": pw_hash, "role": role, "group": group,
-            "comment": comment, "created_at": created_at, "auto_approve": auto_approve, "tz": tz}
+            created_at: float, *, auto_approve: bool = False, tz: str = "",
+            perms: list[str] | None = None) -> dict[str, object]:
+    rec: dict[str, object] = {"pw": pw_hash, "role": _LEGACY.get(role, role), "group": group,
+                              "comment": comment, "created_at": created_at,
+                              "auto_approve": auto_approve, "tz": tz}
+    if rec["role"] == "admin" and perms is not None:      # no `perms`: an admin from before -- all
+        rec["perms"] = sorted(clean(perms, default=DEFAULT))
+    return rec
 
 
 def _normalize(value: object) -> dict[str, object]:
     """Coerce a stored value (legacy bare-string hash, or a record dict) into a current record."""
     if isinstance(value, str):
-        return _record(value, "student", "", "", 0.0)
+        return _record(value, "user", "", "", 0.0)
     v = value if isinstance(value, dict) else {}   # older records may carry a dropped full_name
-    return _record(str(v.get("pw", "")), str(v.get("role", "student")),
+    stored = v.get("perms")
+    return _record(str(v.get("pw", "")), str(v.get("role", "user")),
                    str(v.get("group", "")), str(v.get("comment", "")),
                    float(v.get("created_at", 0.0)), auto_approve=bool(v.get("auto_approve", False)),
-                   tz=str(v.get("tz", "")))
+                   tz=str(v.get("tz", "")), perms=list(stored) if isinstance(stored, list) else None)
 
 
 class UserStore:
@@ -139,9 +149,10 @@ class UserStore:
         self._path.write_text(json.dumps(users, indent=2), encoding="utf-8")
         self._path.chmod(0o600)  # PBKDF2 hashes + profiles: not world-readable
 
-    def add(self, user: str, password: str, *, role: str = "student",
+    def add(self, user: str, password: str, *, role: str = "user",
             group: str = "", comment: str = "") -> None:
         """Add or replace a user with a freshly salted password hash, a group, and a comment."""
+        role = _LEGACY.get(role, role)
         if role not in ROLES:
             msg = f"unknown role: {role!r}"
             raise ValueError(msg)
@@ -149,7 +160,8 @@ class UserStore:
             msg = f"логин {user} занят"
             raise ValueError(msg)
         users = self._load()
-        users[user] = _record(hash_password(password), role, group, comment, time.time())
+        users[user] = _record(hash_password(password), role, group, comment, time.time(),
+                              perms=sorted(DEFAULT) if role == "admin" else None)
         self._save(users)
 
     def _reserved_path(self) -> Path:
@@ -196,7 +208,7 @@ class UserStore:
             return None
         return {"user": user, "role": rec["role"], "group": rec["group"],
                 "comment": rec["comment"], "created_at": rec["created_at"],
-                "auto_approve": rec["auto_approve"], "tz": rec["tz"]}
+                "auto_approve": rec["auto_approve"], "tz": rec["tz"], "perms": rec.get("perms")}
 
     def role(self, user: str) -> str | None:
         """Return the user's role, or None if unknown."""
@@ -220,13 +232,29 @@ class UserStore:
 
     def set_role(self, user: str, role: str) -> None:
         """Change a user's role (KeyError if unknown, ValueError on a bad role)."""
+        role = _LEGACY.get(role, role)
         if role not in ROLES:
             msg = f"unknown role: {role!r}"
             raise ValueError(msg)
         users = self._load()
         if user not in users:
             raise KeyError(user)
+        if role == "admin" and users[user]["role"] != "admin":
+            users[user]["perms"] = sorted(DEFAULT)          # a new admin: everything but `admins`
+        elif role != "admin":
+            users[user].pop("perms", None)
         users[user]["role"] = role
+        self._save(users)
+
+    def set_perms(self, user: str, boxes: Iterable[str]) -> None:
+        """Set an admin's permission boxes (KeyError if unknown, ValueError if not an admin)."""
+        users = self._load()
+        if user not in users:
+            raise KeyError(user)
+        if users[user]["role"] != "admin":
+            msg = f"{user} не админ"
+            raise ValueError(msg)
+        users[user]["perms"] = sorted(clean(list(boxes), default=DEFAULT))
         self._save(users)
 
     def set_group(self, user: str, group: str) -> None:

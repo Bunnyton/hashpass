@@ -13,20 +13,22 @@ def test_add_with_profile_and_role(tmp_path):
     assert us.verify("bob", "pw")
     assert not us.verify("bob", "nope")
     prof = us.get("bob")
-    assert prof == {"user": "bob", "role": "student", "group": "ИУ7-11",
+    assert prof == {"user": "bob", "role": "user", "group": "ИУ7-11",       # spec 2026-10-25 §2
                     "comment": "note", "created_at": prof["created_at"], "auto_approve": False,
-                    "tz": ""}
+                    "tz": "", "perms": None}
     assert "pw" not in prof                    # never leak the hash in a profile
-    assert us.role("bob") == "student"
+    assert us.role("bob") == "user"
 
 
 @pytest.mark.tier1
 def test_set_role_and_validation(tmp_path):
     us = UserStore(tmp_path / "u.json")
     us.add("bob", "pw")
-    assert us.role("bob") == "student"          # default role
-    us.set_role("bob", "author")
-    assert us.role("bob") == "author"
+    assert us.role("bob") == "user"             # default role
+    us.set_role("bob", "author")                # a legacy role: an ordinary user
+    assert us.role("bob") == "user"
+    us.set_role("bob", "admin")
+    assert us.role("bob") == "admin"
     with pytest.raises(ValueError, match="unknown role"):
         us.add("x", "pw", role="wizard")
     with pytest.raises(KeyError):
@@ -50,7 +52,7 @@ def test_set_password_preserves_profile(tmp_path):
     assert not us.verify("bob", "old")
     assert us.verify("bob", "new")
     prof = us.get("bob")
-    assert (prof["role"], prof["group"], prof["comment"]) == ("author", "G", "c")
+    assert (prof["role"], prof["group"], prof["comment"]) == ("user", "G", "c")
     with pytest.raises(KeyError):
         us.set_password("ghost", "x")
 
@@ -61,7 +63,7 @@ def test_legacy_string_record_normalizes(tmp_path):
     p.write_text(json.dumps({"old": hash_password("pw")}), encoding="utf-8")  # legacy: bare hash str
     us = UserStore(p)
     assert us.verify("old", "pw")
-    assert us.role("old") == "student"
+    assert us.role("old") == "user"
     assert us.get("old")["group"] == ""
 
 

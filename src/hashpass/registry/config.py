@@ -10,6 +10,7 @@ class ServerConfig:
 
     registration_open: bool = True
     default_course: str = ""      # `owner/name` old clients (no course) work in (spec §9)
+    owner: str = ""               # the pool's owner (spec 2026-10-25 §2); empty -- see perms.pool_owner
 
 
 def load_config(path: Path) -> ServerConfig:
@@ -19,7 +20,8 @@ def load_config(path: Path) -> ServerConfig:
         return ServerConfig()
     data = json.loads(p.read_text(encoding="utf-8"))
     return ServerConfig(registration_open=bool(data.get("registration_open", True)),
-                        default_course=str(data.get("default_course", "")))
+                        default_course=str(data.get("default_course", "")),
+                        owner=str(data.get("owner", "")))
 
 
 def save_config(path: Path, config: ServerConfig) -> None:
@@ -27,5 +29,5 @@ def save_config(path: Path, config: ServerConfig) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"registration_open": config.registration_open,
-                             "default_course": config.default_course}, indent=2),
+                             "default_course": config.default_course, "owner": config.owner}, indent=2),
                  encoding="utf-8")

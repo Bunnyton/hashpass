@@ -13,10 +13,10 @@ def test_register_creates_student_and_me(registry):
     c = RemoteRegistry(registry.base_url)
     token = c.register("stud", "pass123!", group="ИУ7-31", comment="hi")
     assert token
-    assert registry.users.role("stud") == "student"
+    assert registry.users.role("stud") == "user"
     me = c.me(token=token)
     assert me["user"] == "stud"
-    assert me["role"] == "student"
+    assert me["role"] == "user"
     assert me["comment"] == "ИУ7-31 · hi"     # spec §3: a group (an old client) leads the comment
 
 
@@ -93,8 +93,8 @@ def test_admin_endpoints_are_role_gated(registry):
     admin_token = c.login("admin", "pw")
     c.register("st", "pass123!", group="G")
     # admin can grant a role
-    c.set_role("st", "author", token=admin_token)
-    assert registry.users.role("st") == "author"
+    c.set_role("st", "admin", token=admin_token)
+    assert registry.users.role("st") == "admin"
     # a non-admin (student) token -> 403
     student_token = c.register("st2", "pass123!", group="G")
     with pytest.raises(urllib.error.HTTPError) as exc:

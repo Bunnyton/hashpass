@@ -33,7 +33,7 @@ from werkzeug.serving import make_server as _wsgi_make_server
 from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
 from hashpass.registry import courses as course_model
-from hashpass.registry import era
+from hashpass.registry import era, perms
 from hashpass.registry.access import can
 from hashpass.registry.approved import ApprovedStore
 from hashpass.registry.attachments import AttachmentStore, safe_filename
@@ -803,6 +803,31 @@ class PoolServer:
         g.hp_user = user                                 # the nav links one's own page (home)
         return user
 
+    def pool_owner(self) -> str | None:
+        """Return the pool's owner (spec 2026-10-25 §2): all boxes, nobody takes them."""
+        return perms.pool_owner(self.users, self.config.owner)
+
+    def pool_perms(self, user: str | None) -> frozenset[str]:
+        """Return `user`'s permission boxes on the pool -- empty for anyone but an admin."""
+        return perms.pool_perms(self.users, self.config.owner, user)
+
+    def _perm(self, user: str | None, key: str) -> bool:
+        return key in self.pool_perms(user)
+
+    def _session_perm(self, key: str) -> str | None:
+        """Return the signed-in user if it holds the pool box `key`."""
+        user = self._session_user()
+        return user if user is not None and self._perm(user, key) else None
+
+    def _auth_perm(self, key: str) -> tuple[str | None, HTTPStatus | None]:
+        """Return the token caller holding the pool box `key`: 401 without a token, 403 without it."""
+        user = self._token_user()
+        if user is None:
+            return None, HTTPStatus.UNAUTHORIZED
+        if not self._perm(user, key):
+            return None, HTTPStatus.FORBIDDEN
+        return user, None
+
     def _session_role(self, roles: tuple[str, ...]) -> str | None:
         user = self._session_user()
         if user is not None and self.users.role(user) in roles:
@@ -888,7 +913,7 @@ class PoolServer:
             return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         if self.users.has(user) or self.users.reserved(user):
             return self._empty(HTTPStatus.CONFLICT)
-        self.users.add(user, password, role="student", group=group, comment=comment)
+        self.users.add(user, password, group=group, comment=comment)
         return self._json(HTTPStatus.CREATED,
                           {"token": issue_token(self.secret, user, now=time.time())})
 
@@ -914,6 +939,7 @@ class PoolServer:
             return self._empty(HTTPStatus.BAD_REQUEST)
         target = str(data.get("user", ""))
         role = str(data.get("role", ""))
+        role = "user" if role in ("student", "author") else role     # old clients: an ordinary user
         if role not in ROLES:
             return self._empty(HTTPStatus.BAD_REQUEST)
         if target == actor:                          # an admin cannot change their own role
