@@ -1,0 +1,3 @@
+[Midnight-Commander]
+use_internal_edit=true
+editor_ask_filename_before_edit=true

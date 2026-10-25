@@ -10,8 +10,10 @@ run apt-get update >/dev/null 2>&1
 run DEBIAN_FRONTEND=noninteractive apt-get install -y mc >/dev/null 2>&1
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py tree data/notes --seed 50 --depth 4 --dirs 14 --files 45 --kind notes --lines 15-40
 # data: python3 .claude/skills/task-authoring/scripts/mkdata.py plant data/notes/drafts/photos38/staging_2021/index35.csv --line "пароль от wi-fi в переговорке: walrus-6610" --at 0.6
+# .config/mc/ini: F4 и Shift+F4 открывают встроенный редактор mc (в Debian по умолчанию внешний
+# nano, а здесь из команд только mc и mcedit); Shift+F4 сначала спрашивает имя файла
 copy data /home/student
-run chown -R student:student /home/student/notes
+run chown -R student:student /home/student/notes /home/student/.config
 
 hidden hp
 
