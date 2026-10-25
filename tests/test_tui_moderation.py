@@ -192,3 +192,32 @@ def test_the_main_keys_sleep_under_another_screen(tmp_path):
 
     _run(tmp_path, "admin", "admin", steps)
     assert seen == []
+
+
+class _BoxClient(_ModClient):
+    """A pool of 2026-10-25: /me carries the admin's permission boxes."""
+
+    def __init__(self, entries: list[dict], role: str, boxes: list[str]) -> None:
+        super().__init__(entries, role)
+        self.boxes = boxes
+
+    def me(self, *, token: str) -> dict:  # noqa: ARG002
+        return {"role": self.role, "perms": self.boxes}
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize(("role", "boxes", "may"), [("user", [], False), ("admin", ["people"], False),
+                                                      ("admin", ["content"], True)])
+def test_catalog_keys_follow_the_content_box(tmp_path, role: str, boxes: list[str], may: bool):  # noqa: FBT001
+    client = _BoxClient(ENTRIES, role, boxes)
+
+    async def _drive() -> None:
+        app = PoolTUI(_env(tmp_path), "http://pool.example", "bob", "tok")
+        app.client = client
+        async with app.run_test(size=(160, 40)) as pilot:
+            await pilot.pause()
+            for action in ("approve", "reject", "toggle_hidden", "move"):
+                assert app.check_action(action, ()) is may
+            await pilot.press("q")
+
+    asyncio.run(_drive())

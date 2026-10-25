@@ -154,8 +154,8 @@ def test_parse_layout_specs_leaves_block_open_state_to_the_pool():
 
 @pytest.mark.tier2
 def test_hide_and_move_over_the_api(registry, tmp_path):
-    # The hashpass TUI edits the catalog with a bearer token: an author hides/shows only its own
-    # tasks (like the web ⋯ menu), moving is admin-only (like web drag-and-drop).
+    # The hashpass TUI edits the pool's catalog with a bearer token: an admin with the `content`
+    # box (spec 2026-10-25); an ordinary user -- an author of old too -- may not, even its own.
     for ref in ("b/a:1", "b/c:1", "alice/x:1"):
         _seed(registry, ref, tmp_path)
     registry.users.add("admin", "pw-correct", role="admin")
@@ -164,11 +164,9 @@ def test_hide_and_move_over_the_api(registry, tmp_path):
     admin_tok = admin.login("admin", "pw-correct")
     alice = RemoteRegistry(registry.base_url)
     alice_tok = alice.login("alice", "pw-correct")
-    alice.set_task_hidden("alice/x:1", hidden=True, token=alice_tok)
-    assert Catalog(registry.catalog_path).find("alice/x:1").hidden is True
-    with pytest.raises(RuntimeError, match="другому автору"):
-        alice.set_task_hidden("b/a:1", hidden=True, token=alice_tok)
-    with pytest.raises(RuntimeError, match="администратор"):
+    with pytest.raises(RuntimeError, match="403"):
+        alice.set_task_hidden("alice/x:1", hidden=True, token=alice_tok)
+    with pytest.raises(RuntimeError):
         alice.move_task("alice/x:1", -1, token=alice_tok)
     admin.move_task("b/c:1", -1, token=admin_tok)
     assert [e.ref for e in Catalog(registry.catalog_path).entries()] == ["b/c:1", "b/a:1", "alice/x:1"]
@@ -179,9 +177,11 @@ def test_hide_and_move_over_the_api(registry, tmp_path):
 @pytest.mark.tier2
 def test_open_and_close_a_block_over_the_api(registry, tmp_path):
     # User (2026-10-13): «блоки открывать для студентов тоже через hashpass». Same right as the
-    # web's block toggle: an author or the admin; a student may not.
+    # web's block toggle: an admin with the `content` box (2026-10-25); a user may not.
     _seed(registry, "b/a:1", tmp_path)
-    registry.users.add("alice", "pw-correct", role="author")
+    registry.users.add("admin", "pw-correct", role="admin")
+    registry.users.add("alice", "pw-correct", role="admin")
+    registry.users.set_perms("alice", ["content"])
     registry.users.add("stud", "pw-correct", role="student")
     alice = RemoteRegistry(registry.base_url)
     tok = alice.login("alice", "pw-correct")

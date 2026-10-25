@@ -145,9 +145,9 @@ def migrate_to_courses(server: "PoolServer", *, owner: str, base_ref: str,  # no
                         cm.decide(course, prop["id"], accept=False, by=owner, reason=entry.reason,
                                   now=time.time())
                     report["proposals"] = int(report["proposals"]) + 1
-        for profile in server.users.all_users():
-            if profile["role"] == "author" and profile["user"] != owner:
-                course.members[str(profile["user"])] = "author"
+        for login, stored in server.users.stored_roles().items():   # `author` reads as `user` now
+            if stored == "author" and login != owner:
+                course.members[login] = "author"
     course_id = store.get(ref_course).id
 
     for profile in server.users.all_users():

@@ -210,6 +210,13 @@ class UserStore:
                 "comment": rec["comment"], "created_at": rec["created_at"],
                 "auto_approve": rec["auto_approve"], "tz": rec["tz"], "perms": rec.get("perms")}
 
+    def stored_roles(self) -> dict[str, str]:
+        """Return each login's role as written on disk -- `author` and `student` of old included."""
+        if not self._path.exists():
+            return {}
+        raw = json.loads(self._path.read_text(encoding="utf-8"))
+        return {u: (str(v.get("role", "user")) if isinstance(v, dict) else "user") for u, v in raw.items()}
+
     def role(self, user: str) -> str | None:
         """Return the user's role, or None if unknown."""
         rec = self._load().get(user)

@@ -1,5 +1,6 @@
 """Tier1: a pre-courses pool moves to revisions + a default course, once (spec 2026-10-21 §13)."""
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,9 @@ def legacy(tmp_path: Path) -> PoolServer:
     users.add("bunnyton", "pw-correct1", role="admin")
     users.add("bob", "pw-correct1", role="author")
     users.add("kid", "pw-correct1", role="student", group="ИТ-21")
+    raw = json.loads((root / "users.json").read_text(encoding="utf-8"))
+    raw["bob"]["role"] = "author"                  # an old pool's file: `author` before 2026-10-25
+    (root / "users.json").write_text(json.dumps(raw), encoding="utf-8")
     server = PoolServer(store=srv, users=users, secret=b"s" * 32, catalog_path=root / "catalog.json",
                         config_path=root / "config.json", progress_path=root / "progress")
     catalog = Catalog(root / "catalog.json")

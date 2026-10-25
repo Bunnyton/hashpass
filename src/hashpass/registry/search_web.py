@@ -156,7 +156,7 @@ class SearchWeb:
         viewable = [c for c in api.courses.all() if can(user, self.server.pool_perms(user), c, "view")]
         runs = [self._course_row(c, role_of=login) for c in viewable if c.role_of(login) in _STAFF_ROLES]
         repos = self.repos(user, "", member=login)          # own + those one contributes to
-        see_all = user == login or role == "admin"
+        see_all = user == login or "progress" in self.server.pool_perms(user)
         used: dict[str, dict] = {}
         for r in repos:
             for place in self.where_used(r["name"], None, viewer=user, role=role, see_all=see_all):

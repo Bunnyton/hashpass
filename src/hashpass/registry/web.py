@@ -444,7 +444,7 @@ _AUTHOR_GROUP = "authors"
 def _dashboard_group_of(profile: dict) -> str:
     """Group on the dashboard: the user's own; authors/admins without one share `authors`."""
     group = str(profile.get("group", ""))
-    if not group and profile.get("role") in ("author", "admin"):
+    if not group and profile.get("role") in ("author", "admin"):   # `author`: an old profile
         return _AUTHOR_GROUP
     return group
 
@@ -455,7 +455,7 @@ def render_dashboard(profiles: list[dict], entries: list[dict],
     # Students appear under their real class group; authors/admins share a synthetic `authors`
     # group so they can test-solve alongside (not mixed into) the student roster.
     """Progress matrix: users (login + group, comment on hover) × task numbers, cells passed/failed."""
-    users = [p for p in profiles if p.get("role") in ("student", "author", "admin")]
+    users = list(profiles)
     for p in users:
         p["_dash_group"] = _dashboard_group_of(p)
     groups = sorted({p["_dash_group"] for p in users if p["_dash_group"]})
@@ -708,7 +708,7 @@ def _plural(n: int, one: str, few: str, many: str) -> str:
     return f"{n} {word}"
 
 
-_ROLES = ("student", "author", "admin")
+_ROLES = ("user", "admin")
 
 
 def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "",  # noqa: PLR0913
@@ -717,7 +717,7 @@ def render_users(profiles: list[dict], *, registration_open: bool, current_user:
     rows = [{"user": str(p["user"]), "user_q": quote(str(p["user"]), safe=""),
              "created_at": p.get("created_at") or None,
              "group": str(p.get("group", "")),
-             "role": str(p.get("role", "student")),
+             "role": str(p.get("role", "user")),
              "comment": str(p.get("comment", "")),
              "auto_approve": bool(p.get("auto_approve", False)),
              "is_self": str(p["user"]) == current_user} for p in profiles]

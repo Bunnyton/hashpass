@@ -149,8 +149,8 @@ def test_inline_role_change(registry):
     registry.users.add("stud", "pw", role="student", group="G")
     opener, cookie = _admin_cookie(registry)
     _req(opener, "POST", f"{registry.base_url}/web/users/role", cookie=cookie,
-         data={"user": "stud", "role": "author"})
-    assert registry.users.role("stud") == "author"
+         data={"user": "stud", "role": "admin"})
+    assert registry.users.role("stud") == "admin"
 
 
 @pytest.mark.tier2
@@ -204,7 +204,8 @@ def test_an_author_is_not_sent_in_circles_by_admin_pages(registry):
     # требует». An author saw the admin-only «Пользователи» link; the page redirected to the login
     # form, the author logged in again -- and landed there again.
     registry.users.add("boss", "pw", role="admin")
-    registry.users.add("writer", "pw", role="author")
+    registry.users.add("writer", "pw", role="admin")       # an admin without the people boxes
+    registry.users.set_perms("writer", ["content", "progress"])
     opener = _opener()
     base = registry.base_url
     author = _login(opener, base, "writer")
@@ -213,7 +214,5 @@ def test_an_author_is_not_sent_in_circles_by_admin_pages(registry):
     admin = _login(opener, base, "boss")
     _s, _h, page = _req(opener, "GET", f"{base}/web", cookie=admin)
     assert "/web/users" in page
-    status, headers, _ = _req(opener, "GET", f"{base}/web/users", cookie=author)
-    assert status == HTTPStatus.SEE_OTHER and headers["Location"] == "/web/login"
-    _s, _h, login = _req(opener, "GET", f"{base}/web/login", cookie=author)
-    assert "writer" in login and "администратор" in login     # says why, instead of a bare form
+    status, _h, page = _req(opener, "GET", f"{base}/web/users", cookie=author)
+    assert status == HTTPStatus.FORBIDDEN and "Люди и доступ" in page   # names the missing box

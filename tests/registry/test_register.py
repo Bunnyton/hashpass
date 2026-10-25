@@ -16,7 +16,7 @@ def test_register_creates_student_and_me(registry):
     assert registry.users.role("stud") == "user"
     me = c.me(token=token)
     assert me["user"] == "stud"
-    assert me["role"] == "user"
+    assert me["role"] == "user" and me["perms"] == []      # boxes: a pool admin's only
     assert me["comment"] == "ИУ7-31 · hi"     # spec §3: a group (an old client) leads the comment
 
 

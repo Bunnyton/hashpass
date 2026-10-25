@@ -86,8 +86,17 @@ def _author_cookie(registry) -> tuple:
 
 
 def _login_cookie(registry, user: str, password: str, *, role: str = "author") -> tuple:
-    """Register (role=author by default) and log in via /web/login; return (opener, cookie)."""
-    registry.users.add(user, password, role=role, group="")
+    """
+    Register and log in via /web/login; return (opener, cookie).
+
+    `author` (the old staff role) is, since 2026-10-25, an admin with every box but `content`:
+    it signs in to the old web and writes its own images, not the pool's catalog.
+    """
+    if not registry.users.has("admin"):
+        registry.users.add("admin", "pw-owner-1!", role="admin")   # the pool's owner
+    registry.users.add(user, password, role="admin" if role == "author" else role, group="")
+    if role == "author":
+        registry.users.set_perms(user, ["progress"])
     opener = _opener()
     _, headers, _ = _req(opener, "POST", f"{registry.base_url}/web/login",
                          data={"user": user, "password": password})
@@ -353,29 +362,22 @@ def test_web_write_routes_denied_for_other_authors_namespace(registry, tmp_path)
 
 @pytest.mark.tier2
 def test_web_write_routes_allowed_for_own_namespace(registry, tmp_path):
-    """Alice (author) can still describe/attach/catalog her own namespaced image."""
+    """
+    Alice (author of old) still describes her own image; the pool's catalog is not hers.
+
+    Spec 2026-10-25: the catalog is the `content` box of a pool admin.
+    """
     _seed(registry, "alice/lab:1", tmp_path, task=True)
     opener, cookie = _login_cookie(registry, "alice", "pass123!")
     base = registry.base_url
-    student = RemoteRegistry(registry.base_url).register("stud", "pass123!", group="G")
-    sc = RemoteRegistry(registry.base_url)
 
     _about(registry, "alice/lab:1", "Описание образа")
     _, _, body = _req(opener, "GET", f"{base}/web/image/{urllib.parse.quote('alice/lab:1')}",
                       cookie=cookie)
     assert "Описание образа" in body
-
-    _add_shown(opener, base, cookie, "alice/lab:1")
-    cat = sc.catalog(token=student)
-    assert [(e["number"], e["available"]) for e in cat] == [(1, True)]
-    block_id = cat[0]["block_id"]
-
-    _req(opener, "POST", f"{base}/web/blocks/toggle", cookie=cookie,
-         data={"block_id": block_id, "open": "0"})
-    assert sc.catalog(token=student) == []          # a closed block is not shown to students
-
-    _req(opener, "POST", f"{base}/web/catalog/remove", cookie=cookie, data={"ref": "alice/lab:1"})
-    assert sc.catalog(token=student) == []
+    status, _, _ = _req(opener, "POST", f"{base}/web/catalog/add", cookie=cookie,
+                        data={"ref": "alice/lab:1"})
+    assert status == HTTPStatus.FORBIDDEN
 
 
 @pytest.mark.tier2
@@ -451,7 +453,7 @@ def test_web_block_hide_all_tasks_then_open_one_by_one(registry, tmp_path):
 
 @pytest.mark.tier2
 def test_web_block_hide_all_tasks_touches_only_own_namespace(registry, tmp_path):
-    """An author's «скрыть все» hides only the tasks they own; others' tasks in the block stay."""
+    """«Скрыть все» in a block is the `content` box (spec 2026-10-25): without it nothing hides."""
     _seed(registry, "alice/a:1", tmp_path, task=True)
     _seed(registry, "bob/b:1", tmp_path, task=True)
     admin, acookie = _author_cookie(registry)
@@ -462,9 +464,10 @@ def test_web_block_hide_all_tasks_touches_only_own_namespace(registry, tmp_path)
     student = RemoteRegistry(base).register("stud", "pass123!", group="G")
     sc = RemoteRegistry(base)
     block_id = sc.catalog(token=student)[0]["block_id"]
-    _req(opener, "POST", f"{base}/web/blocks/hide-tasks", cookie=cookie,
-         data={"block_id": block_id, "hidden": "1"})
-    assert [(e["ref"], e["available"]) for e in sc.catalog(token=student)] == [("bob/b:1", True)]
+    status, _, _ = _req(opener, "POST", f"{base}/web/blocks/hide-tasks", cookie=cookie,
+                        data={"block_id": block_id, "hidden": "1"})
+    assert status == HTTPStatus.FORBIDDEN
+    assert [e["available"] for e in sc.catalog(token=student)] == [True, True]
 
 
 @pytest.mark.tier2

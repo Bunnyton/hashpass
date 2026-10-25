@@ -329,6 +329,7 @@ class PoolTUI(App):
         self._notes: list[str] = []                  # toasts from the worker, shown by the timer
         self._leaf_nodes: dict[str, object] = {}          # ref -> its Tree leaf (relabelled in place)
         self.role = "student"                        # from the pool's /me on mount
+        self.perms: frozenset[str] | None = None     # the pool admin's boxes; None -- an old pool
         self._show_rejected = True                   # «Отклонённые» shown (z toggles, remembered)
         self.courses_mode = False                    # the pool has courses: tasks come through one
 
@@ -406,12 +407,25 @@ class PoolTUI(App):
         self.client = RemoteRegistry(self.url, token=self.token)
         self.call_after_refresh(self._start_session)   # the login screen is off the stack by then
 
+    @property
+    def _staff(self) -> bool:
+        """Edits the pool's catalog: the `content` box (2026-10-25); an old pool -- author/admin."""
+        return "content" in self.perms if self.perms is not None else self.role in ("author", "admin")
+
+    @property
+    def _editor(self) -> bool:
+        """Moderates and arranges anyone's task: `content`; an old pool -- its admin."""
+        return "content" in self.perms if self.perms is not None else self.role == "admin"
+
     def _start_session(self) -> None:
         """Check the account, load the catalog, pull the solutions kept on the pool."""
         self.title = f"hashpass · {self.user}"
-        self.role = "student"
+        self.role, self.perms = "student", None
         try:
-            self.role = str(self.client.me(token=self.token).get("role") or "student")
+            me = self.client.me(token=self.token)
+            self.role = str(me.get("role") or "student")
+            boxes = me.get("perms")
+            self.perms = frozenset(boxes) if isinstance(boxes, list) else None
         except urllib.error.HTTPError as exc:
             if exc.code == HTTPStatus.UNAUTHORIZED:      # an admin deleted the account
                 gone = self.user
@@ -548,7 +562,7 @@ class PoolTUI(App):
                 return
             account.logout(self.env, self.url)
             self.token = ""
-            self.role = "student"
+            self.role, self.perms = "student", None
             with self._rows_lock:
                 self.rows = []
             self._paint_tree()
@@ -857,13 +871,13 @@ class PoolTUI(App):
         if self.courses_mode and action in _WEB_ONLY:
             return False                                  # a course is arranged on the web (TODO 2026-10-23)
         if action in ("toggle_hidden", "toggle_block"):
-            return self.role in ("author", "admin")
+            return self._staff
         if action == "move":
-            return self.role in ("author", "admin")   # an author is told why it is refused
+            return self._staff   # an author is told why it is refused
         if action in ("approve", "reject"):
-            return self.role == "admin"
+            return self._editor
         if action in ("delete_task", "toggle_rejected", "view"):
-            return self.role in ("author", "admin")
+            return self._staff
         return super().check_action(action, parameters)
 
     # -- moderation ---------------------------------------------------------
@@ -883,7 +897,7 @@ class PoolTUI(App):
 
     def action_approve(self) -> None:
         """Approve the task's current version (a, admin) -- students get it."""
-        if self.role == "admin":
+        if self._editor:
             # the digest the admin is looking at: a version re-pushed meanwhile is refused (409)
             self._moderate("одобрено", lambda row: self.client.approve(row.ref, digest=row.digest or None,
                                                                          token=self.token))
@@ -891,7 +905,7 @@ class PoolTUI(App):
     def action_reject(self) -> None:
         """n: reject the task's current version (admin), with an optional reason."""
         row = self._cursor_row()
-        if row is None or self.role != "admin":
+        if row is None or not self._editor:
             return
 
         def _done(reason: str | None) -> None:
@@ -903,9 +917,9 @@ class PoolTUI(App):
     def action_delete_task(self) -> None:
         """Delete: remove the task from the pool -- only your own (the admin: any), after a yes."""
         row = self._cursor_row()
-        if row is None or self.role not in ("author", "admin"):
+        if row is None or not self._staff:
             return
-        if self.role != "admin" and row.owner != self.user:
+        if not self._editor and row.owner != self.user:
             self.notify(f"Это задание автора {row.owner or 'admin'}: удалить его может только он "
                         "или администратор.", severity="warning", timeout=5)
             return
@@ -919,7 +933,7 @@ class PoolTUI(App):
     def action_view(self) -> None:
         """v: the task's files as its author wrote them (authors and admins)."""
         row = self._cursor_row()
-        if row is None or self.role not in ("author", "admin"):
+        if row is None or not self._staff:
             return
         try:
             files, fetch = listing_or_taskfile(self.client, row.ref, self.token)
@@ -954,7 +968,7 @@ class PoolTUI(App):
     def action_toggle_hidden(self) -> None:
         """x: hide a task from students or show it again (an author -- only its own)."""
         row = self._cursor_row()
-        if row is None or self.role not in ("author", "admin"):
+        if row is None or not self._staff:
             return
         hide = not row.task_hidden
         try:
@@ -967,7 +981,7 @@ class PoolTUI(App):
 
     def action_toggle_block(self) -> None:
         """o: open or close for students the block under the cursor (or the cursor task's block)."""
-        if self.role not in ("author", "admin"):
+        if not self._staff:
             return
         node = self.query_one("#tasks", Tree).cursor_node
         row = node.data if node is not None and isinstance(node.data, TaskRow) else None
@@ -993,9 +1007,9 @@ class PoolTUI(App):
     def action_move(self, step: int) -> None:
         """Shift+↑/↓: move a task one place; at a block's edge it crosses into the next block."""
         row = self._cursor_row()
-        if row is None or self.role not in ("author", "admin"):
+        if row is None or not self._staff:
             return
-        if self.role != "admin":
+        if not self._editor:
             self.notify("Порядок заданий меняет только администратор", severity="warning",
                         timeout=4)
             return

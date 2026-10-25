@@ -96,7 +96,6 @@ OFFLINE_BUNDLE = "hashpass-offline-x86_64.run"
 OFFLINE_RELEASE_URL = f"https://github.com/Bunnyton/hashpass/releases/latest/download/{OFFLINE_BUNDLE}"
 _MAX_BODY = 512 * 1024 * 1024  # cap request bodies to avoid memory blowup
 _USER_RE = LOGIN_RE  # safe as a login + a per-user progress filename
-_AUTHOR_ROLES = ("author", "admin")
 
 
 @functools.cache
@@ -725,15 +724,6 @@ class PoolServer:
             return None
         return user
 
-    def _auth_role(self, roles: tuple[str, ...]) -> tuple[str | None, HTTPStatus | None]:
-        """Return (user, None) if the bearer token maps to a user in `roles`, else (None, 401/403)."""
-        user = self._token_user()
-        if user is None:
-            return None, HTTPStatus.UNAUTHORIZED
-        if self.users.role(user) not in roles:
-            return None, HTTPStatus.FORBIDDEN
-        return user, None
-
     def _repo_level(self, user: str | None, name: str) -> int:
         """
         Return `user`'s level in image `name` (spec 2026-10-23 §2).
@@ -742,7 +732,7 @@ class PoolServer:
         """
         if user is None:
             return -1
-        if self.users.role(user) == "admin" or _owner_of(name) == user:
+        if self._perm(user, "content") or _owner_of(name) == user:   # others' images: `content`
             return 3
         role = self.repo(name).members.get(user)
         return REPO_ROLES.index(role) if role in REPO_ROLES else -1
@@ -795,8 +785,10 @@ class PoolServer:
         # is treated as no session -- every `/web/*` route redirects to /web/login.
         if user is None or not self.users.has(user):
             return None
-        g.hp_admin = self.users.role(user) == "admin"    # the nav shows admin pages to the admin only
-        g.hp_staff = self.users.role(user) in _AUTHOR_ROLES
+        boxes = self.pool_perms(user)
+        g.hp_perms = boxes
+        g.hp_admin = bool(boxes & {"people", "admins"})   # the nav: «Пользователи»
+        g.hp_staff = bool(boxes)                            # the old pages: any admin
         g.hp_tz = str((self.users.get(user) or {}).get("tz", ""))   # pages show times in it
         g.hp_user = user                                 # the nav links one's own page (home)
         return user
@@ -817,6 +809,21 @@ class PoolServer:
         user = self._session_user()
         return user if user is not None and self._perm(user, key) else None
 
+    def _web_need(self, key: str) -> tuple[str | None, Response | None]:
+        """
+        Return the signed-in user holding the pool box `key`, or the answer instead.
+
+        Signed out -> the login page; signed in without the box -> 403 that names the box (not the
+        login page again: the user is in, it is the right that is missing).
+        """
+        user = self._session_user()
+        if user is None:
+            return None, self._redirect("/web/login")
+        if not self._perm(user, key):
+            return None, self._html(
+                f"<p>Здесь нужны права админа пула: «{perms.LABELS[key]}».</p>", status=HTTPStatus.FORBIDDEN)
+        return user, None
+
     def _auth_perm(self, key: str) -> tuple[str | None, HTTPStatus | None]:
         """Return the token caller holding the pool box `key`: 401 without a token, 403 without it."""
         user = self._token_user()
@@ -825,12 +832,6 @@ class PoolServer:
         if not self._perm(user, key):
             return None, HTTPStatus.FORBIDDEN
         return user, None
-
-    def _session_role(self, roles: tuple[str, ...]) -> str | None:
-        user = self._session_user()
-        if user is not None and self.users.role(user) in roles:
-            return user
-        return None
 
     def _pool_url(self) -> str:
         return f"{request.scheme}://{request.host}"
@@ -916,7 +917,7 @@ class PoolServer:
                           {"token": issue_token(self.secret, user, now=time.time())})
 
     def _route_admin_registration(self) -> Response:
-        _user, err = self._auth_role(("admin",))
+        _user, err = self._auth_perm("people")
         if err is not None:
             return self._empty(err)
         data = request.get_json(silent=True) or {}
@@ -929,7 +930,7 @@ class PoolServer:
                           {"registration_open": self.config.registration_open})
 
     def _route_admin_role(self) -> Response:
-        actor, err = self._auth_role(("admin",))
+        actor, err = self._auth_perm("admins")
         if err is not None:
             return self._empty(err)
         data = request.get_json(silent=True) or {}
@@ -960,7 +961,7 @@ class PoolServer:
 
     def _route_user_search(self) -> Response:
         """Admin: find users by login or comment (where a group now lives) -- spec §3."""
-        _user, err = self._auth_role(("admin",))
+        _user, err = self._auth_perm("people")
         if err is not None:
             return self._empty(err)
         rows = [{k: p[k] for k in ("user", "comment", "group", "role", "created_at")}
@@ -972,7 +973,8 @@ class PoolServer:
         profile = self.users.get(user) if user is not None else None
         if profile is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
-        return self._json(HTTPStatus.OK, profile)
+        boxes = self.pool_perms(user)                     # the effective ones: the owner has all
+        return self._json(HTTPStatus.OK, profile | {"perms": [k for k in perms.KEYS if k in boxes]})
 
     def _route_catalog(self) -> Response:
         """
@@ -1060,18 +1062,16 @@ class PoolServer:
         """
         Return the catalog as `user` may see it.
 
-        A student sees only what is open to them, at the APPROVED version (its digest). An
-        author sees approved tasks (locked ones marked `preview`) and all of their own; the
-        admin sees everything. Rejected tasks go to a block «Отклонённые» at the end -- for their
-        author and the admin only.
+        Someone else's task is seen only when open, at the APPROVED version (its digest); one's
+        own -- in full, with its moderation; an admin with `content` sees everything. Rejected
+        tasks go to a block «Отклонённые» at the end -- for their author and the admin only.
         """
-        role = self.users.role(user)
-        staff, admin = role in _AUTHOR_ROLES, role == "admin"
+        admin = self._perm(user, "content")
         rows: list[dict[str, object]] = []
         rejected: list[dict[str, object]] = []
         for e in self.catalog().entries():
-            mine = admin or e.owner == user
-            if not staff:
+            mine = admin or e.owner == user     # spec 2026-10-25: one's own in full, no `author` role
+            if not mine:
                 if e.available:                           # moderation details are not theirs
                     row = {k: v for k, v in e.as_dict().items() if k in _STUDENT_FIELDS}
                     rows.append(row | {"digest": e.approved_digest})
@@ -1080,17 +1080,12 @@ class PoolServer:
                 rejected.append(e.as_dict() | {"preview": True, "rejected": True,
                                                "block_id": _REJECTED_BLOCK, "block_name": "Отклонённые"})
                 continue
-            if not (mine or e.approved_digest):
-                continue                                  # someone else's, never approved
-            row = e.as_dict() | ({"preview": True} if not e.available else {})
-            if not mine:
-                row["digest"] = e.approved_digest          # they get the approved copy
-            rows.append(row)
+            rows.append(e.as_dict() | ({"preview": True} if not e.available else {}))
         return rows + rejected
 
     def _route_catalog_approve(self) -> Response:
         """Admin: approve a task's current version -- students get it from now on."""
-        _user, err = self._auth_role(("admin",))
+        _user, err = self._auth_perm("content")
         if err is not None:
             return self._empty(err)
         data = request.get_json(silent=True) or {}
@@ -1107,7 +1102,7 @@ class PoolServer:
 
     def _route_catalog_reject(self) -> Response:
         """Admin: reject a task's current version, with an optional reason for its author."""
-        _user, err = self._auth_role(("admin",))
+        _user, err = self._auth_perm("content")
         if err is not None:
             return self._empty(err)
         data = request.get_json(silent=True) or {}
@@ -1118,7 +1113,7 @@ class PoolServer:
 
     def _route_pool_settings(self) -> Response:
         """Admin: read / switch pool-wide auto-approval."""
-        _user, err = self._auth_role(("admin",))
+        _user, err = self._auth_perm("content")
         if err is not None:
             return self._empty(err)
         settings = self.pool_settings()
@@ -1128,7 +1123,7 @@ class PoolServer:
 
     def _route_user_auto_approve(self, user: str) -> Response:
         """Admin: switch one author's auto-approval (the admin's own too)."""
-        _actor, err = self._auth_role(("admin",))
+        _actor, err = self._auth_perm("content")
         if err is not None:
             return self._empty(err)
         if not self.users.has(user):
@@ -1144,7 +1139,7 @@ class PoolServer:
         are not published on the pool are dropped by `Catalog.set_layout`; the reply lists the
         resulting catalog so the caller can show the numbering.
         """
-        _user, err = self._auth_role(("admin",))
+        _user, err = self._auth_perm("content")
         if err is not None:
             if err == HTTPStatus.FORBIDDEN:
                 return self._json(HTTPStatus.FORBIDDEN,
@@ -1192,7 +1187,7 @@ class PoolServer:
 
     def _route_catalog_hidden(self) -> Response:
         """Hide or show one task (the hashpass TUI): an author its own tasks, an admin any."""
-        user, err = self._auth_role(_AUTHOR_ROLES)
+        user, err = self._auth_perm("content")
         if err is not None:
             return self._empty(err)
         data = request.get_json(silent=True) or {}
@@ -1208,7 +1203,7 @@ class PoolServer:
 
     def _route_catalog_block(self) -> Response:
         """Open or close a block for students (the hashpass TUI); an author or the admin, as on the web."""
-        _user, err = self._auth_role(_AUTHOR_ROLES)
+        _user, err = self._auth_perm("content")
         if err is not None:
             return self._empty(err)
         data = request.get_json(silent=True) or {}
@@ -1221,7 +1216,7 @@ class PoolServer:
 
     def _route_catalog_move(self) -> Response:
         """Move one task a step up/down (the hashpass TUI); admin-only like web drag-and-drop."""
-        _user, err = self._auth_role(("admin",))
+        _user, err = self._auth_perm("content")
         if err is not None:
             if err == HTTPStatus.FORBIDDEN:
                 return self._json(HTTPStatus.FORBIDDEN,
@@ -1403,7 +1398,7 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         target = request.args.get("user") or user
-        if target != user and self.users.role(user) != "admin":
+        if target != user and not self._perm(user, "progress"):
             return self._empty(HTTPStatus.FORBIDDEN)
         sol = self.attempts().solution(target, ref)
         if sol is None:
@@ -1416,7 +1411,7 @@ class PoolServer:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         store = self.progress()
         # user 2026-10-25: other people's progress -- the admin only, not a course's staff
-        if self.users.role(user) == "admin":
+        if self._perm(user, "progress"):
             return self._json(HTTPStatus.OK, {"progress": store.all()})
         return self._json(HTTPStatus.OK, {"progress": {user: store.get(user)}})
 
@@ -1451,14 +1446,14 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         rows = [r for r in self._pool_image_rows() if self._may_see_repo(user, str(r["repo"]))]
-        if self.users.role(user) not in _AUTHOR_ROLES:
-            # a student: a catalogued tag only as its approved revision of an open task; other
+        if not self._perm(user, "content"):
+            # a student (and one's own repositories in full): a catalogued tag only as its approved revision of an open task; other
             # tags only as plain images (bases) -- never a task outside the catalog
             entries = self.catalog().entries()
             catalogued = {e.ref for e in entries}
             served = {(r or "").removeprefix(_COPY) for e in entries if e.available
                       for r in (self._approved_rev(e),)}
-            rows = [r for r in rows if r["ref"] in served
+            rows = [r for r in rows if r["ref"] in served or self._may_write(user, str(r["repo"]))
                     or (f"{r['repo']}:{r['tag']}" not in catalogued and r["kind"] != "task")]
         return self._json(HTTPStatus.OK, {"images": rows})
 
@@ -2132,7 +2127,7 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         rows = [r for r in self.deletions().all() if r["state"] == "open"
-                and (self.users.role(user) == "admin" or r["by"] == user)]
+                and (self._perm(user, "content") or r["by"] == user)]
         return self._json(HTTPStatus.OK, {"requests": rows})
 
     def _route_deletion(self, rid: str) -> Response:
@@ -2144,7 +2139,7 @@ class PoolServer:
         row = next((r for r in self.deletions().all() if r["id"] == rid and r["state"] == "open"), None)
         if row is None:
             return self._json(HTTPStatus.NOT_FOUND, {"error": "такого открытого запроса нет"})
-        admin = self.users.role(user) == "admin"
+        admin = self._perm(user, "content")
         if (action == "withdraw" and row["by"] != user) or (action in ("approve", "reject") and not admin) \
                 or action not in ("approve", "reject", "withdraw"):
             return self._empty(HTTPStatus.FORBIDDEN)
@@ -2516,8 +2511,9 @@ class PoolServer:
     def _web_dashboard(self) -> Response:
         if era.courses_on():   # progress lives in each course now
             return self._redirect("/c")
-        if self._session_role(("admin",)) is None:   # everyone's progress: the admin only
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("progress")
+        if denied is not None:
+            return denied
         group = request.args.get("group") or None
         profiles = self.users.all_users()
         attempts = self.attempts()
@@ -2528,9 +2524,9 @@ class PoolServer:
             attempts={str(p["user"]): attempts.summary(str(p["user"])) for p in profiles}))
 
     def _web_users(self) -> Response:
-        actor = self._session_role(("admin",))
-        if actor is None:
-            return self._redirect("/web/login")
+        actor, denied = self._web_need("people")
+        if denied is not None:
+            return denied
         q = request.args.get("q", "").strip()
         return self._html(render_users(
             self.users.search(q) if q else self.users.all_users(),
@@ -2540,8 +2536,9 @@ class PoolServer:
 
     def _web_users_auto_approve(self) -> Response:
         """Admin: switch one author's auto-approval (own included)."""
-        if self._session_role(("admin",)) is None:
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         target = request.form.get("user", "").strip()
         if self.users.has(target):
             self.users.set_auto_approve(target, on=request.form.get("on") == "1")
@@ -2549,15 +2546,16 @@ class PoolServer:
 
     def _web_pool_auto_approve(self) -> Response:
         """Admin: switch auto-approval for the whole pool."""
-        if self._session_role(("admin",)) is None:
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         self.pool_settings().set_auto_approve(on=request.form.get("on") == "1")
         return self._redirect("/web/users")
 
     def _web_images(self) -> Response:
         if era.courses_on():   # tasks/images: search and user pages
             return self._redirect("/search?type=tasks")
-        if self._session_role(_AUTHOR_ROLES) is None:
+        if self._session_user() is None:
             return self._redirect("/web/login")
         blocks = [b.as_dict() for b in self.catalog().blocks()]
         return self._html(render_catalog(self._pool_image_rows(), blocks))
@@ -2565,7 +2563,8 @@ class PoolServer:
     def _web_image_card(self, ref: str) -> Response:
         viewer = self._session_user()
         courses_on = era.courses_on()
-        if viewer is None or (not courses_on and self.users.role(viewer) not in _AUTHOR_ROLES):
+        if viewer is None or (not courses_on and not self.pool_perms(viewer)
+                              and not self._may_write(viewer, ref.partition(":")[0])):
             return self._redirect(f"/web/login?next={quote('/web/image/' + ref, safe='')}")
         ref = self._live_ref(ref)
         if not self.store.exists(ref) or not self._may_see_repo(viewer, ref.partition(":")[0]):
@@ -2629,7 +2628,7 @@ class PoolServer:
             "repo": name, "tag": tag, "n": n, "repo_info": idx.as_dict() if idx.exists else None,
             "owner": owner, "courses_era": era.courses_on(),
             "used_in": self.people.where_used(name, tag, viewer=viewer, role=role,
-                                              see_all=owner or role == "admin"),
+                                              see_all=owner or self._perm(viewer, "content")),
             "propose_to": [c.ref for c in self.course_api.courses.all() if can(viewer, self.pool_perms(viewer), c, "propose")
                            and c.find_task(name, tag) is None],
             "may_fork": self._may_read_sources(viewer, name) and not owner and n is not None,
@@ -2646,7 +2645,7 @@ class PoolServer:
 
         `raw=1` sends the file as plain text, `dl=1` as a download (GitHub's Raw / Download).
         """
-        if self._session_role(_AUTHOR_ROLES) is None:
+        if self._session_user() is None:
             return self._redirect("/web/login")
         ref, path = self._live_ref(request.args.get("ref", "")), request.args.get("path", "").strip("/")
         if not self._sources_ready(ref):
@@ -2675,7 +2674,7 @@ class PoolServer:
 
     def _web_source_archive(self) -> Response:
         """Send the task's sources as one tar.gz download -- authors/admins."""
-        if self._session_role(_AUTHOR_ROLES) is None:
+        if self._session_user() is None:
             return self._redirect("/web/login")
         ref = self._live_ref(request.args.get("ref", ""))
         try:
@@ -2695,7 +2694,7 @@ class PoolServer:
         """
         if viewer is None:
             return False
-        return viewer == student or self.users.role(viewer) == "admin"
+        return viewer == student or self._perm(viewer, "progress")
 
     def _web_history(self) -> Response:
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
@@ -2757,7 +2756,7 @@ class PoolServer:
     def _web_login_post(self) -> Response:
         user = request.form.get("user", "").strip()
         courses = era.courses_on()     # with courses anyone signs in
-        staff = self.users.role(user) in _AUTHOR_ROLES
+        staff = bool(self.pool_perms(user))
         if self.users.verify(user, request.form.get("password", "")) and (staff or courses):
             token = issue_token(self.secret, user, now=time.time())
             home = f"/u/{quote(user, safe='')}" if courses else "/web"   # one's own page is home
@@ -2813,8 +2812,9 @@ class PoolServer:
 
     def _web_user_profile(self, login: str) -> Response:
         """One user's profile: every catalog task with status, tries, time -- authors/admins."""
-        if self._session_role(("admin",)) is None:   # everyone's progress: the admin only
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("progress")
+        if denied is not None:
+            return denied
         profile = self.users.get(login)
         if profile is None:
             return self._empty(HTTPStatus.NOT_FOUND)
@@ -2847,9 +2847,9 @@ class PoolServer:
         return self._redirect("/web/login")
 
     def _web_users_role(self) -> Response:
-        actor = self._session_role(("admin",))
-        if actor is None:
-            return self._redirect("/web/login")
+        actor, denied = self._web_need("admins")
+        if denied is not None:
+            return denied
         target = request.form.get("user", "").strip()
         role = request.form.get("role", "")
         if target != actor and role in ROLES and self.users.has(target):
@@ -2857,9 +2857,9 @@ class PoolServer:
         return self._redirect("/web/users")
 
     def _web_users_group(self) -> Response:
-        actor = self._session_role(("admin",))
-        if actor is None:
-            return self._redirect("/web/login")
+        _actor, denied = self._web_need("people")
+        if denied is not None:
+            return denied
         target = request.form.get("user", "").strip()
         group = request.form.get("group", "").strip()[:64]
         if self.users.has(target):
@@ -2868,9 +2868,9 @@ class PoolServer:
         return self._inline_saved()
 
     def _web_users_comment(self) -> Response:
-        actor = self._session_role(("admin",))
-        if actor is None:
-            return self._redirect("/web/login")
+        _actor, denied = self._web_need("people")
+        if denied is not None:
+            return denied
         target = request.form.get("user", "").strip()
         comment = request.form.get("comment", "").strip()[:_MAX_COMMENT]
         if self.users.has(target):
@@ -2885,16 +2885,18 @@ class PoolServer:
         return self._redirect("/web/users")
 
     def _web_users_registration(self) -> Response:
-        if self._session_role(("admin",)) is None:
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("people")
+        if denied is not None:
+            return denied
         self.config.registration_open = request.form.get("open") == "true"
         if self.config_path is not None:
             save_config(self.config_path, self.config)
         return self._redirect("/web/users")
 
     def _web_users_reset_link(self) -> Response:
-        if self._session_role(("admin",)) is None:
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("people")
+        if denied is not None:
+            return denied
         target = request.form.get("user", "")
         if not self.users.has(target):
             return self._redirect("/web/users")
@@ -2904,9 +2906,9 @@ class PoolServer:
             render_reset_link(target, f"{self._pool_url()}/web/reset?token={token}"))
 
     def _web_users_delete(self) -> Response:
-        actor = self._session_role(("admin",))
-        if actor is None:
-            return self._redirect("/web/login")
+        actor, denied = self._web_need("people")
+        if denied is not None:
+            return denied
         target = request.form.get("user", "").strip()
         if target and target != actor:                 # never delete yourself
             self.users.delete(target)
@@ -2915,9 +2917,9 @@ class PoolServer:
         return self._redirect("/web/users")
 
     def _web_users_delete_group(self) -> Response:
-        actor = self._session_role(("admin",))
-        if actor is None:
-            return self._redirect("/web/login")
+        actor, denied = self._web_need("people")
+        if denied is not None:
+            return denied
         group = request.form.get("group", "").strip()
         if group:
             prog = self.progress()
@@ -2931,7 +2933,7 @@ class PoolServer:
 
     def _web_ref_form(self) -> tuple[str, str] | None:
         """Author-gate a POST, return (ref, form-ref) if the ref exists, else redirect (returns None)."""
-        if self._session_role(_AUTHOR_ROLES) is None:
+        if self._session_user() is None:
             return None
         ref = request.form.get("ref", "")
         if not ref or not self.store.exists(ref):
@@ -2958,7 +2960,7 @@ class PoolServer:
         return self._html(_ownership_message(name), status=HTTPStatus.FORBIDDEN)
 
     def _web_image_attach(self) -> Response:
-        user = self._session_role(_AUTHOR_ROLES)
+        user = self._session_user()
         if user is None:
             return self._redirect("/web/login")
         ref = self._live_ref(request.form.get("ref", ""))
@@ -2974,7 +2976,7 @@ class PoolServer:
         return self._redirect(self._card_url(ref))
 
     def _web_image_attach_delete(self) -> Response:
-        user = self._session_role(_AUTHOR_ROLES)
+        user = self._session_user()
         if user is None:
             return self._redirect("/web/login")
         ref = self._live_ref(request.form.get("ref", ""))
@@ -2988,7 +2990,7 @@ class PoolServer:
         return self._redirect(self._card_url(ref))
 
     def _web_image_file(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
+        if self._session_user() is None:
             return self._redirect("/web/login")
         ref, name = self._live_ref(request.args.get("ref", "")), request.args.get("name", "")
         try:
@@ -3001,9 +3003,9 @@ class PoolServer:
         return resp
 
     def _web_catalog_add(self) -> Response:
-        user = self._session_role(_AUTHOR_ROLES)
-        if user is None:
-            return self._redirect("/web/login")
+        user, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         ref = self._live_ref(request.form.get("ref", ""))
         if not ref or not self.store.exists(ref):
             return self._redirect("/web/images")
@@ -3019,9 +3021,9 @@ class PoolServer:
         return self._redirect("/web/images")
 
     def _web_catalog_remove(self) -> Response:
-        user = self._session_role(_AUTHOR_ROLES)
-        if user is None:
-            return self._redirect("/web/login")
+        user, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         ref = _tag_ref(request.form.get("ref", ""))
         name = ref.partition(":")[0]
         if ref and not self._may_write(user, name):
@@ -3032,9 +3034,9 @@ class PoolServer:
         return self._redirect("/web/images")
 
     def _web_task_toggle(self) -> Response:
-        user = self._session_role(_AUTHOR_ROLES)
-        if user is None:
-            return self._redirect("/web/login")
+        user, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         ref = request.form.get("ref", "")
         if not ref:
             return self._redirect("/web/images")
@@ -3051,8 +3053,8 @@ class PoolServer:
         It can move or de-list ANY task, including ones an author doesn't own, so (unlike the
         per-ref add/remove/toggle routes, which stay `_may_write`-gated) this one is admin-only.
         """
-        if self._session_role(("admin",)) is None:
-            if self._session_role(_AUTHOR_ROLES) is not None:
+        if self._session_perm("content") is None:
+            if self._session_user() is not None:
                 return self._html(_LAYOUT_ADMIN_ONLY, status=HTTPStatus.FORBIDDEN)
             return self._empty(HTTPStatus.UNAUTHORIZED)
         data = request.get_json(silent=True) or {}
@@ -3062,36 +3064,40 @@ class PoolServer:
         return self._json(HTTPStatus.OK, {"ok": True})
 
     def _web_block_add(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         self.catalog().add_block(request.form.get("name", "").strip() or "Блок")
         return self._redirect("/web/images")
 
     def _web_block_rename(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         self.catalog().rename_block(request.form.get("block_id", ""),
                                     request.form.get("name", "").strip() or "Блок")
         return self._redirect("/web/images")
 
     def _web_block_remove(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         self.catalog().remove_block(request.form.get("block_id", ""))
         return self._redirect("/web/images")
 
     def _web_block_toggle(self) -> Response:
-        if self._session_role(_AUTHOR_ROLES) is None:
-            return self._redirect("/web/login")
+        _who, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         self.catalog().set_block_open(request.form.get("block_id", ""),
                                       open_=request.form.get("open", "") == "1")
         return self._redirect("/web/images")
 
     def _web_block_hide_tasks(self) -> Response:
         """Hide/show every task of a block at once -- only the ones this author may write."""
-        user = self._session_role(_AUTHOR_ROLES)
-        if user is None:
-            return self._redirect("/web/login")
+        user, denied = self._web_need("content")
+        if denied is not None:
+            return denied
         self.catalog().set_block_tasks_hidden(
             request.form.get("block_id", ""), hidden=request.form.get("hidden", "") == "1",
             may=lambda ref: self._may_write(user, ref.partition(":")[0]))

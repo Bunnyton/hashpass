@@ -66,3 +66,14 @@ def test_set_perms_keeps_only_known_keys(tmp_path: Path) -> None:
     users.set_perms("bob", ["people", "bogus"])
     assert users.get("bob")["perms"] == ["people"]
     assert perms.pool_perms(users, "", "bob") == {"people"}
+
+
+@pytest.mark.tier2
+def test_me_carries_the_effective_boxes(registry) -> None:
+    from hashpass.registry.remote import RemoteRegistry  # noqa: PLC0415
+    registry.users.add("admin", "pw-correct1", role="admin")
+    registry.users.add("ed", "pw-correct1", role="admin")
+    registry.users.set_perms("ed", ["content"])
+    client = RemoteRegistry(registry.base_url)
+    assert client.me(token=client.login("admin", "pw-correct1"))["perms"] == list(perms.KEYS)  # the owner
+    assert client.me(token=client.login("ed", "pw-correct1"))["perms"] == ["content"]
