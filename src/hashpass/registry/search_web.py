@@ -208,7 +208,7 @@ class SearchWeb:
         api = self.server.course_api
         return api._summary(course, role_of) | {"tasks": sum(1 for _ in course.tasks())}  # noqa: SLF001
 
-    def _courses(self, user: str | None, role: str | None, q: str) -> list[dict]:
+    def _courses(self, user: str | None, role: str | None, q: str) -> list[dict]:  # noqa: ARG002  (callers pass it)
         rows = [self._course_row(c, role_of=user) for c in self.server.course_api.courses.all()
                 if can(user, self.server.pool_perms(user), c, "view")
                 and q.casefold() in f"{c.ref} {c.title} {c.description}".casefold()]
@@ -267,7 +267,7 @@ class SearchWeb:
                     continue
         return summary(text)
 
-    def where_used(self, repo: str, tag: str | None, *, viewer: str | None, role: str | None,
+    def where_used(self, repo: str, tag: str | None, *, viewer: str | None, role: str | None,  # noqa: ARG002
                    see_all: bool = False) -> list[dict]:
         """
         Every place `repo` (`:tag`) stands in a course: course, block, the version students get.

@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from flask import Flask, Response, request
 
+from hashpass.registry import perms
 from hashpass.registry.access import can
 from hashpass.registry.progress_store import outside_course
 from hashpass.registry.web import _env, history_href, render_profile
@@ -31,7 +32,7 @@ def render_course(view: dict, **ctx: object) -> str:
     """Render one course page (what is shown depends on the viewer's rights in `ctx`)."""
     return _env.get_template("course.html.j2").render(
         title=f"{view.get('title') or view['ref']} — hashpass", nav=True, active="/c", c=view,
-        role_ru=_ROLE_RU, **ctx)
+        role_ru=_ROLE_RU, perm_labels=perms.LABELS, **ctx)
 
 
 class CourseWeb:

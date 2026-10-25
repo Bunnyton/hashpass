@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from flask import Flask, Response, request
 
 from hashpass.registry import courses as cm
+from hashpass.registry import perms
 from hashpass.registry.access import can, course_perms
 from hashpass.registry.courses import Course, CourseConflictError, CourseStore
 from hashpass.registry.revisions import parse_version
@@ -321,21 +322,40 @@ class CourseApi:
             self.enrollments.enroll(user, course.id)
         return err or self._json(HTTPStatus.OK, {"user": user, "accepted": accept})
 
-    def member(self, owner: str, name: str, user: str) -> Response:
-        course, actor, err = self._load(owner, name, "people")
+    def member(self, owner: str, name: str, user: str) -> Response:  # noqa: PLR0911
+        """
+        Give `user` a role here, or take it away (spec 2026-10-25 §3).
+
+        Making, unmaking or re-boxing an admin is the `admins` box, and only with boxes the caller
+        holds itself; any other role is `people`. Nobody changes its own role.
+        """
+        course, actor, err = self._load(owner, name, "view")
         if err is not None:
             return err
+        body = self._body()
+        role = str(body.get("role", ""))
+        role = "admin" if role == "maintainer" else role               # old clients
+        held = course_perms(course, actor) | self.server.pool_perms(actor)
+        boxes = body.get("perms") if isinstance(body.get("perms"), list) else None
+        admin_change = course.role_of(user) == "admin" or (request.method != "DELETE" and role == "admin")
+        if user == actor:
+            return self._err(HTTPStatus.FORBIDDEN, "свою роль не меняют")
+        if ("admins" if admin_change else "people") not in held:
+            return self._err(HTTPStatus.FORBIDDEN, "не хватает прав в этом курсе")
+        wanted = perms.clean(boxes, default=perms.DEFAULT) if role == "admin" else frozenset()
+        if request.method != "DELETE" and not perms.subset(wanted, held):
+            return self._err(HTTPStatus.FORBIDDEN, "нельзя выдать права, которых нет у вас")
         if request.method == "DELETE":
             err = self._edit(course.ref, lambda c: cm.remove_member(c, user), by=actor,
                              what=f"{user} больше не участник")
             return err or self._json(HTTPStatus.OK, {"removed": user})
         if not self.server.users.has(user):
             return self._err(HTTPStatus.NOT_FOUND, f"нет пользователя {user}")
-        role = str(self._body().get("role", ""))
-        role = "admin" if role == "maintainer" else role               # old clients
-        err = self._edit(course.ref, lambda c: cm.set_member(c, user, role), by=actor,
-                         what=f"{user} — {_ROLE_RU.get(role, role)}")
-        return err or self._json(HTTPStatus.OK, {"user": user, "role": role})
+        given = sorted(wanted) if role == "admin" else None
+        said = f" ({', '.join(perms.LABELS[k] for k in given)})" if given else ""
+        err = self._edit(course.ref, lambda c: cm.set_member(c, user, role, given), by=actor,
+                         what=f"{user} — {_ROLE_RU.get(role, role)}{said}")
+        return err or self._json(HTTPStatus.OK, {"user": user, "role": role, "perms": given})
 
     def add_block(self, owner: str, name: str) -> Response:
         course, actor, err = self._load(owner, name, "content")
@@ -425,7 +445,6 @@ class CourseApi:
         course, user, err = self._load(owner, name, "add")
         if err is not None:
             return err
-        role = self.server.users.role(user)
         moderator = can(user, self.server.pool_perms(user), course, "content")
         current = course.find_task(repo, tag)
         if current is None:

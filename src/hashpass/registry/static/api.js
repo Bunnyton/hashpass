@@ -1,6 +1,7 @@
 /* Course/image pages: a <form data-api="METHOD /path"> sends its fields to the JSON API
    (a path slot __NAME__ is filled from the field `__name`, which is not sent).
-   Fields go as JSON (data-type="bool"|"int" converts; a checkbox is a bool); data-rev adds the
+   Fields go as JSON (data-type="bool"|"int" converts; a checkbox is a bool, or with
+   data-type="list" one of a list of the checked values); data-rev adds the
    page's revision of the course; data-confirm asks first; data-then="go:/c/{ref}" follows the
    answer, else the page reloads. Errors show the server's own `error` text. */
 (function () {
@@ -23,7 +24,10 @@
     [].forEach.call(form.elements, function (el) {
       if (!el.name || el.disabled) return;
       var type = el.getAttribute('data-type');
-      if (el.type === 'checkbox') body[el.name] = el.checked;
+      if (el.type === 'checkbox' && type === 'list') {         // boxes of one name -> a list
+        body[el.name] = body[el.name] || [];
+        if (el.checked) body[el.name].push(el.value);
+      } else if (el.type === 'checkbox') body[el.name] = el.checked;
       else if (type === 'bool') body[el.name] = el.value === 'true' || el.value === 'True';
       else if (type === 'int') body[el.name] = parseInt(el.value, 10);
       else body[el.name] = el.value;

@@ -290,6 +290,8 @@ table.cmds tr.fresh td{animation:hp-fresh 2.4s ease-out}
 /* course era: a checkbox sits in line with its words; wide tables scroll inside their card on a phone */
 label.check{display:flex;flex-direction:row;align-items:center;gap:10px;font-weight:500}
 label.check input{width:auto;margin:0;flex:none}
+.perm-boxes{display:inline-flex;flex-wrap:wrap;gap:4px 12px}
+.perm-boxes label.check{font-weight:400;gap:6px}
 pre.diff{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);
   padding:10px 12px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;white-space:pre}
 .course-card{display:block;text-decoration:none;color:inherit}

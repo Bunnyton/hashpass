@@ -405,7 +405,6 @@ class PoolServer:
         needs only `view` (a public course's tasks download without a token, as before courses);
         credit needs `play`.
         """
-        role = self.users.role(user) if user else None
         wanted = course_ref or (request.args.get("course") if request else None)
         store = self.course_api.courses
         candidates = [c for c in ([store.get(wanted)] if wanted else store.courses_with(repo, tag)) if c]
@@ -421,7 +420,6 @@ class PoolServer:
 
     def _reachable_in_course(self, user: str | None, ref: str) -> bool:
         """Whether a private image `ref` is a parent/base of a task `user` gets through a course."""
-        role = self.users.role(user) if user else None
         for course in self.course_api.courses.all():
             if not can(user, self.pool_perms(user), course, "play"):
                 continue
@@ -1025,7 +1023,6 @@ class PoolServer:
 
     def _course_rows(self, course: "course_model.Course", user: str) -> list[dict[str, object]]:
         """Return the default course in the old `/catalog` row shape, as `user` may see it."""
-        role = self.users.role(user)
         if not can(user, self.pool_perms(user), course, "view"):
             return []
         staff = can(user, self.pool_perms(user), course, "content")
@@ -2176,7 +2173,6 @@ class PoolServer:
 
     def _course_names(self, found: list["course_model.Course"], user: str) -> list[str]:
         """Course names for `user`: private courses they are not in stay unnamed."""
-        role = self.users.role(user)
         named = [c.ref for c in found if can(user, self.pool_perms(user), c, "view")]
         hidden = len(found) - len(named)
         return named + ([f"ещё приватных курсов: {hidden}"] if hidden else [])

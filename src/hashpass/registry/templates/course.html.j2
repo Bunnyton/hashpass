@@ -189,13 +189,15 @@
 <li><a class='person' href='/u/{{ ref_parts[0] | q }}'>{{ avatar(ref_parts[0], 'sm') }}<span class='mono'>{{ ref_parts[0] }}</span></a><span class='pill sm author'>владелец</span></li>
 {% for user, role in (c.members or {}).items() %}
 <li><a class='person' href='/u/{{ user | q }}'>{{ avatar(user, 'sm') }}<span class='mono'>{{ user }}</span></a>
-{% if may.people %}
+{% set boxes = (c.perms or {}).get(user, []) %}
+{% if user != signed_in and ((role != 'admin' and may.people) or may.admins) %}
 <form class='inline row' data-api='PUT {{ api }}/members/{{ user | q }}'>
 <label class='visually-hidden' for='crole-{{ loop.index }}'>Роль {{ user }}</label>
-<select id='crole-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'admin'] %}<option value='{{ r }}'{% if r == role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endfor %}</select>
+<select id='crole-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'admin'] %}{% if r != 'admin' or may.admins %}<option value='{{ r }}'{% if r == role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endif %}{% endfor %}</select>
+{% if role == 'admin' and may.admins %}<span class='perm-boxes'>{% for k, label in perm_labels.items() %}<label class='check sm'><input type='checkbox' name='perms' value='{{ k }}' data-type='list'{% if k in boxes %} checked{% endif %}> {{ label }}</label>{% endfor %}</span>{% endif %}
 <button class='sm ghost' type='submit'>Сохранить</button></form>
 {{ act('DELETE', api ~ '/members/' ~ (user | q), 'Убрать', 'sm danger', confirm='Убрать ' ~ user ~ ' из участников?') }}
-{% else %}<span class='pill sm'>{{ role_ru[role] }}</span>{% endif %}
+{% else %}<span class='pill sm'>{{ role_ru[role] }}</span>{% if role == 'admin' and boxes %} <span class='sub small'>{% for k in boxes %}{{ perm_labels[k] }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}{% endif %}
 </li>
 {% endfor %}
 </ul>
@@ -205,7 +207,7 @@
 <label class='visually-hidden' for='new-cmember'>Логин</label>
 <input id='new-cmember' name='__login' placeholder='логин пользователя' required>
 <label class='visually-hidden' for='new-crole'>Роль</label>
-<select id='new-crole' name='role'><option value='member'>участник — проходит приватный курс</option><option value='author' selected>автор — добавляет задания</option><option value='admin'>админ — управляет курсом</option></select>
+<select id='new-crole' name='role'><option value='member'>участник — проходит приватный курс</option><option value='author' selected>автор — добавляет задания</option>{% if may.admins %}<option value='admin'>админ — управляет курсом</option>{% endif %}</select>
 <button class='sm' type='submit'>Добавить</button>
 </form>
 <p class='sub small'>Ссылка-приглашение — кто откроет её и войдёт, станет участником: <code class='copy'>{{ invite_link }}</code></p>
