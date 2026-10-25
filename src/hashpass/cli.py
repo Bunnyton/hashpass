@@ -1890,8 +1890,35 @@ def _built_on_base(store: ImageStore, ref: str) -> str | None:
     return base_ref()
 
 
+_VISIBILITY_WORDS = {"public": "публичный", "private": "приватный"}
+
+
+def _ask_visibility(env: Home, client: RemoteRegistry, url: str, name: str, io: Io) -> str | None:
+    """
+    Ask who sees one's own repository on the pool; None -- keep it (Enter, EOF, someone else's).
+
+    User 2026-10-25: «при пуше пускай спрашивает — приватный или публичный образ».
+    """
+    token = _pool_token(env, url)
+    if not token or token_user(token) != name.partition("/")[0]:
+        return None                                   # someone else's image: a proposal, the owner decides
+    try:
+        now = str(client.revisions(name).get("visibility") or "public")
+    except (urllib.error.HTTPError, urllib.error.URLError, RuntimeError, ValueError):
+        now = "public"                                # a new repository is public
+    answer = (io.read(f"Кто увидит {name} на пуле? 1 — публичный (все), 2 — приватный (только ты "
+                      f"и админы); Enter — оставить ({'сейчас: ' + _VISIBILITY_WORDS.get(now, now)}): ")
+              or "").strip().casefold()
+    if answer.startswith(("1", "пуб", "pub", "откр")):
+        return "public"
+    if answer.startswith(("2", "пр", "pri", "закр")):
+        return "private"
+    return None
+
+
 def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR0913
-             force: bool = False, io: Io | None = None, message: str = "") -> int:
+             force: bool = False, io: Io | None = None, message: str = "",
+             visibility: str | None = None) -> int:
     """
     Push one's own build of a ref (+ its `from` closure) as a new version.
 
@@ -1901,8 +1928,10 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR09
 
     Resolves the registry (explicit → saved) and logs in inline if there is no cached token.
     `force=True` re-uploads even layers the server already holds (needed to overwrite a
-    contaminated server-side blob that HEAD would otherwise dedup-skip).
+    contaminated server-side blob that HEAD would otherwise dedup-skip). `visibility` --
+    "public" / "private"; None asks before the upload (a terminal or an injected `io`).
     """
+    asking = visibility is None and (io is not None or sys.stdin.isatty())
     io = io or _default_io()
     pulled = ImageStore(env.images)
     if not pulled.exists(ref):                # before any login prompt: nothing to push
@@ -1916,6 +1945,9 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR09
     tdir = task_dir(ref, store)
     url = _ensure_registry_login(env, registry, io)
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+    name = split_ref(ref)[0]
+    if asking:
+        visibility = _ask_visibility(env, client, url, name, io)
     _push_call(client.push, store, ref, force=force, task_dir=tdir if tdir.exists() else None,
                extras=lambda staging: _attach_taskfile(client, store, ref, io, staging),
                base=_built_on_base(store, ref), message=message, origin=_push_origin(store, ref))
@@ -1929,7 +1961,22 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR09
             sys.stdout.write(f"без изменений: {human_ref(done['ref'])} уже на пуле\n")
         else:
             sys.stdout.write(f"отправлено {human_ref(done['ref'])}\n")
+    if visibility is not None and not any(d.get("proposal") for d in client.last_push):
+        _set_visibility(client, name, visibility)
     return 0
+
+
+def _set_visibility(client: RemoteRegistry, name: str, visibility: str) -> None:
+    """Apply the answer; a refusal (a public course uses it) is said, the push still stands."""
+    try:
+        client.repo_settings(name, visibility=visibility)
+    except urllib.error.HTTPError as exc:
+        why = exc.read().decode("utf-8", "replace")
+        with contextlib.suppress(ValueError, AttributeError):
+            why = json.loads(why).get("error", why)
+        sys.stdout.write(f"\x1b[33mвидимость не изменена: {why}\x1b[0m\n")
+        return
+    sys.stdout.write(f"видимость {name}: {_VISIBILITY_WORDS[visibility]}\n")
 
 
 def cmd_push_base(env: Home, registry: str | None = None, *, force: bool = False,

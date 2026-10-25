@@ -12,7 +12,7 @@ from hashpass import cli
 POOL_HELP = "адрес пула (по умолчанию — сохранённый)"
 
 
-def add_author_commands(sub: argparse._SubParsersAction) -> None:
+def add_author_commands(sub: argparse._SubParsersAction) -> None:  # noqa: PLR0915  (one line per option)
     """Add build/push/clone/serve/... to the `hashpass` parser."""
     sub.add_parser("work", help=argparse.SUPPRESS)                   # the list of everything (also `/` in hashpass)
     p_build = sub.add_parser("build", help="собрать из Taskfile: со stage — задание, без — образ; "
@@ -28,6 +28,11 @@ def add_author_commands(sub: argparse._SubParsersAction) -> None:
     p_push.add_argument("--block", help=argparse.SUPPRESS)
     p_push.add_argument("--force", action="store_true",
                         help="отправить даже без изменений (студенты скачают заново)")
+    seen = p_push.add_mutually_exclusive_group()     # without either the push asks (a terminal)
+    seen.add_argument("--public", dest="visibility", action="store_const", const="public",
+                      help="образ видят все (без вопроса)")
+    seen.add_argument("--private", dest="visibility", action="store_const", const="private",
+                      help="образ видят только владелец, его люди и админы (без вопроса)")
     p_clone = sub.add_parser("clone", help="скачать файлы задания с пула в папку — чтобы править")
     p_clone.add_argument("ref", help="задание на пуле, например alice/lab:1")
     p_clone.add_argument("dest", nargs="?", help="куда (по умолчанию ./<имя задания>)")
@@ -82,7 +87,8 @@ def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # n
         if args.ref == "base":
             return cli.cmd_push_base(env, args.registry, force=args.force)
         _say_no_more_flags(args)
-        return cli.cmd_push(env, args.ref, args.registry, force=args.force, message=args.message)
+        return cli.cmd_push(env, args.ref, args.registry, force=args.force, message=args.message,
+                            visibility=args.visibility)
     if command in ("clone", "source"):
         return cli.cmd_source(env, args.ref, args.dest, args.registry)
     if command == "serve":
