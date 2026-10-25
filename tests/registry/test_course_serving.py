@@ -63,12 +63,13 @@ def test_credit_comes_from_the_course_and_records_it(pool: _Courses) -> None:
 
 
 @pytest.mark.tier1
-def test_course_staff_do_not_see_their_students(pool: _Courses) -> None:
-    """User 2026-10-25: who takes a course and how far -- the admin only."""
+def test_course_staff_see_only_their_students_on_their_tasks(pool: _Courses) -> None:
+    """Spec 2026-10-25 §4: the owner sees its course's students, on its course's tasks only."""
     pool.call("POST", "/submit", "kid", {"task_ref": "bob/git-init:1", "course": "bob/linux",
                                          "digest": _digest(pool, 1), "passed": True})
     pool.r.users.set_role("bob", "user")                           # not a legacy author any more
-    assert set(pool.call("GET", "/progress", "bob")[1]["progress"]) == {"bob"}
+    seen = pool.call("GET", "/progress", "bob")[1]["progress"]
+    assert "bob/git-init:1" in seen["kid"] and "max" not in seen
     assert "bob/git-init:1" in pool.call("GET", "/progress", "bunnyton")[1]["progress"]["kid"]
     assert pool.call("GET", "/progress", "max")[1]["progress"] == {"max": {}}
 

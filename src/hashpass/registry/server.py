@@ -1452,7 +1452,8 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         target = request.args.get("user") or user
-        if target != user and not self._perm(user, "progress"):
+        if (target != user and not self._perm(user, "progress")
+                and ref not in self._course_students(user).get(target, set())):
             return self._empty(HTTPStatus.FORBIDDEN)
         sol = self.attempts().solution(target, ref)
         if sol is None:
@@ -1464,10 +1465,27 @@ class PoolServer:
         if user is None:
             return self._empty(HTTPStatus.UNAUTHORIZED)
         store = self.progress()
-        # user 2026-10-25: other people's progress -- the admin only, not a course's staff
+        # spec 2026-10-25 §4: a pool admin with `progress` -- everyone; a course's owner or its
+        # admin with `progress` -- that course's students on that course's tasks
         if self._perm(user, "progress"):
             return self._json(HTTPStatus.OK, {"progress": store.all()})
-        return self._json(HTTPStatus.OK, {"progress": {user: store.get(user)}})
+        payload = {user: store.get(user)}
+        for student, refs in self._course_students(user).items():
+            mine = store.get(student)
+            payload.setdefault(student, {}).update({r: v for r, v in mine.items() if r in refs})
+        return self._json(HTTPStatus.OK, {"progress": payload})
+
+    def _course_students(self, viewer: str) -> dict[str, set[str]]:
+        """Return the students of the courses where `viewer` holds `progress` -> those courses' task refs."""
+        pool = self.pool_perms(viewer)
+        out: dict[str, set[str]] = {}
+        for course in self.course_api.courses.all():
+            if not can(viewer, pool, course, "progress"):
+                continue
+            refs = {f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()}
+            for student in self.course_api.enrollments.users_of(course.id):
+                out.setdefault(student, set()).update(refs)
+        return out
 
     def _pool_image_rows(self) -> list[dict[str, object]]:
         """One row per stored revision: its tag's catalog place, description, digest, newest-or-not."""
@@ -2742,22 +2760,24 @@ class PoolServer:
         resp.headers["Content-Disposition"] = f'attachment; filename="{name}.tar.gz"'
         return resp
 
-    def _may_watch(self, viewer: str | None, student: str) -> bool:
+    def _may_watch(self, viewer: str | None, student: str, ref: str) -> bool:
         """
-        Tell whether `viewer` may read `student`'s commands: one's own, or the admin.
+        Tell whether `viewer` may read `student`'s commands on `ref`.
 
-        User 2026-10-25: other people's work is the admin's, not a course's staff.
+        One's own; a pool admin with `progress`; a course's owner or admin with `progress` when
+        `student` takes that course and `ref` is in it (spec 2026-10-25 §4).
         """
         if viewer is None:
             return False
-        return viewer == student or self._perm(viewer, "progress")
+        return (viewer == student or self._perm(viewer, "progress")
+                or ref in self._course_students(viewer).get(student, set()))
 
     def _web_history(self) -> Response:
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
         viewer = self._session_user()
         if viewer is None:
             return self._redirect("/web/login")
-        if not self._may_watch(viewer, user):
+        if not self._may_watch(viewer, user, ref):
             return self._empty(HTTPStatus.FORBIDDEN)
         record = self.progress().get(user).get(ref, {}) if user else {}
         sessions = self.attempts().sessions(user, ref) if user and ref else []
@@ -2772,7 +2792,7 @@ class PoolServer:
         The page asks every few seconds with the signature it has; a student typing changes it.
         """
         user, ref = request.args.get("user", ""), request.args.get("ref", "")
-        if not self._may_watch(self._session_user(), user):
+        if not self._may_watch(self._session_user(), user, ref):
             return self._empty(HTTPStatus.UNAUTHORIZED)
         record = self.progress().get(user).get(ref, {}) if user else {}
         sessions = self.attempts().sessions(user, ref) if user and ref else []

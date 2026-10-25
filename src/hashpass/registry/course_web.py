@@ -48,14 +48,14 @@ class CourseWeb:
         app.add_url_rule("/c/<owner>/<name>/u/<login>", "web_course_student", self.student, methods=["GET"])
 
     def student(self, owner: str, name: str, login: str) -> Response:
-        """One student inside a course: its tasks with status, tries, time -- for the admin."""
-        user, role = self._viewer()
+        """One student inside a course: its tasks with status, tries, time -- for whoever holds `progress` here."""
+        user, _role = self._viewer()
         course = self.server.course_api.courses.get(f"{owner}/{name}")
         if course is None or not self.server.users.has(login):
             return self.server._empty(HTTPStatus.NOT_FOUND)                     # noqa: SLF001
         if user is None:
             return self.server._redirect(f"/web/login?next={quote(request.path, safe='')}")  # noqa: SLF001
-        if role != "admin":            # user 2026-10-25: who takes a course -- the admin only
+        if not can(user, self.server.pool_perms(user), course, "progress"):   # spec 2026-10-25 §4
             return self.server._empty(HTTPStatus.FORBIDDEN)                     # noqa: SLF001
         entries = [{"ref": f"{t['repo']}:{t['tag']}", "number": i}
                    for i, (_b, t) in enumerate(course.tasks(), 1)]
@@ -99,7 +99,7 @@ class CourseWeb:
         pool = self.server.pool_perms(user)
         may = {a: can(user, pool, course, a)
                for a in ("view", "play", "propose", "add", "content", "people", "progress", "admins", "delete")}
-        may["students"] = role == "admin"     # user 2026-10-25: not the course's staff, the admin only
+        may["students"] = may["progress"]     # spec 2026-10-25 §4: owner, admins with `progress`
         view = api._view(course, user, role) if may["view"] else api._peek(course, user)  # noqa: SLF001
         for block in view.get("blocks") or []:        # «what is this task» for the hover card
             for task in block.get("tasks", []):

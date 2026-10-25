@@ -75,8 +75,8 @@ def test_progress_lives_in_the_course(world: _Courses) -> None:
     assert "kid" in students and "1 / 1" in students and "type='search'" in students
     status, page = _page(_browser(world, "bunnyton"), f"{world.url}/c/bob/linux/u/kid")
     assert status == 200 and "bob/git-init" in page and "решено" in page  # noqa: PLR2004
-    for other in ("eve", "bob"):                     # the course's owner too: the admin only
-        assert _page(_browser(world, other), f"{world.url}/c/bob/linux/u/kid")[0] == 403  # noqa: PLR2004
+    assert _page(_browser(world, "bob"), f"{world.url}/c/bob/linux/u/kid")[0] == 200  # noqa: PLR2004  (its owner)
+    assert _page(_browser(world, "eve"), f"{world.url}/c/bob/linux/u/kid")[0] == 403  # noqa: PLR2004
 
 
 @pytest.mark.tier1

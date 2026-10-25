@@ -136,14 +136,41 @@ def test_staff_are_not_listed_as_students(pool: _Courses) -> None:
 
 
 @pytest.mark.tier1
-def test_only_the_admin_sees_who_takes_the_course(pool: _Courses) -> None:
-    """User 2026-10-25: «список студентов, проходящих курс, должен быть виден только администратору»."""
+def test_the_course_owner_sees_its_students(pool: _Courses) -> None:
+    """
+    Spec 2026-10-25 §3-§4: who takes a course -- its owner, its admins with `progress`, a pool admin.
+
+    (ed39fb6 had the pool admin alone: nobody was an admin in a course then.)
+    """
     pool.call("POST", "/courses/bob/linux/join", "kid", {})
     owner = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
-    assert "id='students'" not in owner and "#students" not in owner and ">kid<" not in owner
-    assert _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux/u/kid")[0] == 403  # noqa: PLR2004
-    assert _page(_browser(pool, "bunnyton"), f"{pool.url}/c/bob/linux/u/kid")[0] == 200  # noqa: PLR2004
-    # the same students through the API: the owner gets only its own progress
-    assert set(pool.call("GET", "/progress", "bob")[1]["progress"]) == {"bob"}
-    assert pool.call("GET", "/solution/bob/git-init:1?user=kid", "bob")[0] == 403  # noqa: PLR2004
-    assert _page(_browser(pool, "bob"), f"{pool.url}/web/history?user=kid&ref=bob/git-init:1")[0] == 403  # noqa: PLR2004
+    assert "id='students'" in owner and ">kid<" in owner.split("id='students'", 1)[1]
+    assert _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux/u/kid")[0] == 200  # noqa: PLR2004
+    pool.r.users.set_role("bob", "user")                           # no pool rights: the course's own
+    seen = pool.call("GET", "/progress", "bob")[1]["progress"]
+    assert set(seen) == {"bob", "kid"}
+    assert _page(_browser(pool, "bob"), f"{pool.url}/web/history?user=kid&ref=bob/git-init:1")[0] == 200  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize(("role", "boxes"), [("admin", ["content", "people"]), ("author", None)])
+def test_a_course_admin_without_progress_or_an_author_does_not(pool: _Courses, role: str,
+                                                                boxes: list[str] | None) -> None:
+    pool.call("POST", "/courses/bob/linux/join", "kid", {})
+    body = {"role": role} | ({"perms": boxes} if boxes is not None else {})
+    assert pool.call("PUT", "/courses/bob/linux/members/eve", "bob", body)[0] == 200  # noqa: PLR2004
+    page = _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux")[1]
+    assert "id='students'" not in page
+    assert _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux/u/kid")[0] == 403  # noqa: PLR2004
+    assert set(pool.call("GET", "/progress", "eve")[1]["progress"]) == {"eve"}
+    assert pool.call("GET", "/solution/bob/git-init:1?user=kid", "eve")[0] == 403  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_a_pool_admin_without_progress_does_not(pool: _Courses) -> None:
+    pool.call("POST", "/courses/bob/linux/join", "kid", {})
+    pool.r.users.add("clerk", "pw-correct1", role="admin")
+    pool.r.users.set_perms("clerk", ["people", "content"])
+    page = _page(_browser(pool, "clerk"), f"{pool.url}/c/bob/linux")[1]
+    assert "id='students'" not in page
+    assert _page(_browser(pool, "clerk"), f"{pool.url}/c/bob/linux/u/kid")[0] == 403  # noqa: PLR2004
