@@ -37,11 +37,11 @@
 <p class='sub small'>Приватный комментарий редактируется кликом по ячейке (Enter или уход из поля — сохраняет). Его видят только админ и преподаватели курсов, где учится человек.</p>
 <p class='sub small'>Клик по заголовку столбца — сортировка (повторный — в обратную сторону). Логин открывает страницу пользователя.</p>
 <table class='wide sortable'>
-<thead><tr><th>Логин</th><th>Роль</th><th>Приватный комментарий</th><th>Создан</th><th data-nosort>Изменить роль</th><th>Авто-одобрение</th><th data-nosort>Пароль</th><th data-nosort>Удалить</th></tr></thead>
+<thead><tr><th>Логин</th><th>Роль</th><th>Приватный комментарий</th><th>Создан</th><th data-nosort>Админ</th><th>Авто-одобрение</th><th data-nosort>Пароль</th><th data-nosort>Удалить</th></tr></thead>
 <tbody>
 {% if rows %}{% for r in rows %}
 <tr><td class='mono'><a href='/u/{{ r.user_q }}'>{{ r.user }}</a></td>
-<td data-sort='{{ {'admin': 'a', 'author': 'b', 'student': 'c'}.get(r.role, r.role) }}'><span class='pill {{ r.role }}'>{{ r.role }}</span></td>
+<td data-sort='{{ 'a' if r.is_owner else ('b' if r.role == 'admin' else 'c') }}'><span class='pill {{ r.role }}'>{{ 'владелец' if r.is_owner else ('админ' if r.role == 'admin' else 'пользователь') }}</span></td>
 <td>
 <form class='inline user-edit' method='post' action='/web/users/comment'>
 <input type='hidden' name='user' value='{{ r.user }}'>
@@ -49,14 +49,19 @@
 </form>
 </td>
 <td class='small' data-sort='{{ (r.created_at or 0)|int }}'>{{ ts(r.created_at) }}</td>
-<td>{% if r.is_self %}<span class='dim'>вы</span>{% else %}
-<form class='inline row' method='post' action='/web/users/role'>
+<td>{% if r.is_self %}<span class='dim'>вы</span>{% elif r.is_owner %}<span class='dim'>все права</span>
+{% elif 'admins' not in boxes %}{% if r.role == 'admin' %}<span class='sub small'>{% for k in r.perms %}{{ perm_labels[k] }}{% if not loop.last %}, {% endif %}{% else %}без прав{% endfor %}</span>{% else %}<span class='dim'>—</span>{% endif %}
+{% elif r.role == 'admin' %}
+<form class='inline row' method='post' action='/web/users/perms'>
 <input type='hidden' name='user' value='{{ r.user }}'>
-<select name='role'>{% for opt in roles %}<option value='{{ opt }}'{% if opt == r.role %} selected{% endif %}>{{ opt }}</option>{% endfor %}</select>
-<button class='sm' type='submit'>OK</button>
+<span class='perm-boxes'>{% for k, label in perm_labels.items() %}<label class='check sm'><input type='checkbox' name='perms' value='{{ k }}'{% if k in r.perms %} checked{% endif %}{% if k not in boxes %} disabled title='этого права у вас нет'{% endif %}> {{ label }}</label>{% endfor %}</span>
+<button class='sm' type='submit'>Сохранить</button>
 </form>
+<form class='inline' method='post' action='/web/users/role'><input type='hidden' name='user' value='{{ r.user }}'><input type='hidden' name='role' value='user'><button class='sm ghost' type='submit'>Убрать из админов</button></form>
+{% else %}
+<form class='inline' method='post' action='/web/users/role'><input type='hidden' name='user' value='{{ r.user }}'><input type='hidden' name='role' value='admin'><button class='sm ghost' type='submit'>Сделать админом</button></form>
 {% endif %}</td>
-<td data-sort='{{ ('1' if r.auto_approve else '0') if r.role in ('author', 'admin') else '' }}'>{% if r.role in ('author', 'admin') %}
+<td data-sort='{{ '1' if r.auto_approve else '0' }}'>{% if true %}
 <form class='inline' method='post' action='/web/users/auto-approve'>
 <input type='hidden' name='user' value='{{ r.user }}'>
 <input type='hidden' name='on' value='{{ '0' if r.auto_approve else '1' }}'>

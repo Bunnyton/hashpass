@@ -11,7 +11,7 @@ from flask import g, has_request_context
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
 
-from hashpass.registry import era
+from hashpass.registry import era, perms
 from hashpass.registry.attempt_store import is_live
 from hashpass.registry.codeview import highlight_lines, render_markdown_html
 from hashpass.registry.progress_store import outside_course
@@ -712,7 +712,8 @@ _ROLES = ("user", "admin")
 
 
 def render_users(profiles: list[dict], *, registration_open: bool, current_user: str = "",  # noqa: PLR0913
-                 pool_auto: bool = False, q: str = "", deletions: list[dict] | None = None) -> str:
+                 pool_auto: bool = False, q: str = "", deletions: list[dict] | None = None,
+                 owner: str = "", boxes: frozenset[str] = frozenset()) -> str:
     """User management: per-user role change / reset link / delete, delete-group, registration toggle."""
     rows = [{"user": str(p["user"]), "user_q": quote(str(p["user"]), safe=""),
              "created_at": p.get("created_at") or None,
@@ -720,10 +721,13 @@ def render_users(profiles: list[dict], *, registration_open: bool, current_user:
              "role": str(p.get("role", "user")),
              "comment": str(p.get("comment", "")),
              "auto_approve": bool(p.get("auto_approve", False)),
+             "perms": list(p.get("perms") or []),
+             "is_owner": str(p["user"]) == owner,
              "is_self": str(p["user"]) == current_user} for p in profiles]
     return _env.get_template("users.html.j2").render(
         title="Пользователи — hashpass", nav=True, active="/web/users",
         rows=rows, roles=_ROLES, pool_auto=pool_auto, q=q, deletions=deletions or [],
+        boxes=boxes, perm_labels=perms.LABELS,
         reg_label="открыта" if registration_open else "закрыта",
         toggle_to="false" if registration_open else "true",
         toggle_label="Закрыть регистрацию" if registration_open else "Открыть регистрацию")

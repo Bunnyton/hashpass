@@ -542,6 +542,7 @@ class PoolServer:
         app.add_url_rule("/admin/registration", "admin_registration",
                          self._route_admin_registration, methods=["POST"])
         app.add_url_rule("/admin/role", "admin_role", self._route_admin_role, methods=["POST"])
+        app.add_url_rule("/admin/perms", "admin_perms", self._route_admin_perms, methods=["PUT"])
         app.add_url_rule("/submit", "submit", self._route_submit, methods=["POST"])
         app.add_url_rule("/attempt", "attempt", self._route_attempt, methods=["POST"])
         app.add_url_rule("/solutions", "solutions", self._route_solutions, methods=["GET"])
@@ -600,6 +601,7 @@ class PoolServer:
                          self._web_users_auto_approve, methods=["POST"])
         app.add_url_rule("/web/pool/auto-approve", "web_pool_auto_approve",
                          self._web_pool_auto_approve, methods=["POST"])
+        app.add_url_rule("/web/users/perms", "web_users_perms", self._web_users_perms, methods=["POST"])
         app.add_url_rule("/web/users/role", "web_users_role",
                          self._web_users_role, methods=["POST"])
         app.add_url_rule("/web/users/group", "web_users_group",
@@ -809,6 +811,42 @@ class PoolServer:
         user = self._session_user()
         return user if user is not None and self._perm(user, key) else None
 
+    def _set_admin(self, actor: str, target: str, *, role: str | None = None,  # noqa: C901, PLR0911
+                   boxes: list[str] | None = None) -> str | None:
+        """
+        Make, unmake or re-box a pool admin as `actor`; return why not, or None when done.
+
+        The `admins` box; never oneself, never the owner; boxes the actor lacks are neither given
+        nor taken -- they stay as they were (spec 2026-10-25 §1).
+        """
+        held = self.pool_perms(actor)
+        if "admins" not in held:
+            return "нужны права «Админы»"
+        if target == actor:
+            return "свои права не меняют"
+        if target == self.pool_owner():
+            return "владельца пула не меняют"
+        if not self.users.has(target):
+            return "нет такого пользователя"
+        current = self.pool_perms(target)
+        if role == "user":
+            if not perms.subset(current, held):
+                return "у этого админа есть права, которых нет у вас"
+            self.users.set_role(target, "user")
+            return None
+        if role == "admin" and self.users.role(target) != "admin":
+            self.users.set_role(target, "admin")
+            self.users.set_perms(target, perms.DEFAULT & held)
+            return None
+        if boxes is not None:
+            if self.users.role(target) != "admin":
+                return "это не админ"
+            wanted = perms.clean(boxes, default=frozenset())
+            if not perms.subset(wanted - current, held):     # giving one it lacks; keeping is fine
+                return "нельзя выдать права, которых нет у вас"
+            self.users.set_perms(target, (wanted & held) | (current - held))
+        return None
+
     def _web_need(self, key: str) -> tuple[str | None, Response | None]:
         """
         Return the signed-in user holding the pool box `key`, or the answer instead.
@@ -941,13 +979,29 @@ class PoolServer:
         role = "user" if role in ("student", "author") else role     # old clients: an ordinary user
         if role not in ROLES:
             return self._empty(HTTPStatus.BAD_REQUEST)
-        if target == actor:                          # an admin cannot change their own role
-            return self._empty(HTTPStatus.FORBIDDEN)
-        try:
-            self.users.set_role(target, role)
-        except KeyError:
+        if not self.users.has(target):
             return self._empty(HTTPStatus.NOT_FOUND)
+        why = self._set_admin(actor, target, role=role)
+        if why is not None:
+            return self._json(HTTPStatus.FORBIDDEN, {"error": why})
         return self._json(HTTPStatus.OK, {"user": target, "role": role})
+
+    def _route_admin_perms(self) -> Response:
+        """PUT {user, perms}: set a pool admin's boxes (spec 2026-10-25 §2)."""
+        actor, err = self._auth_perm("admins")
+        if err is not None:
+            return self._empty(err)
+        data = request.get_json(silent=True) or {}
+        boxes = data.get("perms") if isinstance(data, dict) else None
+        if not isinstance(boxes, list):
+            return self._empty(HTTPStatus.BAD_REQUEST)
+        target = str(data.get("user", ""))
+        if not self.users.has(target):
+            return self._empty(HTTPStatus.NOT_FOUND)
+        why = self._set_admin(actor, target, boxes=[str(b) for b in boxes])
+        if why is not None:
+            return self._json(HTTPStatus.FORBIDDEN, {"error": why})
+        return self._json(HTTPStatus.OK, {"user": target, "perms": sorted(self.pool_perms(target))})
 
     def _route_user_exists(self, user: str) -> Response:
         """
@@ -2529,8 +2583,10 @@ class PoolServer:
             return denied
         q = request.args.get("q", "").strip()
         return self._html(render_users(
-            self.users.search(q) if q else self.users.all_users(),
+            [p | {"perms": sorted(self.pool_perms(str(p["user"])))}
+             for p in (self.users.search(q) if q else self.users.all_users())],
             registration_open=self.config.registration_open, current_user=actor,
+            owner=self.pool_owner() or "", boxes=self.pool_perms(actor),
             pool_auto=self.pool_settings().auto_approve, q=q,
             deletions=[r for r in self.deletions().all() if r["state"] == "open"]))
 
@@ -2852,8 +2908,21 @@ class PoolServer:
             return denied
         target = request.form.get("user", "").strip()
         role = request.form.get("role", "")
-        if target != actor and role in ROLES and self.users.has(target):
-            self.users.set_role(target, role)   # never change your own role (self-lockout)
+        role = "user" if role in ("student", "author") else role
+        if role in ROLES:
+            why = self._set_admin(actor, target, role=role)
+            if why is not None:
+                return self._html(f"<p>{html.escape(why)}.</p>", status=HTTPStatus.FORBIDDEN)
+        return self._redirect("/web/users")
+
+    def _web_users_perms(self) -> Response:
+        actor, denied = self._web_need("admins")
+        if denied is not None:
+            return denied
+        why = self._set_admin(actor, request.form.get("user", "").strip(),
+                              boxes=request.form.getlist("perms"))
+        if why is not None:
+            return self._html(f"<p>{html.escape(why)}.</p>", status=HTTPStatus.FORBIDDEN)
         return self._redirect("/web/users")
 
     def _web_users_group(self) -> Response:
