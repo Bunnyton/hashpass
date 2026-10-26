@@ -1,0 +1,28 @@
+#!/bin/sh
+# Отложить → починить → вернуть: хеши и время у каждого свои — проверяем состояние ~/bot.
+# state shelved | fixed | restored
+repo=/home/student/bot
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+clean() { [ -z "$(g status --porcelain)" ]; }
+# работа над доставкой: строка в bot.sh, строка в messages.txt и файл delivery.sh
+work_in_tree() {
+    grep -q 'delivery)' "$repo/bot.sh" && grep -q 'двух часов' "$repo/messages.txt" &&
+    [ -f "$repo/delivery.sh" ]
+}
+# отложенное не потеряно: на полке есть и правки, и новый файл (в самом снимке или в его
+# третьем родителе — так git хранит неотслеживаемые файлы)
+work_on_shelf() {
+    g show 'stash@{0}:bot.sh' 2>/dev/null | grep -q 'delivery)' &&
+    { g cat-file -e 'stash@{0}:delivery.sh' 2>/dev/null || g cat-file -e 'stash@{0}^3:delivery.sh' 2>/dev/null; }
+}
+fix_in_head() {
+    [ "$(g show HEAD:discount.sh | sh -s 1000 10)" = 900 ] &&
+    [ "$(g show HEAD:discount.sh | sh -s 2000 25)" = 1500 ] &&
+    ! g show HEAD:bot.sh | grep -q 'delivery)'
+}
+case "$2" in
+shelved)  clean && work_on_shelf ;;
+fixed)    fix_in_head && clean && [ "$(g symbolic-ref --short HEAD 2>/dev/null)" = main ] ;;
+restored) fix_in_head && work_in_tree ;;
+*)        exit 1 ;;
+esac

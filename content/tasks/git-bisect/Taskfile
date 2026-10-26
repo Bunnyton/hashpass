@@ -1,0 +1,54 @@
+# git-bisect — поиск делением пополам: 300 коммитов после v1.0, тест ./test.sh падает
+# начиная с коммита fbb73db («price.sh: скидка считается быстрее», № 187; до и после него
+# price.sh переписывали ещё пять раз). Найти → записать хеш → починить main отменой виновника
+# (git revert, знакомый по git-log), не теряя коммиты после него. Продолжение git-reflog.
+
+image git-bisect:1
+from git-reflog:1
+
+# от git-reflog наследуются git и имя студента; его рукопись здесь не нужна
+run rm -rf /home/student/novel
+# data: data/calc + data/mkrepo.sh — руками; 300 коммитов собирает mkrepo.sh
+copy data /var/tmp/hp-calc
+run sh /var/tmp/hp-calc/mkrepo.sh /var/tmp/hp-calc /home/student/calc
+run rm -rf /var/tmp/hp-calc
+run chown -R student:student /home/student/calc
+
+hidden hp
+
+settings
+  pager on
+
+say "Бухгалтерия «Пельменя» жалуется: суммы заказов со скидкой не сходятся на несколько рублей. Калькулятор — в ~/calc."
+read brief.md
+
+stage
+  say "Найди коммит, с которого ./test.sh перестал проходить, и запиши его хеш в ~/culprit.txt"
+  solve:
+    cd /home/student/calc
+    git bisect start HEAD v1.0
+    git bisect run ./test.sh
+    git rev-parse refs/bisect/bad > /home/student/culprit.txt
+  accept file /home/student/culprit.txt "^\s*fbb73db[0-9a-f]{0,33}\s*$"
+  neutral ls cat pwd cd
+  on pass say "Проверять руками необязательно: git bisect run ./test.sh сам запускает тест на каждом шаге и сам говорит good или bad по коду выхода."
+  hint output "is the first bad commit" say "Виновник найден — осталось записать его хеш в ~/culprit.txt."
+  hint output "You need to start by" say "Сначала поиск начинают — команда в брифе."
+  hint tries 5 say "Где точно было хорошо? Тег v1.0 — последняя известная рабочая версия."
+  hint tries 10 say "После каждого переключения запусти ./test.sh: молчит — good, ругается — bad."
+
+stage
+  say "Почини main: отмени коммит-виновник, а всё, что сделано после него, сохрани"
+  solve:
+    cd /home/student/calc
+    git bisect reset
+    git revert --no-edit fbb73db
+  check exec state fixed
+  neutral ls cat pwd cd
+  on pass say "Тест снова молчит. git bisect log покажет, как шёл поиск, — его можно приложить к разбору ошибки."
+  hint output "currently bisecting" say "Поиск ещё не завершён: git стоит посреди истории. Как закончить — в git bisect --help, слово reset."
+  hint output "HEAD detached" say "Ты не на ветке, а на коммите посреди истории — поиск не завершён. Вернись в main."
+  hint output "HEAD is now at" say "reset переставил ветку — а коммиты после этого места? Журнал git помнит, где была main."
+  hint tries 5 say "Как отменить один старый коммит, не трогая остальные, ты уже делал — в магазине с портом 80800."
+
+exec finale

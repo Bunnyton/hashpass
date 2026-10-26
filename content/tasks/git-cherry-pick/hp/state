@@ -1,0 +1,21 @@
+#!/bin/sh
+# Одно исправление в релиз + тег: хеш перенесённого коммита у каждого свой — сверяем саму правку
+# (patch-id) и состояние веток в ~/site.
+# state picked | tagged
+repo=/home/student/site
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+FIX=92e5d2b RELEASE=77348e5 MAIN=c00b822
+busy() { [ -f "$repo/.git/CHERRY_PICK_HEAD" ] || [ -f "$repo/.git/MERGE_HEAD" ] || [ -d "$repo/.git/sequencer" ]; }
+pid() { g show "$1" | git patch-id --stable | cut -d' ' -f1; }
+picked() {
+    ! busy && [ -z "$(g status --porcelain --untracked-files=no)" ] &&
+    [ "$(g rev-parse 'release/1.0^')" = "$(g rev-parse $RELEASE)" ] &&
+    [ "$(pid release/1.0)" = "$(pid $FIX)" ] &&
+    [ "$(g rev-parse main)" = "$(g rev-parse $MAIN)" ]
+}
+case "$2" in
+picked) picked ;;
+tagged) picked && [ "$(g cat-file -t v1.0.1 2>/dev/null)" = tag ] &&
+        [ "$(g rev-parse 'v1.0.1^{commit}')" = "$(g rev-parse release/1.0)" ] ;;
+*)      exit 1 ;;
+esac

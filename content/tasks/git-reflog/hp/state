@@ -1,0 +1,13 @@
+#!/bin/sh
+# Вернуть потерянное по журналу git: сверяем, что ветки снова ведут к пропавшим коммитам.
+# state main | epilogue
+repo=/home/student/novel
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+MAIN=a07004d EPILOGUE=c981d96
+busy() { [ -f "$repo/.git/MERGE_HEAD" ] || [ -d "$repo/.git/rebase-merge" ] || [ -f "$repo/.git/CHERRY_PICK_HEAD" ]; }
+main_back() { ! busy && [ -z "$(g status --porcelain)" ] && g merge-base --is-ancestor $MAIN main; }
+case "$2" in
+main)     main_back ;;
+epilogue) main_back && g merge-base --is-ancestor $EPILOGUE epilogue 2>/dev/null ;;
+*)        exit 1 ;;
+esac

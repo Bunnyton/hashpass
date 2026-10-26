@@ -1,0 +1,57 @@
+# git-rebase — перенос ветки: search отстала от main на четыре коммита → git rebase main
+# (на втором коммите конфликт в CHANGELOG.md — доза conflict.md на «Could not apply») → влить в main
+# без коммита слияния (перемотка). Слияние вместо переноса — доза merge.md. Состояние
+# проверяет hp/state (после переноса хеши у каждого свои). Продолжение git-stash.
+
+image git-rebase:1
+from git-stash:1
+
+# от git-stash наследуются git и имя студента; его бот здесь не нужен
+run rm -rf /home/student/bot
+# data: data/api + data/mkrepo.sh — руками; ветки и историю собирает mkrepo.sh
+copy data /var/tmp/hp-api
+run sh /var/tmp/hp-api/mkrepo.sh /var/tmp/hp-api /home/student/api
+run rm -rf /var/tmp/hp-api
+run chown -R student:student /home/student/api
+
+hidden hp
+
+settings
+  pager on
+
+say "Поиск в API готов, осталось влить ветку search. А в CONTRIBUTING.md у команды есть правило на этот счёт."
+read brief.md
+
+stage
+  say "Перенеси ветку search на свежий main — без коммита слияния"
+  solve:
+    cd /home/student/api
+    git -c core.editor=true rebase main || true
+    sed -i '/^\(<<<<<<<\|=======\|>>>>>>>\)/d' CHANGELOG.md
+    git add CHANGELOG.md
+    GIT_EDITOR=true git rebase --continue
+  check exec state rebased
+  neutral ls cat pwd cd
+  on pass say "git log --graph --oneline --all покажет: search теперь продолжает main, развилки нет."
+  hint output "Could not apply" read conflict.md
+  hint output "Automatic merge failed" read merge.md
+  hint output "Merge made by" read merge.md
+  hint output "is up to date" say "Ветка уже стоит поверх того, куда ты переносишь. А куда должна?"
+  hint output "You must edit all merge conflicts" say "В каком-то файле ещё остались метки конфликта или он не добавлен: что говорит git status?"
+  hint tries 5 say "Что сейчас показывает git status? Посреди переноса он говорит, что делать дальше."
+  hint tries 10 say "Нарисуй историю: git log --graph --oneline --all. Где main, где search?"
+
+stage
+  say "Влей search в main — история main должна остаться прямой"
+  solve:
+    cd /home/student/api
+    git switch -q main
+    git merge search
+  check exec state merged
+  neutral ls cat pwd cd
+  on pass say "Fast-forward: git просто передвинул метку main вперёд — склеивать было нечего. Ключ --ff-only откажется сливать, если перемотка невозможна."
+  hint output "Merge made by" say "Получился коммит слияния. Значит, перед слиянием search не продолжала main — что показывает git log --graph?"
+  hint output "Already up to date" say "Вливают в ту ветку, в которой стоишь. В какой ты сейчас?"
+  hint tries 5 say "В какую ветку вливаем и в какой ты стоишь? Это показывает git branch."
+
+exec finale

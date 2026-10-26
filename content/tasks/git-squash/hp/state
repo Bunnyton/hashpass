@@ -1,0 +1,18 @@
+#!/bin/sh
+# Сложить коммиты ветки report: после переписывания хеши у каждого свои — проверяем ~/reports.
+# state one | named
+repo=/home/student/reports
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+busy() { [ -d "$repo/.git/rebase-merge" ] || [ -d "$repo/.git/rebase-apply" ]; }
+MAIN=5099beb                                       # main, на котором растёт report
+TREE=b3adf780c53df6360be417520b993d1906f79853       # файлы на вершине report до переписывания
+one() {
+    ! busy && [ -z "$(g status --porcelain)" ] &&
+    [ "$(g rev-parse report^ 2>/dev/null)" = "$(g rev-parse "$MAIN")" ] &&
+    [ "$(g rev-parse 'report^{tree}')" = "$TREE" ]
+}
+case "$2" in
+one)   one ;;
+named) one && [ "$(g log -1 --format=%s report)" = "Отчёт по продажам за квартал" ] ;;
+*)     exit 1 ;;
+esac

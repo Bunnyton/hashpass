@@ -1,0 +1,55 @@
+# git-cherry-pick — один коммит в релиз: исправление уязвимости upload.sh из main → в
+# release/1.0 (без остальных девяти коммитов main) → аннотированный тег v1.0.1 на вершину
+# релиза (доза tags.md при входе в шаг). Слияние main вместо переноса — доза merge.md.
+# Проверяет hp/state (перенесённая правка сверяется по patch-id). Продолжение git-squash.
+
+image git-cherry-pick:1
+from git-squash:1
+
+# от git-squash наследуются git (редактор — vim) и имя студента; его отчёты здесь не нужны
+run rm -rf /home/student/reports
+# data: data/app + data/mkrepo.sh — руками; ветки и историю собирает mkrepo.sh
+copy data /var/tmp/hp-site
+run sh /var/tmp/hp-site/mkrepo.sh /var/tmp/hp-site /home/student/site
+run rm -rf /var/tmp/hp-site
+run git -C /home/student/site switch -q release/1.0
+run chown -R student:student /home/student/site
+
+hidden hp
+
+settings
+  pager on
+
+say "Сайт «Пельменя» в ~/site. Безопасники нашли дыру в загрузке файлов, исправление уже есть в main — а покупатели работают с release/1.0."
+read brief.md
+
+stage
+  say "Перенеси в release/1.0 исправление загрузки файлов — и ничего больше из main"
+  solve:
+    cd /home/student/site
+    git switch -q release/1.0
+    git cherry-pick 92e5d2b
+  check exec state picked
+  neutral ls cat pwd cd
+  on pass say "Попробуй ./upload.sh ../hack.txt — файл ляжет в uploads, а не рядом. Ключ -x допишет к сообщению, откуда взят коммит."
+  hint output "Automatic merge failed" read merge.md
+  hint output "Merge made by" read merge.md
+  hint output "Fast-forward" read merge.md
+  hint output "bad revision" say "Такого коммита git не знает. Хеш — из git log, хватит первых семи символов."
+  hint tries 5 say "Какие коммиты в main меняли upload.sh? Из них нужен один — какой?"
+  hint tries 10 say "Перенести стоит, стоя в release/1.0: git branch покажет, где ты сейчас."
+
+stage
+  say "Выпусти версию: аннотированный тег v1.0.1 на вершине release/1.0"
+  solve:
+    cd /home/student/site
+    git tag -a v1.0.1 -m "Версия 1.0.1: исправлена загрузка файлов" release/1.0
+  check exec state tagged
+  neutral ls cat pwd cd
+  on enter read tags.md
+  on pass say "Теги на сервер сами не уходят: git push origin v1.0.1 — или git push --tags для всех сразу."
+  hint output "already exists" say "Тег с таким именем уже есть. Если он не тот — у git tag есть ключ удаления, загляни в git tag --help."
+  hint tries 5 say "git show v1.0.1 — что там? Аннотированный тег начинается со строки tag, автора и даты."
+  hint tries 10 say "Простой тег — просто имя. Для аннотированного git tag нужен ключ -a и сообщение."
+
+exec finale

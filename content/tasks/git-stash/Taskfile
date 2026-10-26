@@ -1,0 +1,64 @@
+# git-stash — полка: отложить незаконченную работу (правки + новый файл) → починить баг
+# отдельным коммитом → вернуть работу. Простой git stash оставляет новый файл в каталоге —
+# доза untracked.md приходит на «Untracked files». Состояние проверяет hp/state (хеши
+# и время у каждого свои). Продолжение git-remote: оттуда git и имя студента.
+
+image git-stash:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/bot, data/delivery.sh, data/mkrepo.sh — руками; историю и недоделку собирает mkrepo.sh
+copy data /var/tmp/hp-bot
+run sh /var/tmp/hp-bot/mkrepo.sh /var/tmp/hp-bot /home/student/bot
+run rm -rf /var/tmp/hp-bot
+run chown -R student:student /home/student/bot
+
+hidden hp
+
+settings
+  pager on
+
+say "В ~/bot — бот магазина «Пельмень» и твоя незаконченная доставка. Покупатели тем временем видят цены со скидкой ниже нуля."
+read brief.md
+
+stage
+  say "Отложи незаконченную доставку так, чтобы в ~/bot стало чисто, как после последнего коммита"
+  solve:
+    cd /home/student/bot
+    git stash -u
+  check exec state shelved
+  neutral ls cat pwd cd
+  on pass say "Каталог чистый, а доставка лежит в репозитории. Полок может быть сколько угодно — git stash list покажет их по порядку."
+  hint output "Untracked files" read untracked.md
+  hint output "No local changes to save" say "Откладывать уже нечего: что показывает git status? Может, всё уже на полке."
+  hint output "not a git repository" say "Здесь git не видит репозитория. Где лежит бот?"
+  hint tries 5 say "Что сейчас показывает git status? Там не должно остаться ни одной строки об изменениях."
+
+stage
+  say "Почини скидку в discount.sh — 1000 ₽ со скидкой 10 % должны стоить 900 — и сохрани исправление коммитом"
+  solve:
+    cd /home/student/bot
+    sed -i 's/price \* percent ))/price * percent \/ 100 ))/' discount.sh
+    git commit -q -am "discount.sh: скидка в процентах"
+  check exec state fixed
+  neutral ls cat pwd cd
+  on pass say "В этом коммите — только исправление, без доставки. Его можно выкатывать прямо сейчас."
+  hint output "Changes not staged for commit" say "Исправление есть, а в коммит его не добавили."
+  hint output "-9000" say "Посчитай на бумажке: какую часть цены составляют 10 процентов? А что вычитает скрипт?"
+  hint tries 5 say "Проверь себя: ./discount.sh 1000 10 должен напечатать 900."
+  hint tries 10 say "Скидка в процентах — это цена × процент / 100."
+
+stage
+  say "Верни отложенную доставку на место — поверх исправления"
+  solve:
+    cd /home/student/bot
+    git stash pop
+  check exec state restored
+  neutral ls cat pwd cd
+  on pass say "pop снимает с полки и убирает её; apply — достаёт, а полку оставляет: пригодится, если ту же недоделку хочешь положить в две ветки."
+  hint output "No stash entries found" say "Полка пуста. Отложенное точно ушло на полку? git stash list покажет."
+  hint tries 5 say "Что ещё умеет git stash, кроме как класть? Загляни в git stash --help."
+  hint tries 10 say "Снять верхнее с полки — по-английски «pop», как со стопки тарелок."
+
+exec finale

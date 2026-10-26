@@ -1,0 +1,26 @@
+#!/bin/sh
+# Перенос ветки и прямая история: после rebase хеши у каждого свои — проверяем состояние ~/api.
+# state rebased | merged
+repo=/home/student/api
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+clean() { [ -z "$(g status --porcelain)" ]; }
+busy() { [ -d "$repo/.git/rebase-merge" ] || [ -d "$repo/.git/rebase-apply" ] || [ -f "$repo/.git/MERGE_HEAD" ]; }
+MAIN=1a134f2      # вершина main, какой её оставила команда
+# все три коммита поиска на месте, по одному разу, и стоят поверх свежего main
+search_on_top() {
+    g merge-base --is-ancestor "$MAIN" search &&
+    [ -z "$(g rev-list --merges "$MAIN"..search)" ] &&
+    [ "$(g log --format=%s "$MAIN"..search | sort | tr '\n' '|')" = "CHANGELOG: поиск|Маршрут поиска|Поиск: ограничение числа результатов|" ]
+}
+# CHANGELOG в итоге помнит обе правки и без следов конфликта
+changelog_ok() {
+    f=$(g show "$1":CHANGELOG.md) &&
+    printf '%s\n' "$f" | grep -q 'Поиск товаров' && printf '%s\n' "$f" | grep -q 'Отмена заказа' &&
+    ! printf '%s\n' "$f" | grep -qE '^(<<<<<<<|=======|>>>>>>>)'
+}
+case "$2" in
+rebased) ! busy && clean && search_on_top && changelog_ok search ;;
+merged)  ! busy && clean && search_on_top && [ "$(g rev-parse main)" = "$(g rev-parse search)" ] &&
+         [ "$(g symbolic-ref --short HEAD 2>/dev/null)" = main ] && changelog_ok main ;;
+*)       exit 1 ;;
+esac

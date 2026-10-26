@@ -1,0 +1,46 @@
+# git-reflog — журнал HEAD: main откачен на три главы назад (reset --hard HEAD~3), ветка
+# epilogue удалена (branch -D) — всё это сделано при сборке (data/mkrepo.sh). Студент по
+# git reflog возвращает main на a07004d и вешает ветку epilogue на её последнюю вершину
+# c981d96 (а не на промежуточную 30ce5d8). Проверяет hp/state. Продолжение git-cherry-pick.
+
+image git-reflog:1
+from git-cherry-pick:1
+
+# от git-cherry-pick наследуются git и имя студента; его сайт здесь не нужен
+run rm -rf /home/student/site
+# data: data/novel (главы — python-ом при подготовке задания, дальше руками) + data/mkrepo.sh;
+# историю и «вчерашние» ошибки собирает mkrepo.sh
+copy data /var/tmp/hp-novel
+run sh /var/tmp/hp-novel/mkrepo.sh /var/tmp/hp-novel /home/student/novel
+run rm -rf /var/tmp/hp-novel
+run chown -R student:student /home/student/novel
+
+hidden hp
+
+settings
+  pager on
+
+say "Твоя повесть «Дежурная» в ~/novel. Вчера там было семь глав и ветка с эпилогом."
+read brief.md
+
+stage
+  say "Верни в main три пропавшие главы"
+  solve git -C /home/student/novel reset -q --hard a07004d
+  check exec state main
+  neutral ls cat pwd cd
+  on pass say "reflog помнит около трёх месяцев. Коммиты, на которые не ведёт ни ветка, ни журнал, git со временем выбрасывает сам."
+  hint output "unknown revision" say "Такого хеша или имени git не знает. Хеш возьми из первой колонки git reflog."
+  hint tries 5 say "Что ты делал последним, судя по журналу? А какая запись была прямо перед этим?"
+  hint tries 10 say "Нужна точка, где в main был последний коммит с главой — до строки reset."
+
+stage
+  say "Восстанови удалённую ветку epilogue — со всеми правками эпилога"
+  solve git -C /home/student/novel branch epilogue c981d96
+  check exec state epilogue
+  neutral ls cat pwd cd
+  on enter read branch.md
+  on pass say "git show epilogue:epilog.md — эпилог на месте, с финальной фразой. Журнал помнит больше, чем ты сам."
+  hint output "already exists" say "Ветка с таким именем уже есть. Куда она указывает? git log --oneline epilogue."
+  hint tries 5 say "В журнале три записи про эпилог. Какая из них — последняя по времени?"
+
+exec finale

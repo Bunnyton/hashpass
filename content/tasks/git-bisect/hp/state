@@ -1,0 +1,11 @@
+#!/bin/sh
+# Починить main отменой виновника: хеш отмены у каждого свой — проверяем ~/calc целиком.
+# state fixed
+repo=/home/student/calc
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+TIP=e5696a7          # вершина main до починки: всё после виновника должно остаться
+[ "$2" = fixed ] || exit 1
+[ ! -f "$repo/.git/BISECT_LOG" ] && [ ! -f "$repo/.git/MERGE_HEAD" ] && [ ! -f "$repo/.git/REVERT_HEAD" ] &&
+[ "$(g symbolic-ref --short HEAD 2>/dev/null)" = main ] && [ -z "$(g status --porcelain)" ] &&
+g merge-base --is-ancestor $TIP main &&
+[ "$(cd "$repo" && sh ./test.sh >/dev/null 2>&1; echo $?)" = 0 ]

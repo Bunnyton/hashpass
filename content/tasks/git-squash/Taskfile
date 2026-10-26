@@ -1,0 +1,50 @@
+# git-squash — интерактивный rebase: шесть черновых коммитов ветки report → один коммит
+# с теми же файлами → осмысленное сообщение. Любой способ годится (rebase -i, reset --soft +
+# commit): hp/state сравнивает дерево с исходной вершиной ветки и считает коммиты поверх main.
+# Продолжение git-rebase.
+
+image git-squash:1
+from git-rebase:1
+
+# от git-rebase наследуются git (редактор — vim) и имя студента; его API здесь не нужен
+run rm -rf /home/student/api
+# data: data/report (sales.csv — сделан python-ом с random.seed(7), см. историю в git), data/report.sh,
+# data/mkrepo.sh — руками; историю собирает mkrepo.sh
+copy data /var/tmp/hp-reports
+run sh /var/tmp/hp-reports/mkrepo.sh /var/tmp/hp-reports /home/student/reports
+run rm -rf /var/tmp/hp-reports
+run chown -R student:student /home/student/reports
+
+hidden hp
+
+settings
+  pager on
+
+say "Отчёт по продажам в ~/reports готов: ветка report, шесть коммитов. Посмотри на их названия, прежде чем отдавать."
+read brief.md
+
+stage
+  say "Сложи все коммиты ветки report в один — файлы должны остаться ровно такими же"
+  solve:
+    cd /home/student/reports
+    git reset -q --soft main
+    git commit -q -m "wip"
+  check exec state one
+  neutral ls cat pwd cd
+  on pass say "Тот же результат даёт git reset --soft main и один git commit: ветка отъезжает к main, а изменения остаются подготовленными."
+  hint output "Successfully rebased" say "Переписал — посмотри на итог: git log --oneline main..report. Сколько там коммитов?"
+  hint tries 5 say "Список в редакторе — это план. Какое слово, судя по пояснениям внизу файла, вливает коммит в предыдущий?"
+  hint tries 10 say "Первый коммит оставь как есть: остальным пяти есть куда влиться — в него."
+
+stage
+  say "Дай этому коммиту сообщение «Отчёт по продажам за квартал»"
+  solve:
+    cd /home/student/reports
+    git commit -q --amend -m "Отчёт по продажам за квартал"
+  check exec state named
+  neutral ls cat pwd cd
+  on pass say "Последний коммит поправить проще всего: git commit --amend. Более старые — тем же rebase -i, словом reword."
+  hint tries 5 say "Новый коммит не нужен — нужно поправить последний. У git commit есть ключ «поправить», загляни в git commit --help."
+  hint tries 10 say "Слово в git commit --help — amend."
+
+exec finale
