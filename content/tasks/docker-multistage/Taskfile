@@ -1,0 +1,62 @@
+# docker-multistage — многоступенчатая сборка: ~/recipes собирается в образ site 67 МБ
+# (инструменты генератора ~60 МБ остаются в образе) → переписать Dockerfile на две ступени
+# (доза multistage.md при входе): образ < 10 МБ, без /opt/tools, все 321 страница на месте
+# → запустить сайт и открыть в браузере. Сборка в консоли идёт без сети: FROM busybox
+# берётся из загруженных образов. Продолжает docker-compose.
+
+image docker-multistage:1
+from docker-compose:1
+
+# от docker-compose наследуются Docker, compose и образы; его магазин здесь не нужен
+run rm -rf /home/student/shop
+# data: data/recipes — генератор и Dockerfile руками; pages/*.txt — python-ом с random.seed(5)
+copy data/recipes /home/student/recipes
+run chown -R student:student /home/student/recipes
+
+hidden hp
+
+settings
+  pager on
+
+say "Сайт рецептов «Пельменя» в ~/recipes собирается в образ. Админ сервера жалуется: каждое обновление качается минуту."
+read brief.md
+
+stage
+  say "Собери из ~/recipes образ site и узнай, сколько он весит"
+  solve:
+    docker build -t site /home/student/recipes
+    docker images site
+  accept cmd "docker images" ok
+  accept cmd "docker image ls" ok
+  accept output "(?m)^site\s"
+  check live docker image inspect site
+  neutral ls cat pwd cd
+  on pass say "Шестьдесят с лишним мегабайт — а сам сайт, судя по docker history site, весит меньше одного."
+  hint output "Unable to find image" say "Образ site ещё не собран: его собирают из Dockerfile, как greeter и shop."
+  hint tries 5 say "Сначала docker build -t с именем, потом список образов — в нём есть размер."
+
+stage
+  say "Переделай Dockerfile так, чтобы образ site весил меньше 10 МБ — а сайт в нём остался целиком"
+  solve:
+    printf '%s\n' 'FROM busybox AS build' 'COPY install-tools.sh /src/' 'RUN sh /src/install-tools.sh' 'COPY . /src' 'RUN sh /src/generate.sh' 'FROM busybox' 'COPY --from=build /www /www' 'EXPOSE 80' 'CMD ["httpd", "-f", "-p", "80", "-h", "/www"]' > /home/student/recipes/Dockerfile
+    docker build -t site /home/student/recipes
+  accept cmd "docker build" ok
+  check live s=$(docker image inspect -f '{{.Size}}' site) && [ "$s" -lt 10000000 ] && docker run --rm site sh -c 'test ! -e /opt/tools && test "$(ls /www | wc -l)" -ge 321 && grep -q "Рецепты" /www/index.html'
+  neutral ls cat pwd cd vim vi nano
+  on enter read multistage.md
+  on pass say "Ступеней может быть сколько угодно: отдельно тесты, отдельно сборка, а в итог — только результат. docker build --target build соберёт одну мастерскую."
+  hint output "нет инструментов генератора" say "Генератору нужны инструменты — на той ступени, где он запускается. Что в ней есть?"
+  hint output "failed to compute cache key" say "COPY --from берёт файлы из ступени. Есть ли в ней такой путь — и правильно ли названа ступень?"
+  hint tries 5 say "docker images site: сколько теперь? Если почти столько же — что в образе осталось от инструментов? docker history site."
+  hint tries 10 say "rm в последнем RUN не уменьшает образ: слой с инструментами лежит ниже. Нужна ступень, на которую инструменты не попадают вовсе."
+
+stage
+  say "Запусти похудевший сайт рецептов в фоне и открой его в браузере"
+  solve docker run -d -p 8083:80 site
+  check live docker ps -q --filter ancestor=site | while read c; do docker port "$c" 80/tcp; done | sed 's/.*://' | while read p; do curl -fs "http://127.0.0.1:$p/"; done | grep -q "Рецепты «Пельменя»"
+  neutral ls cat pwd cd
+  on pass say "Тот же сайт, та же команда запуска — а скачивать в тринадцать раз меньше."
+  hint output "address already in use" say "Этот порт уже занят. Возьми любой другой свободный."
+  hint tries 5 say "Сайт в контейнере слушает 80-й порт. Как опубликовать его наружу, ты делал с вики."
+
+exec finale

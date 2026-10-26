@@ -1,0 +1,61 @@
+# docker-network — своя сеть контейнеров: склад stock (httpd с остатками) под именем stock →
+# из busybox по http://stock/ — в сети по умолчанию «bad address» (доза network.md) → своя
+# сеть, склад в ней, проверка проходит → витрина shopfront в той же сети с опубликованным
+# портом показывает остатки склада. Контейнеры живут только в работающей консоли — check live.
+# Продолжает docker-debug.
+
+image docker-network:1
+from docker-debug:1
+
+# от docker-debug наследуются Docker и образы; его сервис здесь не нужен
+run rm -rf /home/student/billing /usr/local/share/hp-docker/images/billing.tar.gz
+# data: образы с машины автора:
+#   cd data/stock-src && docker build -t stock . && docker save stock:latest | gzip -9 > ../stock.tar.gz
+#   cd data/shopfront-src && docker build -t shopfront . && docker save shopfront:latest | gzip -9 > ../shopfront.tar.gz
+copy data/stock.tar.gz /usr/local/share/hp-docker/images/stock.tar.gz
+copy data/shopfront.tar.gz /usr/local/share/hp-docker/images/shopfront.tar.gz
+
+hidden hp
+
+settings
+  pager on
+
+say "Склад «Пельменя» переехал в контейнер, витрина магазина — в другой. Осталось их познакомить."
+read brief.md
+
+stage
+  say "Запусти склад — образ stock — в фоне под именем stock"
+  solve docker run -d --name stock stock
+  check live [ "$(docker inspect -f '{{.State.Running}} {{.Config.Image}}' stock 2>/dev/null)" = "true stock" ]
+  neutral ls cat pwd cd
+  on pass say "Склад слушает порт 80 внутри своего контейнера. Наружу его никто не публиковал — и не надо: снаружи к складу не ходят."
+  hint output "is already in use" say "Имя stock уже занято другим контейнером. Посмотри docker ps -a."
+  hint tries 5 say "Фоновый запуск и своё имя — ключи из прошлых заданий."
+
+stage
+  say "Проверь из контейнера busybox, что склад отвечает по адресу http://stock/stock.txt"
+  solve:
+    docker network create shop
+    docker network connect shop stock
+    docker run --rm --network shop busybox wget -qO- http://stock/stock.txt
+  accept cmd "docker run" ok
+  accept output "Склад «Пельменя»: на связи"
+  check live docker inspect -f '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}{{println}}{{end}}' stock | grep -qvx bridge
+  neutral ls cat pwd cd
+  on pass say "Адресную книгу сети держит сам docker: перезапустишь склад — IP сменится, а имя stock останется."
+  hint output "bad address" read network.md
+  hint output "No such container" say "Подключают к сети контейнер по имени — как он называется? docker ps."
+  hint tries 5 say "В какой сети склад, а в какой — твой busybox? docker inspect stock покажет сети склада."
+
+stage
+  say "Запусти витрину — образ shopfront — так, чтобы её страница показывала остатки склада, и открой её в браузере"
+  solve docker run -d --name shopfront --network shop -p 8081:80 shopfront
+  check live docker ps -q --filter ancestor=shopfront | while read c; do docker port "$c" 80/tcp; done | sed 's/.*://' | while read p; do curl -fs "http://127.0.0.1:$p/"; done | grep -q "42 шт."
+  neutral ls cat pwd cd
+  on pass say "Наружу смотрит только витрина, склад спрятан в сети shop. Так и строят сервисы: открыто ровно то, что нужно людям."
+  hint output "Склад недоступен" say "Витрина видит склад так же, как видел твой busybox, — по имени. В какой она сети?"
+  hint output "address already in use" say "Этот порт на машине уже занят. Возьми любой другой свободный."
+  hint tries 5 say "Витрина отвечает в браузере? Тогда что на ней написано: остатки или «склад недоступен»?"
+  hint tries 10 say "Витрине нужны две вещи: порт наружу для браузера и сеть склада для остатков."
+
+exec finale

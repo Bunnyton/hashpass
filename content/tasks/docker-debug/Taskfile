@@ -1,0 +1,66 @@
+# docker-debug — отладка контейнера: billing падает (Exited (1)) без переменной DB_URL →
+# docker logs → пересоздать контейнер с -e/--env-file и именем billing (доза env.md при входе)
+# → достать отчёт из работающего контейнера docker exec / docker cp (доза inside.md).
+# Упавший контейнер поднимает hp/broken при входе в первый шаг. Контейнеры живут только в
+# работающей консоли — шаги 2–3 принимает check live. Продолжает docker-layers.
+
+image docker-debug:1
+from docker-layers:1
+
+# от docker-layers наследуются Docker и образы; его лавка здесь не нужна
+run rm -rf /home/student/shop
+# data: data/billing.tar.gz — образ с машины автора:
+#   cd data/billing-src && docker build -t billing . && docker save billing:latest | gzip -9 > ../billing.tar.gz
+#   (report.csv — python-ом с random.seed(11))
+copy data/billing.tar.gz /usr/local/share/hp-docker/images/billing.tar.gz
+# data: data/billing — руками
+copy data/billing /home/student/billing
+run chown -R student:student /home/student/billing
+
+hidden hp
+
+settings
+  pager on
+
+say "Ночью коллега выкатил новый сервис расчётов billing. Утром бухгалтерия пишет: «отчёта нет». Настройки сервиса — в ~/billing."
+read brief.md
+
+stage
+  say "Узнай, почему контейнер billing не работает"
+  solve docker logs billing
+  accept cmd "docker logs" ok
+  accept cmd "docker container logs" ok
+  accept output "DB_URL"
+  neutral ls cat pwd cd
+  on enter apply broken
+  on pass say "Логи живут, пока жив контейнер: удалишь его — пропадут и они."
+  hint output "No such container" say "Как называется контейнер? Имена — в последней колонке docker ps -a."
+  hint tries 5 say "Контейнер работает? Что docker ps -a говорит о его статусе?"
+
+stage
+  say "Запусти billing заново — с адресом базы из ~/billing/.env, под тем же именем billing"
+  solve:
+    docker rm -f billing
+    docker run -d --name billing --env-file /home/student/billing/.env billing
+  check live [ "$(docker inspect -f '{{.State.Running}}' billing)" = true ] && docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' billing | grep -qx 'DB_URL=postgres://billing@db.pelmen.local:5432/orders'
+  neutral ls cat pwd cd
+  on enter read env.md
+  on pass say "docker inspect billing покажет всё про контейнер: переменные, порты, каталоги, когда запущен и сколько раз падал."
+  hint output "is already in use" say "Имя billing занято старым, упавшим контейнером. Убирать контейнеры ты умеешь."
+  hint output "не задана переменная" say "Опять без адреса базы: переменная до контейнера не дошла. Как ты её передал?"
+  hint output "invalid reference format" say "docker run читает ключи до имени образа, а всё после имени — команда для контейнера. Где стоят твои ключи?"
+  hint tries 5 say "Что сейчас пишет docker logs billing? Если «база — …», значит, работает."
+  hint tries 10 say "Значение — строка DB_URL=… из ~/billing/.env. Можно передать её ключом -e или весь файл ключом --env-file."
+
+stage
+  say "billing пишет отчёт в /data/report.csv внутри контейнера. Достань его к себе в ~/report.csv"
+  solve docker exec billing cat /data/report.csv > /home/student/report.csv
+  check live docker exec billing cat /data/report.csv | cmp -s - /home/student/report.csv
+  neutral ls cat pwd cd
+  on enter read inside.md
+  on pass say "Скопировать файл можно и напрямую: docker cp billing:/data/report.csv ~/ — в обе стороны, даже у остановленного контейнера."
+  hint output "is not running" say "Контейнер не работает — значит, он опять упал. Что в docker logs billing?"
+  hint output "No such file or directory" say "Где отчёт — путь внутри контейнера, а куда сохранить — путь на машине. Какая часть команды выполняется внутри?"
+  hint tries 5 say "Отчёт лежит внутри контейнера. Какой командой можно его оттуда показать — так же, как cat показывает файл здесь?"
+
+exec finale

@@ -1,0 +1,64 @@
+# docker-compose — compose.yaml: склад stock + витрина shopfront (образы из docker-network)
+# одной командой, витрина с опубликованным портом показывает остатки (сервис склада обязан
+# зваться stock — так его ищет витрина) → подключить ~/shop/stock в /www склада (доза
+# volumes.md при входе), витрина показывает свежие остатки «100 шт.» → docker compose down.
+# Пакет docker-compose ставится при сборке (плагин `docker compose`). Продолжает docker-network.
+
+image docker-compose:1
+from docker-network:1
+
+run apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker-compose >/dev/null
+run docker compose version
+# data: data/shop — руками
+copy data/shop /home/student/shop
+run chown -R student:student /home/student/shop
+
+hidden hp
+
+settings
+  pager on
+
+say "Склад и витрина «Пельменя» работают. Только запускать их — три команды по README, и каждый раз кто-нибудь ошибается."
+read brief.md
+
+stage
+  say "Опиши склад и витрину в ~/shop/compose.yaml и подними их одной командой — витрина должна открываться в браузере"
+  solve:
+    cd /home/student/shop
+    printf '%s\n' 'services:' '  stock:' '    image: stock' '  shopfront:' '    image: shopfront' '    ports:' '      - "8080:80"' > compose.yaml
+    docker compose up -d
+  check live docker ps -q --filter label=com.docker.compose.service=shopfront | while read c; do docker port "$c" 80/tcp; done | sed 's/.*://' | while read p; do curl -fs "http://127.0.0.1:$p/"; done | grep -q "шт\."
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Ни одной docker network create: compose завёл сеть shop_default сам и подключил к ней оба сервиса."
+  hint output "no configuration file provided" say "compose ищет compose.yaml в текущем каталоге. Где ты сейчас и где файл?"
+  hint output "yaml:" say "compose не понял файл: отступы в YAML — только пробелы, а вложенность должна совпадать с примером."
+  hint output "Склад недоступен" say "Витрина ищет склад по адресу http://stock/. Как называется сервис склада в твоём compose.yaml?"
+  hint output "address already in use" say "Порт занят — может, старыми контейнерами из README? docker ps."
+  hint tries 5 say "Что показывает docker compose ps? Оба сервиса работают, и у витрины есть порт наружу?"
+
+stage
+  say "Свежие остатки — в ~/shop/stock/stock.txt. Подключи этот каталог складу, чтобы витрина показывала их"
+  solve:
+    cd /home/student/shop
+    printf '%s\n' 'services:' '  stock:' '    image: stock' '    volumes:' '      - ./stock:/www' '  shopfront:' '    image: shopfront' '    ports:' '      - "8080:80"' > compose.yaml
+    docker compose up -d
+  check live docker ps -q --filter label=com.docker.compose.service=shopfront | while read c; do docker port "$c" 80/tcp; done | sed 's/.*://' | while read p; do curl -fs "http://127.0.0.1:$p/"; done | grep -q "100 шт\."
+  neutral ls cat pwd cd vim vi nano
+  on enter read volumes.md
+  on pass say "Остатки меняют в файле на машине — склад отдаёт их сразу, без перезапуска."
+  hint output "is not a directory" say "Слева — каталог на машине, справа — каталог /www в складе. Что у тебя слева?"
+  hint tries 5 say "Витрина обновляет страницу раз в две секунды. Что отдаёт сам склад? Его каталог — /www."
+
+stage
+  say "Останови магазин и убери за ним всё — контейнеры и сеть — одной командой"
+  solve:
+    cd /home/student/shop
+    docker compose down
+  accept cmd "docker compose down" ok
+  accept cmd "docker-compose down" ok
+  check live [ -z "$(docker ps -aq --filter label=com.docker.compose.project)" ] && ! docker network ls --format '{{.Name}}' | grep -q '_default$'
+  neutral ls cat pwd cd
+  on pass say "Каталог ~/shop/stock цел: compose убирает контейнеры и сеть, а данные на машине не трогает. compose.yaml кладут в git — и магазин поднимается на любом сервере одной командой."
+  hint tries 5 say "Поднимает всё up. А что, по docker compose --help, всё опускает?"
+
+exec finale

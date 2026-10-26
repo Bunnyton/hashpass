@@ -1,0 +1,11 @@
+#!/bin/sh
+# Поднять сервис billing так, как его «запустил коллега»: без адреса базы — контейнер падает
+# сразу. Ждём демон и образ (они грузятся при старте консоли), потом запускаем.
+i=0
+until docker image inspect billing >/dev/null 2>&1; do
+    i=$((i + 1)); [ "$i" -gt 300 ] && exit 1
+    sleep 0.2
+done
+docker rm -f billing >/dev/null 2>&1
+docker run -d --name billing billing >/dev/null
+sleep 1
