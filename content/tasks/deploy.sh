@@ -39,7 +39,9 @@ BLOCKS=(
     'Редактор и текст: vim-intro vim-more fruit-store'
     'Скрипты: my-command'
     'Git: git-init git-log git-branch git-remote'
+    'Git — глубже: git-stash git-rebase git-squash git-cherry-pick git-reflog git-bisect'
     'Docker: docker-run docker-web docker-volume docker-build docker-layers'
+    'Docker — глубже: docker-debug docker-network docker-compose docker-multistage'
     'Призы: star-wars moria'
     'Архив: first-steps showcase'
 )
