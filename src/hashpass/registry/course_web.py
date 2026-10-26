@@ -11,7 +11,7 @@ from urllib.parse import quote
 from flask import Flask, Response, request
 
 from hashpass.registry import perms
-from hashpass.registry.access import can
+from hashpass.registry.access import can, course_perms
 from hashpass.registry.progress_store import outside_course
 from hashpass.registry.web import _env, history_href, render_profile
 
@@ -32,7 +32,8 @@ def render_course(view: dict, **ctx: object) -> str:
     """Render one course page (what is shown depends on the viewer's rights in `ctx`)."""
     return _env.get_template("course.html.j2").render(
         title=f"{view.get('title') or view['ref']} — hashpass", nav=True, active="/c", c=view,
-        role_ru=_ROLE_RU, perm_labels=perms.LABELS, **ctx)
+        role_ru=_ROLE_RU, perm_labels=perms.LABELS, extra_labels=perms.EXTRA_LABELS,
+        extra_hints=perms.EXTRA_HINTS, extra_needs=perms.EXTRA_NEEDS, default_boxes=perms.DEFAULT, **ctx)
 
 
 class CourseWeb:
@@ -99,7 +100,8 @@ class CourseWeb:
         pool = self.server.pool_perms(user)
         may = {a: can(user, pool, course, a)
                for a in ("view", "play", "propose", "add", "content", "people", "progress", "admins", "delete")}
-        may["students"] = may["progress"]     # spec 2026-10-25 §4: owner, admins with `progress`
+        may["students"] = may["progress"]     # spec 2026-10-25 §4: owner, admins/authors with `progress`
+        givable = perms.givable_extras(course_perms(course, user) | pool)
         view = api._view(course, user, role) if may["view"] else api._peek(course, user)  # noqa: SLF001
         for block in view.get("blocks") or []:        # «what is this task» for the hover card
             for task in block.get("tasks", []):
@@ -112,7 +114,7 @@ class CourseWeb:
         return self.server._html(render_course(  # noqa: SLF001
             view, may=may, signed_in=user, link=link, invite_link=invite_link, pool=pool,
             curl_flags="-fsSLk" if pool.startswith("https://") else "-fsSL",
-            invite=request.args.get("invite", ""), students=students, joined=joined,
+            invite=request.args.get("invite", ""), students=students, joined=joined, givable=givable,
             api=f"/courses/{course.ref}", next_url=quote(request.full_path.rstrip("?"), safe="")))
 
     def _students(self, course: object) -> list[dict]:

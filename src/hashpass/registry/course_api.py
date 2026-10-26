@@ -18,7 +18,7 @@ from flask import Flask, Response, request
 
 from hashpass.registry import courses as cm
 from hashpass.registry import perms
-from hashpass.registry.access import can, course_perms
+from hashpass.registry.access import can, course_perms, sees_hidden
 from hashpass.registry.courses import Course, CourseConflictError, CourseStore
 from hashpass.registry.revisions import parse_version
 
@@ -29,6 +29,12 @@ _HISTORY_KEEP = 500           # a course remembers this many changes
 _HISTORY_SHOWN = 100
 _ROLE_RU = {"member": "участник", "author": "автор", "admin": "админ", "owner": "владелец"}
 _MAX_TEXT = 2000
+
+
+def _rights_said(boxes: list[str] | None, extras: list[str]) -> str:
+    """Say a member's rights for the course history: « (Люди и доступ)», « (+ прогресс курса)»."""
+    said = f" ({', '.join(perms.LABELS[k] for k in boxes)})" if boxes else ""
+    return said + (f" (+ {', '.join(perms.EXTRA_LABELS[e].lower() for e in extras)})" if extras else "")
 
 
 class Enrollments:
@@ -173,14 +179,14 @@ class CourseApi:
     def _view(self, course: Course, user: str | None, _role: str | None) -> dict:
         """Return the course as `user` may see it."""
         staff = can(user, self.server.pool_perms(user), course, "content")
+        sees = sees_hidden(user, self.server.pool_perms(user), course)
         out = self._summary(course, user) | {"rev": course.rev}
         blocks = []
         for block in course.blocks:
-            if not block.get("open", True) and not staff:
-                continue
             tasks = []
             for task in block["tasks"]:
-                if task.get("hidden") and not staff:
+                own = bool(user) and task.get("added_by") == user      # one's own task, hidden or not
+                if (task.get("hidden") or not block.get("open", True)) and not (sees or own):
                     continue
                 latest = self._latest(task["repo"], task["tag"])
                 n = cm.effective_n(course, task, latest=latest)
@@ -192,8 +198,9 @@ class CourseApi:
                     row |= {"pinned": task.get("pinned", False), "hidden": task.get("hidden", False),
                             "latest": latest, "added_by": task.get("added_by", "")}
                 tasks.append(row)
-            blocks.append({"id": block["id"], "name": block["name"], "open": block.get("open", True),
-                           "tasks": tasks})
+            if tasks or block.get("open", True) or sees:
+                blocks.append({"id": block["id"], "name": block["name"], "open": block.get("open", True),
+                               "tasks": tasks})
         out["blocks"] = blocks
         out["proposals"] = [p for p in course.proposals if staff or p.get("by") == user]
         if staff:
@@ -201,6 +208,7 @@ class CourseApi:
                               for r, t, n in cm.pending_updates(course, self._latest)]
             out["settings"] = {"auto_accept": course.auto_accept, "auto_update": course.auto_update}
         out["members"] = course.members                 # who is in: everyone who sees the course
+        out["extras"] = course.extras                   # authors' extra rights (2026-10-26)
         # each change is a version of the course, numbered once (entries from before had no number)
         out["history"] = [h if "n" in h else h | {"n": i}
                           for i, h in reversed(list(enumerate(course.history, 1)))][:_HISTORY_SHOWN]
@@ -324,16 +332,19 @@ class CourseApi:
 
     def member(self, owner: str, name: str, user: str) -> Response:  # noqa: PLR0911
         """
-        Give `user` a role here, or take it away (spec 2026-10-25 §3).
+        Give `user` a role here, or take it away (spec 2026-10-25 §3); an author's extras (2026-10-26).
 
         Making, unmaking or re-boxing an admin is the `admins` box, and only with boxes the caller
-        holds itself; any other role is `people`. Nobody changes its own role.
+        holds itself; any other role is `people`. An author's extras need `people` and the box
+        behind each (perms.EXTRA_NEEDS). Nobody changes its own role.
         """
         course, actor, err = self._load(owner, name, "view")
         if err is not None:
             return err
         body = self._body()
-        role = str(body.get("role", ""))
+        role = str(body.get("role") or "")
+        if not role and "extras" in body and request.method == "PUT":
+            role = course.role_of(user) or ""             # only the author's extras change
         role = "admin" if role == "maintainer" else role               # old clients
         held = course_perms(course, actor) | self.server.pool_perms(actor)
         boxes = body.get("perms") if isinstance(body.get("perms"), list) else None
@@ -342,30 +353,59 @@ class CourseApi:
             return self._err(HTTPStatus.FORBIDDEN, "свою роль не меняют")
         if ("admins" if admin_change else "people") not in held:
             return self._err(HTTPStatus.FORBIDDEN, "не хватает прав в этом курсе")
+        wanted = self._admin_boxes(course, user, role, boxes, held)
+        extras = self._author_extras(course, user, role, body, held)
+        for refused in (wanted, extras):
+            if isinstance(refused, Response):
+                return refused
+        if request.method == "DELETE":
+            err = self._edit(course.ref, lambda c: cm.remove_member(c, user), by=actor,
+                             what=f"{user} больше не в курсе")
+            return err or self._json(HTTPStatus.OK, {"removed": user})
+        if not self.server.users.has(user):
+            return self._err(HTTPStatus.NOT_FOUND, f"нет пользователя {user}")
+        given = sorted(wanted) if role == "admin" else None
+        more = [e for e in perms.EXTRAS if e in extras]
+        said = _rights_said(given, more)
+        err = self._edit(course.ref, lambda c: cm.set_member(c, user, role, given, extras=more), by=actor,
+                         what=f"{user} — {_ROLE_RU.get(role, role)}{said}")
+        return err or self._json(HTTPStatus.OK, {"user": user, "role": role, "perms": given,
+                                                 "extras": more if role == "author" else None})
+
+    def _admin_boxes(self, course: Course, user: str, role: str, boxes: list | None,
+                     held: frozenset[str]) -> "frozenset[str] | Response":
+        """Return an admin's boxes after this change, or a refusal."""
         # boxes the caller lacks are neither given nor taken (as on the pool; review I1, I4)
         current = course_perms(course, user) if course.role_of(user) == "admin" else frozenset()
         if (request.method == "DELETE" or role != "admin") and not perms.subset(current, held):
             return self._err(HTTPStatus.FORBIDDEN, "у этого админа есть права, которых нет у вас")
         if role != "admin":
-            wanted = frozenset()
-        elif boxes is None:                               # an old client: keep, or the default
-            wanted = current if course.role_of(user) == "admin" else perms.DEFAULT & held
-        else:
-            wanted = perms.clean(boxes, default=frozenset())
-            if not perms.subset(wanted - current, held):
-                return self._err(HTTPStatus.FORBIDDEN, "нельзя выдать права, которых нет у вас")
-            wanted = (wanted & held) | (current - held)
-        if request.method == "DELETE":
-            err = self._edit(course.ref, lambda c: cm.remove_member(c, user), by=actor,
-                             what=f"{user} больше не участник")
-            return err or self._json(HTTPStatus.OK, {"removed": user})
-        if not self.server.users.has(user):
-            return self._err(HTTPStatus.NOT_FOUND, f"нет пользователя {user}")
-        given = sorted(wanted) if role == "admin" else None
-        said = f" ({', '.join(perms.LABELS[k] for k in given)})" if given else ""
-        err = self._edit(course.ref, lambda c: cm.set_member(c, user, role, given), by=actor,
-                         what=f"{user} — {_ROLE_RU.get(role, role)}{said}")
-        return err or self._json(HTTPStatus.OK, {"user": user, "role": role, "perms": given})
+            return frozenset()
+        if boxes is None:                                 # an old client: keep, or the default
+            return current if course.role_of(user) == "admin" else perms.DEFAULT & held
+        wanted = perms.clean(boxes, default=frozenset())
+        if not perms.subset(wanted - current, held):
+            return self._err(HTTPStatus.FORBIDDEN, "нельзя выдать права, которых нет у вас")
+        return (wanted & held) | (current - held)
+
+    def _author_extras(self, course: Course, user: str, role: str, body: dict,
+                       held: frozenset[str]) -> "frozenset[str] | Response":
+        """Return the author's extras after this change (kept ones the caller lacks), or a refusal."""
+        givable = perms.givable_extras(held)
+        had = frozenset(course.extras.get(user, []))
+        asked = body.get("extras") if isinstance(body.get("extras"), list) else None
+        if (request.method == "DELETE" or role != "author") and not had <= givable:
+            return self._err(HTTPStatus.FORBIDDEN, "у этого автора есть права, которых нет у вас")
+        if role != "author":
+            if asked:
+                return self._err(HTTPStatus.BAD_REQUEST, "дополнительные права дают автору курса")
+            return frozenset()
+        if asked is None:
+            return had
+        wanted = frozenset(e for e in asked if e in perms.EXTRAS)
+        if not wanted - had <= givable:
+            return self._err(HTTPStatus.FORBIDDEN, "нельзя выдать права, которых нет у вас")
+        return (wanted & givable) | (had - givable)
 
     def add_block(self, owner: str, name: str) -> Response:
         course, actor, err = self._load(owner, name, "content")

@@ -221,3 +221,19 @@ def test_catalog_keys_follow_the_content_box(tmp_path, role: str, boxes: list[st
             await pilot.press("q")
 
     asyncio.run(_drive())
+
+
+@pytest.mark.tier1
+def test_own_course_tasks_and_proposals_show_their_status() -> None:
+    """2026-10-26: whoever sent a task sees it marked and what became of it, right in the panel."""
+    in_course = TaskRow(ref="ann/x:1", number=1, block="Git", available=False, digest="",
+                        preview=True, mine=True, block_id="b1")
+    label = in_course.tree_label()
+    assert "· скрыто" in label and "· ваше" in label and "(в курсе)" in label
+    proposed = TaskRow(ref="ann/y:1", number=2, block="Мои предложения", available=False, digest="",
+                       preview=True, mine=True, block_id="proposals", moderation="pending")
+    label = proposed.tree_label()
+    assert "на проверке" in label and "· ваше" in label and "скрыто" not in label and "(в курсе)" not in label
+    refused = TaskRow(ref="ann/z:1", number=3, block="Мои предложения", available=False, digest="",
+                      preview=True, mine=True, block_id="proposals", moderation="rejected", reason="сыро")
+    assert "отклонено: сыро" in refused.tree_label()

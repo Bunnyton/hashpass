@@ -56,6 +56,7 @@ class Course:
     proposals: list[dict] = field(default_factory=list)
     history: list[dict] = field(default_factory=list)   # spec 2026-10-23 §4: who changed what, why
     perms: dict[str, list[str]] = field(default_factory=dict)   # spec 2026-10-25 §3: admins' boxes
+    extras: dict[str, list[str]] = field(default_factory=dict)   # 2026-10-26: authors' extra rights
     created_at: str = ""
     rev: int = 0
 
@@ -67,6 +68,8 @@ class Course:
         course.members = {u: ("admin" if r == "maintainer" else r) for u, r in course.members.items()}
         course.perms = {u: list(b) for u, b in (course.perms or {}).items()
                         if course.members.get(u) == "admin" and isinstance(b, list)}
+        course.extras = {u: [e for e in perms.EXTRAS if e in b] for u, b in (course.extras or {}).items()
+                         if course.members.get(u) == "author" and isinstance(b, list)}
         return course
 
     @property
@@ -376,8 +379,9 @@ def withdraw(course: Course, proposal_id: str, *, by: str) -> None:
 
 # -- members, requests, invites ----------------------------------------------
 
-def set_member(course: Course, user: str, role: str, boxes: Iterable[str] | None = None) -> None:
-    """Give `user` a role here; an admin's boxes are `boxes`, or kept, or DEFAULT."""
+def set_member(course: Course, user: str, role: str, boxes: Iterable[str] | None = None, *,
+               extras: Iterable[str] | None = None) -> None:
+    """Give `user` a role here; an admin's boxes are `boxes`, or kept, or DEFAULT; an author's `extras`."""
     role = "admin" if role == "maintainer" else role       # old clients
     if role not in ROLES[:-1]:
         msg = f"роль — {', '.join(ROLES[:-1])}"
@@ -386,15 +390,32 @@ def set_member(course: Course, user: str, role: str, boxes: Iterable[str] | None
         msg = "владелец остаётся владельцем"
         raise ValueError(msg)
     course.members[user] = role
+    if role != "author":
+        course.extras.pop(user, None)
     if role != "admin":
         course.perms.pop(user, None)
     elif boxes is not None:
         course.perms[user] = sorted(perms.clean(list(boxes), default=perms.DEFAULT))
+    if role == "author" and extras is not None:
+        set_extras(course, user, extras)
+
+
+def set_extras(course: Course, user: str, extras: Iterable[str]) -> None:
+    """Give an author extra rights (perms.EXTRAS, 2026-10-26); none -- the entry goes."""
+    if course.members.get(user) != "author":
+        msg = "дополнительные права дают автору курса"
+        raise ValueError(msg)
+    wanted = [e for e in perms.EXTRAS if e in set(extras)]
+    if wanted:
+        course.extras[user] = wanted
+    else:
+        course.extras.pop(user, None)
 
 
 def remove_member(course: Course, user: str) -> None:
     course.members.pop(user, None)
     course.perms.pop(user, None)
+    course.extras.pop(user, None)
 
 
 def request_access(course: Course, user: str, comment: str, *, now: float) -> dict:

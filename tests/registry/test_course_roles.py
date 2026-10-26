@@ -77,7 +77,8 @@ def test_the_people_tab_shows_boxes_to_the_admins_box_only(pool: _Courses) -> No
     pool.call("PUT", f"{path}/members/ann", "bob", {"role": "admin"})
     pool.call("PUT", f"{path}/members/max", "bob", {"role": "admin"})
     owner = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
-    assert owner.count("name='perms'") == 8  # noqa: PLR2004                     # four boxes for each of two admins
+    # four boxes for each of two admins, and four in the form adding someone (shown once «админ» is picked)
+    assert owner.count("name='perms'") == 12  # noqa: PLR2004
     ann = _page(_browser(pool, "ann"), f"{pool.url}/c/bob/linux")[1]
     assert "name='perms'" not in ann and "Люди и доступ" in ann  # ann sees max's boxes, cannot set
     assert "<option value='admin'>" not in ann

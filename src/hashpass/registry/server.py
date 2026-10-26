@@ -34,7 +34,7 @@ from hashpass.imagestore.store import ImageStore, did_you_mean
 from hashpass.key import global_key
 from hashpass.registry import courses as course_model
 from hashpass.registry import era, perms
-from hashpass.registry.access import can
+from hashpass.registry.access import can, sees_hidden
 from hashpass.registry.approved import ApprovedStore
 from hashpass.registry.attachments import AttachmentStore, safe_filename
 from hashpass.registry.attempt_store import AttemptStore, SeqMismatch
@@ -108,6 +108,7 @@ AUTHOR, MAINTAINER, OWNER = 1, 2, 3   # levels in an image (spec 2026-10-23 §2)
 _ROLE_RU = {"owner": "владелец", "admin": "админ", "author": "автор", "member": "участник"}
 _MAX_REASON = 500                # a rejection reason, shown to the author
 _REJECTED_BLOCK = "rejected"     # the virtual block of rejected tasks (author + admin)
+_REJECTED_SHOWN = 7 * 24 * 60 * 60  # a rejected proposal stays in «Мои предложения» a week
 _STUDENT_FIELDS = frozenset(("number", "name", "version", "digest", "ref", "block_id",
                              "block_name", "available", "hidden", "block_open"))
 _MAX_ATTACH = 8 * 1024 * 1024   # per-file attachment cap (8 MiB)
@@ -1107,16 +1108,23 @@ class PoolServer:
         return self.course_api.courses.get(ref) if ref else None
 
     def _course_rows(self, course: "course_model.Course", user: str) -> list[dict[str, object]]:
-        """Return the default course in the old `/catalog` row shape, as `user` may see it."""
+        """
+        Return a course in the old `/catalog` row shape, as `user` may see it.
+
+        Hidden tasks and closed blocks -- for `content` and members given the right; one's own
+        task (`mine`) always, with its status; one's open and lately rejected proposals -- in a
+        block «Мои предложения» at the end (2026-10-26).
+        """
         if not can(user, self.pool_perms(user), course, "view"):
             return []
-        staff = can(user, self.pool_perms(user), course, "content")
+        sees = sees_hidden(user, self.pool_perms(user), course)
         mine = self.progress().get(user)
         rows: list[dict[str, object]] = []
         for block in course.blocks:
             for task in block["tasks"]:
                 visible = block.get("open", True) and not task.get("hidden")
-                if not visible and not staff:
+                own = task.get("added_by") == user
+                if not visible and not (sees or own):
                     continue
                 latest = self.repo(task["repo"]).latest(task["tag"])
                 n = course_model.effective_n(course, task, latest=latest.n if latest else None)
@@ -1128,9 +1136,38 @@ class PoolServer:
                              "block_id": block["id"], "block_name": block["name"],
                              "available": visible, "hidden": task.get("hidden", False),
                              "block_open": block.get("open", True), "course": course.ref}
-                            | ({"preview": True} if staff and not visible else {})
+                            | ({"preview": True} if not visible else {})
+                            | ({"mine": True, "owner": user} if own else {})
+                            | ({"pending_update": True} if own and latest and latest.n > n else {})
                             | ({"solved_n": solved} if solved else {})
                             | ({"outside": True} if solved and outside_course(mine.get(ref), course.ref) else {}))
+        return self._proposal_rows(course, user, rows)
+
+    def _proposal_rows(self, course: "course_model.Course", user: str,
+                       rows: list[dict[str, object]]) -> list[dict[str, object]]:
+        """Mark `user`'s proposals on its rows; a task not in the course yet goes to «Мои предложения»."""
+        now = time.time()
+        by_ref = {str(r["ref"]): r for r in rows}
+        latest: dict[str, dict] = {}                      # the newest proposal of each task
+        for prop in course.proposals:
+            if prop.get("by") != user or prop.get("state") not in ("open", "rejected"):
+                continue
+            if prop["state"] == "rejected" and now - float(prop.get("decided_at") or 0) > _REJECTED_SHOWN:
+                continue
+            latest[f"{prop['repo']}:{prop['tag']}"] = prop
+        for ref, prop in latest.items():
+            state = "pending" if prop["state"] == "open" else "rejected"
+            said = {"state": state, "reason": str(prop.get("reason") or ""), "mine": True}
+            if ref in by_ref:                             # a newer version of a task in the course
+                if state == "pending":
+                    by_ref[ref]["pending_update"] = True
+                continue
+            rev = self.repo(prop["repo"]).get(prop["tag"], int(prop.get("n") or 0))
+            rows.append({"number": len(rows) + 1, "name": prop["repo"], "version": prop["tag"], "ref": ref,
+                         "digest": rev.task_digest if rev else "", "n": int(prop.get("n") or 0),
+                         "block_id": "proposals", "block_name": "Мои предложения", "available": False,
+                         "preview": True, "hidden": False, "block_open": False, "course": course.ref,
+                         "owner": user} | said | ({"rejected": True} if state == "rejected" else {}))
         return rows
 
     def _solved_n(self, rec: object, repo: str, tag: str) -> int | None:

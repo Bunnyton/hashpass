@@ -49,6 +49,7 @@ _DOWN_WORKERS = 4            # layers of ONE task downloaded in parallel (tasks 
 _TICK = 0.2                  # seconds between repaints of a running download (only when dirty)
 _BAR = 24                    # width of a layer's progress bar in the downloads panel
 _TASK_LAYER = "задание (проверка)"   # pseudo-layer: the task bundle pulled after the images
+_PROPOSALS = "proposals"     # the pool's block of the viewer's proposals not in the course yet
 
 
 def _mb(n: int) -> str:
@@ -118,6 +119,7 @@ class TaskRow:
     n: int = 0                      # the course's version of the task (0: a pool without versions)
     solved_n: int = 0               # the version the credit was earned in (an older one still counts)
     outside: bool = False           # earned outside this course (`hashpass run`, another course)
+    mine: bool = False              # sent by this viewer: its task in the course or its proposal
 
     def credit_word(self) -> str:
         """`зачтено` / `не зачтено`, and which version was solved when the course has moved on."""
@@ -191,8 +193,10 @@ class TaskRow:
             down = "[dim]○ не загружено[/]"
         tail = f"   {local_dot}   {server_dot}   {down}"
         badge = self.moderation_badge()
-        if self.preview and not badge:
+        if self.preview and not badge and self.block_id != _PROPOSALS:
             tail += "   [yellow]· скрыто[/]"
+        if self.mine:
+            tail += "   [cyan]· ваше[/]" + ("" if badge or self.block_id == _PROPOSALS else " [dim](в курсе)[/]")
         version = f" [dim]· версия {self.n}[/]" if self.n else ""
         return f"{self.ref}{version}{tail}{badge}"
 
@@ -630,7 +634,7 @@ class PoolTUI(App):
             if job is not None:              # downloading right now: keep the live row object
                 job.number, job.server, job.local = int(e.get("number") or 0), server_status, ref in solved
                 job.n, job.solved_n = int(e.get("n") or 0), int(e.get("solved_n") or 0)
-                job.outside = bool(e.get("outside"))
+                job.outside, job.mine = bool(e.get("outside")), bool(e.get("mine"))
                 rows.append(job)
                 continue
             rows.append(TaskRow(
@@ -646,7 +650,7 @@ class PoolTUI(App):
                 expires_at=float(e["expires_at"]) if e.get("expires_at") else None,
                 owner=str(e.get("owner") or ""),
                 n=int(e.get("n") or 0), solved_n=int(e.get("solved_n") or 0),
-                outside=bool(e.get("outside"))))
+                outside=bool(e.get("outside")), mine=bool(e.get("mine"))))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
@@ -845,7 +849,9 @@ class PoolTUI(App):
             visible_open = sum(1 for r in block_rows if r.state == "готово" and not r.hidden)
             head = (f"[b cyan]{block}[/]  "
                     f"[dim]{visible_open}/{len(block_rows)} готово[/]")
-            if not block_rows[0].block_open:
+            if block_rows[0].block_id == _PROPOSALS:
+                head += "   [dim]· ваши задания, которых ещё нет в курсе[/]"
+            elif not block_rows[0].block_open:
                 head += "   [yellow]· закрыт для проходящих курс[/]"
             b_node = tree.root.add(head, expand=True, data=block_rows[0].block_id or None)
             for row in block_rows:
@@ -991,7 +997,7 @@ class PoolTUI(App):
         current = next((r for r in self.rows if r.block_id == block_id), None)
         if current is None:
             return
-        if block_id == "rejected":
+        if block_id in ("rejected", _PROPOSALS):
             self.notify("«Отклонённые» — служебный блок: проходящим курс он не показывается.",
                         severity="warning", timeout=5)
             return

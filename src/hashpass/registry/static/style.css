@@ -588,3 +588,24 @@ ol.history .why{color:var(--muted);font-style:italic}
 .settings-card form label{display:flex;gap:8px;align-items:center}
 .settings-card .people{margin:0 0 14px}
 @media(min-width:700px){.titem .tref{flex:0 0 auto;white-space:nowrap}}
+/* the course team: rights as toggle chips (2026-10-26) */
+.people.team{gap:10px}
+.member-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%}
+.member-form{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1 1 340px;margin:0;min-width:0}
+.member-form.add{flex:none}
+.member-form select{width:auto;max-width:100%;padding-top:6px;padding-bottom:6px}
+.member-form.add input[name=__login]{flex:1 1 200px;width:auto}
+.rights{display:inline-flex;flex-wrap:wrap;gap:6px;border:0;margin:0;padding:0;min-width:0}
+.rights[hidden]{display:none}
+.chip{position:relative;display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border:1px solid var(--border-strong);
+  border-radius:999px;background:var(--surface);color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;
+  user-select:none;transition:background .12s,border-color .12s,color .12s}
+.chip input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.chip:hover{border-color:var(--accent)}
+.chip:has(input:checked),.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.chip:has(input:checked)::before{content:'✓';font-size:12px}
+.chip:has(input:disabled){opacity:.55;cursor:not-allowed}
+.chip:has(input:disabled):hover{border-color:var(--border-strong)}
+.chip:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.chip.static{cursor:default;font-size:12px;padding:2px 9px}
+.team-sub{font-size:14px;margin:18px 0 8px;color:var(--muted);font-weight:600}

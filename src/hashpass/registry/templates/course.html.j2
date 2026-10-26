@@ -20,7 +20,7 @@
 <div class='row hero-meta'>
 <a class='owner' href='/u/{{ ref_parts[0] | q }}'><span class='avatar xs' aria-hidden='true'>{{ ref_parts[0][:1] | upper }}</span><span class='mono'>{{ ref_parts[0] }}</span></a><span class='mono dim'>/ {{ ref_parts[1] }}</span>
 {% if c.blocks is defined %}<span class='dim'>·</span><span class='small'>{{ n_tasks | plural('задание', 'задания', 'заданий') }} в {{ (c.blocks | length) | plural('блоке', 'блоках', 'блоках') }}</span>{% endif %}
-{% if may.students %}<span class='dim'>·</span><a class='small' href='#students'>{{ students | length }} {{ students | length | taking }}</a>{% endif %}
+{% if may.students %}<span class='dim'>·</span><a class='small' href='#students'>{{ students | length | plural('участник', 'участника', 'участников') }}</a>{% endif %}
 </div>
 </div>
 
@@ -54,10 +54,10 @@
 {% if may.view %}
 <nav class='tabs' aria-label='Разделы курса'>
 <a href='#tasks' data-tab>{{ icon('task') }} Задания <span class='count'>{{ n_tasks }}</span></a>
-{% if may.students %}<a href='#students' data-tab>{{ icon('user') }} Проходят курс <span class='count'>{{ students | length }}</span></a>{% endif %}
+{% if may.students %}<a href='#students' data-tab>{{ icon('user') }} Участники курса <span class='count'>{{ students | length }}</span></a>{% endif %}
 {% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
 {% if may.people and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
-<a href='#people' data-tab>{{ icon('user') }} Участники <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
+<a href='#people' data-tab>{{ icon('user') }} Команда курса <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
 <a href='#history' data-tab>Изменения <span class='count'>{{ (c.history or []) | length }}</span></a>
 {% if may.content %}<a href='#settings-tab' data-tab>Настройки</a>{% endif %}
 </nav>
@@ -182,38 +182,56 @@
 {% endif %}
 
 </section>
-<section id='people' class='tab-panel' aria-label='Участники'>
-<h2>Участники</h2>
-<div class='card'>
-<ul class='people'>
-<li><a class='person' href='/u/{{ ref_parts[0] | q }}'>{{ avatar(ref_parts[0], 'sm') }}<span class='mono'>{{ ref_parts[0] }}</span></a><span class='pill sm author'>владелец</span></li>
-{% for user, role in (c.members or {}).items() %}
-<li><a class='person' href='/u/{{ user | q }}'>{{ avatar(user, 'sm') }}<span class='mono'>{{ user }}</span></a>
+<section id='people' class='tab-panel' aria-label='Команда курса'>
+<h2>Команда курса</h2>
+{% macro rights_view(user, role) %}{% set boxes = (c.perms or {}).get(user, []) %}{% set extras = (c.extras or {}).get(user, []) %}
+{% if role == 'admin' and boxes %}<span class='rights'>{% for k in boxes %}<span class='chip on static'>{{ perm_labels[k] }}</span>{% endfor %}</span>
+{% elif role == 'author' and extras %}<span class='rights'>{% for k in extras %}<span class='chip on static' title='{{ extra_hints[k] }}'>+ {{ extra_labels[k] }}</span>{% endfor %}</span>{% endif %}
+{% endmacro %}
+{% macro rights_edit(user, role, idx) %}{% set boxes = (c.perms or {}).get(user, []) %}{% set extras = (c.extras or {}).get(user, []) %}
+{% if may.admins %}<fieldset class='rights' data-for-role='admin'{% if role != 'admin' %} hidden{% endif %}><legend class='visually-hidden'>Права админа {{ user }}</legend>
+{% for k, label in perm_labels.items() %}<label class='chip'><input type='checkbox' name='perms' value='{{ k }}' data-type='list'{% if k in boxes or (role != 'admin' and k in default_boxes) %} checked{% endif %}{% if role != 'admin' %} disabled{% endif %}>{{ label }}</label>{% endfor %}</fieldset>{% endif %}
+<fieldset class='rights' data-for-role='author'{% if role != 'author' %} hidden{% endif %}><legend class='visually-hidden'>Дополнительные права автора {{ user }}</legend>
+{% for k, label in extra_labels.items() %}<label class='chip' title='{{ extra_hints[k] }}{% if k not in givable %} — выдать может тот, у кого есть «{{ perm_labels[extra_needs[k]] }}»{% endif %}'><input type='checkbox' name='extras' value='{{ k }}' data-type='list' data-givable='{{ 1 if k in givable else 0 }}'{% if k in extras %} checked{% endif %}{% if role != 'author' or k not in givable %} disabled{% endif %}>+ {{ label }}</label>{% endfor %}</fieldset>
+{% endmacro %}
+{% macro person(user, role, idx) %}
+<li class='member'><div class='member-head'><a class='person' href='/u/{{ user | q }}'>{{ avatar(user, 'sm') }}<span class='mono'>{{ user }}</span></a>
 {% set boxes = (c.perms or {}).get(user, []) %}
 {% if user != signed_in and ((role != 'admin' and may.people) or may.admins) %}
-<form class='inline row' data-api='PUT {{ api }}/members/{{ user | q }}'>
-<label class='visually-hidden' for='crole-{{ loop.index }}'>Роль {{ user }}</label>
-<select id='crole-{{ loop.index }}' name='role'>{% for r in ['member', 'author', 'admin'] %}{% if r != 'admin' or may.admins %}<option value='{{ r }}'{% if r == role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endif %}{% endfor %}</select>
-{% if role == 'admin' and may.admins %}<span class='perm-boxes'>{% for k, label in perm_labels.items() %}<label class='check sm'><input type='checkbox' name='perms' value='{{ k }}' data-type='list'{% if k in boxes %} checked{% endif %}> {{ label }}</label>{% endfor %}</span>{% endif %}
+<form class='member-form' data-api='PUT {{ api }}/members/{{ user | q }}'>
+<label class='visually-hidden' for='crole-{{ idx }}'>Роль {{ user }}</label>
+<select id='crole-{{ idx }}' name='role' data-rights-role>{% for r in ['member', 'author', 'admin'] %}{% if r != 'admin' or may.admins %}<option value='{{ r }}'{% if r == role %} selected{% endif %}>{{ role_ru[r] }}</option>{% endif %}{% endfor %}</select>
+{{ rights_edit(user, role, idx) }}
 <button class='sm ghost' type='submit'>Сохранить</button></form>
-{{ act('DELETE', api ~ '/members/' ~ (user | q), 'Убрать', 'sm danger', confirm='Убрать ' ~ user ~ ' из участников?') }}
-{% else %}<span class='pill sm'>{{ role_ru[role] }}</span>{% if role == 'admin' and boxes %} <span class='sub small'>{% for k in boxes %}{{ perm_labels[k] }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}{% endif %}
-</li>
-{% endfor %}
+{{ act('DELETE', api ~ '/members/' ~ (user | q), 'Убрать', 'sm danger', confirm='Убрать ' ~ user ~ ' из курса?') }}
+{% else %}<span class='pill sm'>{{ role_ru[role] }}</span>{{ rights_view(user, role) }}{% endif %}
+</div></li>
+{% endmacro %}
+{% set team = (c.members or {}).items() | rejectattr(1, 'equalto', 'member') | list %}
+{% set admitted = (c.members or {}).items() | selectattr(1, 'equalto', 'member') | list %}
+<div class='card'>
+<ul class='people team'>
+<li class='member'><div class='member-head'><a class='person' href='/u/{{ ref_parts[0] | q }}'>{{ avatar(ref_parts[0], 'sm') }}<span class='mono'>{{ ref_parts[0] }}</span></a><span class='pill sm author'>владелец</span></div></li>
+{% for user, role in team | sort(attribute='1') %}{{ person(user, role, 't' ~ loop.index) }}{% endfor %}
 </ul>
+{% if admitted %}
+<h3 class='team-sub'>Допущены к курсу <span class='count-pill'>{{ admitted | length }}</span></h3>
+<ul class='people'>{% for user, role in admitted %}{{ person(user, role, 'm' ~ loop.index) }}{% endfor %}</ul>
+{% endif %}
 {% if may.people %}
 <hr class='divider'>
-<form class='row' data-api='PUT {{ api }}/members/__LOGIN__'>
+<form class='member-form add' data-api='PUT {{ api }}/members/__LOGIN__'>
 <label class='visually-hidden' for='new-cmember'>Логин</label>
 <input id='new-cmember' name='__login' placeholder='логин пользователя' required>
 <label class='visually-hidden' for='new-crole'>Роль</label>
-<select id='new-crole' name='role'><option value='member'>участник — проходит приватный курс</option><option value='author' selected>автор — добавляет задания</option>{% if may.admins %}<option value='admin'>админ — управляет курсом</option>{% endif %}</select>
+<select id='new-crole' name='role' data-rights-role><option value='member'>участник — проходит приватный курс</option><option value='author' selected>автор — добавляет задания</option>{% if may.admins %}<option value='admin'>админ — управляет курсом</option>{% endif %}</select>
+{{ rights_edit('', 'author', 'new') }}
 <button class='sm' type='submit'>Добавить</button>
 </form>
-<p class='sub small'>Ссылка-приглашение — кто откроет её и войдёт, станет участником: <code class='copy'>{{ invite_link }}</code></p>
+<p class='sub small'>Ссылка-приглашение — кто откроет её и войдёт, станет участником курса: <code class='copy'>{{ invite_link }}</code></p>
 {{ act('PUT', api, 'Сменить ссылку (старая перестанет работать)', 'sm ghost', {'rotate_invite': true}) }}
 {% endif %}
-<p class='sub small'>Участник проходит приватный курс и предлагает задания; автор добавляет задания сам и обновляет свои; админ управляет курсом в пределах своих прав; владелец может всё.</p>
+<p class='sub small'>Автор добавляет задания сам и обновляет свои; ему можно дать дополнительные права — {% for k, label in extra_labels.items() %}«{{ label }}» ({{ extra_hints[k] }}){% if not loop.last %} и {% endif %}{% endfor %}. Админ управляет курсом в пределах отмеченных прав; владелец может всё. Участник проходит приватный курс и предлагает задания.</p>
 </div>
 </section>
 <section id='history' class='tab-panel' aria-label='Изменения в курсе'>
@@ -232,12 +250,12 @@
 {% else %}<div class='empty card'><p class='sub'>Изменений пока не было.</p></div>{% endif %}
 </section>
 {% if may.students %}
-<section id='students' class='tab-panel' aria-label='Проходят курс'>
-<div class='cat-head'><h2>Проходят курс <span class='count-pill'>{{ students | length }}</span></h2></div>
+<section id='students' class='tab-panel' aria-label='Участники курса'>
+<div class='cat-head'><h2>Участники курса <span class='count-pill'>{{ students | length }}</span></h2></div>
 {% if students %}
 <div class='card'>
 <div class='row students-tools'>
-<label class='visually-hidden' for='student-q'>Найти среди проходящих курс</label>
+<label class='visually-hidden' for='student-q'>Найти среди участников курса</label>
 <input id='student-q' type='search' placeholder='найти по логину или приватному комментарию' data-filter='#student-rows tr'>
 <span class='sub small legend'><span class='cell passed'>✓</span> решено <span class='cell started'>◐</span> начато <span class='cell none'>·</span> не начато</span>
 </div>
@@ -282,6 +300,7 @@
 {% endif %}
 {% endif %}
 <script src='/static/api.js'></script>
+<script src='/static/team.js'></script>
 <script src='/static/filter.js'></script>
 {% if may.content %}<script src='/static/catalog.js'></script>{% endif %}
 {% endblock %}

@@ -8,7 +8,8 @@ permission boxes on the pool (empty for anyone but a pool admin). Course roles: 
 for an access request; `view`/`play`; `propose` -- anyone signed in on a public course, anyone
 in a private one; `add` -- straight in, no proposal; `content`, `people`, `progress`, `admins`
 -- the boxes; `delete` -- the owner. A pool admin sees every course and acts in it with its
-own pool boxes.
+own pool boxes. An author may hold extras (2026-10-26): `progress` (a box) and `hidden` --
+`sees_hidden` answers for hidden tasks and closed blocks (`content`, or that extra).
 """
 from hashpass.registry import perms
 from hashpass.registry.courses import Course
@@ -23,6 +24,8 @@ def course_perms(course: Course, user: str | None) -> frozenset[str]:
         return perms.ALL
     if role == "admin":
         return perms.clean(course.perms.get(user or ""), default=perms.DEFAULT)
+    if role == "author":
+        return frozenset(course.extras.get(user or "", [])) & perms.ALL     # `progress`, when given
     return frozenset()
 
 
@@ -44,3 +47,8 @@ def can(user: str | None, pool: frozenset[str], course: Course, action: str) -> 
     if action == "view":
         return course.visibility == "public" or role is not None or bool(pool)
     return user is not None and (course.visibility == "public" or role is not None or bool(pool))
+
+
+def sees_hidden(user: str | None, pool: frozenset[str], course: Course) -> bool:
+    """Whether `user` sees `course`'s hidden tasks and closed blocks: `content`, or given the right."""
+    return can(user, pool, course, "content") or "hidden" in course.extras.get(user or "", [])
