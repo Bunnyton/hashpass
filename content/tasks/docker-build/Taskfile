@@ -15,6 +15,13 @@ hidden hp
 settings
   pager on
 
+# Сервисы — только в фоне: без -d сервер в контейнере занимает консоль навсегда (busybox httpd
+# и sleep первым процессом контейнера не слышат Ctrl+C). Отказ консоли — до того, как она зависнет.
+block docker match "^(sudo +)?docker +(container +)?run( +(-[a-ce-zA-Z0-9]+|--[a-ce-z][^ ]*|[^ -][^ ]*))* +(([^ ]*/)?(wiki|stock|shopfront|billing|site|redis|registry|thumbs|cruncher|pinger|files|orders-db|orders-app|blog)(:[^ ]*)? *$|(alpine|busybox)(:[^ ]*)? +(sleep|tail|httpd|ping|nc)( |$))" say "Без -d сервис займёт консоль: он работает, пока его не остановят, и командная строка не вернётся. Запусти его в фоне — ключ -d."
+block docker match "^(sudo +)?docker(-compose| +compose)( +[^ ]+)* +up( +(-[a-ce-zA-Z0-9]+|--[a-ce-z][^ ]*|[^ -][^ ]*))* *$" say "Без -d compose займёт консоль журналами сервисов, и командная строка не вернётся. Подними проект в фоне — ключ -d."
+block docker-compose match "^(sudo +)?docker(-compose| +compose)( +[^ ]+)* +up( +(-[a-ce-zA-Z0-9]+|--[a-ce-z][^ ]*|[^ -][^ ]*))* *$" say "Без -d compose займёт консоль журналами сервисов, и командная строка не вернётся. Подними проект в фоне — ключ -d."
+block docker match "^(sudo +)?docker +(container +)?(attach|start +([^ ]+ +)*(-a|--attach|-[a-zA-Z]*a[a-zA-Z]*)( |$))" say "Так консоль подключится к работающему сервису, и вернуть её будет нечем. Что он пишет, покажет docker logs."
+
 say "Чужие образы ты запускать умеешь. Пора собрать свой — рецепт уже лежит в ~/greeter."
 read brief.md
 
