@@ -67,6 +67,9 @@ def add_author_commands(sub: argparse._SubParsersAction) -> None:  # noqa: PLR09
                          help="HTTPS с самоподписанным сертификатом (создастся при первом запуске)")
     p_serve.add_argument("--reset-admin", action="store_true",
                          help="сгенерировать новый пароль администратора")
+    p_course = sub.add_parser("course", help="курс: блоки и задания в них — то же, что на странице курса "
+                                             "(hashpass course help)", add_help=False)
+    p_course.add_argument("words", nargs=argparse.REMAINDER)
     p_mig = sub.add_parser("migrate-courses", help=argparse.SUPPRESS)  # once, on an old pool's machine
     p_mig.add_argument("--owner", default="bunnyton", help="владелец курса по умолчанию (администратор)")
     p_cat = sub.add_parser("catalog", help=argparse.SUPPRESS)        # a pool not on courses only
@@ -75,7 +78,7 @@ def add_author_commands(sub: argparse._SubParsersAction) -> None:  # noqa: PLR09
     p_cat.add_argument("--registry")
 
 
-def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # noqa: PLR0911, C901
+def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # noqa: PLR0911, PLR0912, C901
     """Run an author/pool command; None -- not one of them."""
     command = args.command
     if command == "work":
@@ -104,6 +107,8 @@ def dispatch_author(env: cli.Home, args: argparse.Namespace) -> int | None:  # n
         return cli.cmd_rm(env, args.ref, args.registry, local=True)
     if command in ("tag", "fork", "rm"):
         return _on_the_web(env, command, args)
+    if command == "course":
+        return _course(env, args.words)
     if command == "migrate-courses":
         return cli.cmd_migrate_courses(env, args.owner)
     return None
@@ -135,3 +140,18 @@ def _say_no_more_flags(args: argparse.Namespace) -> None:
 def say_moved(old: str) -> None:
     """Tell a `hashengine …` user where the command lives now (once, on stderr)."""
     sys.stderr.write(f"\x1b[2mhashengine больше не нужен — это теперь `hashpass {old}`.\x1b[0m\n")
+
+
+def _course(env: cli.Home, words: list[str]) -> int:
+    """`hashpass course …` through the pool's course API, as the logged-in author."""
+    from hashpass.course_cli import USAGE, CourseApi, run_course  # noqa: PLC0415
+    from hashpass.registry.creds import CredentialCache  # noqa: PLC0415
+    from hashpass.registry.remote import RemoteRegistry  # noqa: PLC0415
+    if words[:1] in (["help"], ["-h"], ["--help"]):
+        sys.stdout.write(USAGE)
+        return 0
+    url = cli._ensure_registry_login(env, None, cli._default_io())  # noqa: SLF001
+    client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+    api = CourseApi(client, client._auth_token(None))  # noqa: SLF001
+    return run_course(api, cli.load_pool(env).get("user", ""), words, out=sys.stdout)
+

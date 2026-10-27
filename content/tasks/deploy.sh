@@ -1,99 +1,79 @@
 #!/bin/bash
-# deploy.sh — собрать все Taskfile-задания и запушить в пул одной командой.
+# deploy.sh — собрать задания, отправить их на пул и разложить по курсам.
 #
-# Требования (только на машине автора, с настроенным scoped sudo для nspawn):
-#   - hashpass установлен (`make install` в корне репо)
-#   - hashpass login выполнен ХОТЯ БЫ РАЗ (Bearer-токен закэширован)
-#   - в HASHPASS_POOL (или ~/.hashpass/pool.json) указан адрес пула
+# Две отдельные операции, как и в вебе (пользователь, 2026-10-27: «унификация»):
+#   1. hashpass push <образ>                                  — новая версия образа на пуле;
+#   2. hashpass course <курс> add block <блок>                 — блок в курсе (если его нет),
+#      hashpass course <курс> block <блок> add <ref>…          — задания в блок.
+# Обе ходят в один API пула — тот же, что страница курса в браузере.
+#
+# Требования: hashpass login выполнен (токен закэширован), адрес пула — в HASHPASS_POOL
+# или ~/.hashpass/pool.json. Сборка идёт в nspawn (scoped sudo).
 #
 # Использование:
-#   cd content/tasks && ./deploy.sh
-#   ./deploy.sh --dry            # только собрать, не пушить
-#   ./deploy.sh --layout         # только раскладка каталога по BLOCKS (без сборки и push)
-#
-# Каждое задание собирается из своей папки; на пул уходит образ + Taskfile-attachment,
-# и задание добавляется в каталог (--task).
+#   cd content/tasks && ./deploy.sh            # собрать, отправить, разложить по курсам
+#   ./deploy.sh --dry                          # только собрать
+#   ./deploy.sh --layout                       # только разложить по курсам (без сборки и push)
+#   ./deploy.sh --force                        # отправить даже без изменений
+# Любой другой аргумент — ошибка: скрипт ничего не делает (2026-10-26 `--help` молча запустил
+# настоящий деплой).
 
 set -euo pipefail
 DRY=""
 FORCE=""
 LAYOUT_ONLY=""
+usage() { sed -n '2,19p' "$0"; }
 for a in "$@"; do
     case "$a" in
         --dry)    DRY="1" ;;
         --force)  FORCE="--force" ;;
         --layout) LAYOUT_ONLY="1" ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "deploy.sh: неизвестный аргумент «$a» — ничего не делаю" >&2; usage >&2; exit 2 ;;
     esac
 done
 
 cd "$(dirname "$0")"
-# Блоки каталога по темам. Порядок блоков и заданий внутри = нумерация на пуле: после всех
-# push-ей раскладка целиком отправляется `hashpass catalog layout` (только администратор).
-# Формат строки: 'Название блока: каталог каталог …' (имена каталогов заданий здесь).
+# курс | блок: задания — в порядке курса; родитель задания (from) стоит раньше потомка
 BLOCKS=(
-    'Знакомство: intro-hello first-commands cd-abs'
-    'Файлы и каталоги: cp-basics cp-more mv-basics rm-basics inventory ls-mv-cp links mc'
-    'Поиск: pipes streams grep-hunt find xargs'
-    'Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
-    'Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit top'
-    'Редактор и текст: vim-intro vim-more fruit-store'
-    'Скрипты: my-command'
-    'Git: git-init git-log git-branch git-remote'
-    'Git — глубже: git-ignore git-reset git-conflict git-stash git-rebase git-squash git-cherry-pick'
-    'Git — мастер: git-reflog git-bisect git-internals git-hooks git-deploy'
-    'Docker: docker-run docker-web docker-ports docker-volume docker-db docker-build docker-layers'
-    'Docker — глубже: docker-debug docker-network docker-compose docker-multistage docker-registry'
-    'Docker — под капотом: docker-inside docker-limits docker-caps'
-    'Docker Compose: compose-health compose-config compose-scale'
-    'Призы: star-wars moria'
-    'Архив: first-steps showcase'
+    'bunnyton/linux | Знакомство: intro-hello first-commands cd-abs'
+    'bunnyton/linux | Файлы и каталоги: cp-basics cp-more mv-basics rm-basics inventory ls-mv-cp links mc'
+    'bunnyton/linux | Поиск: pipes streams grep-hunt find xargs'
+    'bunnyton/linux | Права и пользователи: sudo-basics chmod-basics chgrp-basics chmod-evil'
+    'bunnyton/linux | Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit top'
+    'bunnyton/linux | Редактор и текст: vim-intro vim-more fruit-store'
+    'bunnyton/linux | Скрипты: my-command'
+    'bunnyton/git-docker | Git: git-init git-log git-branch git-remote'
+    'bunnyton/git-docker | Git — глубже: git-ignore git-reset git-conflict git-stash git-rebase git-squash git-cherry-pick'
+    'bunnyton/git-docker | Git — мастер: git-reflog git-bisect git-internals git-hooks git-deploy'
+    'bunnyton/docker | Docker: docker-run docker-web docker-ports docker-volume docker-db docker-build docker-layers'
+    'bunnyton/docker | Docker — глубже: docker-debug docker-network docker-compose docker-multistage docker-registry'
+    'bunnyton/docker | Docker — под капотом: docker-inside docker-limits docker-caps'
+    'bunnyton/docker | Docker Compose: compose-health compose-config compose-scale'
+    'bunnyton/linux | Призы: star-wars moria'
+    'bunnyton/linux | Архив: first-steps showcase'
 )
-# Порядок сборки/пуша — тот же, что в блоках (родитель из `from` раньше потомка).
 TASKS=()
-declare -A BLOCK_OF
-for block in "${BLOCKS[@]}"; do
+declare -A BLOCK_OF COURSE_OF
+for line in "${BLOCKS[@]}"; do
+    c="${line%% | *}"; block="${line#* | }"
     read -r -a names <<< "${block#*:}"
     TASKS+=("${names[@]}")
-    for n in "${names[@]}"; do BLOCK_OF[$n]="${block%%:*}"; done
+    for n in "${names[@]}"; do BLOCK_OF[$n]="${block%%:*}"; COURSE_OF[$n]="$c"; done
 done
-# Must equal the namespace the images were built under -- `hashpass build` namespaces images
-# by the LOCAL login, and the pool now rejects a push whose ref namespace differs from the
-# pushing user (author == author): a mismatch here gets a 403, not a silent wrong owner.
 USER_LOGIN="${HASHPASS_USER:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("user",""))' 2>/dev/null || true)}"
-POOL_URL="${HASHPASS_POOL:-$(python3 -c 'import json,os;p=os.path.expanduser("~/.hashpass/pool.json");print(json.load(open(p)).get("url",""))' 2>/dev/null || true)}"
-
 if [[ -z "$USER_LOGIN" ]]; then
-    echo "нужен логин: HASHPASS_USER=... ./deploy.sh, либо предварительно  hashpass login" >&2
+    echo "нужен логин: hashpass login" >&2
     exit 1
-fi
-
-# Пре-логин на пул: закэшируем bearer-токен один раз, чтобы дальнейшие 28 push-ей
-# не спрашивали пароль на каждой итерации. --if-needed: если токен уже свежий, login
-# только подтверждает это и не задаёт вопрос "перезайти?" -- деплой не должен
-# блокироваться на вводе.
-if [[ -z "$DRY" ]]; then
-    echo "── единоразовый вход на пул ($POOL_URL) от имени $USER_LOGIN ──"
-    hashpass login "$POOL_URL" --if-needed || {
-        echo "вход на пул не удался — деплой прерван" >&2
-        exit 1
-    }
 fi
 
 if [[ -z "$DRY" && -z "$LAYOUT_ONLY" ]]; then
     echo "── базовый образ (bunnyton/debian:trixie) ──"
-    # БЕЗ $FORCE: тег фиксированный, `push base` сам сравнивает digest ЭТОГО пула с тем,
-    # что эта машина на него заливала: уходит база, пересобранная здесь (новый runtime) или
-    # с машины, которая на этот пул базу ещё не заливала; неизменная не отправляется, а
-    # залитую с другой машины он не трогает (скажет об этом). --force перезалил бы базу и
-    # заставил КАЖДОГО студента заново скачать ~57 МБ; если это действительно нужно — вручную:
-    #   hashpass push base --force
-    # Логин на пул должен быть владельцем базы (bunnyton) или администратором.
     hashpass push base
 fi
 
 declare -A REF_OF
 for name in "${TASKS[@]}"; do
-    # image_ref = 'first-steps:1'; on the pool it lives under <login>/first-steps:1
     image_ref=$(grep -E '^image ' "$name/Taskfile" | head -1 | awk '{print $2}')
     REF_OF[$name]="$USER_LOGIN/$image_ref"
     [[ -n "$LAYOUT_ONLY" ]] && continue
@@ -103,32 +83,21 @@ for name in "${TASKS[@]}"; do
         cd "$name"
         hashpass build Taskfile
         if [[ -z "$DRY" ]]; then
-            # Сразу в свой блок; НОВОЕ задание появляется скрытым (автор проверяет в hashpass, потом
-            # «Показать» в веб-каталоге); уже опубликованное сохраняет место и видимость.
-            hashpass push "$USER_LOGIN/$image_ref" --task --block "${BLOCK_OF[$name]}" $FORCE
+            hashpass push "$USER_LOGIN/$image_ref" --public $FORCE
         fi
     )
 done
 
-# Раскладка каталога: блоки по темам, нумерация по порядку; задания, которых больше нет в
-# BLOCKS (например, старые help-flag / man-of-man), из каталога уходят (образы остаются).
-SPECS=()
-for block in "${BLOCKS[@]}"; do
-    title="${block%%:*}"
+[[ -n "$DRY" ]] && { echo; echo "собрано, на пул ничего не отправлено"; exit 0; }
+echo
+echo "── раскладка по курсам ──"
+for line in "${BLOCKS[@]}"; do
+    c="${line%% | *}"; block="${line#* | }"; title="${block%%:*}"
     read -r -a names <<< "${block#*:}"
     refs=()
     for n in "${names[@]}"; do refs+=("${REF_OF[$n]}"); done
-    SPECS+=("$title: ${refs[*]}")
+    hashpass course "$c" add block "$title"
+    hashpass course "$c" block "$title" add "${refs[@]}"
 done
-if [[ -z "$DRY" ]]; then
-    echo
-    echo "── раскладка каталога по блокам ──"
-    # Пул, переведённый на курсы, раскладку из скрипта не принимает (410): блоки и порядок —
-    # на странице курса в вебе. Тогда отправленные ревизии уже на пуле, а раскладка — руками.
-    if ! hashpass catalog layout --registry "$POOL_URL" "${SPECS[@]}"; then
-        echo "раскладку не задать отсюда — откройте курс в вебе: $POOL_URL/c"
-    fi
-fi
-
 echo
-echo "готово. Проверьте пул: hashpass"
+echo "готово. Курсы: hashpass course"
