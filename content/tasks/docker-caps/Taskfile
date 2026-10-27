@@ -1,0 +1,49 @@
+# docker-caps — привилегии ядра (capabilities): pinger со сброшенными привилегиями не может
+# пинговать (доза caps.md на «are you root?») → оставить ровно одну, NET_RAW → files при
+# старте меняет владельца /data — снова одна нужная, CHOWN. Скрипт проверки — копия hp/caps в
+# /usr/local/lib/hp-caps (check live выполняется в работающей консоли, без скрытого слоя).
+# Продолжает docker-multistage: оттуда Docker и образы.
+
+image docker-caps:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+# data: образы с машины автора:
+#   cd data/pinger-src && docker build -t pinger . && docker save pinger:latest | gzip -9 > ../pinger.tar.gz
+#   cd data/files-src && docker build -t files . && docker save files:latest | gzip -9 > ../files.tar.gz
+copy data/pinger.tar.gz /usr/local/share/hp-docker/images/pinger.tar.gz
+copy data/files.tar.gz /usr/local/share/hp-docker/images/files.tar.gz
+copy hp/caps /usr/local/lib/hp-caps/caps
+run chmod 700 /usr/local/lib/hp-caps /usr/local/lib/hp-caps/caps
+
+hidden hp
+
+settings
+  pager on
+
+say "Безопасник «Пельменя» прочитал отчёт про взломанные контейнеры и выдал правило: никаких лишних прав. Каждому сервису — только то, без чего он не работает."
+read brief.md
+
+stage
+  say "Запусти сторож связи — образ pinger — в фоне под именем pinger: все привилегии ядра сбрось и оставь одну, без которой он не работает"
+  solve docker run -d --name pinger --cap-drop ALL --cap-add NET_RAW pinger
+  check live /usr/local/lib/hp-caps/caps pinger NET_RAW "bytes from"
+  neutral ls cat pwd cd
+  on pass say "Взломают pinger — у взломщика будет root, который умеет только пинговать: ни файлы чужие тронуть, ни сеть перенастроить."
+  hint output "are you root" read caps.md
+  hint output "is already in use" say "Имя pinger уже занято. docker ps -a — и убери старый."
+  hint tries 5 say "Что pinger пишет в журнал? docker logs pinger."
+  hint tries 10 say "Пинг шлёт «сырые» сетевые пакеты. Какая привилегия в man 7 capabilities про RAW?"
+
+stage
+  say "Файловый сервис files при старте отдаёт свой каталог /data пользователю nobody. Запусти его в фоне под именем files по тому же правилу"
+  solve docker run -d --name files --cap-drop ALL --cap-add CHOWN files
+  check live /usr/local/lib/hp-caps/caps files CHOWN "отдан пользователю nobody"
+  neutral ls cat pwd cd
+  on pass say "Правило работает и наоборот: --privileged даёт контейнеру все привилегии сразу — и почти всю машину в придачу. Его ставят, только когда без него никак, и всегда с вопросом «зачем?»."
+  hint output "Operation not permitted" say "Сервис упал на смене владельца. Какая привилегия разрешает менять владельца файла?"
+  hint output "is already in use" say "Имя files уже занято. docker ps -a — и убери старый."
+  hint tries 5 say "Что files пишет в журнал перед тем, как упасть?"
+
+exec finale

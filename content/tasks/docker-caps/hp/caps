@@ -1,0 +1,10 @@
+#!/bin/sh
+# caps <контейнер> <привилегия> — контейнер работает, сброшены все привилегии ядра, а добавлена
+# ровно одна нужная (имя в любом регистре, с CAP_ или без), и сервис пишет, что всё в порядке.
+# Проверка живого контейнера: выполняется в работающей консоли.
+c=$1 want=$2 ok=$3
+norm() { tr 'a-z' 'A-Z' | sed 's/CAP_//g; s/[][]//g'; }
+[ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" = true ] || exit 1
+[ "$(docker inspect -f '{{.HostConfig.CapDrop}}' "$c" | norm)" = ALL ] || exit 1
+[ "$(docker inspect -f '{{.HostConfig.CapAdd}}' "$c" | norm)" = "$want" ] || exit 1
+docker logs "$c" 2>&1 | grep -q "$ok"

@@ -1,0 +1,52 @@
+# docker-inside — контейнер не виртуальная машина: ядро в контейнере alpine то же, что у машины
+# (uname -r) → контейнер nap со sleep 1000 в фоне виден среди процессов машины (когда он найден —
+# доза namespaces.md: как процесс машины оказывается в своём мире) → тот же процесс внутри
+# контейнера — PID 1. Контейнеры живут только в работающей консоли — check live.
+# Продолжает docker-multistage: оттуда Docker и образы.
+
+image docker-inside:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+
+hidden hp
+
+settings
+  pager on
+
+say "Начальник спрашивает: «Docker — это же виртуалка? Сколько памяти ей выделить?» Пора разобраться, что такое контейнер на самом деле."
+read brief.md
+
+stage
+  say "Узнай, на каком ядре Linux работает контейнер из образа alpine, — и сравни с ядром машины"
+  solve docker run --rm alpine uname -r
+  accept cmd "docker run" ok
+  accept output "^[0-9]+\.[0-9]+\.[0-9]+"
+  neutral ls cat pwd cd uname
+  on pass say "Версия та же, что у uname -r на машине. Своего ядра у контейнера нет — есть только ядро машины, общее на всех. Поэтому контейнер с Linux не запустить на голой Windows: ему нужно ядро Linux."
+  hint tries 5 say "Версию ядра печатает uname с ключом — какой, расскажет uname --help. А запустить её надо в контейнере."
+
+stage
+  say "Запусти в фоне контейнер nap из alpine, который просто спит — sleep 1000, — и найди этот sleep среди процессов машины"
+  solve:
+    docker run -d --name nap alpine sleep 1000
+    ps aux
+  accept output "sleep 1000"
+  check live [ "$(docker inspect -f '{{.State.Running}}' nap 2>/dev/null)" = true ]
+  neutral ls cat pwd cd
+  on pass read namespaces.md
+  hint output "is already in use" say "Имя nap уже занято. docker ps -a — и убери старый."
+  hint tries 5 say "Список всех процессов машины ты уже умеешь выводить — с ключами, которые показывают и чужие процессы."
+
+stage
+  say "Узнай, каким номером (PID) этот же sleep видит себя внутри контейнера nap"
+  solve docker exec nap ps
+  accept cmd "docker exec" ok
+  accept output "(?m)^\s*1\s+\S+\s+.*sleep 1000"
+  neutral ls cat pwd cd
+  on pass say "Снаружи — большой номер среди сотен процессов, внутри — PID 1, первый и единственный. Один процесс, два номера: это пространство имён PID."
+  hint output "is not running" say "Контейнер nap уже не работает. Запусти его снова, как в прошлом шаге."
+  hint tries 5 say "Выполнить команду внутри работающего контейнера ты умеешь с docker-debug. А список процессов — ps."
+
+exec finale

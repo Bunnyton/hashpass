@@ -1,0 +1,60 @@
+# docker-limits — cgroups: сервис превью thumbs копит фото в памяти (до 128 МБ данных) →
+# запустить с лимитом 64 МБ → он падает, ядро убило его за лимит: код 137 (доза oom.md на
+# «137») в ~/exit-code.txt → cruncher грузит ядро на 100 % — запустить с лимитом в половину
+# ядра (доза cpu.md при входе) и посмотреть docker stats. Контейнеры живут только в работающей
+# консоли — check live. Продолжает docker-multistage: оттуда Docker и образы.
+
+image docker-limits:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+# data: образы с машины автора:
+#   cd data/thumbs-src && docker build -t thumbs . && docker save thumbs:latest | gzip -9 > ../thumbs.tar.gz
+#   cd data/cruncher-src && docker build -t cruncher . && docker save cruncher:latest | gzip -9 > ../cruncher.tar.gz
+copy data/thumbs.tar.gz /usr/local/share/hp-docker/images/thumbs.tar.gz
+copy data/cruncher.tar.gz /usr/local/share/hp-docker/images/cruncher.tar.gz
+
+hidden hp
+
+settings
+  pager on
+
+say "Сервер «Пельменя» по ночам встаёт колом: сервисы в контейнерах съедают всю память и весь процессор, а сайту ничего не остаётся."
+read brief.md
+
+stage
+  say "Запусти сервис превью — образ thumbs — в фоне под именем thumbs так, чтобы он не мог занять больше 64 МБ памяти"
+  solve docker run -d --name thumbs --memory 64m thumbs
+  check live [ "$(docker inspect -f '{{.HostConfig.Memory}}' thumbs 2>/dev/null)" = 67108864 ]
+  neutral ls cat pwd cd
+  on pass say "Лимит записан ядру: в /sys/fs/cgroup/memory.max внутри контейнера теперь 67108864. Посмотри, что thumbs пишет в журнал, — он копит фото."
+  hint output "is already in use" say "Имя thumbs уже занято. docker ps -a — и убери старый."
+  hint output "Minimum memory limit" say "Число без единицы docker считает в байтах. Какую букву дописать, чтобы вышли мегабайты?"
+  hint output "invalid size" say "Размер пишут числом с буквой единицы: k, m, g."
+  hint tries 5 say "Что пишет docker run --help про память — memory?"
+
+stage
+  say "Сервис thumbs остановился. Узнай, с каким кодом он завершился, и запиши этот код в ~/exit-code.txt"
+  solve:
+    sleep 30
+    docker inspect -f '{{.State.ExitCode}}' thumbs > /home/student/exit-code.txt
+  check live [ "$(docker inspect -f '{{.State.OOMKilled}} {{.State.ExitCode}}' thumbs 2>/dev/null)" = "true 137" ] && [ "$(tr -d ' \n' < /home/student/exit-code.txt)" = 137 ]
+  neutral ls cat pwd cd
+  on pass say "Это защита сервера: thumbs упал один, а сайт и база рядом даже не заметили. Без лимита ядро убивало бы, кого придётся."
+  hint output "137" read oom.md
+  hint output "Up " say "Он ещё работает — дай ему пару десятков секунд и посмотри его журнал."
+  hint tries 5 say "Код завершения видно в docker ps -a, в колонке STATUS."
+
+stage
+  say "Сервис cruncher съедает ядро процессора целиком. Запусти его в фоне под именем cruncher, не больше чем на половину ядра, и посмотри его нагрузку в docker stats"
+  solve docker run -d --name cruncher --cpus 0.5 cruncher
+  accept cmd "docker stats"
+  check live [ "$(docker inspect -f '{{.HostConfig.NanoCpus}}' cruncher 2>/dev/null)" = 500000000 ]
+  neutral ls cat pwd cd
+  on enter read cpu.md
+  on pass say "Около 50 % — и не больше, сколько бы cruncher ни старался. Память, процессор, число процессов — всё это cgroups, и так же их ставят в compose и Kubernetes."
+  hint output "is already in use" say "Имя cruncher уже занято. docker ps -a — и убери старый."
+  hint tries 5 say "Что пишет docker run --help про cpus?"
+
+exec finale
