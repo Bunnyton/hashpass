@@ -1,0 +1,69 @@
+# docker-db — временная база в контейнере: redis в фоне + ключ greeting (docker exec + redis-cli)
+# → удалить и запустить заново — ключа нет (доза volume.md, когда это увидено: данные жили в
+# слое контейнера и безымянном томе) → именованный том cache-data для /data: ключ переживает
+# пересоздание. Образ redis — официальный redis:7-alpine с записью на диск после каждой
+# команды (data/redis-src). Контейнеры живут только в работающей консоли — check live.
+# Продолжает docker-multistage: оттуда Docker и образы.
+
+image docker-db:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+# data: образ redis с машины автора:
+#   cd data/redis-src && docker build -t redis . && docker save redis:latest | gzip -9 > ../redis.tar.gz
+copy data/redis.tar.gz /usr/local/share/hp-docker/images/redis.tar.gz
+
+hidden hp
+
+settings
+  pager on
+
+say "Сайту «Пельменя» нужна быстрая база для корзин покупателей. Поставить redis на сервер — полдня. Запустить в контейнере — секунда."
+read brief.md
+
+stage
+  say "Запусти redis в фоне под именем cache и сохрани в нём ключ greeting со значением «Привет из Пельменя»"
+  solve:
+    docker run -d --name cache redis
+    sleep 2
+    docker exec cache redis-cli SET greeting "Привет из Пельменя"
+  check live [ "$(docker exec cache redis-cli GET greeting 2>/dev/null)" = "Привет из Пельменя" ]
+  neutral ls cat pwd cd
+  on pass say "База готова, и ничего не пришлось ставить на машину: redis, его настройки и библиотеки — всё в образе."
+  hint output "is already in use" say "Имя cache уже занято. docker ps -a — и убери старый."
+  hint output "No such container" say "Контейнера с таким именем нет. Как ты назвал его при запуске? docker ps."
+  hint output "ERR wrong number of arguments" say "redis видит в «Привет из Пельменя» три слова. Как сказать оболочке, что это одно значение?"
+  hint tries 5 say "redis-cli живёт внутри контейнера. Как выполнить команду в работающем контейнере — в теории."
+
+stage
+  say "Удали контейнер cache, запусти его заново под тем же именем и проверь, на месте ли ключ"
+  solve:
+    docker rm -f cache
+    docker run -d --name cache redis
+    sleep 2
+    docker exec cache redis-cli GET greeting
+  accept cmd "docker exec" ok
+  check live [ "$(docker inspect -f '{{.State.Running}}' cache 2>/dev/null)" = true ] && [ -z "$(docker exec cache redis-cli GET greeting 2>/dev/null)" ]
+  neutral ls cat pwd cd
+  on pass read volume.md
+  hint output "is already in use" say "Имя cache ещё занято старым контейнером. Его надо удалить — работающий удаляют с ключом -f."
+  hint tries 5 say "Ключ проверяют так же, как сохраняли, — только командой GET."
+
+stage
+  say "Сделай так, чтобы данные cache хранились в томе cache-data и ключ greeting переживал пересоздание контейнера"
+  solve:
+    docker rm -f cache
+    docker run -d --name cache -v cache-data:/data redis
+    sleep 2
+    docker exec cache redis-cli SET greeting "Привет из Пельменя"
+    docker rm -f cache
+    docker run -d --name cache -v cache-data:/data redis
+  check live docker inspect -f '{{range .Mounts}}{{.Type}} {{.Name}} {{.Destination}}{{println}}{{end}}' cache | grep -qx 'volume cache-data /data' && [ "$(docker exec cache redis-cli GET greeting 2>/dev/null)" = "Привет из Пельменя" ]
+  neutral ls cat pwd cd
+  on pass say "Контейнер теперь одноразовый, а данные — нет. Обновить redis до новой версии — это удалить контейнер и запустить новый образ с тем же томом."
+  hint output "is already in use" say "Имя cache ещё занято старым контейнером. Его надо удалить — работающий удаляют с ключом -f."
+  hint tries 5 say "Что показывает docker volume ls? А docker inspect cache — в разделе Mounts?"
+  hint tries 10 say "Том подключают тем же ключом -v, что и каталог машины, — только слева не путь, а имя."
+
+exec finale

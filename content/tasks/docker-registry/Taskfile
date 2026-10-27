@@ -1,0 +1,56 @@
+# docker-registry — свой реестр образов: registry:2 на порту 5000 → образ stock отправлен в него
+# с меткой 1.0 (имя с адресом реестра; доза registry.md, когда docker полез на docker.io) →
+# у себя stock удалён, склад запускается прямо из реестра. Так доставляют образ на сервер:
+# собрали — отправили — сервер забрал. Контейнеры живут только в работающей консоли — check
+# live. Продолжает docker-multistage: оттуда Docker и образы.
+
+image docker-registry:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+# data: образ registry:2 с машины автора: docker save registry:2 | gzip -9 > data/registry.tar.gz
+copy data/registry.tar.gz /usr/local/share/hp-docker/images/registry.tar.gz
+
+hidden hp
+
+settings
+  pager on
+
+say "Новый склад «Пельменя» собран в образ stock. Docker Hub отсюда недоступен, а образ нужен на сервере. Значит, будет свой Docker Hub."
+read brief.md
+
+stage
+  say "Подними свой реестр образов: контейнер из образа registry:2 в фоне, на порту 5000 машины"
+  solve docker run -d --name registry -p 5000:5000 registry:2
+  check live curl -fs http://127.0.0.1:5000/v2/ >/dev/null
+  neutral ls cat pwd cd
+  on pass say "Реестр отвечает на http://localhost:5000/v2/ — у него HTTP-интерфейс, как у Docker Hub. Пока он пуст."
+  hint output "port is already allocated" say "Порт 5000 машины уже занят. Чем? docker ps."
+  hint tries 5 say "Реестр внутри контейнера слушает порт 5000. Как пробросить порт наружу — ты знаешь."
+
+stage
+  say "Отправь в свой реестр образ stock под тем же именем и с меткой 1.0"
+  solve:
+    docker tag stock localhost:5000/stock:1.0
+    docker push localhost:5000/stock:1.0
+  check live curl -fs http://127.0.0.1:5000/v2/stock/tags/list | grep -q '"1.0"'
+  neutral ls cat pwd cd
+  on pass say "Список меток в реестре: curl http://localhost:5000/v2/stock/tags/list. Через месяц там будут 1.0, 1.1, 2.0 — и вернуться к любой версии можно за минуту."
+  hint output "docker.io" read registry.md
+  hint output "does not exist locally" say "Образа с таким именем у тебя нет. docker images — какие имена есть? Новое имя образу даёт docker tag."
+  hint tries 5 say "Что docker images показывает в колонках REPOSITORY и TAG? Куда, по имени, docker будет отправлять образ?"
+
+stage
+  say "Удали у себя образ stock — все его имена — и запусти склад в фоне прямо из своего реестра"
+  solve:
+    docker rmi stock localhost:5000/stock:1.0
+    docker run -d localhost:5000/stock:1.0
+  check live ! docker image inspect stock >/dev/null 2>&1 && docker ps --format '{{.Image}}' | grep -qx 'localhost:5000/stock:1.0'
+  neutral ls cat pwd cd
+  on pass say "Образ скачался из твоего реестра. Так и выкатывают: сборка отправляет образ в реестр, сервер делает docker pull — и никто не копирует файлы руками."
+  hint output "image is being used" say "Образ ещё нужен какому-то контейнеру. docker ps -a — кто его держит?"
+  hint output "Unable to find image" say "Имя образа включает адрес реестра — без него docker ищет на docker.io."
+  hint tries 5 say "Что осталось в docker images? У одного образа может быть несколько имён — удалить нужно все."
+
+exec finale

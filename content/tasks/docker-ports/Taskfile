@@ -1,0 +1,59 @@
+# docker-ports — проброс портов глубже: старая вики на 8080 и новая (wiki:new) на 8070 — обе
+# внутри слушают 80 (доза ports.md на «port is already allocated») → новая только для этой
+# машины: -p 127.0.0.1:8070:80 (доза listen.md при входе) → ещё одна копия старой на порту,
+# который выбрал сам docker (-P), номер — в ~/port.txt. Контейнеры живут только в работающей
+# консоли — check live. Продолжает docker-multistage: оттуда Docker и образы.
+
+image docker-ports:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+# data: образ wiki:new с машины автора:
+#   cd data/wiki-new-src && docker build -t wiki:new . && docker save wiki:new | gzip -9 > ../wiki-new.tar.gz
+copy data/wiki-new.tar.gz /usr/local/share/hp-docker/images/wiki-new.tar.gz
+
+hidden hp
+
+settings
+  pager on
+
+say "Отдел готовит новую вики. Старая должна работать как работала, а новую пока показывают только избранным."
+read brief.md
+
+stage
+  say "Запусти в фоне старую вику — образ wiki — на порту 8080 машины, а новую — образ wiki:new — на порту 8070"
+  solve:
+    docker run -d -p 8080:80 wiki
+    docker run -d -p 8070:80 wiki:new
+  check live curl -fs http://127.0.0.1:8080/ | grep -q "Вики отдела эксплуатации" && curl -fs http://127.0.0.1:8070/ | grep -q "Вики 2.0"
+  neutral ls cat pwd cd
+  on pass say "Обе внутри слушают свой порт 80 — и не мешают друг другу: у каждого контейнера своя сеть. Делить приходится только порты машины."
+  hint output "port is already allocated" read ports.md
+  hint output "address already in use" read ports.md
+  hint tries 5 say "Открой обе в браузере: http://localhost:8080 и http://localhost:8070. Какая не отвечает? docker ps покажет, что куда проброшено."
+
+stage
+  say "Новая вики — черновик. Перезапусти её так, чтобы на 8070 она отвечала только с этой машины, а из сети — нет"
+  solve:
+    docker rm -f $(docker ps -q --filter ancestor=wiki:new)
+    docker run -d -p 127.0.0.1:8070:80 wiki:new
+  check live docker ps --filter ancestor=wiki:new --format '{{.Ports}}' | grep -q '^127\.0\.0\.1:8070->80/tcp$' && curl -fs http://127.0.0.1:8070/ | grep -q "Вики 2.0"
+  neutral ls cat pwd cd
+  on enter read listen.md
+  on pass say "В docker ps теперь 127.0.0.1:8070->80. Так прячут всё служебное — базы, админки, метрики: к ним ходят с самой машины или через неё."
+  hint output "port is already allocated" say "8070 ещё занят прежней новой вики. Её сначала убирают."
+  hint tries 5 say "Что показывает docker ps в колонке PORTS у новой вики — 0.0.0.0 или 127.0.0.1?"
+
+stage
+  say "Запусти ещё одну копию старой вики, не выбирая порт: пусть свободный выберет сам docker. Запиши, какой он выбрал, в ~/port.txt"
+  solve:
+    docker run -d -P wiki
+    docker ps --filter ancestor=wiki --format '{{.Ports}}' | grep -v ':8080->' | sed 's/.*:\([0-9]*\)->.*/\1/' > /home/student/port.txt
+  check live p=$(tr -dc 0-9 < /home/student/port.txt) && [ -n "$p" ] && [ "$p" != 8080 ] && docker ps --filter ancestor=wiki --format '{{.Ports}}' | grep -q ":$p->80/tcp" && curl -fs "http://127.0.0.1:$p/" | grep -q "Вики отдела эксплуатации"
+  neutral ls cat pwd cd
+  on pass say "Порт, который выбрал docker, другой при каждом запуске. Поэтому -P хорош для опытов, а для людей порт всегда пишут явно."
+  hint tries 5 say "Какой ключ docker run публикует порты, не называя их? docker run --help, ищи publish."
+  hint tries 10 say "Куда проброшен порт конкретного контейнера, отвечает docker port <контейнер>."
+
+exec finale
