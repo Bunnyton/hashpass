@@ -1,0 +1,20 @@
+#!/bin/sh
+# Проверка слияний в ~/site. Хеши веток фиксированы (mkrepo.sh), хеши слияний у каждого свои.
+# state redesign | prices
+repo=/home/student/site
+MAIN=50f2ef5 REDESIGN=6a0dcae HOTFIX=d04a048
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+short() { g rev-parse --short=7 "$1" 2>/dev/null; }
+done_merge() { [ ! -e "$repo/.git/MERGE_HEAD" ] && ! grep -rqE '^(<<<<<<<|=======|>>>>>>>)' "$repo"/*.html "$repo"/*.css "$repo"/*.txt; }
+redesign_in() {
+    g merge-base --is-ancestor $REDESIGN HEAD && g merge-base --is-ancestor $MAIN HEAD &&
+    [ "$(g rev-parse HEAD:style.css)" = "$(g rev-parse $REDESIGN:style.css)" ] &&
+    g show HEAD:menu.html | grep -q 'Меню «Пельменя»' && g show HEAD:menu.html | grep -q 'Варим при вас' &&
+    ! g show HEAD:menu.html | grep -q '<h1>Наше меню</h1>'
+}
+case "$2" in
+redesign) done_merge && redesign_in && [ "$(short HEAD^2)" = $REDESIGN ] ;;
+prices)   done_merge && redesign_in && [ "$(short HEAD^2)" = $HOTFIX ] &&
+          g show HEAD:prices.txt | cmp -s - "$(dirname "$0")/prices.expected" ;;
+*)        exit 1 ;;
+esac

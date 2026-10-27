@@ -1,0 +1,18 @@
+#!/bin/sh
+# Проверка ~/menu на каждом из трёх уровней: индекс, история (HEAD), файлы.
+# Хеши фиксированы: mkrepo.sh собирает историю с заданными датами и автором.
+# state unstaged | reset | restored
+repo=/home/student/menu
+WIP2=57497ad    # последний черновик «wip2»
+BASE=7090ec9    # «README» — коммит до черновиков
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+head_is() { [ "$(g rev-parse --short=7 HEAD)" = "$1" ]; }
+dish_kept()  { grep -q '^Сырники' "$repo/menu.txt"; }
+notes_kept() { [ -f "$repo/notes.txt" ] && ! g ls-files --error-unmatch notes.txt >/dev/null 2>&1; }
+prices_kept() { grep -qx 'пельмени-говядина 420' "$repo/prices.txt"; }
+case "$2" in
+unstaged) head_is $WIP2 && [ "$(g diff --cached --name-only)" = menu.txt ] && dish_kept && notes_kept ;;
+reset)    head_is $BASE && grep -q ff00ff "$repo/style.css" && prices_kept && dish_kept && notes_kept ;;
+restored) head_is $BASE && g diff --quiet HEAD -- style.css && prices_kept && dish_kept && notes_kept ;;
+*)        exit 1 ;;
+esac

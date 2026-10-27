@@ -1,0 +1,57 @@
+# git-ignore — .gitignore: git status завален журналами, сборкой dist/, кэшем и файлами
+# редактора → .gitignore по шаблонам, новая страница contacts.html остаётся видна → .env с
+# паролем уже в истории: строка в .gitignore его не отпускает (доза tracked.md на первый же
+# коммит, после которого .env всё ещё в репозитории, — по «[main …» в выводе) → git rm --cached
+# + коммит, файл на месте. Состояние проверяет hp/state.
+# Продолжение git-remote: оттуда git и имя студента.
+
+image git-ignore:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/landing, data/contacts.html — руками; data/junk/logs — mkdata.py text logs/server-2026-10-NN.log
+#   --kind log --lines 40 --seed 1NN (debug.log: --lines 200 --seed 99); историю собирает mkrepo.sh
+copy data /var/tmp/hp-landing
+run sh /var/tmp/hp-landing/mkrepo.sh /var/tmp/hp-landing /home/student/landing
+run rm -rf /var/tmp/hp-landing
+run chown -R student:student /home/student/landing
+
+hidden hp
+
+settings
+  pager on
+
+say "В ~/landing — сайт «Пельменя». Новую страницу ты сделал, а git status её почти не показывает: она тонет в мусоре."
+read brief.md
+
+stage
+  say "Сделай так, чтобы git status в ~/landing молчал про журналы, сборку, кэш и файлы редактора — и показывал новую contacts.html"
+  solve:
+    cd /home/student/landing
+    printf '%s\n' '*.log' 'dist/' '.cache/' '.DS_Store' '*.swp' > .gitignore
+  check exec state ignored
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Шаблоны работают для всего проекта: появится завтра logs/2027.log — git его уже не увидит. git status --ignored покажет спрятанное."
+  hint output "Untracked files" say "Посмотри, что ещё в списке, кроме contacts.html. Каждой такой строке нужен свой шаблон."
+  hint tries 5 say "git status теперь короче? Какие строки в нём лишние и каким шаблоном описать каждую?"
+  hint tries 10 say "git help gitignore — там раздел PATTERN FORMAT с примерами."
+
+stage
+  say ".env с паролем от базы попал в историю ещё в первом коммите. Убери его из репозитория новым коммитом: файл пусть останется у тебя, а git перестанет его замечать"
+  solve:
+    cd /home/student/landing
+    echo .env >> .gitignore
+    git rm -q --cached .env
+    git commit -q -m "Убрать .env из репозитория"
+  check exec state untracked
+  neutral ls cat pwd cd vim vi nano
+  on enter say "Сайту этот файл нужен: без пароля он не достучится до базы заказов."
+  on pass say "Пароль всё равно остался в старых коммитах — git log -p его помнит. Такой пароль считают утёкшим и меняют: история в git не для секретов."
+  hint cmd git has rm missing --cached say "Такой git rm сотрёт .env и с диска. Пароль ещё нужен сайту — на месте ли файл?"
+  hint output "[main " read tracked.md
+  hint output "nothing added to commit" say "Коммит не из чего делать: индекс пуст. Что должно было в него попасть — и попало ли?"
+  hint tries 5 say "Что покажет git ls-files: .env всё ещё в списке файлов репозитория?"
+  hint tries 10 say "git rm --help — посмотри, какой ключ трогает только индекс и не трогает файл."
+
+exec finale

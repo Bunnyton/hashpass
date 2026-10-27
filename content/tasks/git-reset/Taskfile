@@ -1,0 +1,65 @@
+# git-reset — отмена на трёх уровнях: убрать notes.txt из индекса (menu.txt остаётся там) →
+# снять два черновых коммита «wip», оставив их правки в файлах (доза reset.md при входе) →
+# вернуть style.css к последнему коммиту, остальные правки целы. Подсказки ведут к git status:
+# он сам называет команды отмены. --hard закрыт отказом консоли: он стёр бы нужные правки.
+# Состояние проверяет hp/state. Продолжение git-remote: оттуда git и имя студента.
+
+image git-reset:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/menu, data/notes.txt — руками; историю и незакоммиченное собирает mkrepo.sh
+copy data /var/tmp/hp-menu
+run sh /var/tmp/hp-menu/mkrepo.sh /var/tmp/hp-menu /home/student/menu
+run rm -rf /var/tmp/hp-menu
+run chown -R student:student /home/student/menu
+
+hidden hp
+
+settings
+  pager on
+
+say "Пятница, вечер, ты обновляешь меню «Пельменя» в ~/menu. Спешка сделала своё: что-то лишнее уже в индексе, что-то — в истории."
+read brief.md
+
+stage
+  say "Вместе с правкой меню в индекс попал notes.txt с личными заметками. Убери его из индекса — сам файл не трогай"
+  solve:
+    cd /home/student/menu
+    git restore --staged notes.txt
+  check exec state unstaged
+  neutral ls cat pwd cd
+  block git match "--hard" say "--hard сотрёт и правки в файлах — а они ещё нужны."
+  on pass say "Индекс — черновик следующего коммита: класть в него и вынимать можно сколько угодно, история от этого не меняется."
+  hint output "Unstaged changes after reset" say "Из индекса ушло всё, и menu.txt тоже. А он должен был там остаться."
+  hint tries 5 say "Что пишет git status в скобках над списком того, что войдёт в коммит?"
+  hint tries 10 say "git restore --help — найди ключ, который касается индекса."
+
+stage
+  say "Два последних коммита «wip» — черновики. Убери их из истории, а их правки оставь в файлах"
+  solve:
+    cd /home/student/menu
+    git reset HEAD~2
+  check exec state reset
+  neutral ls cat pwd cd
+  block git match "--hard" say "--hard сотрёт и правки в файлах — а они ещё нужны."
+  on enter read reset.md
+  on pass say "Коммиты никуда не делись: git reflog помнит, где стоял HEAD, и вернёт их, если передумаешь."
+  hint output "unknown revision" say "Такого коммита нет. Как git называет коммит на два шага раньше HEAD — смотри в теории."
+  hint tries 5 say "Что показывает git log --oneline: на каком коммите сейчас HEAD и на каком должен оказаться?"
+  hint tries 10 say "git reset --help — посмотри, чем отличаются --soft и --mixed и что каждый делает с файлами."
+
+stage
+  say "Кричащие цвета из черновика в style.css не нужны: верни файл к последнему коммиту, а остальные правки оставь"
+  solve:
+    cd /home/student/menu
+    git restore style.css
+  check exec state restored
+  neutral ls cat pwd cd
+  block git match "--hard" say "--hard сотрёт и правки в файлах — а они ещё нужны."
+  on pass say "Эту отмену не вернёт ни reflog, ни полка: правка не была ни в коммите, ни в индексе."
+  hint tries 5 say "Что пишет git status в скобках над изменёнными файлами?"
+  hint tries 10 say "git restore --help — та же команда, что в первом шаге, только без ключа про индекс."
+
+exec finale

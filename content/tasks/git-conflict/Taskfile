@@ -1,0 +1,60 @@
+# git-conflict — конфликты, которые руками не разбирают: слияние redesign даёт восемь
+# конфликтов в style.css (дизайнер переписал файл целиком — берётся его версия файлом, доза
+# sides.md на «CONFLICT») и один в menu.html (нужны обе правки) → слияние hotfix-prices со
+# стратегией: в спорных строках — её цены, бесспорные правки main остаются (доза strategy.md на
+# «CONFLICT»). Простой конфликт уже был в git-branch. Состояние проверяет hp/state.
+# Продолжение git-remote: оттуда git и имя студента.
+
+image git-conflict:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/site, data/redesign.css — сгенерированы скриптом на Python (16 правил CSS в двух
+# палитрах) и дальше правились руками; ветки собирает mkrepo.sh
+copy data /var/tmp/hp-site
+run sh /var/tmp/hp-site/mkrepo.sh /var/tmp/hp-site /home/student/site
+run rm -rf /var/tmp/hp-site
+run chown -R student:student /home/student/site
+
+hidden hp
+
+settings
+  pager on
+
+say "Сайт «Пельменя» в ~/site живёт в трёх ветках: в main — твои правки, рядом — редизайн и новые цены. Пора собрать всё в main."
+read brief.md
+
+stage
+  say "Влей в main ветку redesign: стили дизайнера в style.css важнее твоих целиком, а в menu.html нужны обе правки"
+  solve:
+    cd /home/student/site
+    git merge redesign || true
+    git checkout --theirs style.css
+    sed -i '/^<<<<<<<\|^=======\|^>>>>>>>/d; /<h1>Наше меню<\/h1>/d' menu.html
+    git add style.css menu.html
+    git commit -q --no-edit
+  check exec state redesign
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Файл целиком — сторона ветки: --theirs или --ours. А в rebase стороны меняются местами: «ours» там — ветка, НА которую переносишь."
+  hint output "CONFLICT" read sides.md
+  hint output "You have not concluded your merge" say "Слияние ещё не закончено: доведи его коммитом или отмени — git status подскажет как."
+  hint tries 5 say "Что показывает git status: какие файлы ещё в конфликте, а какие уже разрешены?"
+  hint tries 10 say "git checkout --help — найди ключи --ours и --theirs."
+
+stage
+  say "Ветку hotfix-prices влей так, чтобы в спорных строках git сам взял её цены, а твои бесспорные правки остались — без ручной правки файла"
+  solve:
+    cd /home/student/site
+    git merge -X theirs --no-edit hotfix-prices
+  check exec state prices
+  neutral ls cat pwd cd
+  block vim match "prices" say "Без ручной правки: пусть спор решит сам git."
+  block vi match "prices" say "Без ручной правки: пусть спор решит сам git."
+  block nano match "prices" say "Без ручной правки: пусть спор решит сам git."
+  on pass say "Свинина 380 осталась твоей: в ней спора не было. Стратегия решает только спорные места — остальное git сливает как обычно."
+  hint output "CONFLICT" read strategy.md
+  hint tries 5 say "У git merge есть ключ, который передаёт стратегии слияния её настройку. Что пишет git merge --help про -X?"
+  hint tries 10 say "git merge --help, раздел MERGE STRATEGIES: у стратегии ort есть настройки ours и theirs."
+
+exec finale

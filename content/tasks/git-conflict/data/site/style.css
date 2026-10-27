@@ -1,0 +1,113 @@
+/* Пельмень: стили сайта */
+
+body {
+  color: #333;
+  font-family: Georgia, serif;
+  margin: 0px 0px;
+  border-radius: 4px;
+}
+
+header {
+  color: #b5462a;
+  font-family: Georgia, serif;
+  margin: 1px 3px;
+  border-radius: 4px;
+}
+
+nav {
+  color: #444;
+  font-family: Georgia, serif;
+  margin: 2px 6px;
+  border-radius: 4px;
+}
+
+nav a {
+  color: #7a2e1b;
+  font-family: Georgia, serif;
+  margin: 3px 1px;
+  border-radius: 4px;
+}
+
+h1 {
+  color: #333;
+  font-family: Georgia, serif;
+  margin: 0px 4px;
+  border-radius: 4px;
+}
+
+h2 {
+  color: #b5462a;
+  font-family: Georgia, serif;
+  margin: 1px 7px;
+  border-radius: 4px;
+}
+
+.menu {
+  color: #444;
+  font-family: Georgia, serif;
+  margin: 2px 2px;
+  border-radius: 4px;
+}
+
+.dish {
+  color: #7a2e1b;
+  font-family: Georgia, serif;
+  margin: 3px 5px;
+  border-radius: 4px;
+}
+
+.dish .name {
+  color: #333;
+  font-family: Georgia, serif;
+  margin: 0px 0px;
+  border-radius: 4px;
+}
+
+.dish .price {
+  color: #b5462a;
+  font-family: Georgia, serif;
+  margin: 1px 3px;
+  border-radius: 4px;
+}
+
+.promo {
+  color: #444;
+  font-family: Georgia, serif;
+  margin: 2px 6px;
+  border-radius: 4px;
+}
+
+footer {
+  color: #7a2e1b;
+  font-family: Georgia, serif;
+  margin: 3px 1px;
+  border-radius: 4px;
+}
+
+.button {
+  color: #333;
+  font-family: Georgia, serif;
+  margin: 0px 4px;
+  border-radius: 4px;
+}
+
+.button:hover {
+  color: #b5462a;
+  font-family: Georgia, serif;
+  margin: 1px 7px;
+  border-radius: 4px;
+}
+
+.cart {
+  color: #444;
+  font-family: Georgia, serif;
+  margin: 2px 2px;
+  border-radius: 4px;
+}
+
+.cart .total {
+  color: #7a2e1b;
+  font-family: Georgia, serif;
+  margin: 3px 5px;
+  border-radius: 4px;
+}

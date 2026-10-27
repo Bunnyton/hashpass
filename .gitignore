@@ -44,3 +44,5 @@ dist/
 
 # course source materials (slides, docs) -- local only
 content/material/
+# task data ships build output on purpose (git-ignore: a dist/ the student hides)
+!content/tasks/*/data/**/dist/

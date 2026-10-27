@@ -1,0 +1,113 @@
+/* Пельмень: редизайн 2026 */
+
+body {
+  color: #1d1d1f;
+  font-family: Inter, sans-serif;
+  margin: 0px 0px;
+  border-radius: 12px;
+}
+
+header {
+  color: #e4572e;
+  font-family: Inter, sans-serif;
+  margin: 1px 3px;
+  border-radius: 12px;
+}
+
+nav {
+  color: #2e86ab;
+  font-family: Inter, sans-serif;
+  margin: 2px 6px;
+  border-radius: 12px;
+}
+
+nav a {
+  color: #f3a712;
+  font-family: Inter, sans-serif;
+  margin: 3px 1px;
+  border-radius: 12px;
+}
+
+h1 {
+  color: #1d1d1f;
+  font-family: Inter, sans-serif;
+  margin: 0px 4px;
+  border-radius: 12px;
+}
+
+h2 {
+  color: #e4572e;
+  font-family: Inter, sans-serif;
+  margin: 1px 7px;
+  border-radius: 12px;
+}
+
+.menu {
+  color: #2e86ab;
+  font-family: Inter, sans-serif;
+  margin: 2px 2px;
+  border-radius: 12px;
+}
+
+.dish {
+  color: #f3a712;
+  font-family: Inter, sans-serif;
+  margin: 3px 5px;
+  border-radius: 12px;
+}
+
+.dish .name {
+  color: #1d1d1f;
+  font-family: Inter, sans-serif;
+  margin: 0px 0px;
+  border-radius: 12px;
+}
+
+.dish .price {
+  color: #e4572e;
+  font-family: Inter, sans-serif;
+  margin: 1px 3px;
+  border-radius: 12px;
+}
+
+.promo {
+  color: #2e86ab;
+  font-family: Inter, sans-serif;
+  margin: 2px 6px;
+  border-radius: 12px;
+}
+
+footer {
+  color: #f3a712;
+  font-family: Inter, sans-serif;
+  margin: 3px 1px;
+  border-radius: 12px;
+}
+
+.button {
+  color: #1d1d1f;
+  font-family: Inter, sans-serif;
+  margin: 0px 4px;
+  border-radius: 12px;
+}
+
+.button:hover {
+  color: #e4572e;
+  font-family: Inter, sans-serif;
+  margin: 1px 7px;
+  border-radius: 12px;
+}
+
+.cart {
+  color: #2e86ab;
+  font-family: Inter, sans-serif;
+  margin: 2px 2px;
+  border-radius: 12px;
+}
+
+.cart .total {
+  color: #f3a712;
+  font-family: Inter, sans-serif;
+  margin: 3px 5px;
+  border-radius: 12px;
+}

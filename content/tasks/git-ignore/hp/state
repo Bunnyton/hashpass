@@ -1,0 +1,20 @@
+#!/bin/sh
+# Проверка состояния ~/landing: хеши новых коммитов у каждого свои — смотрим на результат.
+# state ignored | untracked
+repo=/home/student/landing
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+# что git status ещё показывает, кроме новой страницы и самого .gitignore
+noise() { g status --porcelain | grep -v -e ' \.gitignore$' -e ' contacts\.html$'; }
+junk_kept_and_ignored() {
+    for f in logs/debug.log logs/server-2026-10-01.log dist/assets/chunk-1.js dist/index.min.html \
+             .cache/build.stamp error.log access.log .DS_Store .index.html.swp; do
+        [ -e "$repo/$f" ] && g check-ignore -q "$f" || return 1
+    done
+}
+page_seen() { [ -f "$repo/contacts.html" ] && ! g check-ignore -q contacts.html; }
+case "$2" in
+ignored)   [ -z "$(noise)" ] && junk_kept_and_ignored && page_seen ;;
+untracked) ! g cat-file -e HEAD:.env 2>/dev/null && grep -q '^DB_PASSWORD=' "$repo/.env" &&
+           g check-ignore -q .env && [ -z "$(noise)" ] && junk_kept_and_ignored && page_seen ;;
+*)         exit 1 ;;
+esac
