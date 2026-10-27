@@ -1,6 +1,6 @@
 """Line-based, indentation-aware parser for image/task recipes (Imagefile = Taskfile)."""
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from hashpass.recipe.model import (
@@ -51,6 +51,7 @@ class _Acc:
     intro: list[Action] = field(default_factory=list)
     pending: list[Action] = field(default_factory=list)   # top-level actions seen after a stage
     settings: Settings | None = None
+    blocks: list[BlockRule] = field(default_factory=list)  # `block` for the whole task: every stage
 
 
 @dataclass
@@ -346,6 +347,10 @@ def _do_exec(value: str, acc: _Acc) -> None:
     _add_toplevel(_parse_action("exec " + value), acc)
 
 
+def _do_block(value: str, acc: _Acc) -> None:
+    acc.blocks.append(_parse_block(value))
+
+
 _TOP_HANDLERS = {
     "image": _do_image,
     "say": _do_say,
@@ -357,6 +362,7 @@ _TOP_HANDLERS = {
     "hidden": _do_hidden,
     "readme": _do_readme,
     "react": _do_react,
+    "block": _do_block,
 }
 
 
@@ -693,8 +699,11 @@ def parse_recipe(text: str) -> Recipe:
     # `image` is optional: an unnamed recipe gets name "" and is named at build time
     # (CLI `-t`, else the Taskfile's directory). image_ref/build resolve it then.
     voice = Voice(hello=tuple(acc.hello), bye=tuple(acc.bye))
+    # A task-wide `block` is laid into every stage at build time (after the stage's own rules), so
+    # the console -- which reads the built stage meta, not the Taskfile -- needs nothing new.
+    stages = tuple(replace(s, blocks=(*s.blocks, *acc.blocks)) for s in acc.stages)
     return Recipe(acc.name or "", acc.version, tuple(acc.parents), tuple(acc.steps),
-                  tuple(acc.stages), acc.hidden, acc.readme,
+                  stages, acc.hidden, acc.readme,
                   voice=voice, settings=acc.settings or Settings(), react=tuple(acc.react),
                   intro=tuple(acc.intro), outro=tuple(acc.pending))
 

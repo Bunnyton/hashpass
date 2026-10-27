@@ -380,6 +380,22 @@ def test_block_rule_parse():
 
 
 @pytest.mark.tier1
+def test_top_level_block_rule_guards_every_stage():
+    """A `block` before the stages holds in every stage, after the stage's own rules (2026-10-27)."""
+    r = parse_recipe('image t:1\n'
+                     'block docker match "^docker +run +wiki$" say "Запусти его в фоне"\n'
+                     'say "x"\n'
+                     'stage\n  solve true\n  observe output\n'
+                     '  block cd match "^cd" say "Без cd"\n'
+                     'stage\n  solve true\n  observe output\n')
+    first, second = (s.blocks for s in r.stages)
+    assert [(b.base, b.message) for b in first] == [("cd", "Без cd"), ("docker", "Запусти его в фоне")]
+    assert [(b.base, b.pattern) for b in second] == [("docker", "^docker +run +wiki$")]
+    with pytest.raises(ValueError, match="block"):
+        parse_recipe('image t:1\nblock docker sometimes "x" say "y"\nsay "x"\nstage\n  solve true\n  observe output\n')
+
+
+@pytest.mark.tier1
 def test_apply_action_parse_and_meta_round_trip():
     from hashpass.recipe.model import ApplyAction  # noqa: PLC0415
     from hashpass.taskstore import _action_from_dict, _action_to_dict  # noqa: PLC0415
