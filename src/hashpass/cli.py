@@ -799,10 +799,18 @@ def _policy_reply(session: object) -> str:
     """
     stage = current_stage(session.progress)
     if stage is None:
+        # Solved: a step's own restrictions are over, but the rules every step shares -- a
+        # task-wide `block`, like a service started without -d -- still guard the console.
+        stages = session.meta.stages
+        blocks = tuple(b for b in (getattr(stages[0], "blocks", ()) if stages else ())
+                       if all(b in getattr(s, "blocks", ()) for s in stages))
+        line = ";;"
+    else:
+        sm = session.meta.stages[stage]
+        line = f"{','.join(sm.allow)};{','.join(sm.deny)};{','.join(sm.neutral)}"
+        blocks = getattr(sm, "blocks", ())
+    if not blocks and stage is None:
         return ""
-    sm = session.meta.stages[stage]
-    line = f"{','.join(sm.allow)};{','.join(sm.deny)};{','.join(sm.neutral)}"
-    blocks = getattr(sm, "blocks", ())
     if blocks:
         line += ";" + ",".join(
             base64.b64encode(f"{b.base}\x1f{b.mode}\x1f{b.pattern}\x1f{b.message}".encode()).decode()

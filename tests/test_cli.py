@@ -513,6 +513,27 @@ def test_policy_reply_carries_block_rules_base64(monkeypatch):
 
 
 @pytest.mark.tier1
+def test_a_solved_task_keeps_its_task_wide_block_rules(monkeypatch):
+    """After the last step a service still may not take the console: shared rules stay (2026-10-27)."""
+    import base64  # noqa: PLC0415
+
+    from hashpass.recipe.model import BlockRule  # noqa: PLC0415
+    detach = BlockRule("docker", "match", "^docker +run +wiki$", "Запусти его в фоне")
+    own = BlockRule("vim", "match", "prices", "Без ручной правки")
+    session = SimpleNamespace(progress=object(), meta=SimpleNamespace(stages=[
+        SimpleNamespace(allow=("ls",), deny=(), neutral=(), blocks=(detach,)),
+        SimpleNamespace(allow=(), deny=("cat",), neutral=(), blocks=(own, detach))]))
+    monkeypatch.setattr(cli, "current_stage", lambda _p: None)
+    allow, deny, neutral, blocks = cli._policy_reply(session).rstrip("\n").split(";")  # noqa: SLF001
+    assert (allow, deny, neutral) == ("", "", "")
+    assert [base64.b64decode(b).decode().split("\x1f")[0] for b in blocks.split(",")] == ["docker"]
+    bare = SimpleNamespace(progress=object(), meta=SimpleNamespace(stages=[
+        SimpleNamespace(allow=(), deny=(), neutral=(), blocks=(own,)),
+        SimpleNamespace(allow=(), deny=(), neutral=(), blocks=())]))
+    assert cli._policy_reply(bare) == ""  # noqa: SLF001
+
+
+@pytest.mark.tier1
 def test_render_observe_gives_the_theory_before_the_next_goal(monkeypatch):
     """User: «сначала должна быть теория и только потом название» -- on_enter, then the goal."""
     writes: list[str] = []
