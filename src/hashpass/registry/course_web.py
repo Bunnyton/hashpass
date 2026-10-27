@@ -8,7 +8,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
-from flask import Flask, Response, request
+from flask import Flask, Response, redirect, request
 
 from hashpass.registry import perms
 from hashpass.registry.access import can, course_perms
@@ -97,6 +97,9 @@ class CourseWeb:
             return self.server._html(  # noqa: SLF001
                 render_courses([], q="", signed_in=user, message=f"Курса {owner}/{name} нет."),
                 status=HTTPStatus.NOT_FOUND)
+        if course.ref != f"{owner}/{name}":                 # an address from before a rename
+            query = f"?{request.query_string.decode()}" if request.query_string else ""
+            return redirect(f"/c/{course.ref}{query}")
         pool = self.server.pool_perms(user)
         may = {a: can(user, pool, course, a)
                for a in ("view", "play", "propose", "add", "content", "people", "progress", "admins", "delete")}
@@ -133,7 +136,7 @@ class CourseWeb:
             for i, r in enumerate(refs, 1):
                 status = (progress.get(r) or {}).get("status", "")
                 mark, word = ("✓", "решено") if status == "passed" else (("◐", "начато") if status else ("·", "не начато"))
-                if status == "passed" and outside_course(progress.get(r), course.ref):
+                if status == "passed" and outside_course(progress.get(r), course.ref, course.former):
                     word = "решено не в курсе"
                 cells.append({"n": i, "ref": r, "mark": mark, "word": word, "cls": status or "none",
                               "about": about[r],

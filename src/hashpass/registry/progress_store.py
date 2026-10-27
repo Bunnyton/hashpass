@@ -1,5 +1,6 @@
 """Server-side per-student task progress (passed/failed), persisted as one JSON file per user."""
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 
@@ -52,8 +53,9 @@ class ProgressStore:
         return result
 
 
-def outside_course(rec: object, course_ref: str) -> bool:
-    """Whether a record was earned outside `course_ref` -- `hashpass run`, or another course."""
+def outside_course(rec: object, course_ref: str, former: Iterable[str] = ()) -> bool:
+    """Whether a record was earned outside `course_ref` (or its `former` addresses) -- `hashpass run`, or another course."""
     if not isinstance(rec, dict):
         return False
-    return bool(rec.get("outside")) or (bool(rec.get("course")) and rec.get("course") != course_ref)
+    here = {course_ref, *former}
+    return bool(rec.get("outside")) or (bool(rec.get("course")) and rec.get("course") not in here)

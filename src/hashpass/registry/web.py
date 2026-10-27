@@ -787,7 +787,7 @@ def render_profile(profile: dict, entries: list[dict], progress: dict[str, dict]
     for r in rows:
         r["about"] = (about or {}).get(r["ref"], "")
         if course is not None and r["cell"]["mark"].startswith("✓") and outside_course(
-                progress.get(r["ref"]), str(course.get("ref", ""))):
+                progress.get(r["ref"]), str(course.get("ref", "")), course.get("former") or ()):
             r["status"] += " не в курсе"            # solved by `hashpass run` or in another course
         r["state"] = "passed" if r["cell"]["mark"].startswith("✓") else ("started" if r["cell"]["mark"] else "none")
     started = sum(1 for r in rows if r["state"] == "started")

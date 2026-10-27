@@ -14,6 +14,7 @@ here decides anything the server does not: the console only names things and say
     hashpass course <course> block <name> rename <new name>
     hashpass course <course> rm block <name>
     hashpass course <course> set title|description|visibility <value>
+    hashpass course <course> set name <new name>     a new address; the old one still leads here
 
 <course> is owner/name, a name of one's own, or a title; a block is its name or id.
 """
@@ -36,8 +37,9 @@ USAGE = (
     "hashpass course <курс> block <блок> rename <имя>   — переименовать блок\n"
     "hashpass course <курс> rm block <блок>             — удалить блок\n"
     "hashpass course <курс> set title|description|visibility <значение>\n"
+    "hashpass course <курс> set name <имя>              — новый адрес курса (старый ведёт сюда же)\n"
 )
-_SETTINGS = ("title", "description", "visibility")
+_SETTINGS = ("title", "description", "visibility", "name")
 
 
 class CourseApi:
@@ -233,10 +235,13 @@ def _block_rename(api: CourseApi, _user: str, ref: str, rest: list[str], out: Te
 
 def _set(api: CourseApi, _user: str, ref: str, rest: list[str], out: TextIO) -> int:
     if len(rest) < 3 or rest[1] not in _SETTINGS:  # noqa: PLR2004
-        msg = "hashpass course <курс> set title|description|visibility <значение>"
+        msg = "hashpass course <курс> set title|description|visibility|name <значение>"
         raise RuntimeError(msg)
     value = " ".join(rest[2:])
-    api.call("PUT", _path(ref), {rest[1]: value})
+    said = api.call("PUT", _path(ref), {rest[1]: value})
+    if rest[1] == "name":
+        out.write(f"{ref} → {said.get('ref', '')}: курс теперь здесь, старый адрес ведёт сюда же\n")
+        return 0
     out.write(f"{ref}: {rest[1]} = {value}\n")
     return 0
 
@@ -252,4 +257,5 @@ _ACTIONS: dict[tuple[str, str], _Action] = {
     ("set", "title"): _set,
     ("set", "description"): _set,
     ("set", "visibility"): _set,
+    ("set", "name"): _set,
 }

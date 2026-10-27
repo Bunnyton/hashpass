@@ -283,8 +283,9 @@
 <section id='settings-tab' class='tab-panel' aria-label='Настройки'>
 <h2 id='settings'>Настройки</h2>
 <div class='card'>
-<form data-api='PUT {{ api }}' data-rev='{{ c.rev }}'>
+<form data-api='PUT {{ api }}' data-rev='{{ c.rev }}' data-then='go:/c/{ref}'>
 <label>Название<input name='title' value='{{ c.title }}'></label>
+{% if may.delete %}<label>Адрес <span class='sub small'>/c/{{ c.owner }}/…, латиница, цифры, дефис; старая ссылка будет вести сюда же</span><input name='name' value='{{ c.name }}' pattern='[a-z0-9][a-z0-9\-]{0,63}'></label>{% endif %}
 <label>Описание<textarea name='description' rows='3'>{{ c.description }}</textarea></label>
 <label>Видимость<select name='visibility'>
 <option value='public'{% if c.visibility == 'public' %} selected{% endif %}>публичный</option>

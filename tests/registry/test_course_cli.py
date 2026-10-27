@@ -82,3 +82,11 @@ def test_mistakes_are_said_plainly(pool: _Courses) -> None:
     kid = CourseApi(RemoteRegistry(pool.url), pool.tok["kid"])
     with pytest.raises(RuntimeError, match=r"прав|нельзя|доступ"):
         run_course(kid, "kid", ["bob/linux", "add", "block", "A"], out=io.StringIO())
+
+
+@pytest.mark.tier1
+def test_set_name_moves_the_course_to_a_new_address(pool: _Courses) -> None:
+    _course(pool)
+    assert "bob/base" in _run(pool, "linux", "set", "name", "base")
+    assert pool.call("GET", "/courses/bob/base", "bob")[1]["title"] == "Linux"
+    assert "bob/base" in _run(pool)

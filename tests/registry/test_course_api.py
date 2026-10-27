@@ -197,3 +197,25 @@ def test_a_cross_site_form_post_does_not_act_for_the_user(pool: _Courses) -> Non
         opener.open(req, timeout=10)
     assert exc.value.code == 401  # noqa: PLR2004
     assert pool.call("GET", "/courses/bob/linux", "bob")[1]["requests"] == []
+
+
+@pytest.mark.tier1
+def test_the_owner_renames_a_course_and_the_old_address_still_leads_to_it(pool: _Courses) -> None:
+    _course(pool)
+    pool.call("PUT", "/courses/bob/linux/members/max", "bob", {"role": "admin", "perms": ["content"]})
+    assert pool.call("PUT", "/courses/bob/linux", "max", {"name": "base"})[0] == 403  # noqa: PLR2004
+    pool.call("POST", "/courses", "bob", {"name": "taken"})
+    assert pool.call("PUT", "/courses/bob/linux", "bob", {"name": "taken"})[0] == 400  # noqa: PLR2004
+    assert pool.call("PUT", "/courses/bob/linux", "bob", {"name": "Не так"})[0] == 400  # noqa: PLR2004
+    rev = pool.call("GET", "/courses/bob/linux", "bob")[1]["rev"]
+    assert pool.call("PUT", "/courses/bob/linux", "bob", {"name": "base", "rev": rev - 1})[0] == 409  # noqa: PLR2004
+    code, said = pool.call("PUT", "/courses/bob/linux", "bob", {"name": "base", "title": "Основы", "rev": rev})
+    assert (code, said["ref"], said["title"]) == (200, "bob/base", "Основы")
+    assert sorted(c["ref"] for c in pool.call("GET", "/courses", "bob")[1]["courses"]) == ["bob/base", "bob/taken"]
+    code, old = pool.call("GET", "/courses/bob/linux", "kid")        # an old link, an old client
+    assert (code, old["ref"]) == (200, "bob/base")
+    assert pool.call("POST", "/courses/bob/linux/blocks", "bob", {"name": "A"})[0] == 201  # noqa: PLR2004
+    view = pool.call("GET", "/courses/bob/base", "bob")[1]
+    assert [b["name"] for b in view["blocks"]] == ["A"]
+    assert any("bob/linux → bob/base" in h["what"] for h in view["history"])
+    assert not (Path(pool.r.store.root) / ".courses" / "bob" / "linux").exists()

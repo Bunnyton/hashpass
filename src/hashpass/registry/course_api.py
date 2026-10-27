@@ -141,7 +141,7 @@ class CourseApi:
         return course, user, None
 
     def _edit(self, ref: str, change: Callable[[Course], object], *, by: str = "",
-              what: str | Callable[[Course], str] = "") -> Response | None:
+              what: str | Callable[[Course], str] = "", check_rev: bool = True) -> Response | None:
         """
         Apply `change` under the course lock (`rev` from the body guards); an error -> a response.
 
@@ -149,7 +149,7 @@ class CourseApi:
         (said in words), the body's `comment` (spec 2026-10-23 §4).
         """
         body = self._body()
-        expect = body.get("rev")
+        expect = body.get("rev") if check_rev else None
         try:
             with self.courses.edit(ref, expect_rev=int(expect) if isinstance(expect, int) else None) as course:
                 change(course)
@@ -174,7 +174,7 @@ class CourseApi:
     def _summary(self, course: Course, user: str | None) -> dict:
         return {"ref": course.ref, "id": course.id, "owner": course.owner, "name": course.name,
                 "title": course.title, "description": course.description,
-                "visibility": course.visibility, "role": course.role_of(user)}
+                "visibility": course.visibility, "role": course.role_of(user), "former": course.former}
 
     def _view(self, course: Course, user: str | None, _role: str | None) -> dict:
         """Return the course as `user` may see it."""
@@ -262,6 +262,13 @@ class CourseApi:
             self.courses.delete(course.ref)
             return self._json(HTTPStatus.OK, {"deleted": course.ref})
         body = self._body()
+        renamed = str(body.get("name") or course.name) != course.name
+        if renamed:
+            if isinstance(body.get("rev"), int) and body["rev"] != course.rev:
+                return self._err(HTTPStatus.CONFLICT, "курс изменился, пока вы его смотрели — обновите страницу")
+            course, err = self._rename(course, _user, str(body["name"]))
+            if err is not None:
+                return err
         if body.get("visibility") == "public" and course.visibility == "private":
             private = [f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()
                        if self.server.repo(t["repo"]).visibility == "private"]
@@ -286,9 +293,22 @@ class CourseApi:
         said = [w for k, w in (("title", "название"), ("description", "описание"), ("visibility", "видимость"),
                                ("auto_accept", "приём предложений"), ("auto_update", "автообновление"))
                 if k in body]
-        err = self._edit(course.ref, change, by=_user,
+        err = self._edit(course.ref, change, by=_user, check_rev=not renamed,
                          what=f"настройки: {', '.join(said)}" if said else "")
         return err or self._json(HTTPStatus.OK, self._summary(self.courses.get(course.ref), _user))
+
+    def _rename(self, course: Course, user: str | None, name: str) -> tuple[Course, Response | None]:
+        """Give a course a new address (the owner's call, as deleting it); the old one still leads here."""
+        if not can(user, self.server.pool_perms(user), course, "delete"):
+            return course, self._err(HTTPStatus.FORBIDDEN, "сменить адрес курса может только владелец")
+        old = course.ref
+        try:
+            course = self.courses.rename(old, name)
+        except (ValueError, KeyError) as exc:
+            return course, self._err(HTTPStatus.BAD_REQUEST, str(exc.args[0] if exc.args else exc))
+        err = self._edit(course.ref, lambda _c: None, by=user or "", what=f"адрес: {old} → {course.ref}",
+                         check_rev=False)
+        return course, err
 
     def join(self, owner: str, name: str) -> Response:
         user, _role = self._caller()
