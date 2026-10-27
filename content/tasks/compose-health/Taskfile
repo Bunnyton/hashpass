@@ -20,7 +20,7 @@ copy data/orders-app.tar.gz /usr/local/share/hp-docker/images/orders-app.tar.gz
 copy data/orders /home/student/orders
 run chown -R student:student /home/student/orders
 copy hp/orders /usr/local/lib/hp-orders/orders
-run chmod 700 /usr/local/lib/hp-orders /usr/local/lib/hp-orders/orders
+run chmod 755 /usr/local/lib/hp-orders /usr/local/lib/hp-orders/orders
 
 hidden hp
 

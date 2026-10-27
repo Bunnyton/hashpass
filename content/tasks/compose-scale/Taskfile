@@ -14,7 +14,7 @@ run rm -rf /home/student/recipes
 copy data/shop /home/student/shop
 run chown -R student:student /home/student/shop
 copy hp/shop /usr/local/lib/hp-shop/shop
-run chmod 700 /usr/local/lib/hp-shop /usr/local/lib/hp-shop/shop
+run chmod 755 /usr/local/lib/hp-shop /usr/local/lib/hp-shop/shop
 
 hidden hp
 

@@ -14,7 +14,7 @@ run rm -rf /home/student/recipes
 copy data/blog /home/student/blog
 run chmod 755 /home/student/blog/start.sh && chown -R student:student /home/student/blog
 copy hp/blog /usr/local/lib/hp-blog/blog
-run chmod 700 /usr/local/lib/hp-blog /usr/local/lib/hp-blog/blog
+run chmod 755 /usr/local/lib/hp-blog /usr/local/lib/hp-blog/blog
 
 hidden hp
 

@@ -15,7 +15,7 @@ run rm -rf /home/student/recipes
 copy data/pinger.tar.gz /usr/local/share/hp-docker/images/pinger.tar.gz
 copy data/files.tar.gz /usr/local/share/hp-docker/images/files.tar.gz
 copy hp/caps /usr/local/lib/hp-caps/caps
-run chmod 700 /usr/local/lib/hp-caps /usr/local/lib/hp-caps/caps
+run chmod 755 /usr/local/lib/hp-caps /usr/local/lib/hp-caps/caps
 
 hidden hp
 
