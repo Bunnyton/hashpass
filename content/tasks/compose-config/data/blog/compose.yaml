@@ -1,0 +1,7 @@
+services:
+  blog:
+    image: blog
+    ports:
+      - "8086:80"
+    environment:
+      TITLE: "Блог"

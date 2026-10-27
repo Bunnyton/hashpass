@@ -1,0 +1,67 @@
+# compose-scale — масштаб и сети в compose: три витрины shopfront на 8081–8083 (диапазон портов
+# + --scale; доза ranges.md на занятый порт) → их число в compose.yaml (deploy.replicas) →
+# склад только во внутренней сети private (internal: true), витрины — в private и в public
+# (доза networks.md при входе). Скрипт проверки — копия hp/shop в /usr/local/lib/hp-shop
+# (check live выполняется в работающей консоли). Склад и витрина — образы из docker-network.
+# Продолжает docker-multistage: оттуда Docker, compose и образы.
+
+image compose-scale:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker, compose и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+# data: data/shop — руками
+copy data/shop /home/student/shop
+run chown -R student:student /home/student/shop
+copy hp/shop /usr/local/lib/hp-shop/shop
+run chmod 700 /usr/local/lib/hp-shop /usr/local/lib/hp-shop/shop
+
+hidden hp
+
+settings
+  pager on
+
+say "В пятницу у «Пельменя» распродажа. Одна витрина в прошлый раз не выдержала наплыва — в этот раз их будет три."
+read brief.md
+
+stage
+  say "Подними магазин из ~/shop с тремя витринами — на портах 8081, 8082 и 8083 машины, и каждая показывает остатки склада"
+  solve:
+    cd /home/student/shop
+    sed -i 's/"8081:80"/"8081-8083:80"/' compose.yaml
+    docker compose up -d --scale shopfront=3
+  check live /usr/local/lib/hp-shop/shop three
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Три одинаковых контейнера: shop-shopfront-1, -2, -3. Перед ними обычно ставят балансировщик — он раздаёт покупателей по витринам."
+  hint output "port is already allocated" read ranges.md
+  hint output "address already in use" read ranges.md
+  hint tries 5 say "Сколько контейнеров одного сервиса поднимать, compose спрашивает ключом у up. Что пишет docker compose up --help про scale?"
+
+stage
+  say "Сделай так, чтобы три витрины поднимались обычным docker compose up -d — без ключей: их число должно быть записано в compose.yaml"
+  solve:
+    cd /home/student/shop
+    sed -i 's/^    image: shopfront$/&\n    deploy:\n      replicas: 3/' compose.yaml
+    docker compose up -d
+  check live /usr/local/lib/hp-shop/shop replicas
+  neutral ls cat pwd cd vim vi nano
+  on pass say "deploy — раздел для кластеров. Тот же compose.yaml понимает Docker Swarm: docker stack deploy раскидает реплики по нескольким серверам."
+  hint output "yaml:" say "compose не понял файл: в YAML важны отступы — только пробелы, вложенность ровная."
+  hint tries 5 say "Число копий сервиса в compose.yaml называется replicas. В каком разделе сервиса оно живёт — ищи в документации compose."
+  hint tries 10 say "Раздел называется deploy."
+
+stage
+  say "Склад не должен видеть интернет и быть доступен никому, кроме витрин: держи его только во внутренней сети private, а витрины — в private и в обычной сети public"
+  solve:
+    cd /home/student/shop
+    printf '%s\n' 'services:' '  stock:' '    image: stock' '    networks: [private]' '  shopfront:' '    image: shopfront' '    deploy:' '      replicas: 3' '    ports:' '      - "8081-8083:80"' '    networks: [private, public]' 'networks:' '  private:' '    internal: true' '  public:' > compose.yaml
+    docker compose up -d
+  check live /usr/local/lib/hp-shop/shop networks
+  neutral ls cat pwd cd vim vi nano
+  on enter read networks.md
+  on pass say "Взломают витрину — у взломщика будет сеть private со складом, но не выход в интернет из склада. Сети в compose — главный способ развести сервисы по зонам доверия."
+  hint output "yaml:" say "compose не понял файл: в YAML важны отступы — только пробелы, вложенность ровная."
+  hint output "Склад недоступен" say "Витрина ищет склад по имени stock. Есть ли у них общая сеть?"
+  hint tries 5 say "Что показывает docker network ls? А docker network inspect у сети склада — Internal?"
+
+exec finale

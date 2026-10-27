@@ -1,0 +1,74 @@
+# compose-health — запуск по готовности: в ~/orders база db поднимается 8 секунд, а app
+# проверяет её один раз при старте и падает — причина в журнале → healthcheck у db +
+# depends_on с condition: service_healthy (доза healthcheck.md, когда app снова пишет «база
+# недоступна») → restart-политика: упавший app docker поднимает сам (доза restart.md при входе;
+# проверка роняет app изнутри через /tmp/crash). Скрипт проверки — копия hp/orders в
+# /usr/local/lib/hp-orders (check live выполняется в работающей консоли).
+# Продолжает docker-multistage: оттуда Docker, compose и образы.
+
+image compose-health:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker, compose и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+# data: образы с машины автора:
+#   cd data/orders-db-src && docker build -t orders-db . && docker save orders-db:latest | gzip -9 > ../orders-db.tar.gz
+#   cd data/orders-app-src && docker build -t orders-app . && docker save orders-app:latest | gzip -9 > ../orders-app.tar.gz
+copy data/orders-db.tar.gz /usr/local/share/hp-docker/images/orders-db.tar.gz
+copy data/orders-app.tar.gz /usr/local/share/hp-docker/images/orders-app.tar.gz
+# data: data/orders — руками
+copy data/orders /home/student/orders
+run chown -R student:student /home/student/orders
+copy hp/orders /usr/local/lib/hp-orders/orders
+run chmod 700 /usr/local/lib/hp-orders /usr/local/lib/hp-orders/orders
+
+hidden hp
+
+settings
+  pager on
+
+say "Сервис заказов «Пельменя» в ~/orders: база и приём заказов. Коллега клянётся, что у него всё работало. У тебя — нет."
+read brief.md
+
+stage
+  say "Подними сервис заказов из ~/orders и выясни по журналам, почему приём заказов не работает"
+  solve:
+    cd /home/student/orders
+    docker compose up -d
+    sleep 3
+    docker compose logs app
+  accept output "база недоступна"
+  neutral ls cat pwd cd
+  on pass say "app проверяет базу один раз — в первую же секунду. А база в это время ещё «проверяет журнал транзакций»: ей нужно восемь секунд."
+  hint output "no configuration file provided" say "compose ищет compose.yaml в текущем каталоге. Где ты?"
+  hint tries 5 say "Что показывает docker compose ps -a? У кого статус Exited — и что он писал перед этим?"
+
+stage
+  say "Сделай так, чтобы app запускался, только когда база действительно отвечает, — и заказы открылись на http://localhost:8090"
+  solve:
+    cd /home/student/orders
+    printf '%s\n' 'services:' '  db:' '    image: orders-db' '    healthcheck:' '      test: ["CMD", "wget", "-qO-", "http://localhost/"]' '      interval: 2s' '      retries: 10' '  app:' '    image: orders-app' '    ports:' '      - "8090:80"' '    depends_on:' '      db:' '        condition: service_healthy' > compose.yaml
+    docker compose up -d
+  check live /usr/local/lib/hp-orders/orders healthy
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Теперь compose ждёт «healthy», а не просто «запущен». Статус здоровья видно в docker compose ps: (health: starting), потом (healthy)."
+  hint output "база недоступна" read healthcheck.md
+  hint output "yaml:" say "compose не понял файл: в YAML важны отступы — только пробелы, вложенность ровная."
+  hint output "is unhealthy" say "Проверка здоровья базы не проходит. Что она запускает — и есть ли эта программа в образе базы? docker inspect покажет последние попытки."
+  hint tries 5 say "Что показывает docker compose ps: app запущен? А в журнале app что?"
+  hint tries 10 say "depends_on сам по себе ждёт только запуска контейнера. Чего не хватает — в дозе про healthcheck."
+
+stage
+  say "Если app однажды упадёт сам, пусть docker поднимет его снова — но не после того, как ты остановил его своими руками"
+  solve:
+    cd /home/student/orders
+    sed -i 's/^    image: orders-app$/&\n    restart: unless-stopped/' compose.yaml
+    docker compose up -d
+  check live /usr/local/lib/hp-orders/orders restart
+  neutral ls cat pwd cd vim vi nano
+  on enter read restart.md
+  on pass say "Проверка только что уронила app изнутри — и docker поднял его за секунду. Ночью это сделает тоже он, а не дежурный."
+  hint output "yaml:" say "compose не понял файл: в YAML важны отступы — только пробелы, вложенность ровная."
+  hint tries 5 say "Поменял compose.yaml — а контейнер пересоздан? Что делает docker compose up -d с изменённым сервисом?"
+
+exec finale

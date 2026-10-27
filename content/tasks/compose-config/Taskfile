@@ -1,0 +1,68 @@
+# compose-config — настройка через compose: образа blog нет — compose собирает его сам (build:,
+# доза build.md, когда compose полез за образом в реестр) → заголовок и порт из .env через
+# ${…} (доза env.md при входе) → пароль админки из secret.env через env_file, не переписывая
+# его в compose.yaml (доза envfile.md при входе). Скрипт проверки — копия hp/blog в
+# /usr/local/lib/hp-blog (check live выполняется в работающей консоли).
+# Продолжает docker-multistage: оттуда Docker, compose и образы.
+
+image compose-config:1
+from docker-multistage:1
+
+# от docker-multistage наследуются Docker, compose и образы; его сайт здесь не нужен
+run rm -rf /home/student/recipes
+# data: data/blog — руками
+copy data/blog /home/student/blog
+run chmod 755 /home/student/blog/start.sh && chown -R student:student /home/student/blog
+copy hp/blog /usr/local/lib/hp-blog/blog
+run chmod 700 /usr/local/lib/hp-blog /usr/local/lib/hp-blog/blog
+
+hidden hp
+
+settings
+  pager on
+
+say "Повар «Пельменя» завёл блог. В ~/blog — Dockerfile и compose.yaml, который ему кто-то набросал. Блог пока не запускался ни разу."
+read brief.md
+
+stage
+  say "Подними блог из ~/blog на http://localhost:8086. Образа blog нигде нет — пусть compose соберёт его сам из Dockerfile рядом"
+  solve:
+    cd /home/student/blog
+    sed -i 's/^    image: blog$/    build: ./' compose.yaml
+    docker compose up -d
+  check live /usr/local/lib/hp-blog/blog built
+  neutral ls cat pwd cd vim vi nano
+  on pass say "docker compose up сам собрал образ и сам его запустил. Поменяешь Dockerfile — пересобрать велит docker compose up -d --build."
+  hint output "pull access denied" read build.md
+  hint output "registry-1.docker.io" read build.md
+  hint output "yaml:" say "compose не понял файл: в YAML важны отступы — только пробелы, вложенность ровная."
+  hint tries 5 say "Что ответил docker compose up? Где он искал образ blog?"
+
+stage
+  say "Пусть заголовок блога и порт берутся из файла ~/blog/.env: заголовок «Блог Пельменя», порт 8087. В compose.yaml их быть не должно"
+  solve:
+    cd /home/student/blog
+    printf '%s\n' 'TITLE="Блог Пельменя"' 'BLOG_PORT=8087' > .env
+    sed -i 's/"8086:80"/"${BLOG_PORT}:80"/; s/TITLE: "Блог"/TITLE: "${TITLE}"/' compose.yaml
+    docker compose up -d
+  check live /usr/local/lib/hp-blog/blog env
+  neutral ls cat pwd cd vim vi nano
+  on enter read env.md
+  on pass say "Тот же compose.yaml теперь годится и для теста, и для боевого сервера: у каждого свой .env. Его и не коммитят — коммитят пример, .env.example."
+  hint output "variable is not set" say "compose не нашёл переменную. Как она называется в .env — и так же ли в compose.yaml?"
+  hint tries 5 say "Что показывает docker compose config — какие значения compose подставил?"
+
+stage
+  say "Пароль админки лежит в ~/blog/secret.env. Передай его блогу целым файлом — не переписывая ни в compose.yaml, ни в .env"
+  solve:
+    cd /home/student/blog
+    sed -i 's/^    environment:$/    env_file: secret.env\n&/' compose.yaml
+    docker compose up -d
+  check live /usr/local/lib/hp-blog/blog secret
+  neutral ls cat pwd cd vim vi nano
+  on enter read envfile.md
+  on pass say "На странице «Админка: включена», а пароля нет ни в одном файле, который уходит в git. secret.env живёт только на сервере."
+  hint tries 5 say "Что показывает docker compose config у сервиса blog в разделе environment?"
+  hint tries 10 say "docker compose exec blog env — что из переменных видит сам блог?"
+
+exec finale

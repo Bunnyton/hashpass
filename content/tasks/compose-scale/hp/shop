@@ -1,0 +1,26 @@
+#!/bin/sh
+# Проверка живого магазина (выполняется в работающей консоли).
+# shop three | replicas | networks
+dir=/home/student/shop
+fronts() { docker ps -q --filter label=com.docker.compose.service=shopfront; }
+three_pages() {
+    [ "$(fronts | wc -l)" -eq 3 ] || return 1
+    for p in 8081 8082 8083; do curl -fs "http://127.0.0.1:$p/" | grep -q 'шт\.' || return 1; done
+}
+nets() { docker inspect -f '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}{{println}}{{end}}' "$1" | sed '/^$/d'; }
+internal() { [ "$(docker network inspect -f '{{.Internal}}' "$1")" = true ]; }
+case "$1" in
+three)    three_pages ;;
+replicas) three_pages && (cd "$dir" && docker compose config) | grep -qE '^\s*replicas: 3$' ;;
+networks)
+    three_pages || exit 1
+    s=$(docker ps -q --filter label=com.docker.compose.service=stock | head -1)
+    [ -n "$s" ] && [ "$(nets "$s" | wc -l)" -eq 1 ] || exit 1
+    private=$(nets "$s")
+    internal "$private" || exit 1
+    for f in $(fronts); do
+        nets "$f" | grep -qx "$private" || exit 1
+        nets "$f" | while read n; do internal "$n" || echo outside; done | grep -q outside || exit 1
+    done ;;
+*)  exit 1 ;;
+esac

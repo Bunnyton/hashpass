@@ -2,13 +2,11 @@
 # внутри слушают 80 (доза ports.md на «port is already allocated») → новая только для этой
 # машины: -p 127.0.0.1:8070:80 (доза listen.md при входе) → ещё одна копия старой на порту,
 # который выбрал сам docker (-P), номер — в ~/port.txt. Контейнеры живут только в работающей
-# консоли — check live. Продолжает docker-multistage: оттуда Docker и образы.
+# консоли — check live. Продолжает docker-web: оттуда Docker и образ wiki.
 
 image docker-ports:1
-from docker-multistage:1
+from docker-web:1
 
-# от docker-multistage наследуются Docker и образы; его сайт здесь не нужен
-run rm -rf /home/student/recipes
 # data: образ wiki:new с машины автора:
 #   cd data/wiki-new-src && docker build -t wiki:new . && docker save wiki:new | gzip -9 > ../wiki-new.tar.gz
 copy data/wiki-new.tar.gz /usr/local/share/hp-docker/images/wiki-new.tar.gz

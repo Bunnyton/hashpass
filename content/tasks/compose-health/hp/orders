@@ -1,0 +1,29 @@
+#!/bin/sh
+# Проверка живого сервиса заказов (выполняется в работающей консоли).
+# orders healthy | restart
+svc() { docker ps -aq --filter "label=com.docker.compose.service=$1" | head -1; }
+page() { curl -fs http://127.0.0.1:8090/ | grep -q 'принимаем'; }
+running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = true ]; }
+restarts() { docker inspect -f '{{.RestartCount}}' "$1"; }
+d=$(svc db) a=$(svc app)
+[ -n "$d" ] && [ -n "$a" ] || exit 1
+case "$1" in
+healthy)
+    [ "$(docker inspect -f '{{.State.Health.Status}}' "$d" 2>/dev/null)" = healthy ] &&
+    docker inspect -f '{{index .Config.Labels "com.docker.compose.depends_on"}}' "$a" | grep -q 'db:service_healthy' &&
+    running "$a" && page ;;
+restart)
+    case "$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$a")" in
+        unless-stopped|on-failure) ;;
+        *) exit 1 ;;
+    esac
+    # уронить app изнутри и дать docker поднять его снова
+    n=$(restarts "$a")
+    docker exec "$a" touch /tmp/crash || exit 1
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        sleep 1
+        [ "$(restarts "$a")" -gt "$n" ] && running "$a" && page && exit 0
+    done
+    exit 1 ;;
+*)  exit 1 ;;
+esac

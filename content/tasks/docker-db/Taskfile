@@ -3,13 +3,13 @@
 # слое контейнера и безымянном томе) → именованный том cache-data для /data: ключ переживает
 # пересоздание. Образ redis — официальный redis:7-alpine с записью на диск после каждой
 # команды (data/redis-src). Контейнеры живут только в работающей консоли — check live.
-# Продолжает docker-multistage: оттуда Docker и образы.
+# Продолжает docker-volume: оттуда Docker и образы.
 
 image docker-db:1
-from docker-multistage:1
+from docker-volume:1
 
-# от docker-multistage наследуются Docker и образы; его сайт здесь не нужен
-run rm -rf /home/student/recipes
+# от docker-volume наследуются Docker и образы; его блог здесь не нужен
+run rm -rf /home/student/blog
 # data: образ redis с машины автора:
 #   cd data/redis-src && docker build -t redis . && docker save redis:latest | gzip -9 > ../redis.tar.gz
 copy data/redis.tar.gz /usr/local/share/hp-docker/images/redis.tar.gz

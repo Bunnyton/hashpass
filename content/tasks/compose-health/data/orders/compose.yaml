@@ -1,0 +1,7 @@
+services:
+  db:
+    image: orders-db
+  app:
+    image: orders-app
+    ports:
+      - "8090:80"

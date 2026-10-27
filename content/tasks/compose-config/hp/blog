@@ -1,0 +1,18 @@
+#!/bin/sh
+# Проверка живого блога (выполняется в работающей консоли).
+# blog built | env | secret
+dir=/home/student/blog
+page() { curl -fs "http://127.0.0.1:$1/"; }
+env_ok() {
+    page 8087 | grep -q '<h1>Блог Пельменя</h1>' &&
+    ! grep -q -e 8087 -e 'Блог Пельменя' "$dir/compose.yaml" &&
+    grep -q 8087 "$dir/.env" && grep -q 'Блог Пельменя' "$dir/.env"
+}
+case "$1" in
+built)  page 8086 | grep -q 'Записки повара' ;;
+env)    env_ok ;;
+secret) c=$(docker ps -q --filter label=com.docker.compose.service=blog | head -1)
+        [ -n "$c" ] && docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" | grep -qx 'ADMIN_PASSWORD=Varenik-42' &&
+        ! grep -q Varenik "$dir/compose.yaml" "$dir/.env" && page 8087 | grep -q 'Админка: включена' && env_ok ;;
+*)      exit 1 ;;
+esac

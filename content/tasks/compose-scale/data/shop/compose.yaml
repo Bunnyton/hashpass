@@ -1,0 +1,7 @@
+services:
+  stock:
+    image: stock
+  shopfront:
+    image: shopfront
+    ports:
+      - "8081:80"
