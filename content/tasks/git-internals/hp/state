@@ -1,0 +1,11 @@
+#!/bin/sh
+# Отчёт вернулся в историю: в последнем коммите q3-report.csv — ровно тот объект, что потерялся
+# (хеш — по содержимому, так что любая правка файла его изменит). Хеш коммита у каждого свой.
+# state committed
+repo=/home/student/reports
+REPORT=09b0a7e7238d0cfeba08e306f5ca113802ebc8a2
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+case "$2" in
+committed) [ "$(g rev-parse HEAD:q3-report.csv 2>/dev/null)" = $REPORT ] ;;
+*)         exit 1 ;;
+esac

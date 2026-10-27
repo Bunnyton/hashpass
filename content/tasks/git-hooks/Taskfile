@@ -1,0 +1,53 @@
+# git-hooks — хуки: pre-commit не пускает в коммит строки с password (в любом регистре; тот же
+# хук должен пропускать чистые коммиты) → commit-msg требует номер задачи «API-12: …» в начале
+# сообщения (доза msg.md при входе). Принимается делом: hp/hooks делает пробные коммиты на
+# одноразовой копии. Хук без права на запуск git молча пропускает — подсказка по его
+# предупреждению. Продолжение git-remote: оттуда git и имя студента.
+
+image git-hooks:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/api — руками; историю собирает mkrepo.sh
+copy data /var/tmp/hp-api
+run sh /var/tmp/hp-api/mkrepo.sh /var/tmp/hp-api /home/student/api
+run rm -rf /var/tmp/hp-api
+run chown -R student:student /home/student/api
+
+hidden hp
+
+settings
+  pager on
+
+say "В ~/api — сервис заказов «Пельменя». За месяц в него трижды закоммитили пароль от базы, а в истории — сплошные «fix» и «wip»."
+read brief.md
+
+stage
+  say "Сделай так, чтобы git в ~/api отказывался делать коммит, если в добавленных изменениях есть password= — в любом регистре"
+  solve:
+    cd /home/student/api
+    printf '%s\n' '#!/bin/sh' 'if git diff --cached | grep -qi "password *="; then' '  echo "В коммите пароль — уберите его" >&2' '  exit 1' 'fi' > .git/hooks/pre-commit
+    chmod +x .git/hooks/pre-commit
+  check exec hooks pre-commit
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Хук срабатывает до того, как git спросит сообщение коммита: пароль даже не доходит до истории. А git commit --no-verify пропускает хуки — это аварийный люк, а не обычная дорога."
+  hint output "not set as executable" say "git сам сказал, почему хук не сработал. Каких прав не хватает файлу?"
+  hint tries 5 say "Проверь хук делом: добавь файл со строкой password=123 и попробуй закоммитить. Что ответил git?"
+  hint tries 10 say "Что войдёт в коммит, показывает git diff --cached. Найти в этом выводе строку без учёта регистра — работа для grep."
+
+stage
+  say "Теперь пусть git не принимает коммит, если сообщение не начинается с номера задачи вида API-12:"
+  solve:
+    cd /home/student/api
+    printf '%s\n' '#!/bin/sh' 'grep -qE "^API-[0-9]+: " "$1" || { echo "Начни сообщение с номера задачи: API-12: ..." >&2; exit 1; }' > .git/hooks/commit-msg
+    chmod +x .git/hooks/commit-msg
+  check exec hooks commit-msg
+  neutral ls cat pwd cd vim vi nano
+  on enter read msg.md
+  on pass say "Хуки живут в .git и в клон не попадают: каждый ставит их себе сам. Поэтому команды держат хуки в репозитории и включают одной настройкой core.hooksPath — а то же самое ещё раз проверяет сервер."
+  hint output "not set as executable" say "git сам сказал, почему хук не сработал. Каких прав не хватает файлу?"
+  hint tries 5 say "Проверь хук делом: закоммить что-нибудь с сообщением fix. Что ответил git?"
+  hint tries 10 say "Сообщение лежит в файле, путь к которому — первый аргумент хука. Начало строки в регулярном выражении — ^."
+
+exec finale

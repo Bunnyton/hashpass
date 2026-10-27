@@ -1,0 +1,24 @@
+#!/bin/sh
+# Хуки проверяются делом: пробные коммиты в ~/api (проверка идёт на одноразовой копии — у
+# студента ничего не меняется). Как хук написан — неважно, важно, что он пропускает и что нет.
+# hooks pre-commit | commit-msg
+cd /home/student/api || exit 1
+g() { git -c safe.directory='*' -c user.name=Проверка -c user.email=check@hashpass.local "$@"; }
+# commits <файл> <строка> <сообщение> — получится ли такой коммит
+commits() {
+    printf '%s\n' "$2" > "$1" && g add "$1" && g commit -q -m "$3" >/dev/null 2>&1
+    rc=$?
+    [ $rc -eq 0 ] || { g rm -q --cached -f "$1" >/dev/null 2>&1; rm -f "$1"; }
+    return $rc
+}
+secrets_blocked() {
+    ! commits leak1.env 'DB_PASSWORD=Pelmen-2026' 'API-90: настройки' &&
+    ! commits leak2.conf 'smtp_password = qwerty' 'API-91: почта' &&
+    commits ok.env 'DB_PORT=5432' 'API-92: порт'
+}
+case "$2" in
+pre-commit) secrets_blocked ;;
+commit-msg) ! commits msg1.txt 'a' 'fix' && ! commits msg2.txt 'b' 'починил API-7' &&
+            commits msg3.txt 'c' 'API-42: починил заказ' && secrets_blocked ;;
+*)          exit 1 ;;
+esac

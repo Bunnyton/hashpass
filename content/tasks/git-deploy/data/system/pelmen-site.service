@@ -1,0 +1,11 @@
+[Unit]
+Description=Сайт «Пельменя» из /srv/www/site на порту 8088
+After=network.target
+
+[Service]
+User=student
+ExecStart=/bin/busybox httpd -f -p 8088 -h /srv/www/site
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

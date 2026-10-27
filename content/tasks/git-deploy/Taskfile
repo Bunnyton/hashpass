@@ -1,0 +1,68 @@
+# git-deploy — выкладка по git push, как в CI/CD: хук post-receive на «сервере» (голый
+# репозиторий /srv/git/site.git) выкладывает main в /srv/www/site, его отдаёт busybox httpd на
+# порту 8088 → правка телефона уходит на сайт одним push → pre-receive не пускает push, если в
+# index.html нет </html> (доза ci.md при входе: тесты перед выкладкой, GitHub Actions).
+# Принимается делом: hp/deploy делает пробные push. Продолжение git-remote: git, имя студента.
+
+image git-deploy:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+run apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq busybox >/dev/null
+# data: data/site, data/system — руками; сервер, выложенный сайт и клон собирает mkrepo.sh
+copy data /var/tmp/hp-site
+run mkdir -p /srv/git /srv/www
+run sh /var/tmp/hp-site/mkrepo.sh /var/tmp/hp-site /srv/git/site.git /srv/www/site /home/student/site
+run cp /var/tmp/hp-site/system/pelmen-site.service /etc/systemd/system/ && systemctl enable pelmen-site.service
+run rm -rf /var/tmp/hp-site
+run chown -R student:student /srv/git /srv/www /home/student/site
+
+hidden hp
+
+settings
+  pager on
+
+say "Сайт «Пельменя» крутится на http://localhost:8088. Код — в git на сервере, а выкладывают его руками: зашёл, скопировал, забыл файл, сайт сломан."
+read brief.md
+
+stage
+  say "Сделай так, чтобы после каждого git push в /srv/git/site.git сервер сам выкладывал ветку main в /srv/www/site"
+  solve:
+    printf '%s\n' '#!/bin/sh' 'git --work-tree=/srv/www/site checkout -f main' > /srv/git/site.git/hooks/post-receive
+    chmod +x /srv/git/site.git/hooks/post-receive
+  check exec deploy auto
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Это и есть CD — непрерывная выкладка: человек только отправляет код, остальное делает сервер. Руками на сервер больше никто не ходит."
+  hint output "not set as executable" say "git сам сказал, почему хук не сработал. Каких прав не хватает файлу?"
+  hint tries 5 say "Проверь делом: закоммить в ~/site любую правку и отправь. Поменялся ли файл в /srv/www/site?"
+  hint tries 10 say "У голого репозитория нет рабочего каталога — а у git есть ключ, который назначает его на время одной команды."
+
+stage
+  say "Телефон «Пельменя» сменился на +7 900 000-00-08. Поправь его на сайте — через ~/site и git push"
+  solve:
+    cd /home/student/site
+    git pull -q
+    sed -i 's/000-00-07/000-00-08/' contacts.html
+    git commit -q -am "Новый телефон"
+    git push -q
+  check exec deploy phone
+  neutral ls cat pwd cd vim vi nano
+  on pass say "Обнови страницу http://localhost:8088/contacts.html — новый телефон уже там. Ни scp, ни ssh: выкладка — это просто git push."
+  hint output "rejected" say "Сервер ушёл вперёд твоего клона — после проверки хука там новые коммиты. Что делают в таком случае, ты знаешь."
+  hint tries 5 say "Правка закоммичена и отправлена? git status и git log origin/main покажут."
+
+stage
+  say "Коллега однажды отправил index.html без </html>, и сайт показал полстраницы. Пусть сервер вообще не принимает push, если в новом index.html нет </html>"
+  solve:
+    printf '%s\n' '#!/bin/sh' 'while read old new ref; do' '  git show "$new:index.html" | grep -q "</html>" || { echo "index.html без </html> — не принимаю" >&2; exit 1; }' 'done' > /srv/git/site.git/hooks/pre-receive
+    chmod +x /srv/git/site.git/hooks/pre-receive
+  check exec deploy gate
+  neutral ls cat pwd cd vim vi nano
+  on enter read ci.md
+  on pass say "Сначала проверка, потом выкладка, и сломанное до людей не доходит. В GitHub Actions и GitLab CI всё так же, только проверки — целые наборы тестов, а запускают их отдельные машины."
+  hint output "not set as executable" say "git сам сказал, почему хук не сработал. Каких прав не хватает файлу?"
+  hint tries 5 say "Проверь делом: удали в ~/site из index.html строку </html>, закоммить и отправь. Сервер принял?"
+  hint tries 10 say "Хук получает на вход строки «старый-хеш новый-хеш ветка». Файл из нового коммита достанет git show <хеш>:index.html."
+
+exec finale

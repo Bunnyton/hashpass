@@ -1,0 +1,58 @@
+# git-internals — объекты git: tariffs.txt стёрт из каталога, а show/log/checkout/restore
+# закрыты — содержимое достаётся из объектов (commit → tree → blob, git cat-file) → отчёт за
+# третий квартал побывал только в индексе: git fsck находит ничьи объекты (доза lost.md при
+# входе), среди трёх — отчёт; он возвращается в ~/reports и в коммит. Хеш отчёта постоянный
+# (по содержимому), его и проверяет hp/state. Продолжение git-remote: оттуда git и имя студента.
+
+image git-internals:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/reports/sales-q*.csv и data/q3-report.csv — Python, random.Random(1..3) по меню
+#   «Пельменя»; остальное руками; историю и ничьи объекты собирает mkrepo.sh
+copy data /var/tmp/hp-reports
+run sh /var/tmp/hp-reports/mkrepo.sh /var/tmp/hp-reports /home/student/reports
+run rm -rf /var/tmp/hp-reports
+run chown -R student:student /home/student/reports
+
+hidden hp
+
+settings
+  pager on
+
+say "Аналитик Лёша улетел в отпуск. Отчёт за третий квартал он «точно добавил в git» — но в истории его нет, а директор ждёт сегодня."
+read brief.md
+
+stage
+  say "Сначала разминка: tariffs.txt из ~/reports стёрт из каталога, но лежит в последнем коммите. Выведи его на экран прямо из объектов git"
+  solve:
+    cd /home/student/reports
+    git cat-file -p HEAD:tariffs.txt
+  accept cmd "git cat-file" ok
+  accept output "по договорённости, звоните"
+  neutral ls cat pwd cd
+  block git match "^git +(show|log|checkout|restore|diff|stash|reset|grep|archive|switch|blame)" say "Сегодня только объекты: эта команда сделала бы всё за тебя."
+  on pass say "Каждый коммит, каталог и файл — объект с именем-хешем в .git/objects. Остальные команды git — удобные надстройки над этими четырьмя типами."
+  hint output "Not a valid object name" say "Такого объекта нет. Хеш скопирован целиком — или хотя бы первые семь знаков?"
+  hint output "not a git repository" say "Здесь git не видит репозитория. Где лежат отчёты?"
+  hint tries 5 say "С чего начать: что покажет git cat-file -p HEAD? Там есть хеш следующего объекта."
+  hint tries 10 say "Цепочка такая: коммит → его дерево (tree) → файл в дереве (blob). На каждом шаге — git cat-file -p."
+
+stage
+  say "Найди в репозитории потерянный отчёт, верни его в ~/reports/q3-report.csv и закоммить"
+  solve:
+    cd /home/student/reports
+    git cat-file -p 09b0a7e > q3-report.csv
+    git add q3-report.csv
+    git commit -q -m "Отчёт за третий квартал"
+  check exec state committed
+  neutral ls cat pwd cd
+  on enter read lost.md
+  on pass say "Хеш нового файла в коммите совпал с хешем потерянного объекта до знака: git называет объект по содержимому, и тот же файл — это тот же объект. Проверить можно git hash-object."
+  hint output "dangling blob" say "Ничьих объектов несколько. Чем заглянуть внутрь каждого — ты знаешь с разминки."
+  hint output "nothing added to commit" say "Отчёт на месте, но в коммит его не добавили."
+  hint tries 5 say "Что выводит git fsck? Каждая строка dangling — объект, на который ничто не ссылается."
+  hint tries 10 say "Содержимое объекта на экран выводит git cat-file -p; а в файл его отправит перенаправление >."
+
+exec finale

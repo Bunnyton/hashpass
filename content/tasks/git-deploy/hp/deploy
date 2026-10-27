@@ -1,0 +1,25 @@
+#!/bin/sh
+# Выкладка проверяется делом: пробные push от имени студента из временного клона (проверка
+# идёт на одноразовой копии системы — настоящий сервер и сайт не меняются).
+# deploy auto | phone | gate
+bare=/srv/git/site.git www=/srv/www/site
+as() { runuser -u student -- "$@"; }
+tmp=$(as mktemp -d) && as git clone -q "$bare" "$tmp/w" || exit 1
+g() { as git -C "$tmp/w" -c user.name=Проверка -c user.email=check@hashpass.local "$@"; }
+# change <метка> [сломать] — коммит с меткой в index.html (и без </html>, если сломать)
+change() {
+    g reset -q --hard origin/main &&
+    as sed -i "s|</body>|<!-- $1 -->\n</body>|" "$tmp/w/index.html" &&
+    { [ -z "${2:-}" ] || as sed -i '/<\/html>/d' "$tmp/w/index.html"; } &&
+    g commit -q -am "$1"
+}
+pushed() { g push -q origin main >/dev/null 2>&1 && g fetch -q; }
+live() { grep -q "$1" "$www/index.html"; }
+auto() { change "выкладка-$$" && pushed && live "выкладка-$$"; }
+case "$2" in
+auto)  auto ;;
+phone) git --git-dir="$bare" -c safe.directory='*' show main:contacts.html | grep -q '000-00-08' &&
+       grep -q '000-00-08' "$www/contacts.html" ;;
+gate)  change "сломано-$$" broken && ! pushed && ! live "сломано-$$" && auto ;;
+*)     exit 1 ;;
+esac
