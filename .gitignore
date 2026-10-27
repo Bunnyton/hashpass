@@ -41,3 +41,6 @@ content/tasks/*/reports/
 
 # the offline installer (scripts/offline/build.sh)
 dist/
+
+# course source materials (slides, docs) -- local only
+content/material/
