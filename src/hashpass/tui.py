@@ -446,6 +446,7 @@ class PoolTUI(App):
             listed = None
         self.courses_mode = listed is not None
         if self.courses_mode:
+            my_courses.follow(self.env.root, self.url, listed)    # a renamed course: its new name
             if my_courses.activate(self.env.root, self.url) is None and listed:
                 self._picking = True                              # «скачать?» waits for the pick
                 self.call_after_refresh(self.action_courses)      # first time: pick a course

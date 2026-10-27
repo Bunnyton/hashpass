@@ -2,7 +2,7 @@
 Courses: blocks of tasks pinned to image revisions, with an owner, members and proposals (spec §4-§6).
 
 A course is `courses/<owner>/<name>/course.json` (the id is immutable, `owner/name` is its
-address; a renamed course keeps its old addresses in `former`, and they still lead to it). A task in a course is `{repo, tag, n, pinned, hidden, added_by}`: it shows revision
+address; a rename moves it, and only the newest address exists). A task in a course is `{repo, tag, n, pinned, hidden, added_by}`: it shows revision
 `tag_vN` -- or, with the course's `auto_update` on and the task not pinned, the newest revision
 of the tag. Changes others want go through proposals (`add`, `update`, `restore`), one open per
 tag; `auto_accept` takes them at once. Private courses admit members by invite link or by an
@@ -57,7 +57,6 @@ class Course:
     history: list[dict] = field(default_factory=list)   # spec 2026-10-23 §4: who changed what, why
     perms: dict[str, list[str]] = field(default_factory=dict)   # spec 2026-10-25 §3: admins' boxes
     extras: dict[str, list[str]] = field(default_factory=dict)   # 2026-10-26: authors' extra rights
-    former: list[str] = field(default_factory=list)    # 2026-10-27: addresses before a rename
     created_at: str = ""
     rev: int = 0
 
@@ -114,16 +113,10 @@ class CourseStore:
         return self._root / owner / name / "course.json"
 
     def get(self, ref: str) -> Course | None:
-        """Return the course at `ref`, or the one that was there before a rename."""
         try:
             return _course(json.loads(self._path(ref).read_text(encoding="utf-8")))
         except (OSError, ValueError, TypeError):
-            pass
-        try:
-            self._path(ref)
-        except ValueError:
             return None
-        return next((c for c in self.all() if ref in c.former), None)
 
     def all(self) -> list[Course]:
         if not self._root.is_dir():
@@ -179,17 +172,13 @@ class CourseStore:
         return course
 
     def rename(self, ref: str, name: str) -> Course:
-        """Move a course to `owner/name`; the old address stays in `former` and still leads to it."""
+        """Move a course to `owner/name`; the old address is gone (user 2026-10-27: no legacy names)."""
         if not NAME_RE.match(name):
             msg = f"имя курса «{name}»: строчные латинские буквы, цифры и дефис"
             raise ValueError(msg)
-        found = self.get(ref)
-        if found is None:
-            msg = f"нет такого курса: {ref}"
-            raise KeyError(msg)
-        new = f"{found.owner}/{name}"
-        with self._lock(found.ref):
-            course = self.get(found.ref)
+        new = f"{ref.partition('/')[0]}/{name}"
+        with self._lock(ref):
+            course = self.get(ref)
             if course is None:
                 msg = f"нет такого курса: {ref}"
                 raise KeyError(msg)
@@ -198,10 +187,8 @@ class CourseStore:
             if self._path(new).exists():
                 msg = f"курс {new} уже есть"
                 raise ValueError(msg)
-            old = course.ref
-            self._path(old).parent.rename(self._path(new).parent)
+            self._path(ref).parent.rename(self._path(new).parent)
             course.name = name
-            course.former = [r for r in (*course.former, old) if r != new]
             course.rev += 1
             self._save(course)
         return course
@@ -209,8 +196,6 @@ class CourseStore:
     @contextlib.contextmanager
     def edit(self, ref: str, expect_rev: int | None = None) -> Iterator[Course]:
         """Change a course under its lock; `expect_rev` guards against a concurrent edit."""
-        found = self.get(ref)
-        ref = found.ref if found is not None else ref       # an old address: the course it leads to
         with self._lock(ref):
             course = self.get(ref)
             if course is None:

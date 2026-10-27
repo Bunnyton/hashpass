@@ -177,14 +177,12 @@ def test_a_pool_admin_without_progress_does_not(pool: _Courses) -> None:
 
 
 @pytest.mark.tier1
-def test_only_the_owner_sees_the_address_field_and_an_old_address_redirects(pool: _Courses) -> None:
+def test_only_the_owner_sees_the_address_field(pool: _Courses) -> None:
     owner = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
     assert "name='name' value='linux'" in owner and "data-then='go:/c/{ref}'" in owner
     pool.call("PUT", "/courses/bob/linux/members/max", "bob", {"role": "admin", "perms": ["content"]})
     admin = _page(_browser(pool, "max"), f"{pool.url}/c/bob/linux")[1]
     assert "id='settings-tab'" in admin and "name='name' value='linux'" not in admin
     pool.call("PUT", "/courses/bob/linux", "bob", {"name": "base"})
-    opener = _browser(pool, "kid")
-    with opener.open(f"{pool.url}/c/bob/linux?invite=x", timeout=10) as resp:
-        assert resp.url == f"{pool.url}/c/bob/base?invite=x"
-        assert "Linux для всех" in resp.read().decode("utf-8")
+    assert _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")[0] == 404  # noqa: PLR2004
+    assert "Linux для всех" in _page(_browser(pool, "kid"), f"{pool.url}/c/bob/base")[1]

@@ -14,7 +14,7 @@ here decides anything the server does not: the console only names things and say
     hashpass course <course> block <name> rename <new name>
     hashpass course <course> rm block <name>
     hashpass course <course> set title|description|visibility <value>
-    hashpass course <course> set name <new name>     a new address; the old one still leads here
+    hashpass course <course> set name <new name>     a new address; the old one is gone
 
 <course> is owner/name, a name of one's own, or a title; a block is its name or id.
 """
@@ -37,7 +37,7 @@ USAGE = (
     "hashpass course <курс> block <блок> rename <имя>   — переименовать блок\n"
     "hashpass course <курс> rm block <блок>             — удалить блок\n"
     "hashpass course <курс> set title|description|visibility <значение>\n"
-    "hashpass course <курс> set name <имя>              — новый адрес курса (старый ведёт сюда же)\n"
+    "hashpass course <курс> set name <имя>              — новый адрес курса (старый перестаёт работать)\n"
 )
 _SETTINGS = ("title", "description", "visibility", "name")
 
@@ -240,7 +240,7 @@ def _set(api: CourseApi, _user: str, ref: str, rest: list[str], out: TextIO) -> 
     value = " ".join(rest[2:])
     said = api.call("PUT", _path(ref), {rest[1]: value})
     if rest[1] == "name":
-        out.write(f"{ref} → {said.get('ref', '')}: курс теперь здесь, старый адрес ведёт сюда же\n")
+        out.write(f"{ref} → {said.get('ref', '')}: курс теперь здесь, старого адреса больше нет\n")
         return 0
     out.write(f"{ref}: {rest[1]} = {value}\n")
     return 0

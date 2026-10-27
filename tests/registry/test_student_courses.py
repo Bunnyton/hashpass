@@ -199,3 +199,19 @@ def test_hashpass_run_outside_a_course_reports_the_pass_to_the_profile(pool: _Co
     rec = client.progress(token=pool.tok["kid"])["kid"]["bob/git-init:1"]
     assert (rec["status"], rec["outside"]) == ("passed", True)
     assert "профиль" in "".join(said)
+
+
+@pytest.mark.tier1
+def test_a_renamed_course_is_followed_by_its_id(tmp_path: Path) -> None:
+    url = "http://127.0.0.1:9"
+    my_courses.choose(tmp_path, url, "bob/linux")
+    my_courses.choose(tmp_path, url, "eve/git")
+    my_courses.choose(tmp_path, url, "bob/linux")
+    seen = [{"ref": "bob/linux", "id": "c-1"}, {"ref": "eve/git", "id": "c-2"}]
+    assert not my_courses.follow(tmp_path, url, seen)              # names still right: ids learnt
+    assert my_courses.follow(tmp_path, url, [{"ref": "bob/base", "id": "c-1"}, seen[1]])
+    assert (my_courses.mine(tmp_path, url), my_courses.current(tmp_path, url)) == (
+        ["bob/base", "eve/git"], "bob/base")
+    assert RemoteRegistry(url).course == "bob/base"
+    assert not my_courses.follow(tmp_path, url, [seen[1]])           # not listed: left as it is
+    assert my_courses.mine(tmp_path, url) == ["bob/base", "eve/git"]

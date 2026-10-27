@@ -19,6 +19,7 @@ from flask import Flask, Response, request
 from hashpass.registry import courses as cm
 from hashpass.registry import perms
 from hashpass.registry.access import can, course_perms, sees_hidden
+from hashpass.registry.config import save_config
 from hashpass.registry.courses import Course, CourseConflictError, CourseStore
 from hashpass.registry.revisions import parse_version
 
@@ -174,7 +175,7 @@ class CourseApi:
     def _summary(self, course: Course, user: str | None) -> dict:
         return {"ref": course.ref, "id": course.id, "owner": course.owner, "name": course.name,
                 "title": course.title, "description": course.description,
-                "visibility": course.visibility, "role": course.role_of(user), "former": course.former}
+                "visibility": course.visibility, "role": course.role_of(user)}
 
     def _view(self, course: Course, user: str | None, _role: str | None) -> dict:
         """Return the course as `user` may see it."""
@@ -298,7 +299,7 @@ class CourseApi:
         return err or self._json(HTTPStatus.OK, self._summary(self.courses.get(course.ref), _user))
 
     def _rename(self, course: Course, user: str | None, name: str) -> tuple[Course, Response | None]:
-        """Give a course a new address (the owner's call, as deleting it); the old one still leads here."""
+        """Give a course a new address (the owner's call, as deleting it); the old one stops existing."""
         if not can(user, self.server.pool_perms(user), course, "delete"):
             return course, self._err(HTTPStatus.FORBIDDEN, "сменить адрес курса может только владелец")
         old = course.ref
@@ -306,6 +307,11 @@ class CourseApi:
             course = self.courses.rename(old, name)
         except (ValueError, KeyError) as exc:
             return course, self._err(HTTPStatus.BAD_REQUEST, str(exc.args[0] if exc.args else exc))
+        self.server.progress().rename_course(old, course.ref)    # results earned in it stay in it
+        if self.server.config.default_course == old:              # old clients' course follows it
+            self.server.config.default_course = course.ref
+            if self.server.config_path is not None:
+                save_config(self.server.config_path, self.server.config)
         err = self._edit(course.ref, lambda _c: None, by=user or "", what=f"адрес: {old} → {course.ref}",
                          check_rev=False)
         return course, err

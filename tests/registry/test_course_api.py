@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from hashpass.registry import era
+from hashpass.registry.progress_store import ProgressStore
 from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.revisions import RepoIndex
 from tests.registry.test_push_commit import _http, _Pool
@@ -200,22 +201,22 @@ def test_a_cross_site_form_post_does_not_act_for_the_user(pool: _Courses) -> Non
 
 
 @pytest.mark.tier1
-def test_the_owner_renames_a_course_and_the_old_address_still_leads_to_it(pool: _Courses) -> None:
+def test_the_owner_renames_a_course_and_only_the_new_address_is_left(pool: _Courses) -> None:
     _course(pool)
     pool.call("PUT", "/courses/bob/linux/members/max", "bob", {"role": "admin", "perms": ["content"]})
     assert pool.call("PUT", "/courses/bob/linux", "max", {"name": "base"})[0] == 403  # noqa: PLR2004
     pool.call("POST", "/courses", "bob", {"name": "taken"})
     assert pool.call("PUT", "/courses/bob/linux", "bob", {"name": "taken"})[0] == 400  # noqa: PLR2004
     assert pool.call("PUT", "/courses/bob/linux", "bob", {"name": "Не так"})[0] == 400  # noqa: PLR2004
+    progress = ProgressStore(Path(pool.r.store.root) / "progress")
+    progress.record("kid", "bob/git-init:1", status="passed", ts="t", extra={"course": "bob/linux"})
     rev = pool.call("GET", "/courses/bob/linux", "bob")[1]["rev"]
     assert pool.call("PUT", "/courses/bob/linux", "bob", {"name": "base", "rev": rev - 1})[0] == 409  # noqa: PLR2004
     code, said = pool.call("PUT", "/courses/bob/linux", "bob", {"name": "base", "title": "Основы", "rev": rev})
     assert (code, said["ref"], said["title"]) == (200, "bob/base", "Основы")
     assert sorted(c["ref"] for c in pool.call("GET", "/courses", "bob")[1]["courses"]) == ["bob/base", "bob/taken"]
-    code, old = pool.call("GET", "/courses/bob/linux", "kid")        # an old link, an old client
-    assert (code, old["ref"]) == (200, "bob/base")
-    assert pool.call("POST", "/courses/bob/linux/blocks", "bob", {"name": "A"})[0] == 201  # noqa: PLR2004
-    view = pool.call("GET", "/courses/bob/base", "bob")[1]
-    assert [b["name"] for b in view["blocks"]] == ["A"]
-    assert any("bob/linux → bob/base" in h["what"] for h in view["history"])
+    assert pool.call("GET", "/courses/bob/linux", "kid")[0] == 404  # noqa: PLR2004   no legacy names
     assert not (Path(pool.r.store.root) / ".courses" / "bob" / "linux").exists()
+    assert progress.get("kid")["bob/git-init:1"]["course"] == "bob/base"   # still earned in it
+    view = pool.call("GET", "/courses/bob/base", "bob")[1]
+    assert any("bob/linux → bob/base" in h["what"] for h in view["history"])

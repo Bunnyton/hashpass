@@ -2687,6 +2687,9 @@ def cmd_courses(env: Home, ref: str | None = None, io: Io | None = None) -> int:
         my_courses.choose(env.root, url, ref)
         io.write(f"текущий курс: {ref}\n")
         return 0
+    with contextlib.suppress(urllib.error.URLError, RuntimeError, ValueError, OSError):   # offline: as saved
+        client = RemoteRegistry(url, cache=CredentialCache(env.creds))
+        my_courses.follow(env.root, url, client.courses(token=_pool_token(env, url) or "") or [])
     now = my_courses.current(env.root, url)
     rows = my_courses.mine(env.root, url)
     if not rows:

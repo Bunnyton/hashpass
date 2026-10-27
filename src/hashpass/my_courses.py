@@ -1,7 +1,8 @@
 """
 The student's courses on this machine (spec 2026-10-21 §9): which ones were added, which is current.
 
-`<home>/courses.json` = {pool key: {"current": "owner/name", "mine": ["owner/name", ...]}}. The
+`<home>/courses.json` = {pool key: {"current": "owner/name", "mine": ["owner/name", ...],
+"ids": {"owner/name": id}}} -- the ids let a renamed course be followed to its new name. The
 current course is what every client of that pool reads tasks and gets credit through
 (`remote.use_course`). A course link is `https://<pool>/c/<owner>/<name>[?invite=<token>]`.
 """
@@ -73,6 +74,36 @@ def activate(root: Path, url: str) -> str | None:
     if url:
         use_course(url, ref)
     return ref
+
+
+def follow(root: Path, url: str, listed: list[dict]) -> bool:
+    """
+    Keep the saved names right by the courses' ids (`listed`: the pool's `/courses` rows).
+
+    A saved name the pool still lists learns its id; one the pool no longer has, but whose id it
+    lists under another name, takes that name (the course was renamed). True when a name changed.
+    """
+    data = _load(root)
+    entry = data.get(registry_key(url))
+    if not entry:
+        return False
+    by_ref = {str(r.get("ref")): str(r.get("id") or "") for r in listed}
+    by_id = {i: ref for ref, i in by_ref.items() if i}
+    ids = entry.setdefault("ids", {})
+    renamed: dict[str, str] = {}
+    for ref in entry.get("mine", []):
+        if by_ref.get(ref):
+            ids[ref] = by_ref[ref]
+        elif ids.get(ref) in by_id:
+            renamed[ref] = by_id[ids.pop(ref)]
+            ids[renamed[ref]] = by_ref[renamed[ref]]
+    if renamed:
+        entry["mine"] = list(dict.fromkeys(renamed.get(r, r) for r in entry["mine"]))
+        entry["current"] = renamed.get(entry.get("current", ""), entry.get("current", ""))
+    _save(root, data)
+    if renamed:
+        use_course(url, entry["current"] or None)
+    return bool(renamed)
 
 
 def parse_link(link: str) -> tuple[str, str, str]:

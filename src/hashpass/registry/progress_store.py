@@ -1,6 +1,5 @@
 """Server-side per-student task progress (passed/failed), persisted as one JSON file per user."""
 import json
-from collections.abc import Iterable
 from pathlib import Path
 
 
@@ -40,6 +39,15 @@ class ProgressStore:
         self._root.mkdir(parents=True, exist_ok=True)
         self._path(user).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
+    def rename_course(self, old: str, new: str) -> None:
+        """Make the results earned in course `old` name `new`, the address it moved to."""
+        for user, data in self.all().items():
+            moved = [rec for rec in data.values() if isinstance(rec, dict) and rec.get("course") == old]
+            for rec in moved:
+                rec["course"] = new
+            if moved:
+                self._path(user).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
     def delete(self, user: str) -> None:
         """Remove a user's progress file (no-op if absent)."""
         self._path(user).unlink(missing_ok=True)
@@ -53,9 +61,8 @@ class ProgressStore:
         return result
 
 
-def outside_course(rec: object, course_ref: str, former: Iterable[str] = ()) -> bool:
-    """Whether a record was earned outside `course_ref` (or its `former` addresses) -- `hashpass run`, or another course."""
+def outside_course(rec: object, course_ref: str) -> bool:
+    """Whether a record was earned outside `course_ref` -- `hashpass run`, or another course."""
     if not isinstance(rec, dict):
         return False
-    here = {course_ref, *former}
-    return bool(rec.get("outside")) or (bool(rec.get("course")) and rec.get("course") not in here)
+    return bool(rec.get("outside")) or (bool(rec.get("course")) and rec.get("course") != course_ref)

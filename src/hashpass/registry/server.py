@@ -1140,7 +1140,7 @@ class PoolServer:
                             | ({"mine": True, "owner": user} if own else {})
                             | ({"pending_update": True} if own and latest and latest.n > n else {})
                             | ({"solved_n": solved} if solved else {})
-                            | ({"outside": True} if solved and outside_course(mine.get(ref), course.ref, course.former) else {}))
+                            | ({"outside": True} if solved and outside_course(mine.get(ref), course.ref) else {}))
         return self._proposal_rows(course, user, rows)
 
     def _proposal_rows(self, course: "course_model.Course", user: str,
