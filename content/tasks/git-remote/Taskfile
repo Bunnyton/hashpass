@@ -5,10 +5,11 @@
 # «merge или rebase», а это уже другая тема.
 
 image git-remote:1
-from git-branch:1
+from git-graph:1
 
-# от git-branch наследуются git и имя студента; его репозиторий здесь не нужен
-run rm -rf /home/student/site
+# от git-graph наследуются git, имя студента и его команда git lg; его репозиторий здесь не нужен
+run rm -rf /home/student/planner /home/student/fork.txt
+run runuser -u student -- git config --global alias.lg "log --oneline --graph --all"
 run git config --system pull.rebase false
 # data: data/team + data/mkrepo.sh — руками; «сервер» собирает mkrepo.sh
 copy data /var/tmp/hp-team

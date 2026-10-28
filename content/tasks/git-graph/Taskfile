@@ -1,0 +1,65 @@
+# git-graph — история деревом: git log --graph --all, чтение развилок и слияний, своя команда
+# git lg, и слияние, после которого видно, как дерево сошлось. Репозиторий ~/planner собирает
+# data/mkrepo.sh (даты зафиксированы — хеши одинаковы везде): export и dates уже влиты в main,
+# notify — нет, она отросла от a87b12c «README: как пользоваться». Следующие задания Git
+# наследуют git lg, чтобы студент смотрел им на свой результат до конца курса.
+
+image git-graph:1
+from git-branch:1
+
+# от git-branch наследуются git и имя студента; его репозиторий здесь не нужен
+run rm -rf /home/student/site
+# data: data/planner + data/mkrepo.sh — руками; историю собирает mkrepo.sh
+copy data /var/tmp/hp-planner
+run sh /var/tmp/hp-planner/mkrepo.sh /var/tmp/hp-planner/planner /home/student/planner
+run rm -rf /var/tmp/hp-planner
+run chown -R student:student /home/student/planner
+
+hidden hp
+
+settings
+  pager on
+
+say "В ~/planner — расписание кружков. Над ним работают трое, у каждого свои ветки, и уже непонятно, что где."
+read brief.md
+
+stage
+  say "Одна ветка ещё не влита в main. От какого коммита main она отросла? Запиши его хеш в ~/fork.txt"
+  solve:
+    cd /home/student/planner
+    git log --oneline --graph --all
+    git merge-base main notify > /home/student/fork.txt
+  accept file /home/student/fork.txt "^\s*a87b12c[0-9a-f]{0,33}\s*$"
+  neutral ls cat pwd cd
+  on pass say "Звёздочка, от которой линия уходит вбок, — развилка. Где две линии сходятся в одну звёздочку — слияние."
+  hint tries 5 say "Простой git log показывает только ветку, в которой ты стоишь. Где остальные?"
+  hint tries 10 say "В брифе есть ключ, который рисует историю всех веток сразу, а не только текущей."
+  hint tries 15 say "Нужен коммит main, из которого вниз уходит линия ветки notify, — ищи в дереве место, где линии расходятся."
+
+stage
+  say "Каждый раз набирать три ключа — долго. Заведи в git свою команду lg, которая рисует то же дерево"
+  solve git config --global alias.lg "log --oneline --graph --all"
+  accept file /home/student/.gitconfig "lg\s*=.*log.*--graph"
+  accept cmd "git lg" ok
+  neutral ls cat pwd cd
+  on enter read alias.md
+  on pass say "Своя команда живёт в ~/.gitconfig и работает в любом репозитории — git lg пригодится до конца курса."
+  hint output "is not a git command" say "git о такой команде пока не знает — её сначала заводят в настройках."
+  hint tries 5 say "Какую строку git config дописал в ~/.gitconfig? Загляни в файл."
+  hint tries 10 say "Пример с git st в начале шага устроен так же — поменяй имя и то, что подставлять."
+
+stage
+  say "Влей notify в main и посмотри своей командой, как дерево сошлось"
+  solve:
+    cd /home/student/planner
+    git switch -q main
+    git -c core.editor=true merge notify
+  observe /home/student/planner/README.md /home/student/planner/schedule.txt /home/student/planner/notify.sh
+  accept cmd "git lg"
+  neutral ls cat pwd cd
+  on pass say "Над слиянием — звёздочка с двумя родителями: по дереву всегда видно, когда и что влили."
+  hint output "Already up to date" say "Вливают в ту ветку, в которой стоишь. В какой ты сейчас?"
+  hint output "not something we can merge" say "git не знает ветки с таким именем. Список веток — git branch."
+  hint tries 5 say "Нарисуй дерево: где сейчас main и где notify?"
+
+exec finale

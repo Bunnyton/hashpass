@@ -32,14 +32,14 @@ stage
     GIT_EDITOR=true git rebase --continue
   check exec state rebased
   neutral ls cat pwd cd
-  on pass say "git log --graph --oneline --all покажет: search теперь продолжает main, развилки нет."
+  on pass say "git lg покажет: search теперь продолжает main, развилки нет."
   hint output "Could not apply" read conflict.md
   hint output "Automatic merge failed" read merge.md
   hint output "Merge made by" read merge.md
   hint output "is up to date" say "Ветка уже стоит поверх того, куда ты переносишь. А куда должна?"
   hint output "You must edit all merge conflicts" say "В каком-то файле ещё остались метки конфликта или он не добавлен: что говорит git status?"
   hint tries 5 say "Что сейчас показывает git status? Посреди переноса он говорит, что делать дальше."
-  hint tries 10 say "Нарисуй историю: git log --graph --oneline --all. Где main, где search?"
+  hint tries 10 say "Нарисуй историю своей командой git lg. Где main, где search?"
 
 stage
   say "Влей search в main — история main должна остаться прямой"
@@ -50,7 +50,7 @@ stage
   check exec state merged
   neutral ls cat pwd cd
   on pass say "Fast-forward: git просто передвинул метку main вперёд — склеивать было нечего. Ключ --ff-only откажется сливать, если перемотка невозможна."
-  hint output "Merge made by" say "Получился коммит слияния. Значит, перед слиянием search не продолжала main — что показывает git log --graph?"
+  hint output "Merge made by" say "Получился коммит слияния. Значит, перед слиянием search не продолжала main — что показывает git lg?"
   hint output "Already up to date" say "Вливают в ту ветку, в которой стоишь. В какой ты сейчас?"
   hint tries 5 say "В какую ветку вливаем и в какой ты стоишь? Это показывает git branch."
 

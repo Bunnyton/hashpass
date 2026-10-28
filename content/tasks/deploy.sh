@@ -43,7 +43,7 @@ BLOCKS=(
     'bunnyton/linux | Пакеты и процессы: apt-update apt-remove apt-add-repo apt-deb proc-audit top'
     'bunnyton/linux | Редактор и текст: vim-intro vim-more fruit-store'
     'bunnyton/linux | Скрипты: my-command'
-    'bunnyton/git-docker | Git: git-init git-log git-branch git-remote'
+    'bunnyton/git-docker | Git: git-init git-log git-branch git-graph git-remote'
     'bunnyton/git-docker | Git — глубже: git-ignore git-reset git-conflict git-stash git-rebase git-squash git-cherry-pick'
     'bunnyton/git-docker | Git — мастер: git-reflog git-bisect git-internals git-hooks git-deploy'
     'bunnyton/docker | Docker: docker-run docker-web docker-ports docker-volume docker-db docker-build docker-layers'
