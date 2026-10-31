@@ -455,3 +455,48 @@ def test_parent_going_private_keeps_mirrors_open(pool: _Courses) -> None:
     pool.call("PUT", path, "bob", {"visibility": "private"})
     view = pool.call("GET", "/courses/kid/m", "kid")[1]
     assert (view["origin"]["revoked"], _tasks(view), view["visibility"]) == (False, ["bob/git-init:1"], "private")
+
+
+# -- review minors: merge-request access, copies' student counts ----------------
+
+def _private_fork_with_admin(pool: _Courses) -> str:
+    path = _with_task(pool, "private")
+    pool.call("PUT", path, "bob", {"allow_forks": True})
+    pool.call("PUT", f"{path}/members/kid", "bob", {"role": "member"})
+    assert pool.call("POST", f"{path}/fork", "kid", {"name": "f"})[0] == 201
+    pool.call("PUT", "/courses/kid/f/members/ann", "kid", {"role": "admin"})
+    return path
+
+
+@pytest.mark.tier1
+def test_offer_needs_view_on_parent(pool: _Courses) -> None:
+    path = _private_fork_with_admin(pool)
+    code, body = pool.call("POST", "/courses/kid/f/merge", "ann", {})
+    assert (code, body["error"]) == (403, "нет доступа к исходному курсу")
+    assert pool.call("GET", f"{path}/merges", "bob")[1]["merges"] == []
+
+
+@pytest.mark.tier1
+def test_withdraw_without_view_on_parent(pool: _Courses) -> None:
+    path = _private_fork_with_admin(pool)
+    mid = pool.call("POST", "/courses/kid/f/merge", "kid", {})[1]["merge"]["id"]
+    pool.call("DELETE", f"{path}/members/kid", "bob")
+    code, body = pool.call("POST", f"{path}/merges/{mid}", "kid", {"action": "withdraw"})
+    assert (code, body["merge"]["state"]) == (200, "withdrawn")
+
+
+@pytest.mark.tier1
+def test_fork_admin_withdraws_the_forks_request(pool: _Courses) -> None:
+    path = _private_fork_with_admin(pool)
+    mid = pool.call("POST", "/courses/kid/f/merge", "kid", {})[1]["merge"]["id"]
+    assert pool.call("POST", f"{path}/merges/{mid}", "max", {"action": "withdraw"})[0] in (403, 404)
+    code, body = pool.call("POST", f"{path}/merges/{mid}", "ann", {"action": "withdraw"})
+    assert (code, body["merge"]["state"]) == (200, "withdrawn")
+
+
+@pytest.mark.tier1
+def test_copies_student_count_only_for_staff(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    assert "students" not in pool.call("GET", path, "max")[1]["copies"]
+    assert pool.call("GET", path, "bob")[1]["copies"]["students"] == 1

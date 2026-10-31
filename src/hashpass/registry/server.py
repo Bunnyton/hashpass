@@ -526,6 +526,8 @@ class PoolServer:
         self.course_api.register(app)
         self.copy_api = CopyApi(self)
         self.copy_api.register(app)
+        with contextlib.suppress(OSError):
+            self.course_api.courses.heal()       # mirrors a stopped server left behind (spec 2026-10-31 §2)
         CourseWeb(self).register(app)
         self.people = SearchWeb(self)
         self.people.register(app)

@@ -62,6 +62,8 @@ class CopyApi:
         fork, parent, user, err = self._fork_parent(owner, name)
         if err is not None:
             return err
+        if not can(user, self.server.pool_perms(user), parent, "view"):
+            return self.api._err(HTTPStatus.FORBIDDEN, "нет доступа к исходному курсу")  # noqa: SLF001
         unfit = self._unfit(parent, user, cc.structure(fork))
         if unfit:
             return self.api._err(HTTPStatus.CONFLICT, unfit)                  # noqa: SLF001
@@ -91,11 +93,13 @@ class CopyApi:
     def decide(self, owner: str, name: str, mid: str) -> Response:
         """`merge` / `reject` (the parent's `content`), `withdraw` (the request's author)."""
         action = str(self.api._body().get("action", ""))                     # noqa: SLF001
-        course, user, err = self.api._load(owner, name, "view" if action == "withdraw" else "content")  # noqa: SLF001
+        if action == "withdraw":
+            return self._withdraw(owner, name, mid)
+        course, user, err = self.api._load(owner, name, "content")            # noqa: SLF001
         if err is not None:
             return err
         req = next((r for r in course.merges if r["id"] == mid), None)
-        if req is None or action not in ("merge", "reject", "withdraw"):
+        if req is None or action not in ("merge", "reject"):
             return self.api._err(HTTPStatus.NOT_FOUND, "такого запроса нет")   # noqa: SLF001
         if action == "merge" and (unfit := self._unfit(course, user or "", req["snapshot"])):
             return self.api._err(HTTPStatus.CONFLICT, unfit)                  # noqa: SLF001
@@ -103,21 +107,41 @@ class CopyApi:
         done: list[dict] = []
         try:
             with self.api.courses.edit(course.ref) as cur:
-                if action == "withdraw":
-                    mg.withdraw(cur, mid, by=user or "")
-                    done.append(next(r for r in cur.merges if r["id"] == mid))
-                else:
-                    done.append(mg.decide(cur, mid, accept=action == "merge", by=user or "", now=time.time(),
-                                          reason=reason))
-                    if action == "merge":
-                        self.api._history(cur, by=user or "", what=f"слияние из {req['from_ref']} от {req['by']}")  # noqa: SLF001
-        except PermissionError as exc:
-            return self.api._err(HTTPStatus.FORBIDDEN, str(exc))              # noqa: SLF001
+                done.append(mg.decide(cur, mid, accept=action == "merge", by=user or "", now=time.time(),
+                                      reason=reason))
+                if action == "merge":
+                    self.api._history(cur, by=user or "", what=f"слияние из {req['from_ref']} от {req['by']}")  # noqa: SLF001
         except ValueError as exc:
             return self.api._err(HTTPStatus.CONFLICT, str(exc))               # noqa: SLF001
         if action == "merge":
             self._level(req["from_id"], self.api.courses.get(course.ref))
         return self.api._json(HTTPStatus.OK, {"merge": self._row(self.api.courses.get(course.ref), done[0])})  # noqa: SLF001
+
+    def _withdraw(self, owner: str, name: str, mid: str) -> Response:
+        """
+        Take a request back: its author or the fork's `content` people.
+
+        Not the parent's `view`: whoever lost access to a private parent can still take their request back.
+        """
+        user, _role = self.api._caller()                                      # noqa: SLF001
+        parent = self.api.courses.get(f"{owner}/{name}")
+        req = next((r for r in parent.merges if r["id"] == mid), None) if parent is not None else None
+        if req is None or user is None:
+            return self.api._err(HTTPStatus.NOT_FOUND, "такого запроса нет")   # noqa: SLF001
+        fork = self.api.courses.by_id(str(req["from_id"]))
+        fork_staff = fork is not None and can(user, self.server.pool_perms(user), fork, "content")
+        if req["by"] != user and not fork_staff:
+            if not can(user, self.server.pool_perms(user), parent, "view"):
+                return self.api._err(HTTPStatus.NOT_FOUND, "такого запроса нет")   # noqa: SLF001
+            return self.api._err(HTTPStatus.FORBIDDEN, "отозвать запрос может только его автор")  # noqa: SLF001
+        done: list[dict] = []
+        try:
+            with self.api.courses.edit(parent.ref) as cur:
+                mg.withdraw(cur, mid, by=user, fork_staff=fork_staff)
+                done.append(next(r for r in cur.merges if r["id"] == mid))
+        except ValueError as exc:
+            return self.api._err(HTTPStatus.CONFLICT, str(exc))               # noqa: SLF001
+        return self.api._json(HTTPStatus.OK, {"merge": self._row(self.api.courses.get(parent.ref), done[0])})  # noqa: SLF001
 
     def _level(self, fork_id: str, parent: "Course") -> None:
         """After a merge the fork's base is the parent as it is now: nothing left to pull."""

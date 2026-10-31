@@ -206,9 +206,11 @@ class CourseApi:
         """Return the course's mirrors and forks: counted all, listed those `user` may see."""
         copies = self.courses.copies_of(course.id)
         pool = self.server.pool_perms(user)
-        return {"mirrors": sum(c.kind == "mirror" for c in copies), "forks": sum(c.kind == "fork" for c in copies),
-                "students": sum(len(self.enrollments.users_of(c.id)) for c in copies),
-                "list": [self._summary(c, user) | {"kind": c.kind} for c in copies if can(user, pool, c, "view")]}
+        out = {"mirrors": sum(c.kind == "mirror" for c in copies), "forks": sum(c.kind == "fork" for c in copies),
+               "list": [self._summary(c, user) | {"kind": c.kind} for c in copies if can(user, pool, c, "view")]}
+        if can(user, pool, course, "content"):                   # whose students -- the course's staff only
+            out["students"] = sum(len(self.enrollments.users_of(c.id)) for c in copies)
+        return out
 
     def _view(self, course: Course, user: str | None, _role: str | None) -> dict:
         """Return the course as `user` may see it."""

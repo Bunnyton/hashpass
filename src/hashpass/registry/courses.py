@@ -224,11 +224,52 @@ class CourseStore:
                             title=title or name, description=description, visibility=visibility,
                             invite=secrets.token_urlsafe(16), created_at=_now())
             self._save(course)
+        self._index(lambda ids: ids.__setitem__(course.id, course.ref))
         return course
 
+    @property
+    def _ids_path(self) -> Path:
+        return self._root / ".ids.json"
+
+    def _ids(self) -> dict[str, str] | None:
+        """Return the id -> ref index, or None when there is none yet."""
+        try:
+            ids = json.loads(self._ids_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return ids if isinstance(ids, dict) else None
+
+    def _index(self, change: Callable[[dict[str, str]], object]) -> None:
+        """Change the id -> ref index under its lock (built from a scan the first time)."""
+        self._root.mkdir(parents=True, exist_ok=True)
+        with (self._root / ".ids.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                ids = self._ids()
+                if ids is None:
+                    ids = {c.id: c.ref for c in self.all()}
+                change(ids)
+                fd, tmp = tempfile.mkstemp(prefix=".ids-", suffix=".tmp", dir=self._root)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(ids, f, ensure_ascii=False)
+                Path(tmp).replace(self._ids_path)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
     def by_id(self, course_id: str) -> Course | None:
-        """Return the course whose immutable id is `course_id`."""
-        return next((c for c in self.all() if c.id == course_id), None) if course_id else None
+        """Return the course (as stored) whose immutable id is `course_id`, through the id index."""
+        if not course_id:
+            return None
+        ids = self._ids()
+        ref = ids.get(course_id) if ids is not None else None
+        course = self._read(ref) if ref else None
+        if course is not None and course.id == course_id:
+            return course
+        if ids is not None and ref is None:
+            return None                               # not in a built index: no such course
+        found = next((c for c in self.all() if c.id == course_id), None)   # lost or wrong: rebuild
+        self._index(lambda ids: (ids.clear(), ids.update({c.id: c.ref for c in self.all()})))
+        return found
 
     def copies_of(self, course_id: str, kind: str | None = None) -> list[Course]:
         """Return the direct mirrors and forks of a course (`kind` -- only those)."""
@@ -255,6 +296,9 @@ class CourseStore:
             copy.origin = {"id": parent.id, "kind": kind, "ref": parent.ref, "owner": parent.owner,
                            "title": parent.title, "base_rev": parent.rev, "base": struct,
                            "synced_rev": parent.rev, "gone": False, "revoked": False}
+        if self.by_id(parent.id) is None:             # deleted meanwhile: delete() may have missed us
+            with self.edit(course.ref) as copy:
+                copy.origin["gone"] = True
         return self.get(course.ref) or course
 
     def rename(self, ref: str, name: str) -> Course:
@@ -277,6 +321,7 @@ class CourseStore:
             course.name = name
             course.rev += 1
             self._save(course)
+        self._index(lambda ids: ids.__setitem__(course.id, course.ref))
         return course
 
     @contextlib.contextmanager
@@ -303,6 +348,15 @@ class CourseStore:
             with contextlib.suppress(KeyError), self.edit(mirror.ref):
                 pass                                  # edit() reads through get(): caught up, saved
 
+    def heal(self) -> None:
+        """Write every mirror left behind its parent (a server stopped between the two writes)."""
+        for course in self.all():
+            if course.kind == "mirror":
+                fresh = self.get(course.ref)
+                if fresh is not None and cc.structure(fresh) != cc.structure(course):
+                    with contextlib.suppress(KeyError), self.edit(course.ref):
+                        pass
+
     def delete(self, ref: str) -> None:
         """Remove a course; its copies stay, on their own (`origin.gone`, spec 2026-10-31 §5)."""
         path = self._path(ref)
@@ -312,7 +366,10 @@ class CourseStore:
         with contextlib.suppress(OSError):
             (path.parent / ".lock").unlink()
             path.parent.rmdir()
-        for copy in self.copies_of(gone.id) if gone else []:
+        if gone is None:
+            return
+        self._index(lambda ids: ids.pop(gone.id, None))
+        for copy in self.copies_of(gone.id):
             with contextlib.suppress(KeyError), self.edit(copy.ref) as cur:
                 cur.origin["gone"] = True
 

@@ -67,10 +67,10 @@ def decide(parent: "Course", req_id: str, *, accept: bool, by: str, now: float, 
     return req
 
 
-def withdraw(parent: "Course", req_id: str, *, by: str) -> None:
-    """Take an open request back (its author only)."""
+def withdraw(parent: "Course", req_id: str, *, by: str, fork_staff: bool = False) -> None:
+    """Take an open request back: its author, or one who runs the fork (`fork_staff`)."""
     req = _open(parent, req_id)
-    if req["by"] != by:
+    if req["by"] != by and not fork_staff:
         msg = "отозвать запрос может только его автор"
         raise PermissionError(msg)
     req["state"] = "withdrawn"

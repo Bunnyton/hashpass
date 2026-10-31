@@ -306,3 +306,51 @@ def test_apply_structure_drops_own_hidden_copy_of_a_task_it_brings() -> None:
     cc.apply_structure(course, {"auto_update": True,
                                 "blocks": [{"id": "b1", "name": "Git", "tasks": [cc.structure_task(_task("bob/a", 2))]}]})
     assert [(t["repo"], t["n"], t["hidden"]) for _b, t in course.tasks()] == [("bob/a", 2, False)]
+
+
+# -- review minors: id index, healing after a crash, delete racing a copy -------
+
+@pytest.mark.tier1
+def test_by_id_uses_index_not_a_scan(store: CourseStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    made = store.create("bob", "linux")
+    store.create("eve", "regex")
+    monkeypatch.setattr(store, "all", lambda: pytest.fail("by_id scanned every course"))
+    got = store.by_id(made.id)
+    assert got is not None and got.ref == "bob/linux"
+
+
+@pytest.mark.tier1
+def test_by_id_index_follows_rename_and_delete(store: CourseStore) -> None:
+    made = store.create("bob", "linux")
+    store.rename("bob/linux", "unix")
+    assert store.by_id(made.id).ref == "bob/unix"
+    store.delete("bob/unix")
+    assert store.by_id(made.id) is None
+
+
+@pytest.mark.tier1
+def test_by_id_rebuilds_a_lost_index(store: CourseStore) -> None:
+    made = store.create("bob", "linux")
+    (store._root / ".ids.json").unlink()                  # noqa: SLF001
+    assert store.by_id(made.id).ref == "bob/linux"
+
+
+@pytest.mark.tier1
+def test_heal_writes_mirrors_left_behind_by_a_crash(store: CourseStore) -> None:
+    parent = store.create("bob", "linux")
+    mirror = store.create_copy(parent, "kid", "m", "mirror")
+    cur = store.get(parent.ref)
+    c.add_block(cur, "Git")
+    store._save(cur)                                      # noqa: SLF001  (saved, then the server died)
+    assert store._read(mirror.ref).blocks == []           # noqa: SLF001
+    store.heal()
+    assert [b["name"] for b in store._read(mirror.ref).blocks] == ["Git"]  # noqa: SLF001
+
+
+@pytest.mark.tier1
+def test_copy_of_a_course_deleted_meanwhile_is_gone(store: CourseStore) -> None:
+    parent = store.create("bob", "linux")
+    seen = store.get(parent.ref)
+    store.delete(parent.ref)                              # deleted between the check and the copy
+    made = store.create_copy(seen, "kid", "m", "mirror")
+    assert (made.origin["gone"], made.kind) == (True, "fork")
