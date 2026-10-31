@@ -142,22 +142,35 @@ class CourseStore:
             self._refresh(course)
         return course
 
-    def _refresh(self, copy: Course) -> None:
+    def _refresh(self, copy: Course, parents: dict[str, Course] | None = None) -> None:
         """
         Bring a copy (in memory) up to its parent.
 
         The parent's address and title, whether the copy's owner still sees a private parent
         (`revoked`), and a mirror's structure.
         """
-        parent = self.by_id(str(copy.origin.get("id", "")))
+        pid = str(copy.origin.get("id", ""))
+        parent = parents.get(pid) if parents is not None else self.by_id(pid)
         if parent is None:
             return
+        if parent.visibility == "private":
+            copy.visibility = "private"                # a copy of a private course never shows more
         revoked = parent.visibility == "private" and parent.role_of(copy.owner) is None
         copy.origin |= {"ref": parent.ref, "owner": parent.owner, "title": parent.title, "revoked": revoked}
         if copy.kind != "mirror" or revoked or cc.structure(parent) == cc.structure(copy):
             return
         cc.apply_structure(copy, cc.structure(parent), source_open=cc.block_open(parent))
         copy.origin["synced_rev"] = parent.rev
+
+    def all_fresh(self) -> list[Course]:
+        """Every course as `get()` would give it: copies brought up to their parents (in memory)."""
+        raw = self.all()
+        by_id = {c.id: c for c in raw}
+        fresh = {c.id: _course(asdict(c)) for c in raw}
+        for course in fresh.values():
+            if course.origin and not course.origin.get("gone"):
+                self._refresh(course, by_id)
+        return list(fresh.values())
 
     def all(self) -> list[Course]:
         """Every course as stored."""
@@ -305,7 +318,7 @@ class CourseStore:
 
     def courses_with(self, repo: str, tag: str) -> list[Course]:
         """Courses holding the task `repo:tag`."""
-        return [course for course in self.all() if course.find_task(repo, tag) is not None]
+        return [course for course in self.all_fresh() if course.find_task(repo, tag) is not None]
 
 
 # -- blocks and tasks --------------------------------------------------------

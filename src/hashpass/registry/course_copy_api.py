@@ -224,6 +224,11 @@ class CopyApi:
         """
         copies = self.api.courses.copies_of(course.id)
         if course.visibility == "private":
+            keep = [c.owner for c in copies if course.role_of(c.owner) is None]
+            if keep:                                   # spec §5: existing copies keep going
+                self.api._edit(course.ref, lambda c: [c.members.setdefault(o, "member") for o in keep],  # noqa: SLF001
+                               by=user, check_rev=False,
+                               what=f"курс стал приватным — владельцы копий остаются участниками: {', '.join(keep)}")
             for copy in copies:
                 if copy.visibility != "private":
                     self.api._edit(copy.ref, lambda c: setattr(c, "visibility", "private"), by=user,  # noqa: SLF001

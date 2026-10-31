@@ -293,8 +293,11 @@ class CourseApi:
             if not can(user, self.server.pool_perms(user), course, "view"):
                 return self._json(HTTPStatus.OK, self._peek(course, user))
             return self._json(HTTPStatus.OK, self._view(course, user, role))
+        now = self.courses.get(f"{owner}/{name}")
+        body = self._body()
+        flips = "auto_update" in body and now is not None and bool(body["auto_update"]) != now.auto_update
         course, _user, err = self._load(owner, name, "delete" if request.method == "DELETE" else "content",
-                                        structure="auto_update" in self._body())
+                                        structure=flips)
         if err is not None:
             return err
         if request.method == "DELETE":
@@ -308,6 +311,9 @@ class CourseApi:
             course, err = self._rename(course, _user, str(body["name"]))
             if err is not None:
                 return err
+        parent = self.courses.by_id(str(course.origin.get("id", ""))) if course.origin else None
+        if body.get("visibility") == "public" and parent is not None and parent.visibility == "private":
+            return self._err(HTTPStatus.CONFLICT, "копия приватного курса — только приватная")
         if body.get("visibility") == "public" and course.visibility == "private":
             private = [f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()
                        if self.server.repo(t["repo"]).visibility == "private"]

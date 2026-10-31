@@ -297,3 +297,12 @@ def test_two_parent_writes_mirror_gets_last(store: CourseStore) -> None:
         t.join()
     raw = store._read(mirror)                         # noqa: SLF001  (as written, no catch-up)
     assert cc.structure(raw) == cc.structure(store.get(parent))
+
+
+@pytest.mark.tier1
+def test_apply_structure_drops_own_hidden_copy_of_a_task_it_brings() -> None:
+    course = Course(id="p", owner="bob", name="x")
+    course.blocks = [{"id": "b1", "name": "Git", "open": True, "tasks": [_task("bob/a", hidden=True)]}]
+    cc.apply_structure(course, {"auto_update": True,
+                                "blocks": [{"id": "b1", "name": "Git", "tasks": [cc.structure_task(_task("bob/a", 2))]}]})
+    assert [(t["repo"], t["n"], t["hidden"]) for _b, t in course.tasks()] == [("bob/a", 2, False)]

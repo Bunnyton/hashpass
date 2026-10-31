@@ -40,7 +40,9 @@ def apply_structure(course: "Course", struct: dict, *, source_open: dict[str, bo
     """
     source_open = source_open or {}
     old = {b["id"]: b for b in course.blocks}
-    hidden = {b["id"]: [t for t in b.get("tasks", []) if t.get("hidden")] for b in course.blocks}
+    brought = {f"{t['repo']}:{t['tag']}" for b in struct["blocks"] for t in b["tasks"]}
+    hidden = {b["id"]: [t for t in b.get("tasks", []) if t.get("hidden")
+                        and f"{t['repo']}:{t['tag']}" not in brought] for b in course.blocks}
     blocks = []
     for sb in struct["blocks"]:
         mine = old.get(sb["id"])

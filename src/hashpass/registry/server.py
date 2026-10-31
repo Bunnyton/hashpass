@@ -421,7 +421,7 @@ class PoolServer:
 
     def _reachable_in_course(self, user: str | None, ref: str) -> bool:
         """Whether a private image `ref` is a parent/base of a task `user` gets through a course."""
-        for course in self.course_api.courses.all():
+        for course in self.course_api.courses.all_fresh():
             if not can(user, self.pool_perms(user), course, "play"):
                 continue
             for _block, task in course.tasks():

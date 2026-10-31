@@ -366,7 +366,7 @@
 <label>Видимость<select name='visibility'>
 <option value='public'{% if c.visibility == 'public' %} selected{% endif %}>публичный</option>
 <option value='private'{% if c.visibility == 'private' %} selected{% endif %}>приватный</option></select></label>
-<label class='check'><input type='checkbox' name='auto_update' data-type='bool'{% if c.settings.auto_update %} checked{% endif %}> Автообновление: задания сами переходят на новые версии</label>
+{% if may.edit %}<label class='check'><input type='checkbox' name='auto_update' data-type='bool'{% if c.settings.auto_update %} checked{% endif %}> Автообновление: задания сами переходят на новые версии</label>{% endif %}
 <label class='check'><input type='checkbox' name='auto_accept' data-type='bool'{% if c.settings.auto_accept %} checked{% endif %}> Принимать предложения сразу</label>
 <label class='check'><input type='checkbox' name='allow_mirrors' data-type='bool'{% if c.settings.allow_mirrors %} checked{% endif %}> Разрешить зеркала — копии с теми же заданиями, их учениками управляет сделавший</label>
 <label class='check'><input type='checkbox' name='allow_forks' data-type='bool'{% if c.settings.allow_forks %} checked{% endif %}> Разрешить форки — копии, которые правят и предлагают сюда целиком</label>

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from hashpass.registry.courses import CourseStore
 from hashpass.registry.revisions import RepoIndex
 from tests.registry.test_course_api import _course, _Courses
 
@@ -418,3 +419,39 @@ def test_merge_removing_solved_task_keeps_progress(pool: _Courses) -> None:
     assert pool.call("POST", f"{path}/merges/{mid}", "bob", {"action": "merge"})[0] == 200
     assert _tasks(pool.call("GET", path, "bob")[1]) == []
     assert pool.call("GET", "/progress", "max")[1]["progress"]["max"]["bob/git-init:1"]["status"] == "passed"
+
+
+# -- final review fixes ---------------------------------------------------------
+
+@pytest.mark.tier1
+def test_revoked_mirror_closed_without_course_param(pool: _Courses) -> None:
+    _revoked_setup(pool)
+    store = CourseStore(pool.r.store.root / ".courses")
+    raw = next(c for c in store.courses_with("bob/git-init", "1") if c.ref == "kid/m")
+    assert raw.closed is True
+
+
+@pytest.mark.tier1
+def test_copy_of_private_cannot_go_public(pool: _Courses) -> None:
+    path = _with_task(pool, "private")
+    pool.call("PUT", f"{path}/members/kid", "bob", {"role": "member"})
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    code, body = pool.call("PUT", "/courses/kid/m", "kid", {"visibility": "public"})
+    assert (code, body["error"]) == (409, "копия приватного курса — только приватная")
+
+
+@pytest.mark.tier1
+def test_mirror_settings_save_with_auto_update_unchanged(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    assert pool.call("PUT", "/courses/kid/m", "kid", {"title": "Группа", "auto_update": True})[0] == 200
+    assert pool.call("PUT", "/courses/kid/m", "kid", {"auto_update": False})[0] == 403
+
+
+@pytest.mark.tier1
+def test_parent_going_private_keeps_mirrors_open(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    pool.call("PUT", path, "bob", {"visibility": "private"})
+    view = pool.call("GET", "/courses/kid/m", "kid")[1]
+    assert (view["origin"]["revoked"], _tasks(view), view["visibility"]) == (False, ["bob/git-init:1"], "private")
