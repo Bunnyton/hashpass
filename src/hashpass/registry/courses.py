@@ -57,6 +57,10 @@ class Course:
     history: list[dict] = field(default_factory=list)   # spec 2026-10-23 §4: who changed what, why
     perms: dict[str, list[str]] = field(default_factory=dict)   # spec 2026-10-25 §3: admins' boxes
     extras: dict[str, list[str]] = field(default_factory=dict)   # 2026-10-26: authors' extra rights
+    origin: dict = field(default_factory=dict)      # spec 2026-10-31: a mirror's / a fork's parent
+    allow_mirrors: bool = True
+    allow_forks: bool = False
+    merges: list[dict] = field(default_factory=list)   # whole forks offered back to this course
     created_at: str = ""
     rev: int = 0
 
@@ -75,6 +79,12 @@ class Course:
     @property
     def ref(self) -> str:
         return f"{self.owner}/{self.name}"
+
+    @property
+    def kind(self) -> str:
+        """`mirror` (follows a live parent), `fork` (one's own copy; a mirror whose parent is gone), or ""."""
+        kind = str(self.origin.get("kind", ""))
+        return "fork" if kind == "mirror" and self.origin.get("gone") else kind
 
     def role_of(self, user: str | None) -> str | None:
         """Return `user`'s role here (`owner` for the owner), or None."""
