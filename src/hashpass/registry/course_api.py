@@ -175,7 +175,28 @@ class CourseApi:
     def _summary(self, course: Course, user: str | None) -> dict:
         return {"ref": course.ref, "id": course.id, "owner": course.owner, "name": course.name,
                 "title": course.title, "description": course.description,
-                "visibility": course.visibility, "role": course.role_of(user)}
+                "visibility": course.visibility, "role": course.role_of(user),
+                "origin": self._origin(course, user)}
+
+    def _origin(self, course: Course, user: str | None) -> dict | None:
+        """Where a copy comes from, always said (spec 2026-10-31 §4); `linked` -- `user` may open it."""
+        if not course.origin:
+            return None
+        o = course.origin
+        parent = None if o.get("gone") else self.courses.by_id(str(o.get("id", "")))
+        ref, owner, title = (parent.ref, parent.owner, parent.title) if parent else (
+            str(o.get("ref", "")), str(o.get("owner", "")), str(o.get("title", "")))
+        return {"kind": course.kind, "ref": ref, "owner": owner, "title": title,
+                "gone": bool(o.get("gone")), "revoked": bool(o.get("revoked")),
+                "linked": parent is not None and can(user, self.server.pool_perms(user), parent, "view")}
+
+    def _copies(self, course: Course, user: str | None) -> dict:
+        """Return the course's mirrors and forks: counted all, listed those `user` may see."""
+        copies = self.courses.copies_of(course.id)
+        pool = self.server.pool_perms(user)
+        return {"mirrors": sum(c.kind == "mirror" for c in copies), "forks": sum(c.kind == "fork" for c in copies),
+                "students": sum(len(self.enrollments.users_of(c.id)) for c in copies),
+                "list": [self._summary(c, user) | {"kind": c.kind} for c in copies if can(user, pool, c, "view")]}
 
     def _view(self, course: Course, user: str | None, _role: str | None) -> dict:
         """Return the course as `user` may see it."""
@@ -207,7 +228,9 @@ class CourseApi:
         if staff:
             out["updates"] = [{"repo": r, "tag": t, "latest": n}
                               for r, t, n in cm.pending_updates(course, self._latest)]
-            out["settings"] = {"auto_accept": course.auto_accept, "auto_update": course.auto_update}
+            out["settings"] = {"auto_accept": course.auto_accept, "auto_update": course.auto_update,
+                               "allow_mirrors": course.allow_mirrors, "allow_forks": course.allow_forks}
+        out["copies"] = self._copies(course, user)
         out["members"] = course.members                 # who is in: everyone who sees the course
         out["extras"] = course.extras                   # authors' extra rights (2026-10-26)
         # each change is a version of the course, numbered once (entries from before had no number)
@@ -286,13 +309,14 @@ class CourseApi:
                     msg = "видимость — public или private"
                     raise ValueError(msg)
                 c.visibility = body["visibility"]
-            for key in ("auto_accept", "auto_update"):
+            for key in ("auto_accept", "auto_update", "allow_mirrors", "allow_forks"):
                 if key in body:
                     setattr(c, key, bool(body[key]))
             if body.get("rotate_invite"):
                 cm.rotate_invite(c)
         said = [w for k, w in (("title", "название"), ("description", "описание"), ("visibility", "видимость"),
-                               ("auto_accept", "приём предложений"), ("auto_update", "автообновление"))
+                               ("auto_accept", "приём предложений"), ("auto_update", "автообновление"),
+                               ("allow_mirrors", "зеркала"), ("allow_forks", "форки"))
                 if k in body]
         err = self._edit(course.ref, change, by=_user, check_rev=not renamed,
                          what=f"настройки: {', '.join(said)}" if said else "")

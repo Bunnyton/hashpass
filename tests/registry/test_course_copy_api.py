@@ -1,0 +1,122 @@
+"""Tier1: mirrors and forks of a course over HTTP (spec 2026-10-31)."""
+# ruff: noqa: PLR2004
+from pathlib import Path
+
+import pytest
+
+from tests.registry.test_course_api import _course, _Courses
+
+
+@pytest.fixture
+def pool(registry, tmp_path: Path) -> _Courses:
+    p = _Courses(registry, tmp_path)
+    p.push("bob/git-init", "1", image="one", task="t1")
+    p.push("bob/git-init", "1", image="two", task="t2")
+    p.push("eve/regex", "1", image="re", task="r1", user="eve")
+    return p
+
+
+def _with_task(pool: _Courses, visibility: str = "public") -> str:
+    path = _course(pool, visibility)
+    block = pool.call("POST", f"{path}/blocks", "bob", {"name": "Git"})[1]["id"]
+    pool.call("POST", f"{path}/tasks", "bob", {"repo": "bob/git-init", "tag": "1", "block_id": block})
+    return path
+
+
+def _tasks(view: dict) -> list[str]:
+    return [t["ref"] for b in view.get("blocks", []) for t in b["tasks"]]
+
+
+@pytest.mark.tier1
+def test_mirror_and_fork_created_with_origin(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("PUT", path, "bob", {"allow_forks": True})
+    code, made = pool.call("POST", f"{path}/mirror", "kid", {"name": "linux-m"})
+    assert (code, made["ref"], made["origin"]["kind"], made["origin"]["ref"]) == (201, "kid/linux-m", "mirror",
+                                                                                   "bob/linux")
+    view = pool.call("GET", "/courses/kid/linux-m", "kid")[1]
+    assert (_tasks(view), view["title"], view["origin"]["owner"], view["origin"]["linked"]) == (
+        ["bob/git-init:1"], "Linux", "bob", True)
+    code, made = pool.call("POST", f"{path}/fork", "kid", {"name": "linux-f", "title": "Мой Linux"})
+    assert (code, made["title"], made["origin"]["kind"]) == (201, "Мой Linux", "fork")
+    assert pool.call("GET", "/courses", "kid")[1]["courses"][0]["origin"] is None    # bob/linux itself
+
+
+@pytest.mark.tier1
+def test_forks_off_by_default_mirrors_on(pool: _Courses) -> None:
+    path = _with_task(pool)
+    code, body = pool.call("POST", f"{path}/fork", "kid", {"name": "f"})
+    assert (code, body["error"]) == (403, "автор курса не разрешает форки")
+    assert pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})[0] == 201
+    pool.call("PUT", path, "bob", {"allow_forks": True, "allow_mirrors": False})
+    code, body = pool.call("POST", f"{path}/mirror", "kid", {"name": "m2"})
+    assert (code, body["error"]) == (403, "автор курса не разрешает зеркала")
+    assert pool.call("POST", f"{path}/fork", "kid", {"name": "f"})[0] == 201
+    settings = pool.call("GET", path, "bob")[1]["settings"]
+    assert (settings["allow_mirrors"], settings["allow_forks"]) == (False, True)
+    assert pool.call("POST", f"{path}/fork", None, {"name": "x"})[0] == 401
+
+
+@pytest.mark.tier1
+def test_private_source_copy_must_be_private(pool: _Courses) -> None:
+    path = _with_task(pool, "private")
+    assert pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})[0] in {401, 403, 404}   # cannot see it
+    pool.call("PUT", f"{path}/members/kid", "bob", {"role": "member"})
+    code, body = pool.call("POST", f"{path}/mirror", "kid", {"name": "m", "visibility": "public"})
+    assert (code, body["error"]) == (400, "копия приватного курса — только приватная")
+    code, made = pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    assert (code, made["visibility"]) == (201, "private")
+
+
+@pytest.mark.tier1
+def test_mirror_of_mirror_points_at_root(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    code, made = pool.call("POST", "/courses/kid/m/mirror", "max", {"name": "m2"})
+    assert (code, made["origin"]["ref"]) == (201, "bob/linux")
+    pool.call("PUT", path, "bob", {"allow_mirrors": False})
+    assert pool.call("POST", "/courses/kid/m/mirror", "ann", {"name": "m3"})[0] == 403   # the root's say
+
+
+@pytest.mark.tier1
+def test_fork_of_mirror_is_fork_of_root(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    assert pool.call("POST", "/courses/kid/m/fork", "max", {"name": "f"})[0] == 403      # the root forbids
+    pool.call("PUT", path, "bob", {"allow_forks": True})
+    code, made = pool.call("POST", "/courses/kid/m/fork", "max", {"name": "f"})
+    assert (code, made["origin"]["ref"], made["origin"]["kind"]) == (201, "bob/linux", "fork")
+    assert pool.call("POST", "/courses/max/f/fork", "ann", {"name": "ff"})[0] == 403      # the fork's own say
+    pool.call("PUT", "/courses/max/f", "max", {"allow_forks": True})
+    code, made = pool.call("POST", "/courses/max/f/fork", "ann", {"name": "ff"})
+    assert (code, made["origin"]["ref"]) == (201, "max/f")
+
+
+@pytest.mark.tier1
+def test_origin_unlinked_for_who_cannot_see_parent(pool: _Courses) -> None:
+    path = _with_task(pool, "private")
+    pool.call("PUT", f"{path}/members/kid", "bob", {"role": "member"})
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    pool.call("PUT", "/courses/kid/m/members/max", "kid", {"role": "member"})
+    origin = pool.call("GET", "/courses/kid/m", "max")[1]["origin"]
+    assert (origin["linked"], origin["title"], origin["owner"]) == (False, "Linux", "bob")
+
+
+@pytest.mark.tier1
+def test_parent_lists_copies(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("PUT", path, "bob", {"allow_forks": True})
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    pool.call("POST", f"{path}/fork", "max", {"name": "f"})
+    copies = pool.call("GET", path, "ann")[1]["copies"]
+    assert (copies["mirrors"], copies["forks"]) == (1, 1)
+    assert sorted(c["ref"] for c in copies["list"]) == ["kid/m", "max/f"]
+
+
+@pytest.mark.tier1
+def test_rename_parent_keeps_origin(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    assert pool.call("PUT", path, "bob", {"name": "linux2"})[0] == 200
+    origin = pool.call("GET", "/courses/kid/m", "kid")[1]["origin"]
+    assert (origin["ref"], origin["linked"]) == ("bob/linux2", True)

@@ -6,8 +6,10 @@ tasks (`repo, tag, n, pinned, added_by`) in order, and `auto_update`. A hidden t
 author's draft and is not part of it; whether a block is open is each course's own schedule.
 """
 import json
+from typing import TYPE_CHECKING
 
-from hashpass.registry.courses import Course
+if TYPE_CHECKING:
+    from hashpass.registry.courses import Course
 
 
 def structure_task(task: dict) -> dict:
@@ -16,7 +18,7 @@ def structure_task(task: dict) -> dict:
             "pinned": bool(task.get("pinned", False)), "added_by": str(task.get("added_by", ""))}
 
 
-def structure(course: Course) -> dict:
+def structure(course: "Course") -> dict:
     """Return what a copy of `course` holds: blocks and visible tasks in order, and `auto_update`."""
     return {"auto_update": bool(course.auto_update),
             "blocks": [{"id": b["id"], "name": b["name"],
@@ -24,12 +26,12 @@ def structure(course: Course) -> dict:
                        for b in course.blocks]}
 
 
-def block_open(course: Course) -> dict[str, bool]:
+def block_open(course: "Course") -> dict[str, bool]:
     """Whether each block of `course` is open, by id."""
     return {b["id"]: bool(b.get("open", True)) for b in course.blocks}
 
 
-def apply_structure(course: Course, struct: dict, *, source_open: dict[str, bool] | None = None) -> None:
+def apply_structure(course: "Course", struct: dict, *, source_open: dict[str, bool] | None = None) -> None:
     """
     Make `course`'s structure `struct`, keeping what is its own.
 

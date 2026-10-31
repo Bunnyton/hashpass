@@ -42,6 +42,7 @@ from hashpass.registry.blob import inspect_image_blob, pack_image, pack_task, un
 from hashpass.registry.catalog import Catalog, CatalogEntry
 from hashpass.registry.config import ServerConfig, save_config
 from hashpass.registry.course_api import CourseApi
+from hashpass.registry.course_copy_api import CopyApi
 from hashpass.registry.course_web import CourseWeb
 from hashpass.registry.merges import MergeRequests, tree_diff
 from hashpass.registry.passwords import (
@@ -523,6 +524,8 @@ class PoolServer:
         self._register_routes(app)
         self.course_api = CourseApi(self)
         self.course_api.register(app)
+        self.copy_api = CopyApi(self)
+        self.copy_api.register(app)
         CourseWeb(self).register(app)
         self.people = SearchWeb(self)
         self.people.register(app)

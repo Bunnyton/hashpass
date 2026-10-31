@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from hashpass.registry import course_copies as cc
 from hashpass.registry import perms
 
 ROLES = ("member", "author", "admin", "owner")   # `maintainer` (before 2026-10-25) reads as `admin`
@@ -180,6 +181,37 @@ class CourseStore:
                             invite=secrets.token_urlsafe(16), created_at=_now())
             self._save(course)
         return course
+
+    def by_id(self, course_id: str) -> Course | None:
+        """Return the course whose immutable id is `course_id`."""
+        return next((c for c in self.all() if c.id == course_id), None) if course_id else None
+
+    def copies_of(self, course_id: str, kind: str | None = None) -> list[Course]:
+        """Return the direct mirrors and forks of a course (`kind` -- only those)."""
+        return [c for c in self.all() if c.origin.get("id") == course_id and not c.origin.get("gone")
+                and (kind is None or c.kind == kind)]
+
+    def root_of(self, course: Course) -> Course:
+        """Return what a copy of `course` copies: a mirror's live parent, else the course itself."""
+        if course.kind == "mirror":
+            return self.by_id(str(course.origin.get("id", ""))) or course
+        return course
+
+    def create_copy(self, parent: Course, owner: str, name: str, kind: str, *,  # noqa: PLR0913
+                    title: str = "", visibility: str = "public") -> Course:
+        """Make `owner/name` a mirror or a fork of `parent` (its structure; the people are the copy's own)."""
+        if kind not in ("mirror", "fork"):
+            msg = f"неизвестный вид копии: {kind}"
+            raise ValueError(msg)
+        course = self.create(owner, name, title=title or parent.title, visibility=visibility,
+                             description=parent.description)
+        with self.edit(course.ref) as copy:
+            struct = cc.structure(parent)
+            cc.apply_structure(copy, struct, source_open=cc.block_open(parent))
+            copy.origin = {"id": parent.id, "kind": kind, "ref": parent.ref, "owner": parent.owner,
+                           "title": parent.title, "base_rev": parent.rev, "base": struct,
+                           "synced_rev": parent.rev, "gone": False, "revoked": False}
+        return self.get(course.ref) or course
 
     def rename(self, ref: str, name: str) -> Course:
         """Move a course to `owner/name`; the old address is gone (user 2026-10-27: no legacy names)."""
