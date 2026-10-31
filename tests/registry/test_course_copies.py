@@ -78,3 +78,143 @@ def test_block_open() -> None:
     course = Course(id="c", owner="bob", name="x")
     course.blocks = [{"id": "b1", "name": "A", "open": False, "tasks": []}, {"id": "b2", "name": "B", "tasks": []}]
     assert cc.block_open(course) == {"b1": False, "b2": True}
+
+
+# -- diff and three-way merge -------------------------------------------------
+
+def _t(repo: str, n: int = 1, pinned: bool = False) -> dict:  # noqa: FBT001, FBT002
+    return {"repo": repo, "tag": "1", "n": n, "pinned": pinned, "added_by": "bob"}
+
+
+def _s(*blocks: tuple, auto_update: bool = True) -> dict:
+    """`_s(("b1", "Git", [task, …]), …)` -- a structure."""
+    return {"auto_update": auto_update, "blocks": [{"id": i, "name": n, "tasks": list(ts)} for i, n, ts in blocks]}
+
+
+def _refs(struct: dict) -> list[tuple[str, list[str]]]:
+    return [(b["id"], [t["repo"] for t in b["tasks"]]) for b in struct["blocks"]]
+
+
+A, B, C, X = _t("bob/a"), _t("bob/b"), _t("bob/c"), _t("bob/x")
+
+
+@pytest.mark.tier1
+def test_diff_each_op() -> None:
+    base = _s(("b1", "Git", [A, B]), ("b2", "Regex", [C]))
+    cases = [
+        (_s(("b1", "Git", [A, X, B]), ("b2", "Regex", [C])),
+         [{"op": "task_add", "ref": "bob/x:1", "block": "b1", "block_name": "Git", "after": "bob/a:1",
+           "task": X}]),
+        (_s(("b1", "Git", [A]), ("b2", "Regex", [C])),
+         [{"op": "task_remove", "ref": "bob/b:1", "block": "b1"}]),
+        (_s(("b1", "Git", [A, _t("bob/b", 3)]), ("b2", "Regex", [C])),
+         [{"op": "task_set", "ref": "bob/b:1", "field": "n", "old": 1, "new": 3}]),
+        (_s(("b1", "Git", [A, _t("bob/b", pinned=True)]), ("b2", "Regex", [C])),
+         [{"op": "task_set", "ref": "bob/b:1", "field": "pinned", "old": False, "new": True}]),
+        (_s(("b1", "Git", [B, A]), ("b2", "Regex", [C])),
+         [{"op": "task_move", "ref": "bob/b:1", "block": "b1", "block_name": "Git", "after": "^"}]),
+        (_s(("b1", "Git", [A]), ("b2", "Regex", [C, B])),
+         [{"op": "task_move", "ref": "bob/b:1", "block": "b2", "block_name": "Regex", "after": "bob/c:1"}]),
+        (_s(("b1", "Git", [A, B]), ("b2", "Regex", [C]), ("b3", "Vim", [])),
+         [{"op": "block_add", "id": "b3", "name": "Vim", "after": "b2"}]),
+        (_s(("b1", "Git", [A, B, C])),
+         [{"op": "task_move", "ref": "bob/c:1", "block": "b1", "block_name": "Git", "after": "bob/b:1"},
+          {"op": "block_remove", "id": "b2", "name": "Regex"}]),
+        (_s(("b1", "Гит", [A, B]), ("b2", "Regex", [C])),
+         [{"op": "block_rename", "id": "b1", "old": "Git", "new": "Гит"}]),
+        (_s(("b2", "Regex", [C]), ("b1", "Git", [A, B])),
+         [{"op": "block_move", "id": "b2", "name": "Regex", "after": "^"}]),
+        (_s(("b1", "Git", [A, B]), ("b2", "Regex", [C]), auto_update=False),
+         [{"op": "auto_update", "old": True, "new": False}]),
+    ]
+    for new, want in cases:
+        assert cc.diff(base, new) == want, want[0]["op"]
+    assert cc.diff(base, base) == []
+
+
+@pytest.mark.tier1
+def test_merge3_parent_adds_task_after_neighbour() -> None:
+    base = _s(("b1", "Git", [A, B]))
+    merged, conflicts = cc.merge3(base, _s(("b1", "Git", [A, B, C])), _s(("b1", "Git", [A, X, B])))
+    assert (_refs(merged), conflicts) == ([("b1", ["bob/a", "bob/x", "bob/b", "bob/c"])], [])
+
+
+@pytest.mark.tier1
+def test_merge3_neighbour_missing_goes_to_end() -> None:
+    base = _s(("b1", "Git", [A, B]))
+    merged, conflicts = cc.merge3(base, _s(("b1", "Git", [B, C])), _s(("b1", "Git", [A, X, B])))
+    assert _refs(merged) == [("b1", ["bob/b", "bob/c", "bob/x"])]
+    assert [c["op"] for c in conflicts] == []
+
+
+@pytest.mark.tier1
+def test_merge3_new_block_created() -> None:
+    base = _s(("b1", "Git", [A]))
+    theirs = _s(("b1", "Git", [A]), ("b2", "Regex", [X]))
+    merged, _ = cc.merge3(base, _s(("b1", "Git", [A, C])), theirs)
+    assert _refs(merged) == [("b1", ["bob/a", "bob/c"]), ("b2", ["bob/x"])]
+    assert merged["blocks"][1]["name"] == "Regex"
+
+
+@pytest.mark.tier1
+def test_merge3_both_changed_n_keeps_ours() -> None:
+    base = _s(("b1", "Git", [_t("bob/a", 1)]))
+    merged, conflicts = cc.merge3(base, _s(("b1", "Git", [_t("bob/a", 3)])), _s(("b1", "Git", [_t("bob/a", 2)])))
+    assert merged["blocks"][0]["tasks"][0]["n"] == 3  # noqa: PLR2004
+    assert [(c["op"], c["ref"], c["new"]) for c in conflicts] == [("task_set", "bob/a:1", 2)]
+
+
+@pytest.mark.tier1
+def test_merge3_same_change_no_conflict() -> None:
+    base = _s(("b1", "Git", [_t("bob/a", 1)]))
+    two = _s(("b1", "Git", [_t("bob/a", 2)]))
+    merged, conflicts = cc.merge3(base, two, two)
+    assert (merged, conflicts) == (two, [])
+
+
+@pytest.mark.tier1
+def test_merge3_parent_removes_task_ours_untouched() -> None:
+    base = _s(("b1", "Git", [A, B]))
+    merged, conflicts = cc.merge3(base, _s(("b1", "Git", [A, B, C])), _s(("b1", "Git", [A])))
+    assert (_refs(merged), conflicts) == ([("b1", ["bob/a", "bob/c"])], [])
+    merged, conflicts = cc.merge3(base, _s(("b1", "Git", [A, _t("bob/b", 4)])), _s(("b1", "Git", [A])))
+    assert _refs(merged) == [("b1", ["bob/a", "bob/b"])]
+    assert [(c["op"], c["ref"]) for c in conflicts] == [("task_remove", "bob/b:1")]
+
+
+@pytest.mark.tier1
+def test_merge3_parent_removes_block_ours_added_into_it() -> None:
+    base = _s(("b1", "Git", [A]), ("b2", "Regex", [B]))
+    ours = _s(("b1", "Git", [A]), ("b2", "Regex", [B, C]))
+    merged, conflicts = cc.merge3(base, ours, _s(("b1", "Git", [A])))
+    assert _refs(merged) == [("b1", ["bob/a"]), ("b2", ["bob/c"])]
+    assert [c["op"] for c in conflicts] == ["block_remove"]
+
+
+@pytest.mark.tier1
+def test_merge3_hidden_in_parent_is_removed() -> None:
+    parent = Course(id="p", owner="bob", name="linux")
+    parent.blocks = [{"id": "b1", "name": "Git", "open": True, "tasks": [_task("bob/a"), _task("bob/b")]}]
+    base = cc.structure(parent)
+    parent.blocks[0]["tasks"][1]["hidden"] = True
+    merged, conflicts = cc.merge3(base, base, cc.structure(parent))
+    assert (_refs(merged), conflicts) == ([("b1", ["bob/a"])], [])
+
+
+@pytest.mark.tier1
+def test_describe_russian() -> None:
+    assert cc.describe({"op": "task_set", "ref": "bob/git-init:1", "field": "n", "old": 2, "new": 3}) == \
+        "ревизия bob/git-init:1: v2 → v3"
+    assert cc.describe({"op": "task_add", "ref": "bob/x:1", "block": "b1", "block_name": "Git",
+                        "after": "^", "task": X}) == "добавлено задание bob/x:1 в блок «Git»"
+    for change in cc.diff(_s(("b1", "Git", [A, B]), ("b2", "R", [C])),
+                          _s(("b3", "V", [X]), ("b1", "Гит", [_t("bob/b", 2, pinned=True)]), auto_update=False)):
+        assert cc.describe(change)
+
+
+@pytest.mark.tier1
+def test_merge3_other_aspect_of_a_task_merges() -> None:
+    base = _s(("b1", "Git", [A, B, C]))
+    merged, conflicts = cc.merge3(base, _s(("b1", "Git", [B, C, A])), _s(("b1", "Git", [_t("bob/a", 5), B, C])))
+    assert _refs(merged) == [("b1", ["bob/b", "bob/c", "bob/a"])]
+    assert (merged["blocks"][0]["tasks"][2]["n"], conflicts) == (5, [])
