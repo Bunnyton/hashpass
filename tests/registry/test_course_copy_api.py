@@ -120,3 +120,36 @@ def test_rename_parent_keeps_origin(pool: _Courses) -> None:
     assert pool.call("PUT", path, "bob", {"name": "linux2"})[0] == 200
     origin = pool.call("GET", "/courses/kid/m", "kid")[1]["origin"]
     assert (origin["ref"], origin["linked"]) == ("bob/linux2", True)
+
+
+@pytest.mark.tier1
+def test_mirror_structure_routes_forbidden(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    m = "/courses/kid/m"
+    block = pool.call("GET", m, "kid")[1]["blocks"][0]["id"]
+    says = "это зеркало курса bob/linux — задания и порядок меняет его автор"
+    for method, url, body in (("POST", f"{m}/tasks", {"repo": "eve/regex", "tag": "1", "block_id": block}),
+                              ("POST", f"{m}/blocks", {"name": "Свой"}),
+                              ("PUT", f"{m}/blocks/{block}", {"name": "Переименован"}),
+                              ("DELETE", f"{m}/blocks/{block}", None),
+                              ("PUT", f"{m}/layout", {"blocks": []}),
+                              ("PUT", f"{m}/tasks/bob/git-init:1", {"hidden": True}),
+                              ("DELETE", f"{m}/tasks/bob/git-init:1", None),
+                              ("PUT", m, {"auto_update": False})):
+        for who in ("kid", "max"):
+            code, said = pool.call(method, url, who, body)
+            assert (code, said.get("error")) == (403, says) or (who == "max" and code == 403), (method, url, who)
+    assert pool.call("PUT", f"{m}/blocks/{block}", "kid", {"open": False})[0] == 200   # its own schedule
+    assert pool.call("PUT", m, "kid", {"title": "Группа 7"})[0] == 200
+    view = pool.call("GET", m, "kid")[1]
+    assert (view["blocks"][0]["open"], view["title"], _tasks(view)) == (False, "Группа 7", ["bob/git-init:1"])
+
+
+@pytest.mark.tier1
+def test_parent_change_reaches_mirror_over_http(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    block = pool.call("GET", path, "bob")[1]["blocks"][0]["id"]
+    pool.call("POST", f"{path}/tasks", "bob", {"repo": "eve/regex", "tag": "1", "block_id": block})
+    assert _tasks(pool.call("GET", "/courses/kid/m", "max")[1]) == ["bob/git-init:1", "eve/regex:1"]

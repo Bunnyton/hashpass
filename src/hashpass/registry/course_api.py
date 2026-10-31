@@ -128,8 +128,13 @@ class CourseApi:
         user = self.server._token_user()                 # noqa: SLF001  (same package)
         return user, (self.server.users.role(user) if user else None)
 
-    def _load(self, owner: str, name: str, action: str) -> tuple[Course | None, str | None, Response | None]:
-        """Return the course + caller, or an error: 404/401 when it may not be seen, 403 otherwise."""
+    def _load(self, owner: str, name: str, action: str, *,
+              structure: bool = False) -> tuple[Course | None, str | None, Response | None]:
+        """
+        Return the course + caller, or an error: 404/401 when it may not be seen, 403 otherwise.
+
+        `structure`: the call changes tasks, blocks or their order -- never in a mirror (spec 2026-10-31 §2).
+        """
         user, _role = self._caller()
         course = self.courses.get(f"{owner}/{name}")
         if course is None:
@@ -139,6 +144,9 @@ class CourseApi:
                 status = HTTPStatus.UNAUTHORIZED if user is None else HTTPStatus.FORBIDDEN
                 return None, user, self._err(status, "курс закрыт — попросите доступ")
             return None, user, self._err(HTTPStatus.FORBIDDEN, "не хватает прав в этом курсе")
+        if structure and course.kind == "mirror":
+            return None, user, self._err(HTTPStatus.FORBIDDEN, f"это зеркало курса {course.origin.get('ref', '')}"
+                                                               " — задания и порядок меняет его автор")
         return course, user, None
 
     def _edit(self, ref: str, change: Callable[[Course], object], *, by: str = "",
@@ -279,7 +287,8 @@ class CourseApi:
             if not can(user, self.server.pool_perms(user), course, "view"):
                 return self._json(HTTPStatus.OK, self._peek(course, user))
             return self._json(HTTPStatus.OK, self._view(course, user, role))
-        course, _user, err = self._load(owner, name, "delete" if request.method == "DELETE" else "content")
+        course, _user, err = self._load(owner, name, "delete" if request.method == "DELETE" else "content",
+                                        structure="auto_update" in self._body())
         if err is not None:
             return err
         if request.method == "DELETE":
@@ -458,7 +467,7 @@ class CourseApi:
         return (wanted & givable) | (had - givable)
 
     def add_block(self, owner: str, name: str) -> Response:
-        course, actor, err = self._load(owner, name, "content")
+        course, actor, err = self._load(owner, name, "content", structure=True)
         if err is not None:
             return err
         made: list[str] = []
@@ -467,7 +476,8 @@ class CourseApi:
         return err or self._json(HTTPStatus.CREATED, {"id": made[0]})
 
     def block(self, owner: str, name: str, block_id: str) -> Response:
-        course, actor, err = self._load(owner, name, "content")
+        course, actor, err = self._load(owner, name, "content",
+                                        structure=request.method == "DELETE" or "name" in self._body())
         if err is not None:
             return err
         body = self._body()
@@ -488,7 +498,7 @@ class CourseApi:
         return err or self._json(HTTPStatus.OK, {"id": block_id})
 
     def layout(self, owner: str, name: str) -> Response:
-        course, actor, err = self._load(owner, name, "content")
+        course, actor, err = self._load(owner, name, "content", structure=True)
         if err is not None:
             return err
         blocks = self._body().get("blocks")
@@ -511,7 +521,7 @@ class CourseApi:
         return rev.n
 
     def add_task(self, owner: str, name: str) -> Response:
-        course, user, err = self._load(owner, name, "propose")
+        course, user, err = self._load(owner, name, "propose", structure=True)
         if err is not None:
             return err
         body = self._body()
@@ -542,7 +552,7 @@ class CourseApi:
 
     def task(self, owner: str, name: str, task: str) -> Response:  # noqa: C901
         repo, _, tag = task.rpartition(":")
-        course, user, err = self._load(owner, name, "add")
+        course, user, err = self._load(owner, name, "add", structure=True)
         if err is not None:
             return err
         moderator = can(user, self.server.pool_perms(user), course, "content")
@@ -584,7 +594,7 @@ class CourseApi:
         return err or self._json(HTTPStatus.OK, {"task": self.courses.get(course.ref).find_task(repo, tag)})
 
     def proposal(self, owner: str, name: str, pid: str) -> Response:
-        course, user, err = self._load(owner, name, "propose")
+        course, user, err = self._load(owner, name, "propose", structure=True)
         if err is not None:
             return err
         body = self._body()

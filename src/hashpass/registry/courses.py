@@ -123,13 +123,32 @@ class CourseStore:
             raise ValueError(msg)
         return self._root / owner / name / "course.json"
 
-    def get(self, ref: str) -> Course | None:
+    def _read(self, ref: str) -> Course | None:
+        """Return the course as stored (a mirror not caught up)."""
         try:
             return _course(json.loads(self._path(ref).read_text(encoding="utf-8")))
         except (OSError, ValueError, TypeError):
             return None
 
+    def get(self, ref: str) -> Course | None:
+        """Return the course; a mirror behind its parent shows the parent's structure (spec 2026-10-31 §2)."""
+        course = self._read(ref)
+        if course is not None and course.kind == "mirror":
+            self._catch_up(course)
+        return course
+
+    def _catch_up(self, mirror: Course) -> bool:
+        """Give `mirror` (in memory) its parent's structure if it is behind; whether it was."""
+        parent = self.by_id(str(mirror.origin.get("id", "")))
+        if parent is None or cc.structure(parent) == cc.structure(mirror):
+            return False
+        cc.apply_structure(mirror, cc.structure(parent), source_open=cc.block_open(parent))
+        mirror.origin |= {"synced_rev": parent.rev, "ref": parent.ref, "owner": parent.owner,
+                          "title": parent.title}
+        return True
+
     def all(self) -> list[Course]:
+        """Every course as stored."""
         if not self._root.is_dir():
             return []
         out = []
@@ -246,9 +265,18 @@ class CourseStore:
             if expect_rev is not None and course.rev != expect_rev:
                 msg = "курс изменился, пока вы его смотрели — обновите страницу"
                 raise CourseConflictError(msg)
+            before = cc.structure(course)
             yield course
             course.rev += 1
             self._save(course)
+        if cc.structure(course) != before:
+            self.propagate(course.id)
+
+    def propagate(self, parent_id: str) -> None:
+        """Write a parent's structure into each of its mirrors, each under its own lock."""
+        for mirror in self.copies_of(parent_id, "mirror"):
+            with contextlib.suppress(KeyError), self.edit(mirror.ref):
+                pass                                  # edit() reads through get(): caught up, saved
 
     def delete(self, ref: str) -> None:
         path = self._path(ref)

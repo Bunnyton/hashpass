@@ -218,3 +218,82 @@ def test_merge3_other_aspect_of_a_task_merges() -> None:
     merged, conflicts = cc.merge3(base, _s(("b1", "Git", [B, C, A])), _s(("b1", "Git", [_t("bob/a", 5), B, C])))
     assert _refs(merged) == [("b1", ["bob/b", "bob/c", "bob/a"])]
     assert (merged["blocks"][0]["tasks"][2]["n"], conflicts) == (5, [])
+
+
+# -- mirrors follow their parent ----------------------------------------------
+
+def _parent_and_mirror(store: CourseStore) -> tuple[str, str]:
+    parent = store.create("bob", "linux", title="Linux")
+    with store.edit(parent.ref) as cur:
+        c.add_task(cur, "bob/a", "1", 1, c.add_block(cur, "Git"), by="bob")
+    mirror = store.create_copy(store.get(parent.ref), "kid", "m", "mirror")
+    return parent.ref, mirror.ref
+
+
+@pytest.mark.tier1
+def test_parent_change_reaches_mirror(store: CourseStore) -> None:
+    parent, mirror = _parent_and_mirror(store)
+    with store.edit(parent) as cur:
+        c.add_task(cur, "bob/b", "1", 2, cur.blocks[0]["id"], by="bob")
+        cur.blocks[0]["tasks"][0]["pinned"] = True
+    got = store.get(mirror)
+    assert [(t["repo"], t["pinned"]) for _b, t in got.tasks()] == [("bob/a", True), ("bob/b", False)]
+    assert got.origin["synced_rev"] == store.get(parent).rev
+
+
+@pytest.mark.tier1
+def test_mirror_keeps_own_block_schedule(store: CourseStore) -> None:
+    parent, mirror = _parent_and_mirror(store)
+    with store.edit(mirror) as cur:
+        cur.blocks[0]["open"] = False
+    with store.edit(parent) as cur:
+        cur.blocks[0]["name"] = "Гит"
+        cur.blocks[0]["open"] = True
+    block = store.get(mirror).blocks[0]
+    assert (block["name"], block["open"]) == ("Гит", False)
+
+
+@pytest.mark.tier1
+def test_parent_hidden_task_absent_in_mirror(store: CourseStore) -> None:
+    parent, mirror = _parent_and_mirror(store)
+    with store.edit(parent) as cur:
+        cur.blocks[0]["tasks"][0]["hidden"] = True
+    assert list(store.get(mirror).tasks()) == []
+
+
+@pytest.mark.tier1
+def test_missed_propagation_caught_on_read(store: CourseStore) -> None:
+    parent, mirror = _parent_and_mirror(store)
+    raw = store.get(parent)
+    c.add_task(raw, "bob/z", "1", 1, raw.blocks[0]["id"], by="bob")
+    raw.rev += 1
+    store._save(raw)                                  # noqa: SLF001  (a write that skipped edit())
+    assert [t["repo"] for _b, t in store.get(mirror).tasks()] == ["bob/a", "bob/z"]
+
+
+@pytest.mark.tier1
+def test_fork_does_not_follow(store: CourseStore) -> None:
+    parent = store.create("bob", "linux")
+    fork = store.create_copy(parent, "kid", "f", "fork")
+    with store.edit(parent.ref) as cur:
+        c.add_block(cur, "Git")
+    assert store.get(fork.ref).blocks == []
+
+
+@pytest.mark.tier1
+def test_two_parent_writes_mirror_gets_last(store: CourseStore) -> None:
+    import threading  # noqa: PLC0415
+
+    parent, mirror = _parent_and_mirror(store)
+
+    def add(repo: str) -> None:
+        with store.edit(parent) as cur:
+            c.add_task(cur, repo, "1", 1, cur.blocks[0]["id"], by="bob")
+
+    threads = [threading.Thread(target=add, args=(f"bob/t{i}",)) for i in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    raw = store._read(mirror)                         # noqa: SLF001  (as written, no catch-up)
+    assert cc.structure(raw) == cc.structure(store.get(parent))
