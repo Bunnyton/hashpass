@@ -134,3 +134,23 @@ def test_the_picker_says_where_a_copy_comes_from(tmp_path: Path) -> None:
             options = app.screen.query_one("#course-list")
             assert "зеркало курса Linux от bob" in str(options.get_option_at_index(0).prompt)
     asyncio.run(drive())
+
+
+@pytest.mark.tier1
+def test_a_current_copy_says_its_origin_on_start(tmp_path: Path) -> None:
+    class _Copies(_Client):
+        def courses(self, q: str = "", *, token: str) -> list[dict] | None:  # noqa: ARG002
+            return [{"ref": "kid/m", "title": "Группа 7", "visibility": "public", "role": None,
+                     "origin": {"kind": "fork", "ref": "bob/linux", "owner": "bob", "title": "Linux",
+                                "gone": False, "revoked": False, "linked": True}}]
+
+    home = Home(tmp_path / "h")
+    my_courses.choose(home.root, URL, "kid/m")
+
+    async def drive() -> None:
+        app = PoolTUI(home, URL, "kid", "tok")
+        app.client = _Copies()
+        async with app.run_test(size=(110, 32)) as pilot:
+            line = app.query_one("#origin")
+            await _until(pilot, lambda: str(line.render()) == "форк курса Linux от bob" and line.display)
+    asyncio.run(drive())

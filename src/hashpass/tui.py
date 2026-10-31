@@ -266,6 +266,7 @@ class PoolTUI(App):
     Tree { padding: 1 2; background: $surface; }
     Tree > .tree--cursor { background: $accent 40%; color: $text; }
     Tree > .tree--highlight-line { background: $accent 20%; }
+    #origin { height: 1; padding: 0 2; color: $text-muted; display: none; }
     #downloads { height: auto; max-height: 14; padding: 0 2; border-top: solid $accent;
                  display: none; }
     """
@@ -350,6 +351,7 @@ class PoolTUI(App):
         window (the right pane wasn't repainted after a reload) and, per the
         user, "уберём рассинхронизацию".
         """
+        yield Static("", id="origin")              # a mirror's / a fork's parent (spec 2026-10-31 §4)
         tree: Tree[TaskRow | str] = Tree("Каталог", id="tasks")
         tree.show_root = False
         tree.guide_depth = 3
@@ -447,6 +449,7 @@ class PoolTUI(App):
             listed = None
         self.courses_mode = listed is not None
         if self.courses_mode:
+            self._origins = {str(r["ref"]): r.get("origin") for r in listed}
             my_courses.follow(self.env.root, self.url, listed)    # a renamed course: its new name
             if my_courses.activate(self.env.root, self.url) is None and listed:
                 self._picking = True                              # «скачать?» waits for the pick
@@ -483,6 +486,11 @@ class PoolTUI(App):
     def _course_title(self) -> None:
         course = my_courses.current(self.env.root, self.url)
         self.title = f"hashpass · {self.user}" + (f" · {course}" if course else "")
+        said = origin_said(getattr(self, "_origins", {}).get(course or ""))    # spec 2026-10-31 §4
+        with contextlib.suppress(Exception):            # before compose: nothing to show it in yet
+            line = self.query_one("#origin", Static)
+            line.update(escape(said))
+            line.display = bool(said)
 
     def action_library(self) -> None:
         """/ or f: every task and image, here and on the pool; Enter runs one (no course credit)."""
@@ -555,12 +563,12 @@ class PoolTUI(App):
             with contextlib.suppress(Exception):           # «приступил» (spec §7)
                 self.client.join(ref, token=self.token)
         my_courses.choose(self.env.root, self.url, ref)
+        self._origins = getattr(self, "_origins", {}) | {ref: view.get("origin")}
         self._course_title()
         with self._rows_lock:
             self.rows = []
         self._reload_catalog()
         copy = origin_said(view.get("origin"))           # spec 2026-10-31 §4: whose course it is
-        self.sub_title = copy
         self.notify(f"Курс: {view.get('title') or ref}" + (f" — {copy}" if copy else ""), timeout=4)
 
     def action_relogin(self) -> None:
