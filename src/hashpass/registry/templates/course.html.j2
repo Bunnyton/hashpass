@@ -16,10 +16,12 @@
 {% if c.visibility == 'private' %}<span class='pill closed sm'>приватный</span>{% else %}<span class='pill open sm'>публичный</span>{% endif %}
 {% if c.role %}<span class='pill author sm'>{{ role_ru[c.role] }}</span>{% endif %}</div>
 <h1>{{ c.title }}</h1>
+{% if c.origin %}{% set o = c.origin %}<p class='origin sub'>{% if o.gone %}На основе курса{% elif o.kind == 'mirror' %}Зеркало курса{% else %}Форк курса{% endif %} {% if o.linked %}<a href='/c/{{ o.ref }}'>{{ o.title }}</a>{% else %}<b>{{ o.title }}</b>{% endif %} от <a href='/u/{{ o.owner | q }}'>{{ o.owner }}</a>{% if o.gone %} (удалён){% endif %}</p>{% endif %}
 {% if c.description %}<p class='lead'>{{ c.description }}</p>{% endif %}
 <div class='row hero-meta'>
 <a class='owner' href='/u/{{ ref_parts[0] | q }}'><span class='avatar xs' aria-hidden='true'>{{ ref_parts[0][:1] | upper }}</span><span class='mono'>{{ ref_parts[0] }}</span></a><span class='mono dim'>/ {{ ref_parts[1] }}</span>
 {% if c.blocks is defined %}<span class='dim'>·</span><span class='small'>{{ n_tasks | plural('задание', 'задания', 'заданий') }} в {{ (c.blocks | length) | plural('блоке', 'блоках', 'блоках') }}</span>{% endif %}
+{% if c.copies and (c.copies.mirrors or c.copies.forks) %}<span class='dim'>·</span><a class='small' href='#copies-tab'>Зеркала: {{ c.copies.mirrors }} · Форки: {{ c.copies.forks }}</a>{% endif %}
 {% if may.students %}<span class='dim'>·</span><a class='small' href='#students'>{{ students | length | plural('участник', 'участника', 'участников') }}</a>{% endif %}
 </div>
 </div>
@@ -48,6 +50,24 @@
   {{ cmd('hashpass add ' ~ link) }}
   <p class='sub small'>hashpass ещё не установлен? Одной командой — установка и курс:</p>
   {{ install_cmd(curl_flags, pool, link) }}
+  {% if copy.may_mirror or copy.may_fork %}
+  {% macro copy_form(kind, label, hint) %}
+  <details class='add-menu copy-menu'><summary class='btn ghost'>{{ label }}</summary>
+  <div class='add-panel card'>
+  <form data-api='POST {{ api }}/{{ kind }}' data-then='go:/c/{ref}'>
+  <p class='sub small'>{{ hint }}</p>
+  <label>Адрес <span class='sub small'>/c/{{ signed_in }}/…, латиница, цифры, дефис</span><input name='name' required pattern='[a-z0-9][a-z0-9\-]{0,63}' value='{{ c.name }}'></label>
+  <label>Название<input name='title' value='{{ c.title }}'></label>
+  {% if copy.source_private %}<input type='hidden' name='visibility' value='private'><p class='sub small'>Копия приватного курса — тоже приватная.</p>
+  {% else %}<label>Видимость<select name='visibility'><option value='public'>публичный</option><option value='private'>приватный</option></select></label>{% endif %}
+  <button type='submit'>{{ label }}</button>
+  </form></div></details>
+  {% endmacro %}
+  <div class='row copy-actions'>
+  {% if copy.may_mirror %}{{ copy_form('mirror', 'Сделать зеркало', 'Зеркало: задания и порядок всегда как в этом курсе и сами обновляются, а ученики, приглашения и прогресс — ваши.') }}{% endif %}
+  {% if copy.may_fork %}{{ copy_form('fork', 'Форкнуть курс', 'Форк: ваша копия — меняйте задания как хотите. Изменения этого курса подтягиваются по кнопке, свои можно предложить сюда.') }}{% endif %}
+  </div>
+  {% endif %}
 {% endif %}
 </div>
 
@@ -58,10 +78,36 @@
 {% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
 {% if may.people and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
 <a href='#people' data-tab>{{ icon('user') }} Команда курса <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
+{% if copy.merges %}<a href='#merges-tab' data-tab>Запросы слияния <span class='count'>{{ copy.merges | selectattr('state', 'equalto', 'open') | list | length }}</span></a>{% endif %}
+{% if c.copies and c.copies.list %}<a href='#copies-tab' data-tab>Копии <span class='count'>{{ c.copies.list | length }}</span></a>{% endif %}
 <a href='#history' data-tab>Изменения <span class='count'>{{ (c.history or []) | length }}</span></a>
 {% if may.content %}<a href='#settings-tab' data-tab>Настройки</a>{% endif %}
 </nav>
 <section id='tasks' class='tab-panel' aria-label='Задания'>
+{% if c.origin and c.origin.revoked and copy.mirror %}
+<div class='card notice bad'><b>Доступ к исходному курсу закрыт</b><p class='sub small'>У владельца зеркала больше нет доступа к курсу {{ c.origin.title }} — задания этого зеркала недоступны, пока доступ не вернут.</p></div>
+{% elif copy.mirror and may.content %}
+<p class='sub small'>Задания и их порядок — как в исходном курсе, они обновляются сами. Здесь можно открывать и закрывать блоки для своей группы.</p>
+{% endif %}
+{% if copy.sync %}
+<div class='card notice'>
+{% if copy.sync.changes %}
+<b>В исходном курсе есть изменения: {{ copy.sync.changes | length }}</b>
+<ul class='small'>{% for t in copy.sync.changes %}<li>{{ t }}</li>{% endfor %}</ul>
+{% if copy.sync.conflicts %}<p class='sub small'>Не подтянется — у вас здесь своё:</p><ul class='small'>{% for t in copy.sync.conflicts %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}
+{{ act('POST', api ~ '/sync', 'Подтянуть изменения', 'btn') }}
+{% else %}
+{% set r = copy.my_request %}
+{% if r and r.state == 'open' %}<p class='sub'><span class='pill warn sm'>Запрос в исходный курс открыт</span>{% if r.stale %} — исходный курс изменился: подтяните изменения и обновите запрос{% endif %}</p>
+{% elif r and r.state == 'merged' %}<p class='sub'><span class='pill open sm'>Исходный курс принял ваши изменения</span></p>
+{% elif r and r.state == 'rejected' %}<p class='sub'><span class='pill no sm'>Запрос отклонён</span>{% if r.reason %} — {{ r.reason }}{% endif %}</p>{% endif %}
+<form class='row' data-api='POST {{ api }}/merge'>
+<input name='comment' placeholder='что изменили и зачем'>
+<button class='ghost' type='submit'>{% if r and r.state == 'open' %}Обновить запрос{% else %}Предложить в исходный курс{% endif %}</button>
+</form>
+{% endif %}
+</div>
+{% endif %}
 <div class='cat-head'><h2>Задания</h2>
 {% if may.propose %}
 <details class='add-menu'>
@@ -92,11 +138,11 @@
 {% endif %}
 </div>
 {% if c.blocks %}
-<div id='cat'{% if may.content %} data-layout-url='{{ api }}/layout' data-rev='{{ c.rev }}'{% endif %}>
+<div id='cat'{% if may.edit %} data-layout-url='{{ api }}/layout' data-rev='{{ c.rev }}'{% endif %}>
 {% for b in c.blocks %}
 <div class='block card{% if not b.open %} block-hidden{% endif %}' data-block-id='{{ b.id }}'>
 <div class='block-head'>
-{% if may.content %}
+{% if may.edit %}
 <form class='inline block-rename' data-api='PUT {{ api }}/blocks/{{ b.id }}'>
 <input name='name' value='{{ b.name }}' class='block-name-input'></form>
 {% else %}<b>{{ b.name }}</b>{% endif %}
@@ -106,29 +152,29 @@
 <details class='menu block-menu'><summary class='menu-dot' title='действия с блоком'>⋯</summary>
 <div class='menu-list card'>
 {{ act('PUT', api ~ '/blocks/' ~ b.id, 'Сделать доступным' if not b.open else 'Скрыть от проходящих курс', fields={'open': not b.open}) }}
-{{ act('DELETE', api ~ '/blocks/' ~ b.id, 'Удалить блок', 'menu-item danger', confirm='Удалить пустой блок?') }}
+{% if may.edit %}{{ act('DELETE', api ~ '/blocks/' ~ b.id, 'Удалить блок', 'menu-item danger', confirm='Удалить пустой блок?') }}{% endif %}
 </div></details>
 {% endif %}
 </div>
 <ul class='tasklist' data-block-id='{{ b.id }}'>
 {% for t in b.tasks %}
 <li class='titem{% if t.hidden %} task-hidden{% endif %}' data-ref='{{ t.ref }}'>
-{% if may.content %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
+{% if may.edit %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
 {% set rp = t.revision.rpartition('_v') %}<span class='tref has-tip'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}' aria-describedby='tip-{{ loop.index }}-{{ b.id }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span>{% if t.at %} <span class='small dim'>обновлено {{ ago(t.at) }}</span>{% endif %}
 <span class='tip card' role='tooltip' id='tip-{{ loop.index }}-{{ b.id }}'><span class='kind kind-task'>{{ icon('task') }} задание</span><b class='mono'>{{ rp[0] }}</b><span class='sub small'>{{ t.about or 'без описания' }}</span><a class='small' href='/web/image/{{ t.revision | ref_url }}'>открыть задание →</a></span></span>
 {% if t.hidden %}<span class='pill closed sm'>скрыто</span>{% endif %}
 {% if t.latest and t.latest > t.n %}<span class='pill warn sm'>есть версия {{ t.latest }}</span>{% endif %}
 <span class='sp'></span>
-{% if may.content or (may.add and t.added_by == signed_in) %}
+{% if may.edit or (may.add and t.added_by == signed_in) %}
 <details class='menu task-menu'><summary class='menu-dot' title='действия'>⋯</summary>
 <div class='menu-list card'>
-{% if may.content %}
+{% if may.edit %}
 {{ act('PUT', api ~ '/tasks/' ~ t.ref, '↑ Выше', fields={'move': -1}) }}
 {{ act('PUT', api ~ '/tasks/' ~ t.ref, '↓ Ниже', fields={'move': 1}) }}
 {{ act('PUT', api ~ '/tasks/' ~ t.ref, 'Показать' if t.hidden else 'Скрыть', fields={'hidden': not t.hidden}) }}
 {% endif %}
 {% if t.latest and t.latest > t.n %}{{ act('PUT', api ~ '/tasks/' ~ t.ref, 'Обновить до v' ~ t.latest, fields={'n': t.latest}) }}{% endif %}
-{% if may.content %}{{ act('DELETE', api ~ '/tasks/' ~ t.ref, 'Убрать из курса', 'menu-item danger', confirm='Убрать задание из курса?') }}{% endif %}
+{% if may.edit %}{{ act('DELETE', api ~ '/tasks/' ~ t.ref, 'Убрать из курса', 'menu-item danger', confirm='Убрать задание из курса?') }}{% endif %}
 </div></details>
 {% endif %}
 </li>
@@ -234,6 +280,36 @@
 <p class='sub small'>Автор добавляет задания сам и обновляет свои; ему можно дать дополнительные права — {% for k, label in extra_labels.items() %}«{{ label }}» ({{ extra_hints[k] }}){% if not loop.last %} и {% endif %}{% endfor %}. Админ управляет курсом в пределах отмеченных прав; владелец может всё. Участник проходит приватный курс и предлагает задания.</p>
 </div>
 </section>
+{% if copy.merges %}
+<section id='merges-tab' class='tab-panel' aria-label='Запросы слияния'>
+<h2>Запросы слияния</h2>
+<p class='sub small'>Форк предлагает свой курс целиком: принять — значит сделать задания и порядок как в нём (открытые блоки и скрытые задания останутся вашими).</p>
+<div class='card'><table>
+<tr><th>Откуда</th><th>Кто</th><th>Что изменится</th><th>Состояние</th><th></th></tr>
+{% for m in copy.merges %}
+<tr><td class='mono'><a href='/c/{{ m.from_ref }}'>{{ m.from_ref }}</a></td><td><a href='/u/{{ m.by | q }}'>{{ m.by }}</a>{% if m.comment %}<div class='sub small'>«{{ m.comment }}»</div>{% endif %}</td>
+<td><ul class='small'>{% for x in m.changes %}<li>{{ x.text }}</li>{% else %}<li class='dim'>ничего</li>{% endfor %}</ul></td>
+<td>{% if m.state == 'open' %}<span class='pill warn sm'>открыт</span>{% if m.stale %} <span class='pill sm'>устарел</span>{% endif %}{% elif m.state == 'merged' %}<span class='pill open sm'>принят</span>{% elif m.state == 'rejected' %}<span class='pill no sm'>отклонён</span>{% if m.reason %}<div class='sub small'>{{ m.reason }}</div>{% endif %}{% else %}<span class='pill sm'>отозван</span>{% endif %}</td>
+<td class='row'>{% if m.state == 'open' %}
+{% if may.content %}{% if not m.stale %}{{ act('POST', api ~ '/merges/' ~ m.id, 'Принять', 'sm', {'action': 'merge'}, confirm='Сделать курс как в ' ~ m.from_ref ~ '?') }}{% endif %}
+<form class='inline row' data-api='POST {{ api }}/merges/{{ m.id }}'><input type='hidden' name='action' value='reject'>
+<input name='reason' placeholder='причина' class='sm'><button class='sm ghost' type='submit'>Отклонить</button></form>{% endif %}
+{% if m.by == signed_in %}{{ act('POST', api ~ '/merges/' ~ m.id, 'Отозвать', 'sm ghost', {'action': 'withdraw'}) }}{% endif %}
+{% endif %}</td></tr>
+{% endfor %}
+</table></div>
+</section>
+{% endif %}
+{% if c.copies and c.copies.list %}
+<section id='copies-tab' class='tab-panel' aria-label='Копии курса'>
+<h2>Зеркала и форки</h2>
+<div class='card'><ul class='people'>
+{% for x in c.copies.list %}<li class='member'><div class='member-head'><a class='mono' href='/c/{{ x.ref }}'>{{ x.ref }}</a><span class='pill sm'>{{ 'зеркало' if x.kind == 'mirror' else 'форк' }}</span><span class='sub small'>{{ x.title }}</span></div></li>{% endfor %}
+</ul>
+{% if c.copies.list | length < c.copies.mirrors + c.copies.forks %}<p class='sub small'>И приватные копии, которых вам не видно.</p>{% endif %}
+</div>
+</section>
+{% endif %}
 <section id='history' class='tab-panel' aria-label='Изменения в курсе'>
 <h2>Изменения в курсе</h2>
 {% if c.history %}
@@ -292,8 +368,16 @@
 <option value='private'{% if c.visibility == 'private' %} selected{% endif %}>приватный</option></select></label>
 <label class='check'><input type='checkbox' name='auto_update' data-type='bool'{% if c.settings.auto_update %} checked{% endif %}> Автообновление: задания сами переходят на новые версии</label>
 <label class='check'><input type='checkbox' name='auto_accept' data-type='bool'{% if c.settings.auto_accept %} checked{% endif %}> Принимать предложения сразу</label>
+<label class='check'><input type='checkbox' name='allow_mirrors' data-type='bool'{% if c.settings.allow_mirrors %} checked{% endif %}> Разрешить зеркала — копии с теми же заданиями, их учениками управляет сделавший</label>
+<label class='check'><input type='checkbox' name='allow_forks' data-type='bool'{% if c.settings.allow_forks %} checked{% endif %}> Разрешить форки — копии, которые правят и предлагают сюда целиком</label>
 <button type='submit'>Сохранить</button>
 </form>
+{% for kind, word, flag in [('mirror', 'зеркала', 'allow_mirrors'), ('fork', 'форки', 'allow_forks')] %}{% set d = copy[kind ~ 's'] %}
+{% if d and d.n %}
+<form class='inline' data-api='PUT {{ api }}' data-confirm='Удалить {{ d.n | plural("курс", "курса", "курсов") }}? Их ученики потеряют эти курсы (решённое у них останется).'>
+<input type='hidden' name='{{ flag }}' value='false' data-type='bool'><input type='checkbox' name='delete_existing' value='{{ kind }}s' data-type='list' checked hidden>
+<button class='sm danger' type='submit'>Запретить {{ word }} и удалить существующие: {{ d.n | plural('курс', 'курса', 'курсов') }}, {{ d.students | plural('участник', 'участника', 'участников') }}</button></form>
+{% endif %}{% endfor %}
 {% if may.delete %}<hr class='divider'>
 {{ act('DELETE', api, 'Удалить курс', 'sm danger', confirm='Удалить курс насовсем? Задания и образы останутся — удалится только курс.', then='go:/c') }}{% endif %}
 </div>
@@ -303,5 +387,5 @@
 <script src='/static/api.js'></script>
 <script src='/static/team.js'></script>
 <script src='/static/filter.js'></script>
-{% if may.content %}<script src='/static/catalog.js'></script>{% endif %}
+{% if may.edit %}<script src='/static/catalog.js'></script>{% endif %}
 {% endblock %}

@@ -127,6 +127,35 @@ class CopyApi:
         with self.api.courses.edit(fork.ref) as cur:
             cur.origin |= {"base": cc.structure(parent), "base_rev": parent.rev}
 
+    def page(self, course: "Course", user: str | None) -> dict:
+        """Return what the course page shows about copies to `user` (the web's one source, spec 2026-10-31 §7)."""
+        pool = self.server.pool_perms(user)
+        source = self.api.courses.root_of(course)
+        sees = user is not None and can(user, pool, course, "view") and can(user, pool, source, "view")
+        content = can(user, pool, course, "content")
+        out: dict = {"mirror": course.kind == "mirror", "source_private": "private" in (
+                         source.visibility, course.visibility),
+                     "may_mirror": sees and source.allow_mirrors, "may_fork": sees and source.allow_forks,
+                     "sync": None, "my_request": None,
+                     "merges": [self._row(course, r) for r in mg.shown(course, user, staff=content, now=time.time())][::-1]}
+        parent = None if course.kind != "fork" or course.origin.get("gone") or course.origin.get("revoked") \
+            else self.api.courses.by_id(str(course.origin.get("id", "")))
+        if content and parent is not None:
+            theirs = cc.structure(parent)
+            base = course.origin.get("base") or theirs
+            _merged, conflicts = cc.merge3(base, cc.structure(course), theirs)
+            out["sync"] = {"changes": [cc.describe(c) for c in cc.diff(base, theirs)],
+                           "conflicts": [cc.describe(c) for c in conflicts]}
+            mine = [r for r in parent.merges if r["from_id"] == course.id]
+            out["my_request"] = self._row(parent, mine[-1]) if mine else None
+        if content:
+            copies = self.api.courses.copies_of(course.id)
+            for kind in ("mirror", "fork"):
+                these = [c for c in copies if c.kind == kind]
+                out[f"{kind}s"] = {"n": len(these),
+                                   "students": sum(len(self.api.enrollments.users_of(c.id)) for c in these)}
+        return out
+
     def _fork_parent(self, owner: str, name: str) -> tuple["Course | None", "Course | None", str, Response | None]:
         """Return (fork, its parent, caller) for the fork's `content` people, or an error."""
         fork, user, err = self.api._load(owner, name, "content")         # noqa: SLF001

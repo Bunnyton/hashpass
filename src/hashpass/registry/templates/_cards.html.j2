@@ -12,6 +12,7 @@
 {% if r.role %}<span class='pill author sm'>{{ role_ru[r.role] }}</span>{% endif %}</div>
 <b class='item-title'>{{ r.title or r.ref }}</b>
 <div class='mono small dim'>{{ r.ref }} · {{ r.tasks | plural('задание', 'задания', 'заданий') }}</div>
+{% if r.origin %}<div class='small dim'>{{ 'зеркало' if r.origin.kind == 'mirror' else 'форк' }} {{ r.origin.ref }}</div>{% endif %}
 {% if r.description %}<p class='sub small clamp'>{{ r.description }}</p>{% endif %}
 </a>
 {%- endmacro %}

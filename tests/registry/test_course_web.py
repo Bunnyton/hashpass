@@ -186,3 +186,83 @@ def test_only_the_owner_sees_the_address_field(pool: _Courses) -> None:
     pool.call("PUT", "/courses/bob/linux", "bob", {"name": "base"})
     assert _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")[0] == 404  # noqa: PLR2004
     assert "Linux для всех" in _page(_browser(pool, "kid"), f"{pool.url}/c/bob/base")[1]
+
+
+# -- mirrors and forks (spec 2026-10-31) ---------------------------------------
+
+def _copies(pool: _Courses) -> None:
+    pool.call("PUT", "/courses/bob/linux", "bob", {"allow_forks": True})
+    assert pool.call("POST", "/courses/bob/linux/mirror", "kid", {"name": "m"})[0] == 201  # noqa: PLR2004
+    assert pool.call("POST", "/courses/bob/linux/fork", "max", {"name": "f"})[0] == 201  # noqa: PLR2004
+
+
+@pytest.mark.tier1
+def test_copy_pages_say_where_they_come_from(pool: _Courses) -> None:
+    _copies(pool)
+    _status, html = _page(_browser(pool, "ann"), f"{pool.url}/c/kid/m")
+    assert "Зеркало курса <a href='/c/bob/linux'>Linux для всех</a> от <a href='/u/bob'>bob</a>" in html
+    _status, html = _page(_browser(pool, None), f"{pool.url}/c/max/f")
+    assert "Форк курса <a href='/c/bob/linux'>Linux для всех</a> от <a href='/u/bob'>bob</a>" in html
+
+
+@pytest.mark.tier1
+def test_mirror_page_has_no_structure_editing(pool: _Courses) -> None:
+    _copies(pool)
+    _status, html = _page(_browser(pool, "kid"), f"{pool.url}/c/kid/m")
+    assert "data-api='POST /courses/kid/m/tasks'" not in html
+    assert "data-api='POST /courses/kid/m/blocks'" not in html
+    assert "data-layout-url" not in html
+    assert "block-rename" not in html
+    assert "Скрыть от проходящих курс" in html                     # its own schedule stays
+    _status, html = _page(_browser(pool, "max"), f"{pool.url}/c/max/f")
+    assert "data-api='POST /courses/max/f/tasks'" in html           # a fork is one's own
+
+
+@pytest.mark.tier1
+def test_copy_buttons_follow_the_settings(pool: _Courses) -> None:
+    _status, html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")
+    assert "data-api='POST /courses/bob/linux/mirror'" in html
+    assert "data-api='POST /courses/bob/linux/fork'" not in html     # forks are off by default
+    pool.call("PUT", "/courses/bob/linux", "bob", {"allow_forks": True, "allow_mirrors": False})
+    _status, html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")
+    assert "data-api='POST /courses/bob/linux/mirror'" not in html
+    assert "data-api='POST /courses/bob/linux/fork'" in html
+    _status, html = _page(_browser(pool, None), f"{pool.url}/c/bob/linux")
+    assert "/fork'" not in html                                      # signed in only
+
+
+@pytest.mark.tier1
+def test_fork_shows_parent_changes_and_parent_its_requests(pool: _Courses) -> None:
+    _copies(pool)
+    block = pool.call("GET", "/courses/bob/linux", "bob")[1]["blocks"][0]["id"]
+    pool.call("PUT", f"/courses/bob/linux/blocks/{block}", "bob", {"name": "Гит"})
+    _status, html = _page(_browser(pool, "max"), f"{pool.url}/c/max/f")
+    assert "В исходном курсе есть изменения: 1" in html
+    assert "блок «Git» → «Гит»" in html
+    assert "data-api='POST /courses/max/f/sync'" in html
+    _status, html = _page(_browser(pool, "ann"), f"{pool.url}/c/max/f")
+    assert "В исходном курсе есть изменения" not in html             # the fork's staff only
+    pool.call("POST", "/courses/max/f/sync", "max", {})
+    assert pool.call("POST", "/courses/max/f/merge", "max", {"comment": "моё"})[0] == 201  # noqa: PLR2004
+    _status, html = _page(_browser(pool, "max"), f"{pool.url}/c/max/f")
+    assert "Запрос в исходный курс открыт" in html
+    _status, html = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")
+    assert "Запросы слияния" in html and "max/f" in html
+    _status, html = _page(_browser(pool, "ann"), f"{pool.url}/c/bob/linux")
+    assert "Запросы слияния" not in html
+    assert "Зеркала: 1 · Форки: 1" in html
+
+
+@pytest.mark.tier1
+def test_settings_offer_copy_switches_and_deleting_them(pool: _Courses) -> None:
+    _copies(pool)
+    _status, html = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")
+    assert "name='allow_mirrors'" in html and "name='allow_forks'" in html
+    assert "Запретить зеркала и удалить существующие: 1 курс, 1 участник" in html
+
+
+@pytest.mark.tier1
+def test_course_cards_mark_copies(pool: _Courses) -> None:
+    _copies(pool)
+    _status, html = _page(_browser(pool, "ann"), f"{pool.url}/?type=courses")
+    assert "зеркало bob/linux" in html and "форк bob/linux" in html

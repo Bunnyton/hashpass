@@ -101,6 +101,10 @@ class CourseWeb:
         may = {a: can(user, pool, course, a)
                for a in ("view", "play", "propose", "add", "content", "people", "progress", "admins", "delete")}
         may["students"] = may["progress"]     # spec 2026-10-25 §4: owner, admins/authors with `progress`
+        mirror = course.kind == "mirror"      # spec 2026-10-31 §2: its tasks and order are its parent's
+        may["edit"] = may["content"] and not mirror
+        may["propose"] = may["propose"] and not mirror
+        may["add"] = may["add"] and not mirror
         givable = perms.givable_extras(course_perms(course, user) | pool)
         view = api._view(course, user, role) if may["view"] else api._peek(course, user)  # noqa: SLF001
         for block in view.get("blocks") or []:        # «what is this task» for the hover card
@@ -115,6 +119,7 @@ class CourseWeb:
             view, may=may, signed_in=user, link=link, invite_link=invite_link, pool=pool,
             curl_flags="-fsSLk" if pool.startswith("https://") else "-fsSL",
             invite=request.args.get("invite", ""), students=students, joined=joined, givable=givable,
+            copy=self.server.copy_api.page(course, user),
             api=f"/courses/{course.ref}", next_url=quote(request.full_path.rstrip("?"), safe="")))
 
     def _students(self, course: object) -> list[dict]:
