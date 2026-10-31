@@ -212,7 +212,7 @@ class CourseApi:
         sees = sees_hidden(user, self.server.pool_perms(user), course)
         out = self._summary(course, user) | {"rev": course.rev}
         blocks = []
-        for block in course.blocks:
+        for block in [] if course.closed else course.blocks:
             tasks = []
             for task in block["tasks"]:
                 own = bool(user) and task.get("added_by") == user      # one's own task, hidden or not
@@ -329,7 +329,10 @@ class CourseApi:
                 if k in body]
         err = self._edit(course.ref, change, by=_user, check_rev=not renamed,
                          what=f"настройки: {', '.join(said)}" if said else "")
-        return err or self._json(HTTPStatus.OK, self._summary(self.courses.get(course.ref), _user))
+        if err is not None:
+            return err
+        extra = self.server.copy_api.after_settings(self.courses.get(course.ref), _user or "", body)
+        return self._json(HTTPStatus.OK, self._summary(self.courses.get(course.ref), _user) | extra)
 
     def _rename(self, course: Course, user: str | None, name: str) -> tuple[Course, Response | None]:
         """Give a course a new address (the owner's call, as deleting it); the old one stops existing."""

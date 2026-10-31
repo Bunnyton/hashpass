@@ -29,13 +29,15 @@ def course_perms(course: Course, user: str | None) -> frozenset[str]:
     return frozenset()
 
 
-def can(user: str | None, pool: frozenset[str], course: Course, action: str) -> bool:
+def can(user: str | None, pool: frozenset[str], course: Course, action: str) -> bool:  # noqa: PLR0911
     """Whether `user` (pool boxes `pool`) may do `action` in `course`."""
     if action not in ACTIONS:
         msg = f"unknown action: {action}"
         raise ValueError(msg)
     if action == "peek":
         return True
+    if course.closed and action in ("play", "propose", "add"):      # spec 2026-10-31 §5
+        return False
     role = course.role_of(user)
     boxes = course_perms(course, user) | pool
     if action in perms.KEYS:

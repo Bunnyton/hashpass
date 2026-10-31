@@ -411,7 +411,7 @@ class PoolServer:
         candidates = [c for c in ([store.get(wanted)] if wanted else store.courses_with(repo, tag)) if c]
         for course in candidates:
             task = course.find_task(repo, tag)
-            if task is None or not can(user, self.pool_perms(user), course, action):
+            if task is None or course.closed or not can(user, self.pool_perms(user), course, action):
                 continue
             latest = self.repo(repo).latest(tag)
             eff = course_model.effective_n(course, task, latest=latest.n if latest else None)
@@ -1118,7 +1118,7 @@ class PoolServer:
         task (`mine`) always, with its status; one's open and lately rejected proposals -- in a
         block «Мои предложения» at the end (2026-10-26).
         """
-        if not can(user, self.pool_perms(user), course, "view"):
+        if course.closed or not can(user, self.pool_perms(user), course, "view"):
             return []
         sees = sees_hidden(user, self.pool_perms(user), course)
         mine = self.progress().get(user)

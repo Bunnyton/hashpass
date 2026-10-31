@@ -82,6 +82,11 @@ class Course:
         return f"{self.owner}/{self.name}"
 
     @property
+    def closed(self) -> bool:
+        """A mirror whose owner lost access to its private parent: closed to students (spec 2026-10-31 §5)."""
+        return self.kind == "mirror" and bool(self.origin.get("revoked"))
+
+    @property
     def kind(self) -> str:
         """`mirror` (follows a live parent), `fork` (one's own copy; a mirror whose parent is gone), or ""."""
         kind = str(self.origin.get("kind", ""))
@@ -133,19 +138,26 @@ class CourseStore:
     def get(self, ref: str) -> Course | None:
         """Return the course; a mirror behind its parent shows the parent's structure (spec 2026-10-31 §2)."""
         course = self._read(ref)
-        if course is not None and course.kind == "mirror":
-            self._catch_up(course)
+        if course is not None and course.origin and not course.origin.get("gone"):
+            self._refresh(course)
         return course
 
-    def _catch_up(self, mirror: Course) -> bool:
-        """Give `mirror` (in memory) its parent's structure if it is behind; whether it was."""
-        parent = self.by_id(str(mirror.origin.get("id", "")))
-        if parent is None or cc.structure(parent) == cc.structure(mirror):
-            return False
-        cc.apply_structure(mirror, cc.structure(parent), source_open=cc.block_open(parent))
-        mirror.origin |= {"synced_rev": parent.rev, "ref": parent.ref, "owner": parent.owner,
-                          "title": parent.title}
-        return True
+    def _refresh(self, copy: Course) -> None:
+        """
+        Bring a copy (in memory) up to its parent.
+
+        The parent's address and title, whether the copy's owner still sees a private parent
+        (`revoked`), and a mirror's structure.
+        """
+        parent = self.by_id(str(copy.origin.get("id", "")))
+        if parent is None:
+            return
+        revoked = parent.visibility == "private" and parent.role_of(copy.owner) is None
+        copy.origin |= {"ref": parent.ref, "owner": parent.owner, "title": parent.title, "revoked": revoked}
+        if copy.kind != "mirror" or revoked or cc.structure(parent) == cc.structure(copy):
+            return
+        cc.apply_structure(copy, cc.structure(parent), source_open=cc.block_open(parent))
+        copy.origin["synced_rev"] = parent.rev
 
     def all(self) -> list[Course]:
         """Every course as stored."""
@@ -279,12 +291,17 @@ class CourseStore:
                 pass                                  # edit() reads through get(): caught up, saved
 
     def delete(self, ref: str) -> None:
+        """Remove a course; its copies stay, on their own (`origin.gone`, spec 2026-10-31 §5)."""
         path = self._path(ref)
+        gone = self._read(ref)
         with contextlib.suppress(OSError):
             path.unlink()
         with contextlib.suppress(OSError):
             (path.parent / ".lock").unlink()
             path.parent.rmdir()
+        for copy in self.copies_of(gone.id) if gone else []:
+            with contextlib.suppress(KeyError), self.edit(copy.ref) as cur:
+                cur.origin["gone"] = True
 
     def courses_with(self, repo: str, tag: str) -> list[Course]:
         """Courses holding the task `repo:tag`."""
