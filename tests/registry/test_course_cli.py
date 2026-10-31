@@ -90,3 +90,23 @@ def test_set_name_moves_the_course_to_a_new_address(pool: _Courses) -> None:
     assert "bob/base" in _run(pool, "linux", "set", "name", "base")
     assert pool.call("GET", "/courses/bob/base", "bob")[1]["title"] == "Linux"
     assert "bob/base" in _run(pool)
+
+
+@pytest.mark.tier1
+def test_mirror_fork_and_sync_from_the_console(pool: _Courses) -> None:
+    _course(pool)
+    _run(pool, "linux", "add", "block", "Git")
+    _run(pool, "linux", "block", "Git", "add", "git-init:1")
+    pool.call("PUT", "/courses/bob/linux", "bob", {"allow_forks": True})
+    assert _run(pool, "bob/linux", "mirror", "linux-m", user="kid") == "kid/linux-m: зеркало курса bob/linux\n"
+    assert _run(pool, "bob/linux", "fork", "linux-f", "--private", user="max") == \
+        "max/linux-f: форк курса bob/linux\n"
+    assert pool.call("GET", "/courses/max/linux-f", "max")[1]["visibility"] == "private"
+    assert "зеркало курса Linux от bob" in _run(pool, "kid/linux-m", user="kid")
+    assert "kid/linux-m" in _run(pool, user="kid") and "зеркало bob/linux" in _run(pool, user="kid")
+    assert _run(pool, "max/linux-f", "sync", user="max") == "изменений в исходном курсе нет\n"
+    _run(pool, "linux", "block", "Git", "add", "eve/regex:1")
+    said = _run(pool, "max/linux-f", "sync", user="max")
+    assert said == "подтянуто из bob/linux: изменений 1\n  добавлено задание eve/regex:1 в блок «Git»\n"
+    assert [t["ref"] for t in pool.call("GET", "/courses/max/linux-f", "max")[1]["blocks"][0]["tasks"]] == [
+        "bob/git-init:1", "eve/regex:1"]

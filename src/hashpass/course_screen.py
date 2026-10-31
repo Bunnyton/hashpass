@@ -17,6 +17,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, Label, OptionList
 from textual.widgets.option_list import Option
 
+from hashpass.course_cli import origin_said
+
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
@@ -83,7 +85,8 @@ class CoursePicker(ModalScreen[str | None]):
             mark = "▸ " if r["ref"] == self.current else ("★ " if r["ref"] in mine or r.get("role") else "  ")
             lock = " [dim](приватный)[/]" if r.get("visibility") == "private" else ""
             title = escape(str(r.get("title") or r["ref"]))
-            options.add_option(Option(f"{mark}[b]{title}[/]  [dim]{escape(r['ref'])}[/]{lock}", id=r["ref"]))
+            copy = f"\n    [dim]{escape(origin_said(r['origin']))}[/]" if r.get("origin") else ""
+            options.add_option(Option(f"{mark}[b]{title}[/]  [dim]{escape(r['ref'])}[/]{lock}{copy}", id=r["ref"]))
         if not rows:
             options.add_option(Option("[dim]курсов нет — вставьте ссылку на курс[/]", id="", disabled=True))
         else:

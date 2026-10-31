@@ -35,6 +35,7 @@ from textual.widgets import Footer, Input, Label, Static, Tree
 from hashpass import account, my_courses
 from hashpass.attempts import flush_outbox, sync_solutions
 from hashpass.auth_screens import LoginScreen
+from hashpass.course_cli import origin_said
 from hashpass.course_screen import LINK_PREFIX, AskScreen, CoursePicker
 from hashpass.imagestore.store import ImageStore, registry_key
 from hashpass.registry.remote import RemoteRegistry
@@ -558,7 +559,9 @@ class PoolTUI(App):
         with self._rows_lock:
             self.rows = []
         self._reload_catalog()
-        self.notify(f"Курс: {view.get('title') or ref}", timeout=4)
+        copy = origin_said(view.get("origin"))           # spec 2026-10-31 §4: whose course it is
+        self.sub_title = copy
+        self.notify(f"Курс: {view.get('title') or ref}" + (f" — {copy}" if copy else ""), timeout=4)
 
     def action_relogin(self) -> None:
         """L: log out and sign in as someone else (spec 2026-10-16)."""

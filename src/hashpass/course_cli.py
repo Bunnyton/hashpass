@@ -15,6 +15,8 @@ here decides anything the server does not: the console only names things and say
     hashpass course <course> rm block <name>
     hashpass course <course> set title|description|visibility <value>
     hashpass course <course> set name <new name>     a new address; the old one is gone
+    hashpass course <course> mirror|fork <name> [--title T] [--private]   a copy (spec 2026-10-31)
+    hashpass course <course> sync                     a fork pulls its parent's changes
 
 <course> is owner/name, a name of one's own, or a title; a block is its name or id.
 """
@@ -38,6 +40,9 @@ USAGE = (
     "hashpass course <курс> rm block <блок>             — удалить блок\n"
     "hashpass course <курс> set title|description|visibility <значение>\n"
     "hashpass course <курс> set name <имя>              — новый адрес курса (старый перестаёт работать)\n"
+    "hashpass course <курс> mirror <имя> [--private]    — зеркало: те же задания, свои ученики\n"
+    "hashpass course <курс> fork <имя> [--private]      — форк: своя копия курса\n"
+    "hashpass course <курс> sync                        — форк подтягивает изменения исходного курса\n"
 )
 _SETTINGS = ("title", "description", "visibility", "name")
 
@@ -77,6 +82,8 @@ def run_course(api: CourseApi, user: str, words: list[str], *, out: TextIO) -> i
     rest = words[1:]
     if not rest:
         return _show(api, ref, out)
+    if rest[0] in ("mirror", "fork"):
+        return _copy(api, ref, rest, opts, out)
     action = _ACTIONS.get(tuple(rest[:2])) or _ACTIONS.get((rest[0], rest[2] if len(rest) > 2 else ""))  # noqa: PLR2004
     if action is None:
         msg = "не понял команду.\n" + USAGE
@@ -147,10 +154,51 @@ def _task_ref(user: str, ref: str) -> tuple[str, str]:
     return repo, tag
 
 
+def origin_said(origin: dict | None) -> str:
+    """Say where a copy comes from: «зеркало курса Linux от bob» (spec 2026-10-31 §4), or ""."""
+    if not origin:
+        return ""
+    what = "на основе курса" if origin.get("gone") else (
+        "зеркало курса" if origin.get("kind") == "mirror" else "форк курса")
+    said = f"{what} {origin.get('title') or origin.get('ref', '')} от {origin.get('owner', '')}"
+    if origin.get("gone"):
+        return said + " (удалён)"
+    return said + (" — доступ к нему закрыт" if origin.get("revoked") else "")
+
+
 def _list(api: CourseApi, out: TextIO) -> int:
     for r in api.call("GET", "/courses").get("courses", []):
         role = f" · {r['role']}" if r.get("role") else ""
-        out.write(f"{r['ref']:<28} {r.get('title', '')}{role}\n")
+        o = r.get("origin")
+        copy = f" · {'зеркало' if o['kind'] == 'mirror' else 'форк'} {o['ref']}" if o else ""
+        out.write(f"{r['ref']:<28} {r.get('title', '')}{role}{copy}\n")
+    return 0
+
+
+def _copy(api: CourseApi, ref: str, rest: list[str], opts: dict[str, str], out: TextIO) -> int:
+    """`mirror|fork <name>`: a copy of the course in one's own namespace."""
+    if len(rest) != 2:  # noqa: PLR2004
+        msg = f"hashpass course <курс> {rest[0]} <имя> [--title Название] [--private]"
+        raise RuntimeError(msg)
+    body = {"name": rest[1]} | {k: v for k, v in opts.items() if k in ("title", "visibility")}
+    made = api.call("POST", f"{_path(ref)}/{rest[0]}", body)
+    kind = "зеркало" if rest[0] == "mirror" else "форк"
+    out.write(f"{made['ref']}: {kind} курса {made['origin']['ref']}\n")
+    return 0
+
+
+def _sync(api: CourseApi, _user: str, ref: str, _rest: list[str], out: TextIO) -> int:
+    """`sync`: a fork brings in what its parent changed; what it keeps of its own is said."""
+    seen = api.call("GET", f"{_path(ref)}/sync")
+    if not seen.get("behind"):
+        out.write("изменений в исходном курсе нет\n")
+        return 0
+    done = api.call("POST", f"{_path(ref)}/sync", {})
+    parent = (_view(api, ref).get("origin") or {}).get("ref", "")
+    out.write(f"подтянуто из {parent}: изменений {done['applied']}\n")
+    kept = {c["text"] for c in done.get("conflicts", [])}
+    out.writelines(f"  {c['text']}\n" for c in seen["changes"] if c["text"] not in kept)
+    out.writelines(f"  оставлено ваше, не подтянуто: {t}\n" for t in sorted(kept))
     return 0
 
 
@@ -168,6 +216,8 @@ def _create(api: CourseApi, words: list[str], opts: dict[str, str], out: TextIO)
 def _show(api: CourseApi, ref: str, out: TextIO) -> int:
     view = _view(api, ref)
     out.write(f"{ref} — {view.get('title', '')}\n")
+    if view.get("origin"):
+        out.write(f"{origin_said(view['origin'])}\n")
     for b in view.get("blocks", []):
         out.write(f"\n{b['name']}\n")
         out.writelines(f"  {t['ref']}\n" for t in b["tasks"])
@@ -258,4 +308,5 @@ _ACTIONS: dict[tuple[str, str], _Action] = {
     ("set", "description"): _set,
     ("set", "visibility"): _set,
     ("set", "name"): _set,
+    ("sync", ""): _sync,
 }
