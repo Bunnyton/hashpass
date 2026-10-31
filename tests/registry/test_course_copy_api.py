@@ -324,3 +324,97 @@ def test_sync_parent_gone_or_closed(pool: _Courses) -> None:
     pool.call("DELETE", path, "bob")
     code, body = pool.call("POST", f"{fork}/sync", "kid", {})
     assert (code, body["error"]) == (400, "исходный курс удалён")
+
+
+# -- a whole fork offered back -------------------------------------------------
+
+def _offered(pool: _Courses) -> tuple[str, str, str]:
+    path, fork = _fork(pool)
+    block = pool.call("GET", fork, "kid")[1]["blocks"][0]["id"]
+    pool.call("POST", f"{fork}/tasks", "kid", {"repo": "eve/regex", "tag": "1", "block_id": block})
+    code, body = pool.call("POST", f"{fork}/merge", "kid", {"comment": "добавил regex"})
+    assert code == 201, body
+    return path, fork, body["merge"]["id"]
+
+
+@pytest.mark.tier1
+def test_merge_request_seen_and_taken(pool: _Courses) -> None:
+    path, fork, mid = _offered(pool)
+    code, body = pool.call("GET", f"{path}/merges", "bob")
+    req = body["merges"][0]
+    assert (code, req["from_ref"], req["stale"], [c["text"] for c in req["changes"]]) == (
+        200, "kid/f", False, ["добавлено задание eve/regex:1 в блок «Git»"])
+    assert pool.call("GET", f"{path}/merges", "max")[1]["merges"] == []
+    assert pool.call("POST", f"{path}/merges/{mid}", "kid", {"action": "merge"})[0] == 403
+    assert pool.call("POST", f"{path}/merges/{mid}", "bob", {"action": "merge"})[0] == 200
+    view = pool.call("GET", path, "bob")[1]
+    assert (_tasks(view), view["history"][0]["what"]) == (["bob/git-init:1", "eve/regex:1"],
+                                                          "слияние из kid/f от kid")
+    assert pool.call("GET", f"{fork}/sync", "kid")[1]["behind"] == 0       # the fork is level again
+
+
+@pytest.mark.tier1
+def test_merge_needs_a_pulled_fork(pool: _Courses) -> None:
+    path, fork = _fork(pool)
+    pool.call("PUT", path, "bob", {"auto_update": False})
+    code, body = pool.call("POST", f"{fork}/merge", "kid", {})
+    assert (code, body["error"]) == (409, "сначала подтяните изменения исходного курса")
+    assert pool.call("POST", f"{fork}/merge", "max", {})[0] == 403
+
+
+@pytest.mark.tier1
+def test_stale_merge_refused_then_refreshed(pool: _Courses) -> None:
+    path, fork, mid = _offered(pool)
+    pool.call("PUT", path, "bob", {"auto_update": False})
+    assert pool.call("GET", f"{path}/merges", "bob")[1]["merges"][0]["stale"] is True
+    code, body = pool.call("POST", f"{path}/merges/{mid}", "bob", {"action": "merge"})
+    assert (code, body["error"]) == (409, "запрос устарел — автору нужно подтянуть изменения и обновить его")
+    pool.call("POST", f"{fork}/sync", "kid", {})
+    assert pool.call("POST", f"{fork}/merge", "kid", {})[1]["merge"]["id"] == mid
+    assert pool.call("POST", f"{path}/merges/{mid}", "bob", {"action": "merge"})[0] == 200
+
+
+@pytest.mark.tier1
+def test_private_image_blocks_merge_into_public(pool: _Courses) -> None:
+    _path, fork = _fork(pool)
+    pool.call("PUT", fork, "kid", {"visibility": "private"})
+    with RepoIndex(pool.r.store.root / ".repos", "eve/regex").locked() as idx:
+        idx.set_meta(visibility="private")
+    pool.call("PUT", "/courses/kid/f/members/eve", "kid", {"role": "author"})
+    block = pool.call("GET", fork, "kid")[1]["blocks"][0]["id"]
+    assert pool.call("POST", f"{fork}/tasks", "eve", {"repo": "eve/regex", "tag": "1", "block_id": block})[0] == 201
+    code, body = pool.call("POST", f"{fork}/merge", "kid", {})
+    assert (code, body["error"]) == (409, ("eve/regex приватный — в публичный курс его не поставить; "
+                                           "сделайте образ публичным"))
+
+
+@pytest.mark.tier1
+def test_accept_reaches_parent_mirrors(pool: _Courses) -> None:
+    path, _fork_path, mid = _offered(pool)
+    pool.call("POST", f"{path}/mirror", "max", {"name": "m"})
+    pool.call("POST", f"{path}/merges/{mid}", "bob", {"action": "merge"})
+    assert _tasks(pool.call("GET", "/courses/max/m", "max")[1]) == ["bob/git-init:1", "eve/regex:1"]
+
+
+@pytest.mark.tier1
+def test_reject_and_withdraw(pool: _Courses) -> None:
+    path, fork, mid = _offered(pool)
+    assert pool.call("POST", f"{path}/merges/{mid}", "bob", {"action": "withdraw"})[0] == 403
+    code, body = pool.call("POST", f"{path}/merges/{mid}", "bob", {"action": "reject", "reason": "позже"})
+    assert (code, body["merge"]["state"], body["merge"]["reason"]) == (200, "rejected", "позже")
+    assert pool.call("GET", f"{path}/merges", "kid")[1]["merges"][0]["state"] == "rejected"
+    mid2 = pool.call("POST", f"{fork}/merge", "kid", {})[1]["merge"]["id"]
+    assert pool.call("POST", f"{path}/merges/{mid2}", "kid", {"action": "withdraw"})[0] == 200
+
+
+@pytest.mark.tier1
+def test_merge_removing_solved_task_keeps_progress(pool: _Courses) -> None:
+    path, fork = _fork(pool)
+    digest = RepoIndex(pool.r.store.root / ".repos", "bob/git-init").get("1", 2).task_digest
+    assert pool.call("POST", "/submit", "max", {"task_ref": "bob/git-init:1", "course": "bob/linux",
+                                                "digest": digest, "passed": True})[1]["status"] == "passed"
+    pool.call("DELETE", f"{fork}/tasks/bob/git-init:1", "kid")
+    mid = pool.call("POST", f"{fork}/merge", "kid", {})[1]["merge"]["id"]
+    assert pool.call("POST", f"{path}/merges/{mid}", "bob", {"action": "merge"})[0] == 200
+    assert _tasks(pool.call("GET", path, "bob")[1]) == []
+    assert pool.call("GET", "/progress", "max")[1]["progress"]["max"]["bob/git-init:1"]["status"] == "passed"

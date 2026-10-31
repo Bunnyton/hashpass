@@ -164,10 +164,7 @@ class CourseApi:
                 change(course)
                 text = what(course) if callable(what) else what
                 if text:
-                    last = course.history[-1].get("n", len(course.history)) if course.history else 0
-                    course.history.append({"at": time.time(), "by": by, "what": text, "n": int(last) + 1,
-                                           "comment": str(body.get("comment", ""))[:_MAX_TEXT]})
-                    del course.history[:-_HISTORY_KEEP]
+                    self._history(course, by=by, what=text, comment=str(body.get("comment", "")))
         except CourseConflictError as exc:
             return self._err(HTTPStatus.CONFLICT, str(exc))
         except PermissionError as exc:
@@ -175,6 +172,13 @@ class CourseApi:
         except (ValueError, KeyError) as exc:
             return self._err(HTTPStatus.BAD_REQUEST, str(exc.args[0] if exc.args else exc))
         return None
+
+    def _history(self, course: Course, *, by: str, what: str, comment: str = "") -> None:
+        """Note a change in the course's history (inside the caller's edit)."""
+        last = course.history[-1].get("n", len(course.history)) if course.history else 0
+        course.history.append({"at": time.time(), "by": by, "what": what, "n": int(last) + 1,
+                               "comment": comment[:_MAX_TEXT]})
+        del course.history[:-_HISTORY_KEEP]
 
     def _latest(self, repo: str, tag: str) -> int | None:
         rev = self.server.repo(repo).latest(tag)

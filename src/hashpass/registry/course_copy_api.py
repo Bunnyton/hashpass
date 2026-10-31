@@ -5,12 +5,14 @@ A mirror follows its parent's tasks and keeps its own people; a fork is its owne
 remembers where it came from. Copies are made of what a mirror mirrors (its root); whether one
 may is the root's say for a mirror and the course's own for a fork of a fork.
 """
+import time
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from flask import Flask, Response, request
 
 from hashpass.registry import course_copies as cc
+from hashpass.registry import course_merges as mg
 from hashpass.registry.access import can
 
 if TYPE_CHECKING:
@@ -40,6 +42,90 @@ class CopyApi:
              methods=["POST"])
         rule("/courses/<owner>/<name>/copies", "course_copies", self.copies, methods=["GET"])
         rule("/courses/<owner>/<name>/sync", "course_sync", self.sync, methods=["GET", "POST"])
+        rule("/courses/<owner>/<name>/merge", "course_offer", self.offer, methods=["POST"])
+        rule("/courses/<owner>/<name>/merges", "course_merges", self.merges, methods=["GET"])
+        rule("/courses/<owner>/<name>/merges/<mid>", "course_merge", self.decide, methods=["POST"])
+
+    def _unfit(self, parent: "Course", user: str, snapshot: dict) -> str:
+        """Why a task the snapshot brings may not go into `parent` (its visibility), or ""."""
+        for block in snapshot["blocks"]:
+            for task in block["tasks"]:
+                if parent.find_task(task["repo"], task["tag"]) is not None:
+                    continue
+                said = self.api._revision_ok(parent, user, task["repo"], task["tag"], task["n"])  # noqa: SLF001
+                if isinstance(said, str):
+                    return said
+        return ""
+
+    def offer(self, owner: str, name: str) -> Response:
+        """Offer the whole fork to its parent: one open request per fork, a new offer refreshes it."""
+        fork, parent, user, err = self._fork_parent(owner, name)
+        if err is not None:
+            return err
+        unfit = self._unfit(parent, user, cc.structure(fork))
+        if unfit:
+            return self.api._err(HTTPStatus.CONFLICT, unfit)                  # noqa: SLF001
+        made: list[dict] = []
+        comment = str(self.api._body().get("comment", ""))                    # noqa: SLF001
+        try:
+            with self.api.courses.edit(parent.ref) as cur:
+                made.append(mg.offer(cur, fork, by=user, comment=comment, now=time.time()))
+        except ValueError as exc:
+            return self.api._err(HTTPStatus.CONFLICT, str(exc))               # noqa: SLF001
+        return self.api._json(HTTPStatus.CREATED, {"merge": self._row(parent, made[0])})  # noqa: SLF001
+
+    def _row(self, parent: "Course", req: dict) -> dict:
+        row = {k: v for k, v in req.items() if k not in ("base", "snapshot")}
+        return row | {"stale": mg.stale(parent, req) if req["state"] == "open" else False,
+                      "changes": [c | {"text": cc.describe(c)} for c in mg.changes(parent, req)]}
+
+    def merges(self, owner: str, name: str) -> Response:
+        """Return the requests the caller may see: the course's `content` people -- all, an author -- theirs."""
+        course, user, err = self.api._load(owner, name, "view")              # noqa: SLF001
+        if err is not None:
+            return err
+        staff = can(user, self.server.pool_perms(user), course, "content")
+        rows = [self._row(course, r) for r in mg.shown(course, user, staff=staff, now=time.time())]
+        return self.api._json(HTTPStatus.OK, {"merges": rows[::-1]})        # noqa: SLF001
+
+    def decide(self, owner: str, name: str, mid: str) -> Response:
+        """`merge` / `reject` (the parent's `content`), `withdraw` (the request's author)."""
+        action = str(self.api._body().get("action", ""))                     # noqa: SLF001
+        course, user, err = self.api._load(owner, name, "view" if action == "withdraw" else "content")  # noqa: SLF001
+        if err is not None:
+            return err
+        req = next((r for r in course.merges if r["id"] == mid), None)
+        if req is None or action not in ("merge", "reject", "withdraw"):
+            return self.api._err(HTTPStatus.NOT_FOUND, "такого запроса нет")   # noqa: SLF001
+        if action == "merge" and (unfit := self._unfit(course, user or "", req["snapshot"])):
+            return self.api._err(HTTPStatus.CONFLICT, unfit)                  # noqa: SLF001
+        reason = str(self.api._body().get("reason", ""))                      # noqa: SLF001
+        done: list[dict] = []
+        try:
+            with self.api.courses.edit(course.ref) as cur:
+                if action == "withdraw":
+                    mg.withdraw(cur, mid, by=user or "")
+                    done.append(next(r for r in cur.merges if r["id"] == mid))
+                else:
+                    done.append(mg.decide(cur, mid, accept=action == "merge", by=user or "", now=time.time(),
+                                          reason=reason))
+                    if action == "merge":
+                        self.api._history(cur, by=user or "", what=f"слияние из {req['from_ref']} от {req['by']}")  # noqa: SLF001
+        except PermissionError as exc:
+            return self.api._err(HTTPStatus.FORBIDDEN, str(exc))              # noqa: SLF001
+        except ValueError as exc:
+            return self.api._err(HTTPStatus.CONFLICT, str(exc))               # noqa: SLF001
+        if action == "merge":
+            self._level(req["from_id"], self.api.courses.get(course.ref))
+        return self.api._json(HTTPStatus.OK, {"merge": self._row(self.api.courses.get(course.ref), done[0])})  # noqa: SLF001
+
+    def _level(self, fork_id: str, parent: "Course") -> None:
+        """After a merge the fork's base is the parent as it is now: nothing left to pull."""
+        fork = self.api.courses.by_id(fork_id)
+        if fork is None:
+            return
+        with self.api.courses.edit(fork.ref) as cur:
+            cur.origin |= {"base": cc.structure(parent), "base_rev": parent.rev}
 
     def _fork_parent(self, owner: str, name: str) -> tuple["Course | None", "Course | None", str, Response | None]:
         """Return (fork, its parent, caller) for the fork's `content` people, or an error."""
