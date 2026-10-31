@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from hashpass.registry.revisions import RepoIndex
 from tests.registry.test_course_api import _course, _Courses
 
 
@@ -193,14 +194,14 @@ def test_removed_member_mirror_closed(pool: _Courses) -> None:
 
 @pytest.mark.tier1
 def test_revoked_mirror_serves_no_task(pool: _Courses) -> None:
-    _revoked_setup(pool)
+    path = _revoked_setup(pool)
     _code, body = pool.call("GET", "/catalog?course=kid/m", "max")
     assert [r for r in body.get("catalog", []) if r.get("ref") == "bob/git-init:1"] == []
-    digest = pool.call("GET", "/courses/bob/linux", "bob")[1]  # the parent's revision, for the record
-    assert digest["blocks"]
-    code, body = pool.call("POST", "/submit", "max", {"task_ref": "bob/git-init:1", "course": "kid/m",
-                                                      "digest": "x", "passed": True})
-    assert body.get("status") != "passed"
+    digest = RepoIndex(pool.r.store.root / ".repos", "bob/git-init").get("1", 2).task_digest
+    submit = {"task_ref": "bob/git-init:1", "course": "kid/m", "digest": digest, "passed": True}
+    assert pool.call("POST", "/submit", "max", submit)[1].get("status") != "passed"
+    pool.call("PUT", f"{path}/members/kid", "bob", {"role": "member"})             # access back
+    assert pool.call("POST", "/submit", "max", submit)[1].get("status") == "passed"
 
 
 @pytest.mark.tier1
