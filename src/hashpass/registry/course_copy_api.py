@@ -8,8 +8,9 @@ may is the root's say for a mirror and the course's own for a fork of a fork.
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from flask import Flask, Response
+from flask import Flask, Response, request
 
+from hashpass.registry import course_copies as cc
 from hashpass.registry.access import can
 
 if TYPE_CHECKING:
@@ -38,6 +39,55 @@ class CopyApi:
         rule("/courses/<owner>/<name>/fork", "course_fork", lambda owner, name: self.copy(owner, name, "fork"),
              methods=["POST"])
         rule("/courses/<owner>/<name>/copies", "course_copies", self.copies, methods=["GET"])
+        rule("/courses/<owner>/<name>/sync", "course_sync", self.sync, methods=["GET", "POST"])
+
+    def _fork_parent(self, owner: str, name: str) -> tuple["Course | None", "Course | None", str, Response | None]:
+        """Return (fork, its parent, caller) for the fork's `content` people, or an error."""
+        fork, user, err = self.api._load(owner, name, "content")         # noqa: SLF001
+        if err is not None:
+            return None, None, "", err
+        if not fork.origin or fork.kind != "fork":
+            return None, None, "", self.api._err(HTTPStatus.BAD_REQUEST, "это не форк")  # noqa: SLF001
+        parent = None if fork.origin.get("gone") else self.api.courses.by_id(str(fork.origin.get("id", "")))
+        if parent is None:
+            return None, None, "", self.api._err(HTTPStatus.BAD_REQUEST, "исходный курс удалён")  # noqa: SLF001
+        if fork.origin.get("revoked"):
+            return None, None, "", self.api._err(HTTPStatus.FORBIDDEN, "нет доступа к исходному курсу")  # noqa: SLF001
+        return fork, parent, user or "", None
+
+    def behind(self, fork: "Course") -> int | None:
+        """How many changes the fork's parent made since the fork last pulled, or None (not a live fork)."""
+        if fork.kind != "fork" or fork.origin.get("gone") or fork.origin.get("revoked"):
+            return None
+        parent = self.api.courses.by_id(str(fork.origin.get("id", "")))
+        return len(cc.diff(fork.origin.get("base") or cc.structure(parent), cc.structure(parent))) if parent else None
+
+    def sync(self, owner: str, name: str) -> Response:
+        """GET: what the parent changed and what would conflict; POST: bring it in (spec 2026-10-31 §3.1)."""
+        fork, parent, user, err = self._fork_parent(owner, name)
+        if err is not None:
+            return err
+        theirs = cc.structure(parent)
+        base = fork.origin.get("base") or theirs
+        changes = cc.diff(base, theirs)
+        if request.method == "GET":
+            _merged, conflicts = cc.merge3(base, cc.structure(fork), theirs)
+            return self.api._json(HTTPStatus.OK, {                            # noqa: SLF001
+                "behind": len(changes), "changes": [c | {"text": cc.describe(c)} for c in changes],
+                "conflicts": [c | {"text": cc.describe(c)} for c in conflicts]})
+        said: dict = {}
+
+        def pull(c: "Course") -> None:
+            merged, conflicts = cc.merge3(base, cc.structure(c), theirs)
+            cc.apply_structure(c, merged, source_open=cc.block_open(parent))
+            c.origin |= {"base": theirs, "base_rev": parent.rev}
+            said.update(applied=len(changes) - len(conflicts),
+                        conflicts=[x | {"text": cc.describe(x)} for x in conflicts])
+
+        err = self.api._edit(fork.ref, pull, by=user, check_rev=False,     # noqa: SLF001
+                             what=lambda _c: f"подтянуто из {parent.ref}: изменений {said['applied']}, "
+                                             f"конфликтов {len(said['conflicts'])}")
+        return err or self.api._json(HTTPStatus.OK, said)                   # noqa: SLF001
 
     def copies(self, owner: str, name: str) -> Response:
         """Return the course's own mirrors and forks with their students, for «delete them too?» (`content`)."""

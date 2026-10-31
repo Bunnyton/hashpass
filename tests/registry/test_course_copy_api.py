@@ -246,3 +246,81 @@ def test_disable_and_delete_existing(pool: _Courses) -> None:
     assert (code, body["deleted"]) == (200, ["kid/m"])
     assert pool.call("GET", "/courses/kid/m", "kid")[0] == 404
     assert pool.call("GET", "/courses/max/f", "max")[0] == 200
+
+
+# -- a fork pulls its parent's changes -----------------------------------------
+
+def _fork(pool: _Courses) -> tuple[str, str]:
+    path = _with_task(pool)
+    pool.call("PUT", path, "bob", {"allow_forks": True})
+    pool.call("POST", f"{path}/fork", "kid", {"name": "f"})
+    return path, "/courses/kid/f"
+
+
+@pytest.mark.tier1
+def test_sync_shows_and_applies_parent_changes(pool: _Courses) -> None:
+    path, fork = _fork(pool)
+    block = pool.call("GET", path, "bob")[1]["blocks"][0]["id"]
+    pool.call("POST", f"{path}/tasks", "bob", {"repo": "eve/regex", "tag": "1", "block_id": block})
+    code, sync = pool.call("GET", f"{fork}/sync", "kid")
+    assert (code, sync["behind"], [c["text"] for c in sync["changes"]], sync["conflicts"]) == (
+        200, 1, ["добавлено задание eve/regex:1 в блок «Git»"], [])
+    assert pool.call("GET", fork, "kid")[1]["origin"]["behind"] == 1
+    code, done = pool.call("POST", f"{fork}/sync", "kid", {})
+    assert (code, done["applied"], done["conflicts"]) == (200, 1, [])
+    view = pool.call("GET", fork, "kid")[1]
+    assert (_tasks(view), view["history"][0]["what"]) == (["bob/git-init:1", "eve/regex:1"],
+                                                          "подтянуто из bob/linux: изменений 1, конфликтов 0")
+
+
+@pytest.mark.tier1
+def test_sync_conflict_keeps_fork_version(pool: _Courses) -> None:
+    path, fork = _fork(pool)
+    block = pool.call("GET", path, "bob")[1]["blocks"][0]["id"]
+    pool.call("PUT", f"{path}/tasks/bob/git-init:1", "bob", {"pinned": True})
+    pool.call("PUT", f"{path}/blocks/{block}", "bob", {"name": "Гит"})
+    pool.call("PUT", f"{fork}/tasks/bob/git-init:1", "kid", {"pinned": True})   # the same end: no conflict
+    pool.call("PUT", f"{fork}/blocks/{block}", "kid", {"name": "Мой Git"})
+    done = pool.call("POST", f"{fork}/sync", "kid", {})[1]
+    assert [(c["op"], c["new"]) for c in done["conflicts"]] == [("block_rename", "Гит")]
+    view = pool.call("GET", fork, "kid")[1]
+    assert (view["blocks"][0]["name"], view["blocks"][0]["tasks"][0]["pinned"]) == ("Мой Git", True)
+
+
+@pytest.mark.tier1
+def test_sync_resets_base(pool: _Courses) -> None:
+    path, fork = _fork(pool)
+    pool.call("PUT", path, "bob", {"auto_update": False})
+    pool.call("POST", f"{fork}/sync", "kid", {})
+    assert pool.call("GET", f"{fork}/sync", "kid")[1]["behind"] == 0
+    assert pool.call("GET", fork, "kid")[1]["origin"]["behind"] == 0
+
+
+@pytest.mark.tier1
+def test_sync_needs_content(pool: _Courses) -> None:
+    _path, fork = _fork(pool)
+    assert pool.call("GET", f"{fork}/sync", "max")[0] == 403
+    assert pool.call("POST", f"{fork}/sync", "max", {})[0] == 403
+    assert "behind" not in (pool.call("GET", fork, "max")[1]["origin"] or {})
+
+
+@pytest.mark.tier1
+def test_sync_on_mirror_or_course_400(pool: _Courses) -> None:
+    path = _with_task(pool)
+    pool.call("POST", f"{path}/mirror", "kid", {"name": "m"})
+    code, body = pool.call("GET", "/courses/kid/m/sync", "kid")
+    assert (code, body["error"]) == (400, "это не форк")
+    assert pool.call("GET", f"{path}/sync", "bob")[0] == 400
+
+
+@pytest.mark.tier1
+def test_sync_parent_gone_or_closed(pool: _Courses) -> None:
+    path, fork = _fork(pool)
+    pool.call("PUT", f"{path}/members/kid", "bob", {"role": "member"})
+    pool.call("PUT", path, "bob", {"visibility": "private"})
+    pool.call("DELETE", f"{path}/members/kid", "bob")
+    code, body = pool.call("GET", f"{fork}/sync", "kid")
+    assert (code, body["error"]) == (403, "нет доступа к исходному курсу")
+    pool.call("DELETE", path, "bob")
+    code, body = pool.call("POST", f"{fork}/sync", "kid", {})
+    assert (code, body["error"]) == (400, "исходный курс удалён")

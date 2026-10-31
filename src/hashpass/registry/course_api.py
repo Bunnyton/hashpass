@@ -239,6 +239,8 @@ class CourseApi:
             out["settings"] = {"auto_accept": course.auto_accept, "auto_update": course.auto_update,
                                "allow_mirrors": course.allow_mirrors, "allow_forks": course.allow_forks}
         out["copies"] = self._copies(course, user)
+        if staff and out["origin"] and (behind := self.server.copy_api.behind(course)) is not None:
+            out["origin"]["behind"] = behind
         out["members"] = course.members                 # who is in: everyone who sees the course
         out["extras"] = course.extras                   # authors' extra rights (2026-10-26)
         # each change is a version of the course, numbered once (entries from before had no number)
