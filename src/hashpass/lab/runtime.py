@@ -102,17 +102,28 @@ class LabRuntime:
             msg = f"не удалось соединить машины стенда: {res.stderr.strip() or res.stdout.strip()}"
             raise RuntimeError(msg)
 
-    def netns(self, machine: str) -> str:
-        """Return the nspawn option that puts a machine into its (wired) network namespace."""
-        return f"--network-namespace-path=/proc/{self._leaders[machine]}/ns/net"
+    def netns(self, machine: str) -> list[str]:
+        """
+        Return the nspawn options that put a machine into its (wired) network namespace.
+
+        A joined namespace alone gives no CAP_NET_ADMIN and a read-only /proc/sys/net: a router
+        lab could neither `ip route` nor `sysctl net.ipv4.ip_forward=1`. With `--private-network`
+        too, nspawn keeps the joined namespace (probed 2026-11-02) and grants both, scoped to it.
+        """
+        return [f"--network-namespace-path=/proc/{self._leaders[machine]}/ns/net",
+                "--private-network"]
 
     def start(self, port: int) -> None:
         """Write the machines' files, raise the holders, wire the network, boot the nodes."""
         hosts = {"/etc/hosts": hosts_text(self.lab)} if self.hosts else {}
-        _write_files(self.console, hosts, root_owned=False)
+        # the base names every machine «hashpass» in /etc/hostname, and systemd prefers it to
+        # nspawn's --hostname: each lab machine is called by its own name
+        _write_files(self.console, {**hosts, "/etc/hostname": f"{self.lab.console.name}\n"},
+                     root_owned=False)
         unit = f"/etc/systemd/system/{PORT_UNIT}"
-        for runner in self.nodes.values():
-            _write_files(runner, {**hosts, unit: port_unit(port)}, root_owned=True)
+        for name, runner in self.nodes.items():
+            _write_files(runner, {**hosts, "/etc/hostname": f"{name}\n", unit: port_unit(port)},
+                         root_owned=True)
             res = runner.run(["sh", "-c", ("mkdir -p /etc/systemd/system/multi-user.target.wants && "
                               f"ln -sf {unit} /etc/systemd/system/multi-user.target.wants/{PORT_UNIT}")])
             if res.exit_code != 0:
@@ -127,13 +138,13 @@ class LabRuntime:
         self._wire()
         for name, runner in self.nodes.items():
             machine = machines.machine_name()
-            runner.boot(machine, [self.netns(name), f"--hostname={name}",
+            runner.boot(machine, [*self.netns(name), f"--hostname={name}",
                                   *nspawn_emulation_args(rootfs=runner.rootfs)])
             runner.live_machine = machine
 
     def console_args(self) -> list[str]:
         """Return the console's nspawn options: its network namespace and hostname."""
-        return [self.netns(self.lab.console.name), f"--hostname={self.lab.console.name}"]
+        return [*self.netns(self.lab.console.name), f"--hostname={self.lab.console.name}"]
 
     def stop(self) -> None:
         """Power the nodes off and remove the holders (bridges and links go with them). Idempotent."""

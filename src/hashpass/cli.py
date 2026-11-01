@@ -489,9 +489,9 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
 
 
 def _build_machine(store: ImageStore, base: Path, lab_name: str, lab_version: str,  # noqa: PLR0913, PLR0917
-                   build: str, machine: str, user: str, work: Path) -> str:
+                   source: str, machine: str, user: str, work: Path) -> str:
     """Build one lab machine from its Taskfile (`build <dir>`); return its image ref."""
-    path = Path(build)
+    path = Path(source)
     if path.is_dir():
         path /= "Taskfile"
     if not path.is_file():
