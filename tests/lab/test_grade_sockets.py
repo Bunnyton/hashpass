@@ -40,7 +40,7 @@ def test_each_machine_has_its_socket_and_its_commands_are_tagged(tmp_path, monke
                                      stop, None, history, sockets={pc: None, web: "web"})
     thread.start()
     try:
-        assert 20000 <= port < 40000  # noqa: PLR2004
+        assert 61000 <= port < 65000  # noqa: PLR2004
         assert _ask(pc, "state") == b"\n"
         assert _ask(pc, "policy") == b"a;b;c"
         assert _ask(web, "policy") == b";;"                   # the console's policy is not the machine's

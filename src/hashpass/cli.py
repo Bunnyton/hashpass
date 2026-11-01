@@ -709,8 +709,8 @@ def _advance_and_announce(session: object, io: Io) -> bool:
 _DEFAULT_TERM = "xterm-256color"
 _GRADE_HOST = "127.0.0.1"  # per-command grade server binds loopback (shared with the container)
 _ACCEPT_POLL = 0.3         # accept() timeout so the grade thread can notice `stop`
-_LAB_PORT_BASE = 20000     # a lab's relay port, in each machine's own netns (nothing to collide with)
-_LAB_PORT_SPAN = 20000
+_LAB_PORT_BASE = 61000     # a lab's relay port in each machine's netns: above Linux's ephemeral range
+_LAB_PORT_SPAN = 4000      # (32768-60999), where a lab's own services hardly ever listen
 _GRADER_JOIN = 3.0         # seconds to let the grade thread finish after the console closes
 _MAX_REQ = 1 << 20         # cap a console request (hello / cmd <base64>) at 1 MiB
 
@@ -932,13 +932,18 @@ def _grade_listeners(sockets: dict[Path, str | None] | None) -> tuple[int, list[
         srv.bind((_GRADE_HOST, 0))
         return srv.getsockname()[1], [(srv, None)]
     listeners: list[tuple[socket.socket, str | None]] = []
-    for path, node in sockets.items():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with contextlib.suppress(FileNotFoundError):
-            path.unlink()
-        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        srv.bind(str(path))
-        listeners.append((srv, node))
+    try:
+        for path, node in sockets.items():
+            srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            listeners.append((srv, node))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with contextlib.suppress(FileNotFoundError):
+                path.unlink()
+            srv.bind(str(path))
+    except OSError:
+        for srv, _ in listeners:
+            srv.close()
+        raise
     return _LAB_PORT_BASE + secrets.randbelow(_LAB_PORT_SPAN), listeners
 
 
@@ -990,7 +995,10 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],  #
             for srv, _ in listeners:
                 srv.close()
 
-    return port, threading.Thread(target=loop, daemon=True)
+    thread = threading.Thread(target=loop, daemon=True)
+    # a session that fails before the thread starts (a lab that did not come up) closes them here
+    thread.close_listeners = lambda: [srv.close() for srv, _ in listeners]
+    return port, thread
 
 
 def _console_controls(conn: socket.socket) -> tuple[Callable[[], bool], Callable[[], bool]]:
@@ -1259,6 +1267,7 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
     history = history if history is not None else []
     lab = getattr(session, "lab", None)
     completed = False
+    grader: threading.Thread | None = None
     try:
         port, grader = _grade_server(session, router, io.clock, stop, session.meta.readme, history,
                                      sockets=lab.sockets if lab is not None else None)
@@ -1285,6 +1294,8 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
         completed = current_stage(session.progress) is None   # every stage passed
     finally:
         stop.set()
+        if grader is not None and not grader.is_alive() and hasattr(grader, "close_listeners"):
+            grader.close_listeners()       # never started (a lab did not come up): its sockets
         session.teardown()
         # Overlay upper + lower stacks left on disk are ~1 GB per boot and mostly root-owned;
         # without this every `hashpass run` leaks that much into `env.work/run/` and fills /home

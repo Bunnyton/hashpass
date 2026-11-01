@@ -21,7 +21,7 @@ from hashpass.imagestore.store import ImageStore
 from hashpass.key import local_key
 from hashpass.lab.config import NODES_DIR, find_lab
 from hashpass.lab.mask import masked
-from hashpass.lab.runtime import LabRuntime
+from hashpass.lab.runtime import LabRuntime, grade_dir
 from hashpass.markdown import render_markdown
 from hashpass.paths import absolutize, looks_like_path, resolve_path
 from hashpass.play import capture_candidate
@@ -851,7 +851,7 @@ def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
                 runner = NspawnRunner(workdir / f"node-{m.name}")   # base as a plain lower: no copy
                 nodes[m.name] = runner
                 runner.prepare([layer / NODES_DIR / m.name, Path(base)])
-            lab = LabRuntime(config, hosts, student, nodes, Path(base), workdir / "grade")
+            lab = LabRuntime(config, hosts, student, nodes, Path(base), grade_dir())
         hp_dir = workdir / "hp"
         shutil.copytree(stored.hp_src_dir, hp_dir, dirs_exist_ok=True)
         return TaskSession(stored, student, hp_dir, student_id=student_id, nonce=nonce,

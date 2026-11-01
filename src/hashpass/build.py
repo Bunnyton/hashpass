@@ -178,7 +178,7 @@ def build(  # noqa: PLR0913
     """
     workdir = Path(workdir)
     ref = f"{recipe.name}:{recipe.version}"
-    lowers = resolve_lowers(recipe.parents, store)
+    lowers = masked(resolve_lowers(recipe.parents, store), store.root)   # `from <lab>`: no /.hp-nodes
     base = base or build_base(workdir / "base", from_tar=base_tar)
     key = _build_key(base, _parent_ids(store, recipe.parents), recipe.steps,
                      extra=extra[1] if extra else None)

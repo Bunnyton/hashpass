@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import shutil
 import subprocess
+import tempfile
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hashpass import machines
@@ -22,8 +25,6 @@ from hashpass.lab.config import PORT_UNIT, hosts_text, port_unit
 from hashpass.lab.wire import wire_script
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from hashpass.lab.model import Lab
     from hashpass.runner.nspawn import NspawnRunner
 
@@ -32,6 +33,17 @@ _SOCKET_ACTIVATE = "/usr/bin/systemd-socket-activate"
 _PROXYD = "/usr/lib/systemd/systemd-socket-proxyd"
 _LEADER_WAIT = 20.0                  # seconds for a holder to come up
 _POLL = 0.1
+_STOP_TRIES = 6                      # x _STOP_WAIT: a slow holder gets 30 s to register and go
+_STOP_WAIT = 5.0
+
+
+def grade_dir() -> Path:
+    """
+    Return a fresh directory for a lab's grade sockets, on a short path.
+
+    AF_UNIX paths stop at 107 bytes; under a long HASHPASS_HOME the run dir would not fit.
+    """
+    return Path(tempfile.mkdtemp(prefix="hp-grade-"))
 
 
 def _leader(name: str) -> int | None:
@@ -156,9 +168,15 @@ class LabRuntime:
             with contextlib.suppress(Exception):
                 runner.poweroff()
             runner.live_machine = None
-        for name in self._holders.values():
-            subprocess.run(["sudo", "machinectl", "terminate", name], check=False, capture_output=True)
-        for proc in self._procs:
-            with contextlib.suppress(Exception):
-                proc.wait(timeout=10)
+        # A holder still registering when we gave up is not in machined yet: its `sudo` process is
+        # root's, so we cannot kill it -- terminate by name again until it is gone.
+        for name, proc in zip(self._holders.values(), self._procs, strict=True):
+            for _ in range(_STOP_TRIES):
+                subprocess.run(["sudo", "machinectl", "terminate", name], check=False, capture_output=True)
+                try:
+                    proc.wait(timeout=_STOP_WAIT)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
         self._holders, self._procs, self._leaders = {}, [], {}
+        shutil.rmtree(self.sock_dir, ignore_errors=True)
