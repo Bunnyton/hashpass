@@ -81,7 +81,7 @@ def _alive() -> list[str]:
     return [line.split()[0] for line in out.splitlines() if f"-{pid}-" in line.split()[0]]
 
 
-def _open(env, ref, base, tmp_path):
+def _open(env: cli.Home, ref: str, base: Path, tmp_path: Path) -> tuple:
     store = ImageStore(env.images)
     session = run_task(ref, store, tmp_path / f"run-{uuid.uuid4().hex[:6]}", base=base,
                        student_id="s", nonce="n", sink=lambda _s: None, sleep=lambda _s: None)

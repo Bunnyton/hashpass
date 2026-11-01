@@ -25,7 +25,7 @@ def _ask(path, line: str) -> bytes:
 def test_each_machine_has_its_socket_and_its_commands_are_tagged(tmp_path, monkeypatch):
     seen: list[dict] = []
 
-    def observe(command, **kw):
+    def observe(command: str, **kw: object) -> FeedResult:
         seen.append({"command": command, **kw})
         return FeedResult(advanced=False, stage=0, local_key=None)
 
