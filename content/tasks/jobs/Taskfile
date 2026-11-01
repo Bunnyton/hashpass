@@ -59,6 +59,8 @@ stage
   say "Последний backup тоже останови — по номеру задания, не узнавая его PID"
   solve pkill -x backup || true
   block kill unless "%" say "По номеру задания: PID здесь не нужен."
+  block pkill match "." say "По номеру задания — его видно в jobs."
+  block killall match "." say "По номеру задания — его видно в jobs."
   check live /usr/local/lib/hp-proc/check-backups 0
   neutral ls cat pwd jobs ps
   on enter read jobspec.md

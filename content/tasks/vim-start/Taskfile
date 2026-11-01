@@ -23,8 +23,8 @@ read brief.md
 stage
   say "Открой в vim файл start.txt и выйди из него"
   solve true
-  accept cmd "vim" ok
-  accept cmd "vi" ok
+  accept cmd "vim start.txt" ok
+  accept cmd "vi start.txt" ok
   allow vim vi
   neutral ls cat pwd cd
   on pass say "Ты вышел из vim. Многие этим похвастаться не могут."
@@ -39,7 +39,7 @@ stage
   on enter read move.md
   on pass say "Пять из пяти. Стены можно было и не обходить: vim не знает, что это лабиринт."
   hint tries 5 say "Монеты исчезают, только если сохранить файл. Что пишет cat maze.txt — сколько $ осталось?"
-  hint tries 10 say "Двигаться — hjkl, удалить символ — x, сохранить и выйти — :wq."
+  hint tries 10 say "Как двигаться, убирать символ и сохранять — в начале шага; readme покажет снова."
 
 stage
   say "Исправь строки со стрелкой в insert.txt: убери лишние буквы и вставь пропущенные"

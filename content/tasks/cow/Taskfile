@@ -46,6 +46,6 @@ stage
   on pass say "Так работают redis и PostgreSQL: redis делает fork, чтобы сохранить базу на диск, и копируются только страницы, которые изменились за это время. Android запускает каждое приложение fork-ом заранее прогретого процесса zygote."
   hint tries 5 say "У каждого clone свой smaps_rollup. Какая строка в нём — про личные изменённые страницы?"
   hint tries 10 say "Номера всех clone даст pgrep, а нужные строки из шести файлов — grep."
-  hint tries 15 say "Остановил не того? sudo systemctl restart clones вернёт всех шестерых."
+  hint tries 15 say "Остановил не того? Перезапусти службу clones — вернутся все шестеро."
 
 exec finale
