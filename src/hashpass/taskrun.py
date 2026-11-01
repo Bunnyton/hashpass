@@ -19,6 +19,9 @@ from hashpass.image.base import build_base
 from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore
 from hashpass.key import local_key
+from hashpass.lab.config import NODES_DIR, find_lab
+from hashpass.lab.mask import masked
+from hashpass.lab.runtime import LabRuntime
 from hashpass.markdown import render_markdown
 from hashpass.paths import absolutize, looks_like_path, resolve_path
 from hashpass.play import capture_candidate
@@ -505,10 +508,14 @@ class TaskSession:
     def __init__(self, stored: StoredTask, student: NspawnRunner, hp_dir: Path, *,  # noqa: PLR0913
                  student_id: str, nonce: str,
                  sink: Callable[[str], None] = _stdout,
-                 sleep: Callable[[float], None] = time.sleep) -> None:
+                 sleep: Callable[[float], None] = time.sleep,
+                 nodes: dict[str, NspawnRunner] | None = None,
+                 lab: LabRuntime | None = None) -> None:
         """Bind a stored task to a prepared (student) runner, a writable /hp copy, and a Renderer."""
         self.stored = stored
         self.student = student
+        self.nodes = nodes or {}     # a lab's other machines, by name (spec 2026-11-02)
+        self.lab = lab
         self.hp_dir = Path(hp_dir)
         self.meta = stored.meta
         self.checks = load_bundle(stored.bundle_dir).checks
@@ -637,8 +644,8 @@ class TaskSession:
         if sm.acceptance == "command":   # accepted ONLY by the command's own checks (no FS grading)
             return (True, local_key(self.task_id, stage, self.nonce)) if gates else (False, None)
         if sm.acceptance in ("handler", "live"):
-            if sm.acceptance == "live":      # `check live`: a command inside the running console
-                rc = self.student.check_live(sm.check)
+            if sm.acceptance == "live":      # `check live [on <machine>]`: inside the running system
+                rc = self._check_live(sm)
             else:
                 ctx = self._ctx(command, self.tries[stage], stage, out)
                 rc = run_handler(self.student, ExecAction(sm.check), ctx, hp_dir=self.hp_dir).exit_code
@@ -653,6 +660,13 @@ class TaskSession:
         grade = grade_stage(checks, cand, task_id=self.task_id,
                             stage=stage, student_id=self.student_id, nonce=self.nonce, ts=ts)
         return grade.accepted, grade.local_key
+
+    def _check_live(self, sm: StageMeta) -> int:
+        """Run a stage's `check live` in the console, or in the lab machine it names (fail closed)."""
+        node = getattr(sm, "check_node", None)
+        if node is None or node not in self.nodes:
+            return self.student.check_live(sm.check) if node is None else 1
+        return self.nodes[node].check_live(sm.check)
 
     def _apply_policy(self, sm: StageMeta, command: str, accepted: bool,  # noqa: FBT001
                       key: str | None) -> tuple[bool, str | None, str | None]:
@@ -710,8 +724,9 @@ class TaskSession:
                 dose = isinstance(action, ReadAction)
         return FeedResult(advanced=accepted, stage=stage, local_key=key, hint=hint, dose=dose)
 
-    def observe(self, command: str, *, ts: str, output: str = "",
-                rc: int | None = None, cwd: str | None = None) -> FeedResult:
+    def observe(self, command: str, *, ts: str, output: str = "",  # noqa: PLR0913
+                rc: int | None = None, cwd: str | None = None,
+                node: str | None = None) -> FeedResult:
         """
         React/grade/hint on a command the student ALREADY ran in the interactive console.
 
@@ -720,8 +735,12 @@ class TaskSession:
         unavailable), so `output`-conditioned hints and output-based acceptance fire live too.
         `rc` is the command's exit status as the console reported it (None on an older runtime).
         `cwd` is the directory it ran in: paths in its output are read against it.
+        `node`: the lab machine the command ran on (an ssh session there), None for the console.
+        A machine's command counts as a try and drives hints, but only `check live` stages can
+        pass on it -- the other checks judge the console's command line and files.
         """
-        self._cwd = cwd
+        if node is None:
+            self._cwd = cwd
         self._record(command)
         stage = current_stage(self.progress)
         if stage is None:
@@ -734,8 +753,13 @@ class TaskSession:
             self.tries[stage] += 1
         ctx = self._ctx(command, self.tries[stage], stage, out)
         self._perform_all(self.meta.react, ctx)          # per-command catch-all handlers
-        accepted, key = self._accept(stage, sm, command, out, ts, rc=rc)
-        accepted, key, hint = self._apply_policy(sm, command, accepted, key)
+        if node is None:
+            accepted, key = self._accept(stage, sm, command, out, ts, rc=rc)
+            accepted, key, hint = self._apply_policy(sm, command, accepted, key)
+        else:
+            accepted = sm.acceptance == "live" and self._check_live(sm) == _ACCEPT_EXIT
+            key = local_key(self.task_id, stage, self.nonce) if accepted else None
+            hint = None
         dose = False
         if accepted:
             self._on_pass(stage, ctx, ts)
@@ -772,8 +796,15 @@ class TaskSession:
         return FeedResult(advanced=accepted, stage=stage, local_key=key)
 
     def teardown(self) -> None:
-        """Tear down the student container (unmount overlay). The /hp copy is scratch."""
-        self.student.teardown()
+        """Tear down the lab (if any) and the student container (unmount overlays)."""
+        try:
+            if self.lab is not None:
+                self.lab.stop()
+            for runner in self.nodes.values():
+                with contextlib.suppress(Exception):
+                    runner.teardown()
+        finally:
+            self.student.teardown()
 
 
 def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
@@ -807,17 +838,29 @@ def run_task(ref: str, store: ImageStore, workdir: Path, *,  # noqa: PLR0913
     """
     workdir = Path(workdir)
     stored = load_task(ref, store)
-    lowers = resolve_lowers((ref,), store)
+    lowers = masked(resolve_lowers((ref,), store), store.root)   # a lab console: no /.hp-nodes
     base = base or build_base(workdir / "base", from_tar=base_tar)
     student = NspawnRunner(workdir / "student", base_dir=base)
     student.prepare(lowers)
+    nodes: dict[str, NspawnRunner] = {}
     try:
+        lab = None
+        if (found := find_lab(lowers)) is not None:   # a lab: prepare its other machines too
+            config, hosts, layer = found
+            for m in config.nodes:
+                runner = NspawnRunner(workdir / f"node-{m.name}")   # base as a plain lower: no copy
+                nodes[m.name] = runner
+                runner.prepare([layer / NODES_DIR / m.name, Path(base)])
+            lab = LabRuntime(config, hosts, student, nodes, Path(base), workdir / "grade")
         hp_dir = workdir / "hp"
         shutil.copytree(stored.hp_src_dir, hp_dir, dirs_exist_ok=True)
         return TaskSession(stored, student, hp_dir, student_id=student_id, nonce=nonce,
-                           sink=sink, sleep=sleep)
+                           sink=sink, sleep=sleep, nodes=nodes, lab=lab)
     except Exception:
         # prepare() already mounted the overlay; on any failure before the caller holds a
         # TaskSession (its only teardown handle), unmount it here so we don't leak a mount.
+        for runner in nodes.values():
+            with contextlib.suppress(Exception):
+                runner.teardown()
         student.teardown()
         raise

@@ -201,19 +201,20 @@ class NspawnRunner:
             overlay_umount(mnt, sudo=True)
         return RunResult(p.stdout, p.stderr, p.returncode)
 
-    def boot(self, machine: str) -> None:
+    def boot(self, machine: str, extra_args: tuple[str, ...] | list[str] = ()) -> None:
         """
         Boot the container in the background as a registered machine.
 
         Args:
             machine: Machine name to register with systemd-machined.
+            extra_args: More nspawn options (a lab node: its network namespace, hostname).
 
         Raises:
             RuntimeError: If the machine does not register within 30 seconds.
 
         """
         self._proc = subprocess.Popen(
-            ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, "-D", str(self._mnt)],
+            ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, *extra_args, "-D", str(self._mnt)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

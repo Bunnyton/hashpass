@@ -14,6 +14,7 @@ from pathlib import Path
 from hashpass.image.base import build_base
 from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore, StoredImage
+from hashpass.lab.mask import masked
 from hashpass.machines import machine_name
 from hashpass.overlay import overlay_mount, overlay_umount
 from hashpass.recipe.model import CopyStep, Recipe, RunStep
@@ -116,7 +117,14 @@ def _parent_ids(store: ImageStore, parents: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(out)
 
 
-def _build_key(base: Path, parents: tuple[str, ...], steps: Sequence[_Step]) -> str:
+def _lay_extra(extra: tuple[Path, str] | None, upper: Path) -> None:
+    """Lay a build's extra files (a lab's `/.hp-nodes`, root-owned) into its layer."""
+    if extra is not None:
+        subprocess.run(["sudo", "rsync", "-a", f"{extra[0]}/", f"{upper}/"], check=True)
+
+
+def _build_key(base: Path, parents: tuple[str, ...], steps: Sequence[_Step], *,
+               extra: str | None = None) -> str:
     """
     Fold base identity + parents + every step (COPY by source content) into one cache key.
 
@@ -128,6 +136,8 @@ def _build_key(base: Path, parents: tuple[str, ...], steps: Sequence[_Step]) -> 
     for step in steps:
         h.update(b"\0")
         h.update(_step_repr(step).encode())
+    if extra is not None:
+        h.update(b"\0extra\0" + extra.encode())
     return h.hexdigest()
 
 
@@ -140,6 +150,7 @@ def build(  # noqa: PLR0913
     workdir: Path,
     sudo: bool = True,
     progress: Callable[[str], None] | None = None,
+    extra: tuple[Path, str] | None = None,
 ) -> StoredImage:
     """
     Build a recipe into a stored image layer (the overlay delta), with a build cache.
@@ -158,6 +169,8 @@ def build(  # noqa: PLR0913
         workdir: Scratch directory for base/upper/work/mnt.
         sudo: Whether overlay mounts use sudo (True for real nspawn).
         progress: Optional sink for per-step build-progress lines.
+        extra: (directory, key): files laid into the layer after the steps (a lab's `/.hp-nodes`),
+            and their identity for the build cache.
 
     Returns:
         The StoredImage for the newly built layer.
@@ -167,7 +180,8 @@ def build(  # noqa: PLR0913
     ref = f"{recipe.name}:{recipe.version}"
     lowers = resolve_lowers(recipe.parents, store)
     base = base or build_base(workdir / "base", from_tar=base_tar)
-    key = _build_key(base, _parent_ids(store, recipe.parents), recipe.steps)
+    key = _build_key(base, _parent_ids(store, recipe.parents), recipe.steps,
+                     extra=extra[1] if extra else None)
     if store.exists(ref):
         cached = store.get(ref)
         if cached.build_key == key:                   # identical inputs -> reuse, run nothing
@@ -194,6 +208,7 @@ def build(  # noqa: PLR0913
                                 "-D", str(mnt), "sh", "-c", step.cmd], check=True)
     finally:
         overlay_umount(mnt, sudo=sudo)
+    _lay_extra(extra, upper)
     return store.save(recipe.name, recipe.version, upper, recipe.parents, sudo=sudo, build_key=key)
 
 
@@ -220,7 +235,7 @@ def run_image(ref: str, store: ImageStore, workdir: Path, *,
 
     """
     workdir = Path(workdir)
-    lowers = resolve_lowers((ref,), store)  # raises KeyError if ref is absent
+    lowers = masked(resolve_lowers((ref,), store), store.root)  # KeyError if ref is absent
     base = base or build_base(workdir / "base", from_tar=base_tar)
     runner = NspawnRunner(workdir / "run", base_dir=base)
     runner.prepare(lowers)

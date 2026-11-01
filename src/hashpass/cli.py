@@ -10,6 +10,7 @@ import platform
 import re
 import secrets
 import select
+import selectors
 import signal
 import socket
 import stat
@@ -47,6 +48,8 @@ from hashpass.build import build, run_image
 from hashpass.emulation import emulator_description, failed_units, nspawn_emulation_args
 from hashpass.image.base import _base_version_current, build_base, runtime_stamp
 from hashpass.imagestore.store import ImageStore, did_you_mean, registry_key
+from hashpass.lab.build import stage_nodes
+from hashpass.lab.parse import labfile_of, load_labfile
 from hashpass.progress import current_stage
 from hashpass.recipe.model import (
     Action,
@@ -434,6 +437,8 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
     """Build an image or a task from a Taskfile, under the owner's namespace (login required)."""
     io = io or _default_io()
     taskfile_path = Path(taskfile)
+    if (labfile := labfile_of(taskfile_path)) is not None:   # a lab: several machines (spec 2026-11-02)
+        return _build_lab(env, labfile, tag, io)
     if taskfile_path.is_dir():                           # `hashpass build .` -- the folder's Taskfile
         taskfile_path /= "Taskfile"
     recipe = load_recipe(taskfile_path)
@@ -480,6 +485,69 @@ def cmd_build(env: Home, taskfile: str, tag: str | None = None, io: Io | None = 
         io.write("\x1b[2m  задание сохранено локально (на сервис отправляются образы)\x1b[0m\n")
     else:
         _push_image(env, store, ref, io)
+    return 0
+
+
+def _build_machine(store: ImageStore, base: Path, lab_name: str, lab_version: str,  # noqa: PLR0913, PLR0917
+                   build: str, machine: str, user: str, work: Path) -> str:
+    """Build one lab machine from its Taskfile (`build <dir>`); return its image ref."""
+    path = Path(build)
+    if path.is_dir():
+        path /= "Taskfile"
+    if not path.is_file():
+        msg = f"машина {machine}: нет файла {path}"
+        raise ValueError(msg)
+    recipe = _rebase_paths(load_recipe(path), path.resolve().parent)
+    if is_task(recipe):
+        msg = f"машина {machine}: в её Taskfile есть stage — задание описывается в Labfile"
+        raise ValueError(msg)
+    name, version = (recipe.name, recipe.version) if recipe.name else (f"{lab_name}.{machine}", lab_version)
+    parents = tuple(p if "/" in p else _namespace_name(p, user) for p in recipe.parents)
+    recipe = replace(recipe, name=_namespace_name(name, user), version=version, parents=parents)
+    sys.stdout.write(f"\x1b[1m▸ машина {machine}: {image_ref(recipe)}\x1b[0m\n")
+    built = build(recipe, store, base=base, workdir=work / f"machine-{machine}", progress=_progress)
+    return f"{built.name}:{built.version}"
+
+
+def _build_lab(env: Home, labfile: Path, tag: str | None, io: Io) -> int:
+    """Build a Labfile: every machine's image, then the lab task over the console's image."""
+    lab, recipe = load_labfile(labfile)
+    here = labfile.resolve().parent
+    recipe = _rebase_paths(recipe, here)
+    name, version = resolve_ref(recipe, tag, labfile)
+    check_tag(version)
+    user = _author_identity(env, io)
+    store = ImageStore(env.images)
+    base = ensure_base_image(env, store)
+    work = env.work / "build" / f"run-{uuid.uuid4().hex[:8]}"
+    work.mkdir(parents=True, exist_ok=True)
+    short = name.rsplit("/", 1)[-1]
+    try:
+        refs: dict[str, str] = {}
+        for m in lab.machines:
+            if m.build is not None:
+                refs[m.name] = _build_machine(store, base, short, version, str(here / m.build),
+                                              m.name, user, work)
+            else:
+                ref = m.image if "/" in (m.image or "") else _namespace_name(m.image or "", user)
+                if not store.exists(ref):
+                    msg = f"машина {m.name}: нет образа {ref} на этой машине — сначала hashpass pull {ref}"
+                    raise ValueError(msg)
+                refs[m.name] = ref
+        recipe = replace(recipe, name=_namespace_name(name, user), version=version,
+                         parents=(refs[lab.console.name],))
+        ref = image_ref(recipe)
+        sys.stdout.write(f"\x1b[1m▸ Собираю стенд {ref}: {', '.join(m.name for m in lab.machines)}\x1b[0m\n")
+        extra = stage_nodes(lab, refs, store, work, hosts=recipe.settings.hosts)
+        build_task(recipe, store, base=base, workdir=work / "task", progress=_progress, extra=extra)
+        _stage_read_assets(recipe, store, ref, here)
+    finally:
+        _reset_workdir(work)
+    sys.stdout.write(f"\x1b[32m✓ собрано\x1b[0m: {ref} (стенд, машин: {len(lab.machines)})\n")
+    store.set_taskfile_path(ref, str(labfile.resolve()))
+    if not _uses_local_service(env):
+        io.write(f"\x1b[2m  сохранено на этой машине — запустить: hashpass run {ref}"
+                 f" · на пул: hashpass push {ref}\x1b[0m\n")
     return 0
 
 
@@ -641,6 +709,8 @@ def _advance_and_announce(session: object, io: Io) -> bool:
 _DEFAULT_TERM = "xterm-256color"
 _GRADE_HOST = "127.0.0.1"  # per-command grade server binds loopback (shared with the container)
 _ACCEPT_POLL = 0.3         # accept() timeout so the grade thread can notice `stop`
+_LAB_PORT_BASE = 20000     # a lab's relay port, in each machine's own netns (nothing to collide with)
+_LAB_PORT_SPAN = 20000
 _GRADER_JOIN = 3.0         # seconds to let the grade thread finish after the console closes
 _MAX_REQ = 1 << 20         # cap a console request (hello / cmd <base64>) at 1 MiB
 
@@ -822,14 +892,16 @@ def _policy_reply(session: object) -> str:
 def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913, PLR0917
                     typing: float | None, rc: int | None, io: Io,
                     *, history: list[dict[str, object]] | None = None,
-                    cwd: str | None = None) -> None:
+                    cwd: str | None = None, node: str | None = None) -> None:
     """React/grade/hint on one console command (+ its captured output), then announce a pass."""
     ts = io.clock()
     if history is not None and len(history) < _HISTORY_CAP:
         history.append({"command": command[:1000], "ts": ts, "typing": typing,
                         "pasted": _looks_pasted(command, typing),
-                        "output": cap_output(output)})   # the teacher sees it (spec 2026-10-16)
-    res = session.observe(command, ts=ts, output=output, rc=rc, cwd=cwd)  # grade + hints + on_pass
+                        "output": cap_output(output)}   # the teacher sees it (spec 2026-10-16)
+                       | ({"machine": node} if node else {}))
+    observe = {"node": node} if node else {}                 # a lab machine's command (ssh session)
+    res = session.observe(command, ts=ts, output=output, rc=rc, cwd=cwd, **observe)
     if not res.advanced:
         if getattr(res, "dose", False):
             # A theory dose fills the screen: the student needs the goal again under it (user,
@@ -852,9 +924,28 @@ def _render_observe(session: object, command: str, output: str,  # noqa: PLR0913
         _advance_and_announce(session, io)
 
 
+def _grade_listeners(sockets: dict[Path, str | None] | None) -> tuple[int, list[tuple[socket.socket, str | None]]]:
+    """Open the grade server's sockets: loopback TCP (a plain task) or one unix socket per lab machine."""
+    if sockets is None:
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind((_GRADE_HOST, 0))
+        return srv.getsockname()[1], [(srv, None)]
+    listeners: list[tuple[socket.socket, str | None]] = []
+    for path, node in sockets.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(str(path))
+        listeners.append((srv, node))
+    return _LAB_PORT_BASE + secrets.randbelow(_LAB_PORT_SPAN), listeners
+
+
 def _grade_server(session: object, router: _Router, clock: Callable[[], str],  # noqa: PLR0913, PLR0917
                   stop: threading.Event, readme: str | None,
-                  history: list[dict[str, object]] | None = None) -> tuple[int, threading.Thread]:
+                  history: list[dict[str, object]] | None = None,
+                  sockets: dict[Path, str | None] | None = None) -> tuple[int, threading.Thread]:
     """
     Start a loopback grade server; return its port and (unstarted) thread.
 
@@ -863,27 +954,41 @@ def _grade_server(session: object, router: _Router, clock: Callable[[], str],  #
     interaction runs HOST-side -- greet, react, grade the filesystem, fire hints and on_pass --
     and only the TEXT to print is sent back, so answers/graders never enter the container. It all
     renders live IN the console. The thread runs while the foreground boot blocks the main thread.
+
+    A lab (spec 2026-11-02) passes `sockets`: unix socket path -> the machine whose relay connects
+    there (None = the console). Its machines live in their own network namespaces, where each
+    holder relays `127.0.0.1:<port>` to its socket; the returned port is the one to relay.
     """
-    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind((_GRADE_HOST, 0))
-    srv.listen(8)
-    srv.settimeout(_ACCEPT_POLL)
-    port = srv.getsockname()[1]
+    port, listeners = _grade_listeners(sockets)
+    sel = selectors.DefaultSelector()
+    for srv, node in listeners:
+        srv.listen(8)
+        srv.setblocking(False)  # noqa: FBT003
+        sel.register(srv, selectors.EVENT_READ, node)
+
+    def serve(conn: socket.socket, node: str | None) -> None:
+        with conn, contextlib.suppress(OSError):
+            conn.setblocking(True)  # noqa: FBT003
+            if conn.family == socket.AF_INET:
+                conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # per-char, no Nagle
+            _handle_request(conn, _recv_request(conn), session=session, router=router,
+                            readme=readme, clock=clock, history=history, node=node)
 
     def loop() -> None:
-        while not stop.is_set():
-            try:
-                conn, _ = srv.accept()
-            except TimeoutError:
-                continue
-            except OSError:
-                break
-            with conn, contextlib.suppress(OSError):
-                conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # per-char, no Nagle
-                _handle_request(conn, _recv_request(conn), session=session, router=router,
-                                readme=readme, clock=clock, history=history)
-        srv.close()
+        try:
+            while not stop.is_set():
+                for key, _ in sel.select(timeout=_ACCEPT_POLL):
+                    try:
+                        conn, _ = key.fileobj.accept()
+                    except (BlockingIOError, InterruptedError):
+                        continue
+                    serve(conn, key.data)
+        except OSError:
+            pass
+        finally:
+            sel.close()
+            for srv, _ in listeners:
+                srv.close()
 
     return port, threading.Thread(target=loop, daemon=True)
 
@@ -922,12 +1027,24 @@ def _console_controls(conn: socket.socket) -> tuple[Callable[[], bool], Callable
 
 def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: PLR0913
                     router: _Router, readme: str | None, clock: Callable[[], str],
-                    history: list[dict[str, object]] | None = None) -> None:
-    """Serve one console request: `policy` (raw reply), else `hello`/`cmd` rendered to the socket."""
+                    history: list[dict[str, object]] | None = None,
+                    node: str | None = None) -> None:
+    """
+    Serve one console request: `policy` (raw reply), else `hello`/`cmd` rendered to the socket.
+
+    `node`: the lab machine the request came from (its shell in an ssh session), None = the console.
+    A machine gets no command policy (it is the console's) and never renders the intro.
+    """
     if req.startswith("state"):
         # The prompt asks after each command whether the task is done, to show «[Решено]».
         with contextlib.suppress(OSError):
             conn.sendall(_state_reply(session).encode())
+        return
+    if req.startswith("policy") and node is not None:
+        with contextlib.suppress(OSError):
+            conn.sendall(b";;")
+        return
+    if req.startswith("hello") and node is not None:
         return
     if req.startswith("policy"):
         # The console PULLS the current stage's command policy before running each command, so it
@@ -958,7 +1075,7 @@ def _handle_request(conn: socket.socket, req: str, *, session: object,  # noqa: 
         elif req.startswith("cmd "):
             with contextlib.suppress(Exception):
                 _render_observe(session, *_parse_cmd_request(req), io, history=history,
-                                cwd=_parse_cmd_cwd(req))
+                                cwd=_parse_cmd_cwd(req), node=node)
     finally:
         router.to(_sink_noop)
         session.pause = _no_pause
@@ -1042,7 +1159,7 @@ def _sound_args(environ: Mapping[str, str]) -> list[str]:
 
 
 def _interactive_console(runner: object, *, user: str | None = None, sudo: bool = True,
-                         grade_port: int | None = None) -> None:
+                         grade_port: int | None = None, extra_args: list[str] | None = None) -> None:
     """
     Boot the student's machine in the FOREGROUND, on the real terminal; return once it powers off.
 
@@ -1053,6 +1170,7 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     console in (as HP_USER) to fish; typing `exit` powers the container off, so this returns and
     grading proceeds. `user` is the console login user (a task's `settings user`, default
     student); `grade_port` is the host loopback port the per-command grade hook connects to.
+    A lab console adds `extra_args` (its network namespace, hostname).
     """
     machine = machines.machine_name()
     term, term_args = _console_term(Path(runner.rootfs), os.environ)
@@ -1064,7 +1182,7 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     if grade_port is not None:
         argv.append(f"--setenv=HP_PORT={grade_port}")
     argv += nspawn_emulation_args(rootfs=Path(runner.rootfs))   # x86_64 images on ARM: no seccomp
-    argv += ["-D", str(runner.rootfs)]
+    argv += [*(extra_args or []), "-D", str(runner.rootfs)]
     machines.reap_orphans()            # ptys of interrupted runs; live consoles of other runs stay
     if (full := machines.no_room()) is not None:   # the kernel would kill its systemd cryptically
         raise RuntimeError(full)
@@ -1139,16 +1257,26 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
     stop = threading.Event()
     # every command the student runs, in order; a caller's list is streamed to the pool live
     history = history if history is not None else []
-    port, grader = _grade_server(session, router, io.clock, stop, session.meta.readme, history)
+    lab = getattr(session, "lab", None)
     completed = False
     try:
+        port, grader = _grade_server(session, router, io.clock, stop, session.meta.readme, history,
+                                     sockets=lab.sockets if lab is not None else None)
+        extra: list[str] = []
+        if lab is not None:            # a lab: its other machines come up first (spec 2026-11-02)
+            machines.reap_orphans()
+            if (full := machines.no_room(extra=len(lab.nodes))) is not None:
+                raise RuntimeError(full)
+            io.write(f"\x1b[2m▸ поднимаю стенд: {', '.join(m.name for m in lab.lab.machines)}…\x1b[0m\n")
+            lab.start(port)
+            extra = lab.console_args()
         # The whole interaction (greeting, per-command react/grade/hints/on_pass) runs live IN
         # the console over the grade socket -- so nothing is printed before the boot, where the
         # container's own boot output would scroll it away.
         router.to(_sink_noop)
         grader.start()
         _interactive_console(session.student, user=session.meta.settings.user,
-                             sudo=session.meta.settings.sudo, grade_port=port)
+                             sudo=session.meta.settings.sudo, grade_port=port, extra_args=extra)
         stop.set()
         grader.join(timeout=_GRADER_JOIN)
         router.to(io.write)                # final sweep on host stdout (any stage / voice bye at exit)

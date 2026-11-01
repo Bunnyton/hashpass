@@ -21,6 +21,7 @@ from hashpass.hidden import stage_hidden_layer
 from hashpass.image.base import build_base
 from hashpass.imagestore.resolve import resolve_lowers
 from hashpass.imagestore.store import ImageStore
+from hashpass.lab.mask import masked
 from hashpass.recipe.model import Recipe, StageSpec, image_ref
 from hashpass.recipe.taskbridge import recipe_to_taskcode
 from hashpass.runner.nspawn import NspawnRunner
@@ -300,7 +301,8 @@ def _read_readme(path: str | None) -> str | None:
 def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
                base_tar: Path | None = None, base: Path | None = None,
                workdir: Path, passes: int = 3, sudo: bool = True,
-               progress: Callable[[str], None] | None = None) -> StoredTask:
+               progress: Callable[[str], None] | None = None,
+               extra: tuple[Path, str] | None = None) -> StoredTask:
     """
     Build a task: bake the image, derive acceptance on its chain, stage `/hp`, write meta.
 
@@ -322,6 +324,7 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
         passes: Derivation passes per observed stage (>= 2).
         sudo: Whether overlay mounts use sudo (True for real nspawn).
         progress: Optional sink for build-progress lines (image steps, stages, passes).
+        extra: (directory, key) laid into the image layer after its steps (a lab's machines).
 
     Returns:
         The StoredTask (ref, image, bundle dir, hidden `/hp` dir, meta).
@@ -334,7 +337,7 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
     ref = image_ref(recipe)
     _report(progress, f"building image {ref}: {len(recipe.steps)} build step(s)")
     image = build(recipe, store, base_tar=base_tar, base=base, workdir=workdir / "img",
-                  sudo=sudo, progress=progress)
+                  sudo=sudo, progress=progress, extra=extra)
     task = recipe_to_taskcode(recipe)
 
     tdir = store.get(ref).layer.parent / "task"
@@ -342,7 +345,7 @@ def build_task(recipe: Recipe, store: ImageStore, *,  # noqa: PLR0913
     keys = _stage_keys(recipe, image.build_key, passes)
 
     _report(progress, "вывожу приёмку...")
-    lowers = resolve_lowers((ref,), store)
+    lowers = masked(resolve_lowers((ref,), store), store.root)   # a lab console: no /.hp-nodes
     base = base or build_base(workdir / "base", from_tar=base_tar)
     counter = itertools.count()
 

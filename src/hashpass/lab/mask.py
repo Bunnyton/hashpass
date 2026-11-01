@@ -12,7 +12,7 @@ import subprocess
 import tarfile
 from pathlib import Path
 
-from hashpass.lab.config import NODES_DIR
+from hashpass.lab.config import NODES_DIR, console_lowers, has_nodes
 
 
 def _is_whiteout(path: Path) -> bool:
@@ -43,5 +43,12 @@ def ensure_mask(directory: Path) -> Path:
 
 
 def mask_dir(store_root: Path) -> Path:
-    """Where a home keeps its mask: next to the image store."""
+    """Return where a home keeps its mask: next to the image store."""
     return Path(store_root).parent / "lab-mask"
+
+
+def masked(lowers: list[Path], store_root: Path) -> list[Path]:
+    """Return a console's chain: the mask on top when it carries lab machines, else unchanged."""
+    if not has_nodes(lowers):
+        return list(lowers)
+    return console_lowers(lowers, ensure_mask(mask_dir(store_root)))
