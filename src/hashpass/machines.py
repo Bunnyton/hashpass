@@ -16,12 +16,18 @@ import uuid
 from pathlib import Path
 
 PREFIX = "hp-"
-_OWNED = re.compile(r"hp-(\d+)-[0-9a-f]+")
+HELPER_PREFIX = "hpn-"   # a lab's netns holders / grade relays: no systemd inside (spec 2026-11-02)
+_OWNED = re.compile(r"hpn?-(\d+)-[0-9a-f]+")
 
 
 def machine_name() -> str:
     """Return a unique, hostname-valid machine name owned by this process."""
     return f"{PREFIX}{os.getpid()}-{uuid.uuid4().hex[:8]}"
+
+
+def helper_name() -> str:
+    """Return a unique name for a lab helper machine (netns holder, relay) owned by this process."""
+    return f"{HELPER_PREFIX}{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
 
 def owner(name: str) -> int | None:
@@ -88,13 +94,17 @@ def running() -> int:
     return 0
 
 
-def no_room() -> str | None:
-    """Return why one more console would not boot (the inotify limit), or None if it fits."""
+def no_room(extra: int = 0) -> str | None:
+    """
+    Return why one more console would not boot (the inotify limit), or None if it fits.
+
+    `extra`: more booted machines that start with it (a lab's nodes).
+    """
     limit = _inotify_limit()
     if not limit:
         return None
     fits = max(1, (limit - _RESERVE) // INOTIFY_PER_CONSOLE)
-    if running() < fits:
+    if running() + extra < fits:
         return None
     return (f"на этой машине уже {running()} консолей hashpass — больше не поместится: у ядра "
             f"fs.inotify.max_user_instances = {limit}, а каждой консоли нужно ~{INOTIFY_PER_CONSOLE}.\n"

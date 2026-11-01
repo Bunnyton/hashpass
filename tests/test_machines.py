@@ -73,3 +73,30 @@ def test_a_console_that_would_not_fit_says_which_limit_and_how_to_raise_it(monke
     monkeypatch.setattr(machines, "_inotify_limit", lambda: 8192)
     monkeypatch.setattr(machines, "running", lambda: 500)
     assert machines.no_room() is None
+
+
+@pytest.mark.tier1
+def test_lab_helpers_have_their_own_prefix_and_are_reaped_but_not_counted(monkeypatch) -> None:
+    """Labs: netns holders / relays are `hpn-` machines -- reaped like consoles, no systemd inside."""
+    name = machines.helper_name()
+    assert re.fullmatch(rf"hpn-{os.getpid()}-[0-9a-f]{{8}}", name)
+    assert machines.owner(name) == os.getpid()
+    dead = 999_999_999
+    listing = (f"hpn-{dead}-cccccccc container systemd-nspawn debian 13 -\n"
+               f"hpn-{os.getpid()}-dddddddd container systemd-nspawn debian 13 -\n"
+               f"hp-{os.getpid()}-eeeeeeee container systemd-nspawn debian 13 -\n")
+    terminated: list[str] = []
+    monkeypatch.setattr(machines, "_list", lambda: listing)
+    monkeypatch.setattr(machines, "_terminate", terminated.append)
+    machines.reap_orphans()
+    assert terminated == [f"hpn-{dead}-cccccccc"]
+    assert machines.running() == 1
+
+
+@pytest.mark.tier1
+def test_no_room_counts_the_extra_machines_of_a_lab(monkeypatch) -> None:
+    monkeypatch.setattr(machines, "_inotify_limit", lambda: 8 + 4 * 4)   # room for 4 consoles
+    monkeypatch.setattr(machines, "running", lambda: 1)
+    assert machines.no_room() is None
+    assert machines.no_room(extra=2) is None          # 1 running + 3 new = 4
+    assert machines.no_room(extra=3) is not None      # 1 + 4 = 5 > 4
