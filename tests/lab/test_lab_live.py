@@ -89,10 +89,15 @@ def _open(env: cli.Home, ref: str, base: Path, tmp_path: Path) -> tuple:
     port, thread = cli._grade_server(session, cli._Router(lambda _s: None), lambda: "t", stop,  # noqa: SLF001
                                      None, [], sockets=session.lab.sockets)
     thread.start()
-    session.lab.start(port)
-    console = machines.machine_name()
-    session.student.boot(console, session.lab.console_args())
-    session.student.live_machine = console
+    try:
+        session.lab.start(port)
+        console = machines.machine_name()
+        session.student.boot(console, session.lab.console_args())
+        session.student.live_machine = console
+    except Exception:
+        stop.set()
+        session.teardown()            # a lab that did not come up leaves no machines or mounts
+        raise
     return session, port, stop
 
 
