@@ -6,8 +6,10 @@ from types import ModuleType
 
 import pytest
 
+from tests.content.recipes import is_task_dir
+
 ROOT = Path(__file__).resolve().parents[2]
-TASKS = sorted(p for p in (ROOT / "content" / "tasks").iterdir() if (p / "Taskfile").is_file())
+TASKS = sorted(p for p in (ROOT / "content" / "tasks").iterdir() if is_task_dir(p))
 DATA = [t / "data" for t in TASKS if (t / "data").is_dir()]
 
 

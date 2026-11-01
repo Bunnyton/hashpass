@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 
 from hashpass.recipe.model import ReadAction
-from hashpass.recipe.parse import parse_recipe
+from tests.content.recipes import is_task_dir, parse_task
 
 CONTENT = Path(__file__).resolve().parents[2] / "content" / "tasks"
-TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
+TASKS = sorted(p for p in CONTENT.iterdir() if is_task_dir(p))
 
 
 @pytest.mark.tier1
@@ -15,7 +15,7 @@ TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
 def test_read_files_exist(task: Path) -> None:
     # links (2026-10-14): `hint output "…" read relative.md` showed «(read: файл не найден)» -- a hint's
     # dose is read from the hidden layer hp/, the brief and `on enter` doses from the task folder.
-    recipe = parse_recipe((task / "Taskfile").read_text(encoding="utf-8"))
+    recipe = parse_task(task)
     missing = []
     for st in recipe.stages:
         missing += [f"hint read {h.action.path}" for h in st.hints

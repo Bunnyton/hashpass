@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.content.recipes import is_task_dir
+
 CONTENT = Path(__file__).resolve().parents[2] / "content" / "tasks"
-TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
+TASKS = sorted(p for p in CONTENT.iterdir() if is_task_dir(p))
 # User (2026-10-04): brief «## Задание: Спроси у системы, кто ты. Нажми Enter.» + stage
 # «Узнай у системы, под каким именем…» + on enter = the same task three times; «оставить только
 # “Спроси у системы, кто ты?”». The last page of a brief does not wait for Enter either.

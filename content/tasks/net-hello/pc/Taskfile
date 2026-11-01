@@ -1,0 +1,2 @@
+# pc — рабочее место студента в стенде net-hello: клиенты для сети.
+run apt-get update && apt-get install -y curl openssh-client

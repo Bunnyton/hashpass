@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.content.recipes import is_task_dir, recipe_file
+
 CONTENT = Path(__file__).resolve().parents[2] / "content" / "tasks"
-TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
+TASKS = sorted(p for p in CONTENT.iterdir() if is_task_dir(p))
 
 # The student lives in a world of files, commands and their output. Words of the ENGINE's
 # world -- стадия/этап, грейдер, «засчитается»/«зачёт», the hidden /hp layer, the Taskfile,
@@ -32,12 +34,12 @@ def _shown_lines(text: str) -> str:
 def _student_texts(task: Path, *, assets: bool = True) -> list[tuple[str, str]]:
     """(where, text) for every string a student can see in this task (`assets=False`: prose only)."""
     out: list[tuple[str, str]] = []
-    for line in (task / "Taskfile").read_text(encoding="utf-8").splitlines():
+    for line in recipe_file(task).read_text(encoding="utf-8").splitlines():
         if line.lstrip().startswith("#"):
             continue
         out += [(f"{task.name}/Taskfile", m.group(1) or m.group(2)) for m in _SAY.finditer(line)]
     for f in sorted(task.rglob("*")):
-        if not f.is_file() or f.name.lower() == "notes.md" or f.name == "Taskfile":
+        if not f.is_file() or f.name.lower() == "notes.md" or f.name in ("Taskfile", "Labfile"):
             continue                               # NOTES.md is for authors; the Taskfile is parsed above
         if not assets and ("data" in f.relative_to(task).parts or (f.suffix != ".md" and f.name != "finale")):
             continue                               # data files of the task's world, not its prose
@@ -63,7 +65,7 @@ def test_student_facing_text_never_mentions_internals(task: Path):
 def test_tasks_run_as_student_unless_a_reason_says_root(task: Path):
     # Rule (user, 2026-09-28): tasks go «по максимуму от другого пользователя» -- the default
     # `student` + sudo. `settings user root` needs a `# root: <why>` line in the Taskfile.
-    text = (task / "Taskfile").read_text(encoding="utf-8")
+    text = recipe_file(task).read_text(encoding="utf-8")
     if _USER_ROOT.search(text):
         assert _ROOT_REASON.search(text), f"{task.name}: `user root` without a `# root: …` reason"
 
@@ -108,7 +110,7 @@ def _author_texts(task: Path) -> list[tuple[str, str]]:
             continue
         if f.name.lower() == "notes.md":                 # README.md is the task's public description
             out.append((f"{task.name}/{f.relative_to(task)}", text))
-        elif f.name == "Taskfile" or f.parent.name == "hp":
+        elif f.name in ("Taskfile", "Labfile") or f.parent.name == "hp":
             comments = [ln for ln in text.splitlines() if ln.lstrip().startswith("#")]
             out.append((f"{task.name}/{f.relative_to(task)}", "\n".join(comments)))
     return out

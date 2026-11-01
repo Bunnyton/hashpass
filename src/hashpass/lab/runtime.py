@@ -124,8 +124,11 @@ class LabRuntime:
         for name, runner in self.nodes.items():
             _write_files(runner, {**hosts, "/etc/hostname": f"{name}\n", unit: port_unit(port)},
                          root_owned=True)
+            # a node has no terminal: the base's console autologin (hp-console powers the machine
+            # off when its shell ends) must not run there -- the student comes in over ssh
             res = runner.run(["sh", "-c", ("mkdir -p /etc/systemd/system/multi-user.target.wants && "
-                              f"ln -sf {unit} /etc/systemd/system/multi-user.target.wants/{PORT_UNIT}")])
+                              f"ln -sf {unit} /etc/systemd/system/multi-user.target.wants/{PORT_UNIT} && "
+                              "ln -sf /dev/null /etc/systemd/system/console-getty.service")])
             if res.exit_code != 0:
                 msg = f"не удалось подготовить машину стенда: {res.stderr.strip()}"
                 raise RuntimeError(msg)

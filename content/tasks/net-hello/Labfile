@@ -1,0 +1,59 @@
+# net-hello — стенд из двух машин: консоль студента pc и сервер web в одной сети lan.
+# Студент находит соседа по сети, открывает его сайт, заходит на него по ssh и чинит страницу;
+# проверка третьего шага идёт на самой машине web, поэтому она срабатывает и внутри ssh.
+lab net-hello:1
+
+machine pc
+  console
+  build pc
+  net lan 10.20.0.10/24
+
+machine web
+  build web
+  net lan 10.20.0.20/24
+
+hidden hp
+
+say "Тебе выдали рабочее место в серверной. Где-то рядом в той же сети стоит машина web — на ней живёт сайт отдела, и сегодня он болен."
+read brief.md
+
+stage
+  say "Убедись, что машина web отвечает тебе по сети"
+  solve ping -c 2 web
+  accept cmd "ping" ok
+  neutral ls cat pwd cd
+  on pass say "Ответ пришёл с 10.20.0.20: имя web система нашла в /etc/hosts. Для сотни машин так уже не делают — там работает DNS."
+  hint output "Name or service not known" say "Такого имени система не знает. Посмотри, как именно зовут соседа в задании."
+  hint tries 5 say "Какая команда спрашивает у машины «ты тут?» и ждёт ответа?"
+
+stage
+  say "Открой сайт машины web прямо из консоли"
+  on enter read web.md
+  solve curl -s http://web/
+  accept output "на ремонте"
+  neutral ls cat pwd cd ping
+  on pass say "Сайт и правда болен. Чинить его отсюда не выйдет: файлы страницы лежат на web, а не у тебя."
+  hint output "Could not resolve host" say "Перечитай адрес: имя машины то же, что ты пинговал."
+  hint tries 5 say "Браузер в консоли — это программа, которая просто печатает ответ сервера. Как она называется?"
+
+stage
+  say "Зайди на web и сделай так, чтобы главная страница говорила «Привет, сеть!»"
+  on enter read ssh.md
+  solve true
+  check live on web grep -q "Привет, сеть!" /var/www/html/index.html
+  neutral ls cat pwd cd
+  on pass say "Сервер поправлен изнутри. Так и работают с машинами, до которых не дотянуться рукой: ssh — и ты уже там."
+  hint output "Permission denied, please try again" say "Пароль у тебя тот же, что и здесь."
+  hint output "Permission denied" say "Файл сайта принадлежит не тебе. Вспомни, у кого можно одолжить права на одну команду."
+  hint tries 5 say "Где nginx берёт страницы? Это записано в его настройках."
+  hint tries 10 say "Внутри ssh работают те же команды, что и в консоли: редактор, sudo, cat."
+
+stage
+  say "Вернись на pc и посмотри на сайт глазами посетителя"
+  solve curl -s http://web/
+  accept output "Привет, сеть!"
+  neutral ls cat pwd cd
+  on pass say "Посетитель видит новую страницу, хотя ты ни разу не трогал файлы на своей машине."
+  hint tries 5 say "Из ssh выходят так же, как из любой оболочки. А сайт ты уже открывал."
+
+exec finale

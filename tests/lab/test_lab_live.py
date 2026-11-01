@@ -108,6 +108,7 @@ def test_a_lab_builds_boots_wires_and_checks(lab_ref, tmp_path):
         pc, web, router = session.student, session.nodes["web"], session.nodes["router"]
         assert pc.check_live("test ! -e /.hp-nodes && grep -qx pc /etc/hp-who") == 0
         assert web.check_live('grep -qx web /etc/hp-who && test "$(hostname)" = web') == 0
+        assert web.check_live("! systemctl is-active -q console-getty") == 0   # no autologin on a node
         assert session.nodes["db"].check_live("grep -qx web /etc/hp-who") == 0      # db reuses web/
         assert pc.check_live("ping -c1 -W3 web") == 0
         assert pc.check_live("ping -c1 -W3 10.77.0.20") == 0

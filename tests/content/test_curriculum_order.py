@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.content.recipes import recipe_file
+
 CONTENT = Path(__file__).resolve().parents[2] / "content" / "tasks"
 
 # concept -> (the task that teaches it, how its use looks in a command)
@@ -34,7 +36,7 @@ def course_order() -> list[str]:
 
 def _visible_and_solve(task: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
-    for line in (CONTENT / task / "Taskfile").read_text(encoding="utf-8").splitlines():
+    for line in recipe_file(CONTENT / task).read_text(encoding="utf-8").splitlines():
         if line.lstrip().startswith("#"):
             continue
         out += [("say/hint", m.group(1)) for m in _SAY.finditer(line)]

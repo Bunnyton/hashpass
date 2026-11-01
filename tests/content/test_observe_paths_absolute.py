@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from hashpass.recipe.parse import parse_recipe
+from tests.content.recipes import is_task_dir, parse_task
 
 CONTENT = Path(__file__).resolve().parents[2] / "content" / "tasks"
-TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
+TASKS = sorted(p for p in CONTENT.iterdir() if is_task_dir(p))
 
 
 @pytest.mark.tier1
@@ -14,7 +14,7 @@ TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
 def test_observe_paths_are_absolute(task: Path) -> None:
     # first-steps (2026-10-13 regression run): `observe hello.txt` was checked as /hello.txt, so the
     # student's ~/hello.txt never passed.
-    recipe = parse_recipe((task / "Taskfile").read_text(encoding="utf-8"))
+    recipe = parse_task(task)
     rel = [p for s in recipe.stages for p in (*s.observe, *s.observe_bool)
            if p != "output" and not p.removeprefix("perms:").startswith("/")]
     assert not rel, f"{task.name}: observe needs absolute paths: {rel}"

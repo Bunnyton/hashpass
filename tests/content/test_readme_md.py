@@ -3,9 +3,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.content.recipes import is_task_dir
+
 CONTENT = Path(__file__).resolve().parents[2] / "content" / "tasks"
 _MIN_LINES = 2   # a «# Title» and at least one line about the task
-TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
+TASKS = sorted(p for p in CONTENT.iterdir() if is_task_dir(p))
 
 
 @pytest.mark.tier1

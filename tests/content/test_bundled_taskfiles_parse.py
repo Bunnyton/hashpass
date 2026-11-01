@@ -3,20 +3,22 @@ from pathlib import Path
 
 import pytest
 
-from hashpass.recipe.parse import parse_recipe
+from hashpass.lab.parse import load_labfile
+from hashpass.recipe.parse import load_recipe
+from tests.content.recipes import is_task_dir, parse_task
 
 TASKS_ROOT = Path(__file__).resolve().parents[2] / "content" / "tasks"
 
 # One id per parametrise case, so a failure names the offending task.
-TASKFILES = sorted(p.parent for p in TASKS_ROOT.glob("*/Taskfile"))
+TASKFILES = sorted(p for p in TASKS_ROOT.iterdir() if is_task_dir(p))
+LABS = sorted(p for p in TASKS_ROOT.iterdir() if (p / "Labfile").is_file())
 
 
 @pytest.mark.tier1
 @pytest.mark.parametrize("task_dir", TASKFILES, ids=lambda p: p.name)
 def test_bundled_taskfile_parses(task_dir: Path) -> None:
     """Parse this task's Taskfile, and sanity-check its shape."""
-    text = (task_dir / "Taskfile").read_text(encoding="utf-8")
-    recipe = parse_recipe(text)
+    recipe = parse_task(task_dir)
     # image ref present
     assert recipe.name, f"{task_dir.name}: missing `image <name>:<version>`"
     assert recipe.version, f"{task_dir.name}: missing image version"
@@ -35,6 +37,17 @@ def test_bundled_taskfile_parses(task_dir: Path) -> None:
         if hidden:
             found = found or (task_dir / hidden / name).exists()
         assert found, f"{task_dir.name}: voice references '{name}' but no such file"
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("lab_dir", LABS, ids=lambda p: p.name)
+def test_every_lab_machine_has_an_image_recipe(lab_dir: Path) -> None:
+    """A Labfile's `build <dir>` names a Taskfile that builds an image (no stages: the task is the Labfile)."""
+    lab, _ = load_labfile(lab_dir / "Labfile")
+    for m in lab.machines:
+        if m.build is not None:
+            machine = load_recipe(lab_dir / m.build / "Taskfile")
+            assert not machine.stages, f"{lab_dir.name}/{m.build}: stages belong in the Labfile"
 
 
 def _collect_files(recipe) -> set[str]:

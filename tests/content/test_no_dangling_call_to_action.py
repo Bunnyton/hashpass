@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 
 from hashpass.recipe.model import SayAction
-from hashpass.recipe.parse import parse_recipe
+from tests.content.recipes import is_task_dir, parse_task
 
 CONTENT = Path(__file__).resolve().parents[2] / "content" / "tasks"
-TASKS = sorted(p for p in CONTENT.iterdir() if (p / "Taskfile").is_file())
+TASKS = sorted(p for p in CONTENT.iterdir() if is_task_dir(p))
 
 # User, 2026-10-12, the fifth time (cd-abs, cp-basics, cp-more, inventory, pipes): «рано
 # переходит», «опять двадцать пять». The finale prints right after the last step's `on pass`; an
@@ -23,7 +23,7 @@ _ORDER = re.compile(
 @pytest.mark.tier1
 @pytest.mark.parametrize("task", TASKS, ids=lambda p: p.name)
 def test_last_step_on_pass_gives_no_order(task: Path) -> None:
-    recipe = parse_recipe((task / "Taskfile").read_text(encoding="utf-8"))
+    recipe = parse_task(task)
     if not recipe.stages:
         return
     said = [a.text for a in recipe.stages[-1].on_pass if isinstance(a, SayAction)]
