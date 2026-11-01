@@ -1,0 +1,77 @@
+# signals — сигналы: HUP (перечитать настройки), USR1 (свой смысл программы), STOP/CONT (пауза),
+# TERM (перехвачен и проигнорирован) → KILL. Персонаж — служба radio (data/bin/radio, perl, от
+# student): пишет эфир и полученные сигналы в ~/radio.log. Процесс живёт только в работающей
+# консоли, поэтому шаги принимает check live: data/lib/check-radio <шаг>.
+
+image signals:1
+
+# data: data/bin/radio, data/systemd/radio.service, data/lib/check-radio, data/home/radio.conf — руками
+copy data/bin /usr/local/bin
+copy data/lib /usr/local/lib/hp-proc
+copy data/systemd /etc/systemd/system
+copy data/home /home/student
+run chmod 755 /usr/local/bin/radio /usr/local/lib/hp-proc/check-radio
+run chown -R student:student /home/student
+run systemctl enable radio.service
+
+hidden hp
+
+settings
+  pager on
+
+# kill -1 — «сигнал всем процессам»: снесёт консоль вместе с системой
+block kill match " -1 *$" say "kill с номером -1 бьёт по всем процессам сразу — вместе с этой консолью. Укажи конкретный PID."
+block systemctl match "(restart|stop|kill|reload)" say "Сегодня с radio говорим только сигналами."
+
+say "Офисное радио не выключается с 2019 года. Пора научиться с ним разговаривать."
+read theory.md
+read brief.md
+
+stage
+  say "Коллеги хотят джаз. Пропиши в radio.conf станцию jazz и заставь radio перечитать настройки, не перезапуская его"
+  solve:
+    echo station=jazz > /home/student/radio.conf
+    pkill -HUP radio || true
+  check live /usr/local/lib/hp-proc/check-radio hup
+  neutral ls cat pwd tail head ps pgrep pidof
+  on pass say "Тот же PID, новая станция: так nginx, sshd и rsyslog подхватывают новый конфиг без простоя."
+  hint cmd kill missing -HUP -1 -SIGHUP -s say "Какой сигнал служба по традиции понимает как «перечитай настройки»? Что ответил radio — в журнале."
+  hint tries 5 say "Сначала файл, потом сигнал. Что сейчас в radio.conf и что radio пишет в журнал?"
+  hint tries 10 say "Таблица сигналов — в теории (readme); номер процесса даст pgrep."
+
+stage
+  say "Бухгалтерия спрашивает, сколько песен уже сыграно. Попроси radio записать сводку в журнал"
+  solve pkill -USR1 radio || true
+  check live /usr/local/lib/hp-proc/check-radio usr1
+  neutral ls cat pwd tail head ps pgrep pidof
+  on pass say "USR1 и USR2 система отдала программам: dd по USR1 печатает прогресс, nginx заново открывает журналы."
+  hint tries 5 say "У radio это сигнал без системного смысла — какой из двух «пользовательских»?"
+
+stage
+  say "Начальник на созвоне. Поставь radio на паузу — не выключай"
+  solve pkill -STOP radio || true
+  check live /usr/local/lib/hp-proc/check-radio stop
+  neutral ls cat pwd tail head ps pgrep pidof
+  on pass say "Журнал замер: radio заморожен ядром и даже не знает об этом. STOP перехватить нельзя."
+  hint tries 5 say "Какой сигнал замораживает так, что программа не может отказаться?"
+  hint tries 10 say "Состояние процесса видно в столбце STAT у ps: T — остановлен."
+
+stage
+  say "Созвон кончился. Пусть играет дальше"
+  solve pkill -CONT radio || true
+  check live /usr/local/lib/hp-proc/check-radio cont
+  neutral ls cat pwd tail head ps pgrep pidof
+  on pass say "Ctrl+Z и bg из прошлого задания делают ровно это: TSTP — на паузу, CONT — дальше."
+  hint tries 5 say "Пара к STOP — какой сигнал?"
+
+stage
+  say "Пятница, вечер. Выключи radio"
+  solve pkill -KILL radio || true
+  check live /usr/local/lib/hp-proc/check-radio dead
+  neutral ls cat pwd tail head ps pgrep pidof
+  on pass say "Готово, но смотри: /tmp/radio.lock остался — radio не успел его убрать. Вот почему KILL — последнее средство: служба не запустится, пока кто-то не удалит замок руками."
+  hint cmd kill missing -9 -KILL -SIGKILL -s say "Сигнал дошёл — а radio играет. Что он ответил в журнале?"
+  hint cmd pkill missing -9 -KILL -SIGKILL say "Сигнал дошёл — а radio играет. Что он ответил в журнал?"
+  hint tries 5 say "Какой сигнал нельзя ни перехватить, ни проигнорировать?"
+
+exec finale

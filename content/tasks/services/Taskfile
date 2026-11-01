@@ -1,0 +1,76 @@
+# services — службы и systemctl: вики (busybox httpd, юнит wiki.service, выключена) должна
+# открываться по http://wiki.corp:8471/. Мешают три вещи по очереди: имени wiki.corp нет в
+# /etc/hosts (доза hosts.md на «Could not resolve host»), служба wiki не запущена, а запустить её
+# нельзя — порт держит забытая служба legacy-api (доза port.md на падение wiki). Последний шаг —
+# автозапуск: wiki enabled, legacy-api disabled. Пока wiki не запущена, на порту отвечает
+# legacy-api своей заглушкой — первая улика, что порт занят чужим. Службы и сеть живут только в работающей
+# консоли, поэтому шаги принимает check live: data/lib/check-services hosts|up|boot. Сеть консоли
+# общая с компьютером, поэтому оба сервера слушают только 127.0.0.1.
+
+image services:1
+
+run apt-get install -y curl psmisc iproute2 busybox >/dev/null
+# data: data/bin, data/lib, data/systemd, data/wiki — руками
+copy data/bin /usr/local/bin
+copy data/lib /usr/local/lib/hp-proc
+copy data/systemd /etc/systemd/system
+copy data/wiki /srv/wiki
+run chmod 755 /usr/local/bin/legacy-api /usr/local/lib/hp-proc/check-services
+run systemctl enable legacy-api.service
+# /etc/hosts в базе принадлежит не root (runtime кладётся rsync-ом с владельцем автора) — а в
+# задании он должен быть системным файлом, который правят через sudo
+run chown root:root /etc/hosts && chmod 644 /etc/hosts
+
+hidden hp
+
+settings
+  pager on
+
+# kill -1 — «сигнал всем процессам»: снесёт консоль вместе с системой
+block kill match " -1 *$" say "kill с номером -1 бьёт по всем процессам сразу — вместе с этой консолью. Укажи конкретный PID."
+
+say "Понедельник, девять утра. Вики лежит, и все смотрят на тебя."
+read theory.md
+read brief.md
+
+stage
+  say "Открой вики: http://wiki.corp:8471/"
+  solve echo "127.0.0.1 wiki.corp" | sudo tee -a /etc/hosts
+  check live /usr/local/lib/hp-proc/check-services hosts
+  neutral ls cat pwd getent
+  on pass say "Теперь имя ведёт сюда — /etc/hosts система читает раньше любого DNS."
+  hint output "Could not resolve host" read hosts.md
+  hint output "Permission denied" say "/etc/hosts принадлежит root. Как дописывали в чужой файл в задании про репозиторий?"
+  hint tries 5 say "Что ответил curl? Прочитай его сообщение целиком."
+
+stage
+  solve:
+    sudo systemctl stop legacy-api
+    sudo systemctl start wiki
+    sleep 1
+    curl -s http://wiki.corp:8471/
+  accept output "kofe-bez-sahara"
+  check live /usr/local/lib/hp-proc/check-services up
+  neutral ls cat pwd getent
+  on pass say "Вики жива. Пароль от Wi-Fi в переговорке — бонус."
+  hint output "legacy-api" say "Отвечает не вики, а какой-то legacy-api. А работает ли сама вики? Пульт служб — в теории."
+  hint output "Connection refused" say "Имя нашлось, но на порту никто не отвечает. Работает ли служба вики? Пульт — в теории."
+  hint output "failed" read port.md
+  hint output "Address already in use" read port.md
+  hint output "Access denied" say "Менять состояние служб может только администратор."
+  hint output "not seeing messages" say "Журналы системных служб читает администратор."
+  hint tries 5 say "Что сказал systemctl status wiki? А журнал этой службы?"
+  hint tries 10 say "journalctl -u wiki — что там в последних строках?"
+
+stage
+  say "Ночью сервер перезагрузят. Сделай так, чтобы после перезагрузки вики поднялась сама, а legacy-api — больше никогда"
+  solve:
+    sudo systemctl enable wiki
+    sudo systemctl disable legacy-api
+  check live /usr/local/lib/hp-proc/check-services boot
+  neutral ls cat pwd getent
+  on pass say "start/stop — сейчас, enable/disable — после перезагрузки. Перепутать их — классика: служба работает до первой перезагрузки."
+  hint tries 5 say "Остановить и выключить из автозапуска — разные вещи. Что из этого ты уже сделал с legacy-api?"
+  hint tries 10 say "Какие две команды в теории — про «после перезагрузки»?"
+
+exec finale

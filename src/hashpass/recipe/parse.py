@@ -29,7 +29,7 @@ _COPY_ARGC = 2
 _DEFAULT_VERSION = "latest"
 _STAGE_EVENTS = ("enter", "pass")
 _QUOTE_MIN = 2
-_ACTION_VERBS = ("exec", "say", "show")
+_ACTION_VERBS = ("exec", "say", "show", "read", "apply")
 _TYPE_MODES = ("instant", "normal", "dramatic")
 _MAX_PERCENT = 100
 

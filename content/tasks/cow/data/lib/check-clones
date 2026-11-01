@@ -1,0 +1,12 @@
+#!/bin/sh
+# Проверка задания cow: клоны живут только в работающей консоли. Принято, когда клонов ровно
+# пять и ни у одного нет собственной копии памяти (Private_Dirty меньше 64 МБ): жадный
+# остановлен, остальные целы.
+n=0
+for p in $(pgrep -x clone); do
+    [ "$(ps -o stat= -p "$p" | cut -c1)" = Z ] && continue
+    d=$(awk '/^Private_Dirty:/ {print $2}' /proc/$p/smaps_rollup 2>/dev/null)
+    [ "${d:-0}" -lt 65536 ] || exit 1
+    n=$((n + 1))
+done
+[ "$n" -eq 5 ]

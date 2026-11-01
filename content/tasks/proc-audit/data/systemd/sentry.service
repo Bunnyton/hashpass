@@ -1,0 +1,9 @@
+[Unit]
+Description=sentry — сторож дисков
+
+[Service]
+User=daemon
+ExecStart=/usr/local/bin/sentry
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,65 @@
+# htop-btop — htop и btop (bashtop): htop уже в базе, btop поставить; в htop найти рабочего фермы, который ест
+# процессор, и заморозить его (SIGSTOP из меню сигналов F9), не убивая; в btop остановить всю
+# ферму одним сигналом родителю (farm на TERM гасит и будит своих детей). Ферма — служба farm
+# (data/bin/farm, perl, от student). Процессы живут только в работающей консоли, поэтому шаги 2–3
+# принимает check live: data/lib/check-farm hog|gone. Сигналы из командной строки в этих шагах закрыты:
+# смысл — научиться делать это из интерфейса.
+
+image htop-btop:1
+
+# data: data/bin/farm, data/lib/check-farm, data/systemd/farm.service — руками
+copy data/bin /usr/local/bin
+copy data/lib /usr/local/lib/hp-proc
+copy data/systemd /etc/systemd/system
+run chmod 755 /usr/local/bin/farm /usr/local/lib/hp-proc/check-farm
+run systemctl enable farm.service
+
+hidden hp
+
+settings
+  pager on
+
+# kill -1 — «сигнал всем процессам»: снесёт консоль вместе с системой
+block kill match " -1 *$" say "kill с номером -1 бьёт по всем процессам сразу — вместе с этой консолью. Укажи конкретный PID."
+
+say "top ты уже знаешь. Познакомься с его наследниками."
+read theory.md
+read brief.md
+
+stage
+  say "htop здесь уже есть, а btop — нет. Поставь btop"
+  solve:
+    sudo apt-get update >/dev/null 2>&1
+    sudo apt-get install -y btop >/dev/null 2>&1
+  observe bool /usr/bin/btop
+  neutral ls cat pwd htop
+  on pass say "Оба на месте. Запусти любой — и сразу видно, почему их ставят первым делом."
+  hint output "Unable to locate package" say "apt не знает такого пакета. Когда он в последний раз обновлял список?"
+  hint tries 5 say "Пакет называется так же, как программа."
+
+stage
+  say "Найди в htop рабочего фермы, который ест процессор, и заморозь его — не убивая. Остальных не трогай"
+  solve pkill -STOP -o -x farm-worker || true
+  check live /usr/local/lib/hp-proc/check-farm hog
+  neutral ls cat pwd ps htop
+  block kill match "." say "Сегодня сигналы шлём из htop: F9."
+  block pkill match "." say "Сегодня сигналы шлём из htop: F9."
+  block killall match "." say "Сегодня сигналы шлём из htop: F9."
+  on pass say "Его %CPU упал до нуля, а память и PID остались: процесс жив, просто заморожен. Ещё F5 в htop покажет, чей он ребёнок."
+  hint tries 5 say "По какому столбцу отсортировать, чтобы обжора оказался наверху?"
+  hint tries 10 say "Какой сигнал замораживает процесс, не убивая? Его номер есть в меню F9."
+
+stage
+  say "Ферму пора остановить целиком. Сделай это в btop одним сигналом — родителю"
+  solve pkill -TERM -x farm || true
+  check live /usr/local/lib/hp-proc/check-farm gone
+  neutral ls cat pwd ps btop htop
+  block kill match "." say "Сегодня сигналы шлём из btop."
+  block pkill match "." say "Сегодня сигналы шлём из btop."
+  block killall match "." say "Сегодня сигналы шлём из btop."
+  block systemctl match "." say "Сегодня сигналы шлём из btop."
+  on pass say "Родитель получил TERM и сам уложил детей — даже замороженного разбудил, чтобы тот услышал. Так останавливают nginx, gunicorn и postgres: сигнал главному процессу."
+  hint tries 5 say "Кто из процессов фермы родитель? В btop это видно в дереве."
+  hint tries 10 say "Вежливый сигнал «заверши работу» в btop — одна буква. Какая?"
+
+exec finale

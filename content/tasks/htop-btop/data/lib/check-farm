@@ -1,0 +1,28 @@
+#!/bin/sh
+# Проверка задания htop-btop: ферма живёт только в работающей консоли, поэтому смотрим здесь.
+#   farm hog  — обжора (farm-worker с наибольшим процессорным временем) заморожен (T),
+#               остальные шесть процессов фермы живы и не заморожены;
+#   farm gone — ни родителя farm, ни одного farm-worker.
+want=$1
+hog() {
+    best=; max=-1
+    for p in $(pgrep -x farm-worker); do
+        t=$(awk '{print $14 + $15}' /proc/$p/stat 2>/dev/null) || continue
+        [ "${t:-0}" -gt "$max" ] && { max=$t; best=$p; }
+    done
+    echo "$best"
+}
+ok() {
+    case $want in
+        hog)
+            h=$(hog); [ -n "$h" ] || return 1
+            [ "$(ps -o stat= -p "$h" | cut -c1)" = T ] || return 1
+            [ "$(pgrep -x farm-worker | wc -l)" = 6 ] && [ "$(pgrep -x farm | wc -l)" = 1 ] || return 1
+            [ "$(ps -o stat= -C farm,farm-worker | grep -c '^T')" = 1 ] ;;
+        gone)
+            [ -z "$(pgrep -x farm)$(pgrep -x farm-worker)" ] ;;
+    esac
+}
+i=0
+while [ $i -lt 8 ]; do ok && exit 0; sleep 0.5; i=$((i + 1)); done
+exit 1

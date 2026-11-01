@@ -1,0 +1,21 @@
+#!/bin/sh
+# Проверка задания my-service: служба живёт только в работающей консоли.
+#   run     — служба heartbeat работает, её юнит в /etc/systemd/system, и в журнале есть «тук-тук»;
+#   boot    — она же и включена в автозапуск (именно enabled: is-enabled «успешен» и для static —
+#             юнита без [Install], который никогда не запустится сам);
+#   restart — после убийства systemd поднял её сам (NRestarts ≥ 1), и она снова работает.
+unit=/etc/systemd/system/heartbeat.service
+run() {
+    [ -f "$unit" ] && systemctl is-active -q heartbeat &&
+        journalctl -u heartbeat --no-pager -q 2>/dev/null | grep -q 'тук-тук'
+}
+ok() {
+    case $1 in
+        run)     run ;;
+        boot)    run && [ "$(systemctl is-enabled heartbeat)" = enabled ] ;;
+        restart) run && [ "$(systemctl show -p NRestarts --value heartbeat)" -ge 1 ] ;;
+    esac
+}
+i=0
+while [ $i -lt 14 ]; do ok "$1" && exit 0; sleep 0.5; i=$((i + 1)); done
+exit 1

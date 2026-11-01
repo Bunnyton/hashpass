@@ -1,0 +1,10 @@
+[Unit]
+Description=farm — обработчики очереди заказов
+
+[Service]
+User=student
+ExecStart=/usr/local/bin/farm
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

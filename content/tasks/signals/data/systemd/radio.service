@@ -1,0 +1,9 @@
+[Unit]
+Description=radio — интернет-радио офиса
+
+[Service]
+User=student
+ExecStart=/usr/local/bin/radio
+
+[Install]
+WantedBy=multi-user.target

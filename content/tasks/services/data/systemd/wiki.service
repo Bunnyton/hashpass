@@ -1,0 +1,10 @@
+[Unit]
+Description=wiki — внутренняя вики отдела
+After=network.target
+
+[Service]
+ExecStart=/bin/busybox httpd -f -p 127.0.0.1:8471 -h /srv/wiki
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

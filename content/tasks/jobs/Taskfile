@@ -1,0 +1,69 @@
+# jobs — передний план и фон: &, Ctrl+C, Ctrl+Z, jobs, bg, fg, kill %N. Персонаж — backup
+# (data/bin/backup, perl): «копирует» двадцать минут и печатает прогресс, только пока стоит на
+# переднем плане. Процессы живут только в работающей консоли, поэтому шаги принимает
+# check live: data/lib/check-backups N — ровно N процессов backup, ни один не на паузе.
+
+image jobs:1
+
+# data: data/bin/backup, data/lib/check-backups — руками
+copy data/bin /usr/local/bin
+copy data/lib /usr/local/lib/hp-proc
+run chmod 755 /usr/local/bin/backup /usr/local/lib/hp-proc/check-backups
+
+hidden hp
+
+settings
+  pager on
+
+# kill -1 — «сигнал всем процессам»: снесёт консоль вместе с системой
+block kill match " -1 *$" say "kill с номером -1 бьёт по всем процессам сразу — вместе с этой консолью. Укажи конкретный PID."
+
+say "Терминал один, а дел много. Пора научиться делать их одновременно."
+read theory.md
+read brief.md
+
+stage
+  say "Запусти backup так, чтобы терминал остался свободен"
+  solve backup >/dev/null 2>&1 &
+  check live /usr/local/lib/hp-proc/check-backups 1
+  neutral ls cat pwd jobs ps
+  on pass say "Копия идёт, а терминал твой. Фоновый backup молчит: врываться в твой ввод с процентами было бы невежливо."
+  hint output "Stopped" say "Он на паузе, а не в фоне. Как пауза снимается — дальше узнаешь, а сейчас его проще прервать и запустить заново."
+  hint tries 5 say "Что в теории говорилось про знак в конце команды?"
+  hint tries 10 say "Загугли: «bash запустить команду в фоне»."
+
+stage
+  say "Второй архив — музыку — запусти обычной командой backup, а потом освободи терминал, не прерывая копирование"
+  solve:
+    backup >/dev/null 2>&1 &
+  accept cmd "bg"
+  check live /usr/local/lib/hp-proc/check-backups 2
+  neutral ls cat pwd jobs ps
+  on enter read stopped.md
+  on pass say "Ctrl+Z и bg спасают, когда долгую команду запустили «как обычно» и пожалели."
+  hint output "Stopped" say "Он заморожен и не копирует. Как продолжить его в фоне?"
+  hint tries 5 say "Что показывает jobs — Running или Stopped?"
+  hint tries 10 say "Запусти backup, нажми Ctrl+Z, а потом — команда из теории про продолжение в фоне."
+
+stage
+  say "Музыка подождёт. Верни одно копирование на передний план и прерви его"
+  solve pkill -n -x backup || true
+  accept cmd "fg"
+  check live /usr/local/lib/hp-proc/check-backups 1
+  neutral ls cat pwd jobs ps
+  on pass say "fg вернул ему терминал, и Ctrl+C дошёл: прерывают только того, кто на переднем плане."
+  hint tries 5 say "Какая команда возвращает задание на передний план? И чем потом прерывают?"
+  hint tries 10 say "jobs покажет номера заданий — fg принимает такой номер."
+
+stage
+  say "Последний backup тоже останови — по номеру задания, не узнавая его PID"
+  solve pkill -x backup || true
+  block kill unless "%" say "По номеру задания: PID здесь не нужен."
+  check live /usr/local/lib/hp-proc/check-backups 0
+  neutral ls cat pwd jobs ps
+  on enter read jobspec.md
+  on pass say "Фоновые задания живут, пока жива оболочка: закроешь терминал — им придёт сигнал «отбой», и они умрут. Чтобы программа пережила выход, её запускают через nohup или делают службой."
+  hint tries 5 say "Номер задания видно в jobs — а как его передать kill?"
+  hint tries 10 say "Перед номером задания ставят знак процента."
+
+exec finale

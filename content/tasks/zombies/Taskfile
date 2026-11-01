@@ -1,0 +1,65 @@
+# zombies — зомби-апокалипсис, последнее задание блока «Процессы». Служба necromancer
+# (data/bin/necromancer, perl, от student, Restart=always через 15 с) рождает 66 детей и не
+# делает wait — все они зомби. Шаг 1: увидеть зомби в ps. Шаг 2: избавиться от зомби: kill по
+# зомби не действует (доза undead.md на любой kill без результата), помогает смерть родителя —
+# сирот хоронит PID 1. Шаг 3 (доза back.md при входе): systemd перезапустил necromancer, зомби
+# снова здесь — остановить службу и убрать из автозапуска. Процессы живут только в работающей
+# консоли, поэтому шаги принимает check live: data/lib/check-zombies none|gone.
+
+image zombies:1
+
+# data: data/bin/necromancer, data/lib/check-zombies, data/systemd/necromancer.service — руками
+copy data/bin /usr/local/bin
+copy data/lib /usr/local/lib/hp-proc
+copy data/systemd /etc/systemd/system
+run chmod 755 /usr/local/bin/necromancer /usr/local/lib/hp-proc/check-zombies
+run systemctl enable necromancer.service
+
+hidden hp
+
+settings
+  pager on
+
+# kill -1 — «сигнал всем процессам»: снесёт консоль вместе с системой
+block kill match " -1 *$" say "kill с номером -1 бьёт по всем процессам сразу — вместе с этой консолью. Укажи конкретный PID."
+
+say "Процессы умирают, но не все уходят."
+read theory.md
+read brief.md
+
+stage
+  say "Найди зомби на этом сервере"
+  solve ps aux
+  accept output "<defunct>|(^|\n) *6[67] *(\n|$)"
+  neutral ls cat pwd
+  on pass say "66 мертвецов, и у всех один родитель. Зомби не едят ни память, ни процессор, но каждый держит PID."
+  hint tries 5 say "Какое состояние у зомби в столбце STAT и какая пометка в конце строки?"
+  hint tries 10 say "Длинный список процессов удобно сузить grep-ом."
+
+stage
+  say "Избавь сервер от зомби"
+  solve pkill -x necromancer || true
+  check live /usr/local/lib/hp-proc/check-zombies none
+  block systemctl match "(stop|restart|kill|disable|mask)" say "Со службой разберёмся позже. Сначала пойми, почему зомби не умирают."
+  neutral ls cat pwd ps pgrep pstree
+  on pass say "Родитель умер — зомби осиротели, их усыновил systemd и тут же похоронил: прочитал коды завершения, которые necromancer так и не прочитал."
+  hint cmd kill read undead.md
+  hint cmd pkill has zombie read undead.md
+  hint cmd killall has zombie read undead.md
+  hint tries 5 say "Чей PID стоит у зомби в столбце PPID?"
+  hint tries 10 say "Кто должен прочитать код завершения зомби — и что будет, если этого процесса не станет?"
+
+stage
+  say "Зомби вернулись. Избавься от них навсегда"
+  solve:
+    sudo systemctl stop necromancer
+    sudo systemctl disable necromancer
+  check live /usr/local/lib/hp-proc/check-zombies gone
+  neutral ls cat pwd ps pgrep pstree
+  on enter apply wait-back
+  on enter read back.md
+  on pass say "Апокалипсис отменён. Найти PID, посмотреть родителя и состояние, попросить TERM, KILL — последним, а со службой говорить через systemctl: так разбирают любой процесс."
+  hint output "Access denied" say "Управлять службами может только администратор."
+  hint tries 5 say "Остановить и убрать из автозапуска — две разные команды."
+
+exec finale

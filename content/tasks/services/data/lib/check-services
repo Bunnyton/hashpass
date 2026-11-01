@@ -1,0 +1,15 @@
+#!/bin/sh
+# Проверка задания services: службы и сеть живут только в работающей консоли.
+#   hosts — имя wiki.corp ведёт на 127.0.0.1;
+#   up    — вики отвечает по http://wiki.corp:8471/ и её служба wiki работает;
+#   boot  — после перезагрузки поднимется wiki, а legacy-api — нет.
+ok() {
+    case $1 in
+        hosts) getent ahostsv4 wiki.corp | grep -q '^127\.' ;;
+        up)    systemctl is-active -q wiki && curl -fsS -m 3 http://wiki.corp:8471/ | grep -q 'kofe-bez-sahara' ;;
+        boot)  [ "$(systemctl is-enabled wiki)" = enabled ] && ! systemctl is-enabled -q legacy-api && systemctl is-active -q wiki ;;
+    esac
+}
+i=0
+while [ $i -lt 6 ]; do ok "$1" && exit 0; sleep 0.5; i=$((i + 1)); done
+exit 1

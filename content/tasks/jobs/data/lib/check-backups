@@ -1,0 +1,13 @@
+#!/bin/sh
+# Проверка заданий jobs: процессы backup живут только в работающей консоли, поэтому их считают
+# здесь, в живой системе. «backups N» — ровно N процессов backup и ни один не на паузе (T).
+# Программа только что ушла в фон — даём ей до трёх секунд.
+want=$1
+i=0
+while [ $i -lt 6 ]; do
+    all=$(ps -o stat= -C backup | wc -l)
+    stopped=$(ps -o stat= -C backup | grep -c '^T')
+    [ "$all" -eq "$want" ] && [ "$stopped" -eq 0 ] && exit 0
+    sleep 0.5; i=$((i + 1))
+done
+exit 1

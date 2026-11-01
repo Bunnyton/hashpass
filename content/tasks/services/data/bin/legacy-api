@@ -1,0 +1,15 @@
+#!/usr/bin/perl
+# legacy-api — забытый тестовый сервер для задания про службы: занял порт 8471 и на любой запрос
+# отвечает своей заглушкой. Пока он жив, wiki на этом порту не поднимется: «Address already in use».
+use strict; use warnings; use IO::Socket::INET;
+$0 = "legacy-api";
+my $s = IO::Socket::INET->new(LocalAddr => "127.0.0.1", LocalPort => 8471, Listen => 5,
+                              ReuseAddr => 1, Proto => "tcp")
+    or die "legacy-api: порт 8471: $!\n";
+my $body = "legacy-api v0.3 (test build, 2019): endpoint not implemented\n";
+while (my $c = $s->accept) {
+    my $req = <$c>;
+    print $c "HTTP/1.0 501 Not Implemented\r\nContent-Type: text/plain\r\nContent-Length: "
+        . length($body) . "\r\n\r\n$body";
+    close $c;
+}

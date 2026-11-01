@@ -1,0 +1,66 @@
+# my-service — своя служба: скрипт с бесконечным циклом + юнит в /etc/systemd/system. Шаг 1:
+# heartbeat работает и пишет «тук-тук» в журнал. Шаг 2: автозапуск (доза install.md на ошибку
+# enable без [Install]). Шаг 3: убить её — systemd должен поднять сам (доза restart.md на первый
+# kill, который её просто убил). Служба живёт только в работающей консоли, поэтому шаги принимает
+# check live: data/lib/check-heartbeat run|boot|restart. vim уже пройден, в базе он есть.
+
+image my-service:1
+
+# data: data/lib/check-heartbeat — руками
+copy data/lib /usr/local/lib/hp-proc
+run chmod 755 /usr/local/lib/hp-proc/check-heartbeat
+
+hidden hp
+
+settings
+  pager on
+
+# kill -1 — «сигнал всем процессам»: снесёт консоль вместе с системой
+block kill match " -1 *$" say "kill с номером -1 бьёт по всем процессам сразу — вместе с этой консолью. Укажи конкретный PID."
+
+say "Чужими службами ты уже командовал. Пора завести свою."
+read theory.md
+read brief.md
+
+stage
+  say "Заведи службу heartbeat: раз в 5 секунд она пишет в журнал «тук-тук» и работает, пока её не остановят"
+  solve:
+    printf '#!/bin/bash\nwhile true; do\n    echo "тук-тук"\n    sleep 5\ndone\n' | sudo tee /usr/local/bin/heartbeat >/dev/null
+    sudo chmod +x /usr/local/bin/heartbeat
+    printf '[Unit]\nDescription=heartbeat\n\n[Service]\nExecStart=/usr/local/bin/heartbeat\nRestart=always\n\n[Install]\nWantedBy=multi-user.target\n' | sudo tee /etc/systemd/system/heartbeat.service >/dev/null
+  check live /usr/local/lib/hp-proc/check-heartbeat run
+  neutral ls cat pwd journalctl
+  on pass say "Служба стучит. Её вывод — в journalctl -u heartbeat, с меткой времени на каждой строке: это сделал systemd, а не ты."
+  hint output "203/EXEC" say "systemd не смог запустить программу из ExecStart. Полный ли там путь и может ли файл исполняться?"
+  hint output "not found" say "systemd не нашёл юнит. Как называется файл и в каком он каталоге?"
+  hint output "Permission denied" say "Это системные каталоги — писать в них можно только через sudo."
+  hint output "Access denied" say "Запускать и останавливать службы может только администратор."
+  hint output "not seeing messages" say "Журналы системных служб читает администратор."
+  hint tries 5 say "Что пишет systemctl status heartbeat? А journalctl -u heartbeat?"
+  hint tries 10 say "Нужны два файла: скрипт с бесконечным циклом и юнит, который его запускает. Какого ещё нет?"
+
+stage
+  say "Пусть heartbeat запускается сам после перезагрузки"
+  solve sudo systemctl enable heartbeat
+  check live /usr/local/lib/hp-proc/check-heartbeat boot
+  neutral ls cat pwd journalctl
+  on pass say "В multi-user.target.wants появилась ссылка на твой юнит — при загрузке systemd пройдёт по этому каталогу."
+  hint output "no installation config" read install.md
+  hint tries 5 say "Какое слово systemctl отвечает за «после перезагрузки»?"
+
+stage
+  say "Мониторинг должен знать: если heartbeat убьют, он встанет сам. Убей его и убедись, что systemd его поднял"
+  solve:
+    sudo systemctl kill -s KILL heartbeat
+    sleep 1
+  check live /usr/local/lib/hp-proc/check-heartbeat restart
+  neutral ls cat pwd journalctl
+  on pass say "Новый PID, тот же стук: systemd поднял heartbeat и записал это в журнал. Так держат в строю nginx, базы данных и всё, что не должно лежать."
+  hint cmd kill read restart.md
+  hint cmd pkill read restart.md
+  hint cmd killall read restart.md
+  hint output "changed on disk" say "systemd предупреждает: юнит поменялся, а он работает по старой версии. Что делают после правки юнита?"
+  hint tries 5 say "Что systemctl status heartbeat пишет после убийства — active или inactive?"
+  hint tries 10 say "В man systemd.service найди Restart=."
+
+exec finale

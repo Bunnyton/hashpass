@@ -1,0 +1,30 @@
+#!/usr/bin/perl
+# clones — демонстрация fork и copy-on-write для задания cow. Родитель заполняет 256 МБ памяти
+# и делает fork пять раз. После fork дети видят ту же память, ядро копирует страницу, только
+# когда кто-то в неё пишет. Четыре клона только читают — их память общая с родителем. Один
+# клон переписывает весь свой массив — и получает собственную копию: Private_Dirty ≈ 256 МБ.
+# Все шесть процессов называются одинаково: clone.
+use strict; use warnings;
+$0 = "clone";
+my $mb = 256;
+my $mem = "x" x ($mb * 1024 * 1024);
+my $greedy = 3;                         # какой по счёту клон пишет в память
+$SIG{CHLD} = "IGNORE";                  # убитых клонов ядро хоронит само — зомби не остаётся
+my @kids;
+for my $n (1 .. 5) {
+    my $pid = fork;
+    die "clone: fork: $!\n" unless defined $pid;
+    if ($pid == 0) {
+        $0 = "clone";
+        if ($n == $greedy) {
+            sleep 2;
+            for (my $i = 0; $i < length $mem; $i += 4096) { substr($mem, $i, 1, "y") }
+        } else {
+            my $sum = 0;               # только читают: страницы остаются общими
+            for (my $i = 0; $i < length $mem; $i += 65536) { $sum += ord substr($mem, $i, 1) }
+        }
+        sleep 3600 while 1;
+    }
+    push @kids, $pid;
+}
+sleep 3600 while 1;

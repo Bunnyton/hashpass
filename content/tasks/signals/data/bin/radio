@@ -1,0 +1,59 @@
+#!/usr/bin/perl
+# radio — служба-«радиостанция» для задания про сигналы. Каждые 4 секунды пишет в ~/radio.log,
+# что играет. Отвечает на сигналы так, как отвечают настоящие демоны:
+#   HUP  — перечитать ~/radio.conf (как nginx -s reload), не перезапускаясь;
+#   USR1 — записать в журнал сводку;
+#   CONT — после паузы (STOP) сказать, что снова в эфире;
+#   TERM, INT, QUIT — «эфир не прерывают»: перехвачены и проигнорированы.
+# KILL и STOP перехватить нельзя никому. При старте кладёт /tmp/radio.lock со своим PID и
+# убирает его только при нормальном выходе — после KILL он останется.
+use strict; use warnings; use POSIX qw(strftime);
+my $home = "/home/student";
+my ($conf, $log, $lock) = ("$home/radio.conf", "$home/radio.log", "/tmp/radio.lock");
+$0 = "radio";
+open(my $L, ">>", $log) or die "radio: не открыть $log: $!\n";
+select((select($L), $| = 1)[0]);
+sub say_log { print $L strftime("%H:%M:%S", localtime), "  ", @_, "\n" }
+if (-e $lock) {
+    open(my $f, "<", $lock); my $old = <$f> // "?"; chomp $old;
+    say_log("radio: не запускаюсь — есть $lock (PID $old). Если radio уже не работает, файл остался от прошлого раза.");
+    die "radio: $lock exists (pid $old)\n";
+}
+open(my $lk, ">", $lock) or die; print $lk "$$\n"; close $lk;
+my %songs = (
+    "rock"   => ["Кино — Группа крови", "Ария — Беспечный ангел", "ДДТ — Что такое осень", "Король и Шут — Лесник"],
+    "jazz"   => ["Miles Davis — So What", "Dave Brubeck — Take Five", "John Coltrane — Naima"],
+    "lofi"   => ["beats to compile kernels to", "rainy terminal", "tty1 at 3 am"],
+    "retro"  => ["Сектор Газа — Лирика", "Ласковый май — Белые розы", "Кино — Звезда по имени Солнце"],
+);
+my $station = "rock";
+my $started = time;
+my ($played, $reloads) = (0, 0);
+sub read_conf {
+    open(my $c, "<", $conf) or return;
+    while (<$c>) { $station = $1 if /^\s*station\s*=\s*(\S+)/ }
+}
+read_conf();
+my $want_reload = 0; my $want_stats = 0;
+$SIG{HUP}  = sub { $want_reload = 1 };
+$SIG{USR1} = sub { $want_stats = 1 };
+$SIG{CONT} = sub { say_log("radio: снова в эфире (получен SIGCONT)") };
+for my $s (qw(TERM INT QUIT)) {
+    $SIG{$s} = sub { say_log("radio: эфир не прерывают! (получен SIG$s — перехвачен и проигнорирован)") };
+}
+say_log("radio: в эфире, PID $$, станция $station");
+while (1) {
+    if ($want_reload) {
+        $want_reload = 0; $reloads++;
+        my $was = $station; read_conf();
+        say_log("radio: получен SIGHUP — перечитал $conf, станция: $station (была $was)");
+    }
+    if ($want_stats) {
+        $want_stats = 0;
+        my $min = int((time - $started) / 60);
+        say_log("radio: сводка (SIGUSR1) — в эфире $min мин, сыграно $played, станция $station, перечитываний конфига $reloads");
+    }
+    my $list = $songs{$station} // ["тишина — такой станции нет"];
+    say_log("♪ [$station] " . $list->[$played++ % @$list]);
+    sleep 4;
+}

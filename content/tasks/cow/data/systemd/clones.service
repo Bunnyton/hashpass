@@ -1,0 +1,9 @@
+[Unit]
+Description=clones — шесть одинаковых обработчиков фотографий
+
+[Service]
+User=student
+ExecStart=/usr/local/bin/clones
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,51 @@
+# cow — fork и copy-on-write. Служба clones (data/bin/clones, perl, от student): родитель
+# заполняет 256 МБ и делает fork пять раз; четверо детей только читают — страницы общие; один
+# переписывает весь массив — у него своя копия (Private_Dirty ≈ 256 МБ). У всех шести одно имя
+# clone и одинаковый RES. Шаг 1: увидеть, сколько служба занимает на самом деле (Memory: в
+# systemctl status — это память всей cgroup службы). Шаг 2 (доза cow.md при входе): найти
+# жадного клона по smaps_rollup и остановить, остальных не трогать. Процессы живут только в
+# работающей консоли, поэтому шаг 2 принимает check live: data/lib/check-clones.
+
+image cow:1
+
+# data: data/bin/clones, data/lib/check-clones, data/systemd/clones.service — руками
+copy data/bin /usr/local/bin
+copy data/lib /usr/local/lib/hp-proc
+copy data/systemd /etc/systemd/system
+run chmod 755 /usr/local/bin/clones /usr/local/lib/hp-proc/check-clones
+run systemctl enable clones.service
+
+hidden hp
+
+settings
+  pager on
+
+# kill -1 — «сигнал всем процессам»: снесёт консоль вместе с системой
+block kill match " -1 *$" say "kill с номером -1 бьёт по всем процессам сразу — вместе с этой консолью. Укажи конкретный PID."
+
+say "Шесть одинаковых процессов. Пять честных и один жадный."
+read theory.md
+read brief.md
+
+stage
+  say "Узнай, сколько памяти служба clones занимает на самом деле — все шесть процессов вместе"
+  solve systemctl status clones --no-pager
+  accept output "Memory: [0-9.]+[MG]"
+  neutral ls cat pwd ps top htop
+  on pass say "Около 512 МБ, а не полтора гигабайта: systemd считает настоящие страницы, а не сумму RES. 256 из них общие на всех, а ещё 256 — чьи-то личные."
+  hint tries 5 say "Службами заведует systemd — и он знает, сколько памяти у каждой. Как спросить у него о службе?"
+  hint tries 10 say "Пульт служб — systemctl; какое его слово показывает состояние?"
+
+stage
+  say "Один clone переписал свою память и держит личную копию. Найди его и останови, остальных не трогай"
+  solve:
+    for p in $(pgrep -x clone); do d=$(awk '/^Private_Dirty:/ {print $2}' /proc/$p/smaps_rollup); [ "$d" -gt 65536 ] && kill $p; done; true
+  check live /usr/local/lib/hp-proc/check-clones
+  neutral ls cat pwd ps top htop pgrep head grep
+  on enter read cow.md
+  on pass say "Так работают redis и PostgreSQL: redis делает fork, чтобы сохранить базу на диск, и копируются только страницы, которые изменились за это время. Android запускает каждое приложение fork-ом заранее прогретого процесса zygote."
+  hint tries 5 say "У каждого clone свой smaps_rollup. Какая строка в нём — про личные изменённые страницы?"
+  hint tries 10 say "Номера всех clone даст pgrep, а нужные строки из шести файлов — grep."
+  hint tries 15 say "Остановил не того? sudo systemctl restart clones вернёт всех шестерых."
+
+exec finale

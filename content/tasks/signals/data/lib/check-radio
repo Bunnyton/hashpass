@@ -1,0 +1,22 @@
+#!/bin/sh
+# Проверка задания signals: radio живёт только в работающей консоли, поэтому смотрим здесь, в
+# живой системе. Перехваченные сигналы radio пишет в ~/radio.log с задержкой до 4 секунд
+# (обработчик срабатывает между песнями), поэтому каждая проверка ждёт до 6 секунд.
+log=/home/student/radio.log
+state() { ps -o stat= -C radio | head -1 | cut -c1; }
+starts() { grep -c 'в эфире, PID' "$log" 2>/dev/null; }
+ok() {
+    case $1 in
+        hup)   [ "$(starts)" = 1 ] && grep -q 'SIGHUP.*станция: jazz' "$log" && [ -n "$(state)" ] ;;
+        usr1)  grep -q 'сводка (SIGUSR1)' "$log" ;;
+        stop)  [ "$(state)" = T ] ;;
+        cont)  s=$(state); [ -n "$s" ] && [ "$s" != T ] && grep -q 'снова в эфире' "$log" ;;
+        dead)  [ -z "$(state)" ] ;;
+    esac
+}
+i=0
+while [ $i -lt 12 ]; do
+    ok "$1" && exit 0
+    sleep 0.5; i=$((i + 1))
+done
+exit 1

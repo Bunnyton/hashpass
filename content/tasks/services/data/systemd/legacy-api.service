@@ -1,0 +1,8 @@
+[Unit]
+Description=legacy-api — тестовый API (временно, удалить после релиза 2019 года)
+
+[Service]
+ExecStart=/usr/local/bin/legacy-api
+
+[Install]
+WantedBy=multi-user.target

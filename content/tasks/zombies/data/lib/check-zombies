@@ -1,0 +1,11 @@
+#!/bin/sh
+# Проверка задания zombies: процессы живут только в работающей консоли.
+#   none — зомби нет: ни одного процесса в состоянии Z;
+#   back — necromancer снова поднялся и наплодил зомби (на это нужно время: перезапуск через
+#          15 секунд, потом 66 детей по 0,05 с) — шаг-предпосылка для следующего;
+#   gone — служба остановлена, не в автозапуске, и зомби нет.
+zombies() { ps -eo stat= | grep -c '^Z'; }
+case $1 in
+    none) i=0; while [ $i -lt 8 ]; do [ "$(zombies)" = 0 ] && exit 0; sleep 0.5; i=$((i + 1)); done; exit 1 ;;
+    gone) ! systemctl is-active -q necromancer && ! systemctl is-enabled -q necromancer && [ "$(zombies)" = 0 ] ;;
+esac

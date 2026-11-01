@@ -1,11 +1,13 @@
 import pytest
 
 from hashpass.recipe.model import (
+    ApplyAction,
     CmdCond,
     CopyStep,
     ExecAction,
     IdleCond,
     OutputCond,
+    ReadAction,
     Recipe,
     RunStep,
     SayAction,
@@ -261,6 +263,18 @@ def test_cmd_condition_has_and_missing():
             "  hint cmd grep has -r missing -i exec f.sh\n")
     cond = parse_recipe(text).stages[0].hints[0].condition
     assert cond == CmdCond("grep", ("-r",), ("-i",))
+
+
+@pytest.mark.tier1
+def test_cmd_condition_takes_read_and_apply_actions():
+    text = ('image t:1\nstage\n  say "x"\n  solve echo hi\n'
+            "  hint cmd kill read undead.md\n"
+            "  hint cmd pkill has zombie apply fix.sh\n")
+    hints = parse_recipe(text).stages[0].hints
+    assert hints[0].condition == CmdCond("kill", (), ())
+    assert hints[0].action == ReadAction("undead.md")
+    assert hints[1].condition == CmdCond("pkill", ("zombie",), ())
+    assert hints[1].action == ApplyAction("fix.sh")
 
 
 @pytest.mark.tier1

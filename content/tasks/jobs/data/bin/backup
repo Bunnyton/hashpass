@@ -1,0 +1,18 @@
+#!/usr/bin/perl
+# backup — долгая работа для задания про передний план и фон: «копирует» архив двадцать минут.
+# Прогресс печатает, только пока стоит на переднем плане терминала: в фоне молчит и не мешает
+# набирать команды. Ctrl+C (SIGINT) и Ctrl+Z (SIGTSTP) ведут себя как у обычной программы.
+use strict; use warnings; use POSIX qw(tcgetpgrp getpgrp);
+$| = 1;
+my $total = 1200;
+my $tty = -t STDOUT ? fileno(STDOUT) : undef;
+sub front { defined $tty && tcgetpgrp($tty) == getpgrp() }
+my $running = () = `pgrep -x backup`;     # второй backup подряд копирует музыку
+my $what = $running > 1 ? "/srv/music" : "/srv/photos";
+print "backup: копирую $what в архив — это надолго (около 20 минут)\n" if front();
+for my $s (1 .. $total) {
+    sleep 1;
+    printf "backup: %3d%% — скопировано %d из 48213 файлов\n", $s * 100 / $total, $s * 40
+        if $s % 10 == 0 && front();
+}
+print "backup: готово\n" if front();

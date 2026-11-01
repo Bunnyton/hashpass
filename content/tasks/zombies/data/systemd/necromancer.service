@@ -1,0 +1,11 @@
+[Unit]
+Description=necromancer — «оптимизатор» фоновых задач
+
+[Service]
+User=student
+ExecStart=/usr/local/bin/necromancer
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
