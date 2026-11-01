@@ -3,7 +3,7 @@
 # надпись inscription.txt на синдарине; «pedo mellon a minno» переводится по dictionary.txt
 # (grep, урок grep-hunt) — пароль и есть слово «друг», mellon. Врата хранят только sha256 пароля,
 # так что cat gate ответа не выдаёт. Открытые врата создают ~/moria/khazad-dum и в терминале
-# запускают carbonyl (он в базе) с Epic Sax Gandalf — бесконечным повтором; выход — Ctrl+C.
+# запускают carbonyl (он в базе) с Epic Sax Gandalf со звуком — бесконечным повтором; выход — Ctrl+C.
 # Ролик лежит в задании (/opt/moria/hall), а не на YouTube: встроенный плеер YouTube без
 # страницы-источника отвечает «Error 153», полная страница в Chromium из carbonyl (2023) стоит
 # на 0:00, а в России YouTube ещё и замедлен.
@@ -12,8 +12,10 @@ image moria:1
 
 # data: data/moria — руками: gate, dictionary.txt (словарь синдарина, 129 слов)
 copy data/moria /home/student/moria
-# data: data/hall/gandalf.webm — «Epic Sax Gandalf» (youtu.be/evef8FCK6wk), 30 с с 0:20,
-# ffmpeg -vf "crop=192:108:0:18,fps=15" -c:v libvpx -b:v 110k; index.html — руками
+# data: data/hall/gandalf.webm — «Epic Sax Gandalf» (youtu.be/evef8FCK6wk), 30 с с 0:20;
+# rick.webm — «Never Gonna Give You Up» (youtu.be/dQw4w9WgXcQ), 30 с с 0:43; оба со звуком:
+# ffmpeg -ss S -t 30 -i <360p> -vf "[crop=480:270:0:45,]scale=192:108,fps=15" -c:v libvpx -b:v 110k
+#   -c:a libopus -b:a 48k -ac 1; index.html — руками. Звук идёт в колонки хоста (hashpass run).
 copy data/hall /opt/moria/hall
 run chmod 644 /home/student/moria/gate
 run chown -R student:student /home/student/moria

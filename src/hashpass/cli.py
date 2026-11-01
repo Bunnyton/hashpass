@@ -12,6 +12,7 @@ import secrets
 import select
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tarfile
@@ -1010,6 +1011,36 @@ def _console_term(rootfs: Path, environ: Mapping[str, str]) -> tuple[str, list[s
     return term, [f"--bind-ro={host}:/etc/terminfo/{term[0]}/{term}"]
 
 
+_SOUND_IN = "/run/hp-sound"            # the base's /etc/pulse/client.conf.d/hashpass.conf looks here
+
+
+def _sound_args(environ: Mapping[str, str]) -> list[str]:
+    """
+    Return the nspawn arguments that let the console play sound through the host's PulseAudio.
+
+    The host's socket ($PULSE_SERVER `unix:` path, else $XDG_RUNTIME_DIR/pulse/native --
+    PipeWire serves it too) and its cookie go in under /run/hp-sound; nothing when there is no
+    socket. Moria's finale plays music in carbonyl (user 2026-11-01).
+    """
+    server = environ.get("PULSE_SERVER", "")
+    if server:
+        path = Path(server.removeprefix("unix:")) if server.startswith(("unix:", "/")) else None
+    else:
+        runtime = environ.get("XDG_RUNTIME_DIR", "")
+        path = Path(runtime) / "pulse" / "native" if runtime else None
+    try:
+        if path is None or not stat.S_ISSOCK(path.stat().st_mode):
+            return []
+    except OSError:
+        return []
+    args = [f"--bind={path}:{_SOUND_IN}/native"]
+    home = environ.get("HOME", "")
+    cookie = Path(home) / ".config" / "pulse" / "cookie" if home else None
+    if cookie is not None and cookie.is_file():
+        args.append(f"--bind-ro={cookie}:{_SOUND_IN}/cookie")
+    return args
+
+
 def _interactive_console(runner: object, *, user: str | None = None, sudo: bool = True,
                          grade_port: int | None = None) -> None:
     """
@@ -1025,7 +1056,8 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     """
     machine = machines.machine_name()
     term, term_args = _console_term(Path(runner.rootfs), os.environ)
-    argv = ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, f"--setenv=TERM={term}", *term_args]
+    argv = ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, f"--setenv=TERM={term}", *term_args,
+            *_sound_args(os.environ)]
     if user:
         argv.append(f"--setenv=HP_USER={user}")
     argv.append(f"--setenv=HP_SUDO={'on' if sudo else 'off'}")

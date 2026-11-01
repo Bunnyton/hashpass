@@ -5,7 +5,7 @@
 #
 # Кладёт браузер в /opt/carbonyl и команду /usr/local/bin/carbonyl (Debian/Ubuntu, amd64/arm64).
 # Архив можно передать готовым (так собирается база hashpass), иначе он скачивается с GitHub
-# (curl, wget или python3 -- что найдётся). В контейнере hashpass звука нет -- только картинка.
+# (curl, wget или python3 -- что найдётся). Звук -- через PulseAudio (в hashpass -- колонки хоста).
 #   carbonyl https://example.com        -- открыть страницу; выход -- Ctrl+C
 set -eu
 
@@ -32,6 +32,8 @@ apt-get install -y -qq --no-install-recommends unzip ca-certificates libnss3 lib
     libfontconfig1 fonts-dejavu-core >/dev/null
 apt-get install -y -qq --no-install-recommends libasound2t64 >/dev/null 2>&1 \
     || apt-get install -y -qq --no-install-recommends libasound2 >/dev/null
+# Звук Chromium отдаёт PulseAudio (PipeWire понимает его тоже).
+apt-get install -y -qq --no-install-recommends libpulse0 >/dev/null
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -61,9 +63,10 @@ mv "$(dirname "$bin")" /opt/carbonyl
 chmod -R a+rX /opt/carbonyl
 
 # --no-sandbox: песочнице Chromium нужны user namespaces, которых в контейнере нет.
+# --autoplay-policy: видео со звуком играет сразу -- кликнуть в терминале нечем.
 cat > /usr/local/bin/carbonyl <<'SH'
 #!/bin/sh
-exec /opt/carbonyl/carbonyl --no-sandbox "$@"
+exec /opt/carbonyl/carbonyl --no-sandbox --autoplay-policy=no-user-gesture-required "$@"
 SH
 chmod 755 /usr/local/bin/carbonyl
 echo "carbonyl $VERSION установлен: carbonyl <адрес>"

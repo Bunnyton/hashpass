@@ -29,9 +29,9 @@ cat <<'ART'
   — Можно, — сказал Гэндальф. — Если прочитать, что написано на двери.
 
   Музыку в чертогах крутил carbonyl — браузер прямо в терминале. Он откроет
-  любой сайт или ролик: carbonyl <адрес>. Мультик про кролика, например:
+  любой сайт или ролик: carbonyl <адрес>. А гномы оставили тебе классику:
 
-  carbonyl https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.360p.vp9.webm
+  carbonyl /opt/moria/hall/rick.webm
 
   Выход — Ctrl+C. Дальше балуйся сам.
 ART
