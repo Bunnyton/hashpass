@@ -1,0 +1,70 @@
+# vim-start — первый урок vim по мотивам vimtutor (урок 1): режимы, выход, hjkl, x, i, A, :wq.
+# Шаг 1: открыть файл и выйти (vim завершился успешно). Шаг 2 (доза move.md): лабиринт maze.txt —
+# собрать все $ и сохранить: принимается файл, где не осталось ни одного $ (можно удалить x или
+# заменить — способ не важен). Шаг 3 (доза insert.md): лишние и пропущенные буквы — observe.
+# Шаг 4 (доза append.md): дописать концы строк — observe. Править можно только vim (allow).
+# vim и его настройки — в базе.
+
+image vim-start:1
+
+# data: data/home — руками
+copy data/home /home/student
+run chown -R student:student /home/student
+
+hidden hp
+
+settings
+  pager on
+
+say "Те самые три буквы."
+read theory.md
+read brief.md
+
+stage
+  say "Открой в vim файл start.txt и выйди из него"
+  solve true
+  accept cmd "vim" ok
+  accept cmd "vi" ok
+  allow vim vi
+  neutral ls cat pwd cd
+  on pass say "Ты вышел из vim. Многие этим похвастаться не могут."
+  hint tries 5 say "Выход — команда после двоеточия. Какие — в теории (readme)."
+
+stage
+  say "В лабиринте maze.txt спрятано пять монет $. Собери их все и сохрани файл"
+  solve sed -i 's/\$//g' /home/student/maze.txt
+  accept file /home/student/maze.txt "\A[^$]*\Z"
+  allow vim vi
+  neutral ls cat pwd cd
+  on enter read move.md
+  on pass say "Пять из пяти. Стены можно было и не обходить: vim не знает, что это лабиринт."
+  hint tries 5 say "Монеты исчезают, только если сохранить файл. Что пишет cat maze.txt — сколько $ осталось?"
+  hint tries 10 say "Двигаться — hjkl, удалить символ — x, сохранить и выйти — :wq."
+
+stage
+  say "Исправь строки со стрелкой в insert.txt: убери лишние буквы и вставь пропущенные"
+  solve:
+    f=/home/student/insert.txt
+    sed -i 's/^---> Коровва.*/---> Корова прыгнула через луну./; s/^---> В этй.*/---> В этой строке не хватает нескольких букв./; s/^---> Каждое.*/---> Каждое нажатие клавиши — команда, а не буква./; s/^---> Пслдня.*/---> Последняя строка, и ты свободен./' $f
+  observe /home/student/insert.txt
+  allow vim vi
+  neutral ls cat pwd cd
+  on enter read insert.md
+  on pass say "i, текст, Esc — так в vim печатают всё. Остальное время ты в обычном режиме и командуешь."
+  hint tries 5 say "Сравни с cat insert.txt: в какой строке ещё ошибка?"
+  hint tries 10 say "Лишнее — x, пропущенное — i, текст, Esc. И не забудь сохранить."
+
+stage
+  say "Допиши строки со стрелкой в append.txt — каждая должна совпасть со строкой под ней"
+  solve:
+    f=/home/student/append.txt
+    sed -i 's/^---> В этой строке не хватает$/---> В этой строке не хватает текста в конце./; s/^---> Курсор может быть где угодно$/---> Курсор может быть где угодно, A всё равно допишет в конец./; s/^---> vim — это$/---> vim — это не редактор, а язык редактирования./' $f
+  observe /home/student/append.txt
+  allow vim vi
+  neutral ls cat pwd cd
+  on enter read append.md
+  on pass say "Первый урок vimtutor пройден: движение, x, i, A, сохранение и выход. Дальше — команды, которые правят словами и строками."
+  hint tries 5 say "Сравни с cat append.txt: совпадает ли каждая строка со стрелкой со строкой под ней — буква в букву, с точкой?"
+  hint tries 10 say "A — в конец строки и сразу вставка."
+
+exec finale

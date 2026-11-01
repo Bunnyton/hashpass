@@ -1,0 +1,73 @@
+# vim-edit — второй урок vim по мотивам vimtutor (уроки 2–4): операторы и движения, dd и u,
+# p/r/c, поиск и прыжки. Каждый шаг — свой файл и доза при входе; принимается файл как у
+# эталона (observe). Править можно только vim (allow); чистые копии — /opt/vim-edit.
+
+image vim-edit:1
+
+# data: data/home — руками; server.conf — однократным python-скриптом (20 секций по 25–45
+# маршрутов, timeout = 5 в каждой, нужная — [payments])
+copy data/home /home/student
+copy data/home /opt/vim-edit
+run chown -R student:student /home/student
+
+hidden hp
+
+settings
+  pager on
+
+say "Хватит править по букве. Пора говорить с vim предложениями."
+read theory.md
+read brief.md
+
+stage
+  say "Убери из строк со стрелкой в words.txt лишнее: слова ЗАГЛАВНЫМИ буквами, повтор в конце и мусор после точки"
+  solve:
+    f=/home/student/words.txt
+    sed -i 's/КОТ //; s/ЛИСА //; s/КРОТ //; s/ОЧЕНЬ ОЧЕНЬ ОЧЕНЬ //; s/дважды\. Конец этой строки напечатали дважды\./дважды./; s/здесь\.%.*/здесь./' $f
+  observe /home/student/words.txt
+  allow vim vi
+  neutral ls cat pwd cd cp
+  on enter read delete.md
+  on pass say "dw, d$ и точка — три клавиши, которые экономят больше всего времени."
+  hint tries 5 say "Сравни с cat words.txt: где ещё остались заглавные слова или лишний хвост?"
+  hint tries 10 say "Удалить слово — d и движение до следующего слова; хвост строки — d и движение до её конца."
+
+stage
+  say "В стихах ads.txt завелась реклама. Удали все её строки, стихи не трогай"
+  solve sed -i '/РЕКЛАМА/d' /home/student/ads.txt
+  observe /home/student/ads.txt
+  allow vim vi
+  neutral ls cat pwd cd cp
+  on enter read lines.md
+  on pass say "11 строк рекламы — несколько нажатий. А если строк будут тысячи, есть способ и на это — дальше в курсе."
+  hint tries 5 say "Сравни с cat ads.txt: где ещё осталась реклама?"
+  hint tries 10 say "Строка — dd, несколько подряд — число перед dd."
+
+stage
+  say "В fix.txt расставь строки a)–e) по порядку и исправь строки со стрелкой по образцу под ними"
+  solve:
+    f=/home/student/fix.txt
+    printf 'a) Первая: понедельник.\nb) Вторая: вторник.\nc) Третья: среда.\nd) Четвёртая: четверг.\ne) Пятая: финиш.\n' > /tmp/head.txt
+    tail -n +6 $f > /tmp/tail.txt
+    cat /tmp/head.txt /tmp/tail.txt > $f
+    sed -i 's/^---> Кагда эта сирока набиралась, кто-то нажимал не тк клавиши\./---> Когда эта строка набиралась, кто-то нажимал не те клавиши./; s/^---> В этой строке несколько слов нужно ПОМЕНЯТЬ местами УМОЛЧАНИЕ\./---> В этой строке несколько слов нужно заменить целиком./; s/^---> Конец этой строки нужно исправить вот так: БЛА-БЛА-БЛА\./---> Конец этой строки нужно исправить вот так: как в строке ниже./' $f
+  observe /home/student/fix.txt
+  allow vim vi
+  neutral ls cat pwd cd cp
+  on enter read change.md
+  on pass say "dd + p — переставить, r — один символ, c — кусок целиком. Это уже половина повседневного vim."
+  hint tries 5 say "Сравни с cat fix.txt: всё ли по порядку и совпадает ли каждая строка со стрелкой с образцом?"
+  hint tries 10 say "Переставить строку — удалить и вставить; первая строка «Кагда» правится заменой символа."
+
+stage
+  say "В server.conf у секции [payments] timeout = 5 — поставь 30. Остальные секции не трогай"
+  solve sed -i '/^\[payments\]$/,/^$/s/^timeout = 5$/timeout = 30/' /home/student/server.conf
+  observe /home/student/server.conf
+  allow vim vi
+  neutral ls cat pwd cd cp
+  on enter read search.md
+  on pass say "850 строк, а ты прыгнул ровно в нужную. Уроки vimtutor со второго по четвёртый — пройдены."
+  hint tries 5 say "timeout = 5 есть в каждой секции. Как сначала найти саму секцию?"
+  hint tries 10 say "Поиск — / и текст, а квадратные скобки в поиске можно и не писать: /payments."
+
+exec finale

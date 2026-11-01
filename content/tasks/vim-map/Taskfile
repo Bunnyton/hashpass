@@ -1,0 +1,38 @@
+# vim-map — свои клавиши в vim (исходник it_bastion: vim/21_nnoremap «используйте nnoremap»).
+# Задача, которую :s не решает: прибавить 1000 к порту в каждой из 150 строк ports.conf. Ctrl+A
+# считает, а nnoremap в ~/.vimrc превращает «$1000<C-a>j» в одну клавишу. Ловушка: в имени
+# сервиса тоже число (web_01) — Ctrl+A с начала строки меняет его (доза cursor.md, когда cat
+# покажет web_1001 и подобное: «_100» в имени бывает только так). Принято: файл как у эталона (observe) И в ~/.vimrc есть своя
+# клавиша (accept file). Править можно только vim (allow); чистая копия — /opt/vim-map.
+
+image vim-map:1
+
+# data: ports.conf — однократным python-скриптом (150 строк «имя_0N  порт», порты различны)
+copy data/home /home/student
+copy data/home /opt/vim-map
+run chown -R student:student /home/student
+
+hidden hp
+
+settings
+  pager on
+
+say "150 строк и одна и та же правка в каждой. Пора научить vim новой клавише."
+read brief.md
+
+stage
+  say "Прибавь 1000 к каждому порту в ports.conf. Сделай это своей клавишей из ~/.vimrc"
+  solve:
+    echo 'nnoremap <F2> $1000<C-a>j' > /home/student/.vimrc
+    awk '{printf "%-10s %d\n", $1, $2 + 1000}' /home/student/ports.conf > /tmp/ports && cat /tmp/ports > /home/student/ports.conf
+  accept file /home/student/.vimrc "^\s*:?n?(nore)?map\s"
+  observe /home/student/ports.conf
+  allow vim vi
+  neutral ls cat less cd pwd cp
+  on pass say "Своя клавиша в ~/.vimrc — навсегда. Так vim и подгоняют под себя: у опытных .vimrc на сотни строк."
+  hint output "_100" read cursor.md
+  hint tries 5 say "Сравни с cat ports.conf: все ли порты выросли ровно на 1000, а имена остались как были?"
+  hint tries 10 say "Порты в порядке? Тогда загляни в ~/.vimrc — есть ли там твоя клавиша?"
+  hint tries 15 say "Клавиша должна: дойти до порта, прибавить 1000 и спуститься на строку ниже."
+
+exec finale

@@ -1,5 +1,3 @@
-Оберни слова в print(data["слово"]) — с Adorable до Wonderful включительно, остальные не трогай
-
 Adorable
 Amazing
 Angelic

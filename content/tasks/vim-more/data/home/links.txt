@@ -1,0 +1,120 @@
+001. Почитать: http://vim.org/blog, зеркало: http://kernel.org/changelog
+002. Почитать: http://git-scm.com/install, зеркало: http://vim.org/blog
+003. Почитать: http://redis.io/install, зеркало: http://wiki.debian.org/blog, зеркало: http://docs.docker.com/install
+004. Почитать: http://vim.org/guide
+005. Почитать: http://postgresql.org/blog, зеркало: http://grafana.com/security
+006. Почитать: http://man7.org/security, зеркало: http://docs.python.org/changelog, зеркало: http://wiki.debian.org/guide
+007. Почитать: http://git-scm.com/tutorial
+008. Почитать: http://docs.python.org/blog, зеркало: http://nginx.org/blog
+009. Почитать: http://git-scm.com/changelog, зеркало: http://git-scm.com/reference
+010. Почитать: http://docs.python.org/faq, зеркало: http://kernel.org/reference
+011. Почитать: http://vim.org/faq, зеркало: http://prometheus.io/reference
+012. Почитать: http://git-scm.com/changelog
+013. Почитать: http://docs.python.org/faq
+014. Почитать: http://wiki.debian.org/download, зеркало: http://wiki.debian.org/reference
+015. Почитать: http://wiki.debian.org/guide, зеркало: http://grafana.com/guide
+016. Почитать: http://git-scm.com/guide
+017. Почитать: http://postgresql.org/download, зеркало: http://postgresql.org/faq
+018. Почитать: http://grafana.com/tutorial, зеркало: http://grafana.com/reference
+019. Почитать: http://wiki.debian.org/reference
+020. Почитать: http://docs.python.org/download
+021. Почитать: http://man7.org/tutorial
+022. Почитать: http://wiki.debian.org/guide, зеркало: http://docs.python.org/blog, зеркало: http://kernel.org/install
+023. Почитать: http://vim.org/tutorial, зеркало: http://kernel.org/changelog, зеркало: http://git-scm.com/install
+024. Почитать: http://grafana.com/download, зеркало: http://wiki.debian.org/download
+025. Почитать: http://git-scm.com/guide, зеркало: http://docs.docker.com/security
+026. Почитать: http://docs.python.org/tutorial
+027. Почитать: http://postgresql.org/security
+028. Почитать: http://redis.io/faq, зеркало: http://docs.python.org/install, зеркало: http://git-scm.com/blog
+029. Почитать: http://docs.python.org/security
+030. Почитать: http://docs.docker.com/download
+031. Почитать: http://wiki.debian.org/faq
+032. Почитать: http://redis.io/tutorial
+033. Почитать: http://redis.io/news
+034. Почитать: http://redis.io/blog
+035. Почитать: http://redis.io/blog
+036. Почитать: http://man7.org/download, зеркало: http://man7.org/install
+037. Почитать: http://git-scm.com/security
+038. Почитать: http://prometheus.io/tutorial
+039. Почитать: http://prometheus.io/changelog
+040. Почитать: http://grafana.com/download
+041. Почитать: http://redis.io/faq, зеркало: http://postgresql.org/guide
+042. Почитать: http://wiki.debian.org/guide
+043. Почитать: http://docs.docker.com/tutorial, зеркало: http://prometheus.io/download
+044. Почитать: http://postgresql.org/security
+045. Почитать: http://docs.docker.com/changelog, зеркало: http://man7.org/faq
+046. Почитать: http://git-scm.com/blog
+047. Почитать: http://grafana.com/security, зеркало: http://redis.io/faq
+048. Почитать: http://git-scm.com/tutorial
+049. Почитать: http://docs.python.org/faq, зеркало: http://docs.docker.com/download, зеркало: http://kernel.org/tutorial
+050. Почитать: http://docs.python.org/install
+051. Почитать: http://nginx.org/changelog
+052. Почитать: http://man7.org/faq, зеркало: http://nginx.org/install
+053. Почитать: http://nginx.org/changelog, зеркало: http://redis.io/install
+054. Почитать: http://docs.python.org/guide, зеркало: http://kernel.org/news
+055. Почитать: http://docs.docker.com/guide, зеркало: http://docs.python.org/security, зеркало: http://grafana.com/faq
+056. Почитать: http://wiki.debian.org/reference, зеркало: http://nginx.org/install
+057. Почитать: http://wiki.debian.org/blog
+058. Почитать: http://nginx.org/guide, зеркало: http://prometheus.io/install
+059. Почитать: http://nginx.org/faq
+060. Почитать: http://kernel.org/faq, зеркало: http://postgresql.org/guide, зеркало: http://kernel.org/security
+061. Почитать: http://redis.io/download
+062. Почитать: http://redis.io/guide, зеркало: http://redis.io/faq
+063. Почитать: http://wiki.debian.org/faq
+064. Почитать: http://postgresql.org/news
+065. Почитать: http://prometheus.io/security, зеркало: http://kernel.org/blog
+066. Почитать: http://vim.org/faq, зеркало: http://vim.org/changelog
+067. Почитать: http://docs.docker.com/security
+068. Почитать: http://kernel.org/guide
+069. Почитать: http://prometheus.io/faq
+070. Почитать: http://redis.io/blog, зеркало: http://docs.docker.com/guide
+071. Почитать: http://docs.docker.com/install
+072. Почитать: http://redis.io/tutorial, зеркало: http://vim.org/install, зеркало: http://nginx.org/blog
+073. Почитать: http://git-scm.com/news, зеркало: http://postgresql.org/reference
+074. Почитать: http://grafana.com/download
+075. Почитать: http://git-scm.com/download
+076. Почитать: http://redis.io/news
+077. Почитать: http://man7.org/install
+078. Почитать: http://nginx.org/guide, зеркало: http://prometheus.io/faq
+079. Почитать: http://man7.org/faq
+080. Почитать: http://kernel.org/reference, зеркало: http://git-scm.com/download
+081. Почитать: http://grafana.com/changelog, зеркало: http://kernel.org/news
+082. Почитать: http://redis.io/blog, зеркало: http://nginx.org/faq, зеркало: http://docs.python.org/reference
+083. Почитать: http://docs.python.org/reference, зеркало: http://redis.io/news
+084. Почитать: http://grafana.com/security
+085. Почитать: http://grafana.com/install
+086. Почитать: http://kernel.org/tutorial, зеркало: http://docs.python.org/reference
+087. Почитать: http://man7.org/guide
+088. Почитать: http://wiki.debian.org/blog, зеркало: http://wiki.debian.org/changelog, зеркало: http://grafana.com/news
+089. Почитать: http://grafana.com/tutorial
+090. Почитать: http://kernel.org/reference
+091. Почитать: http://prometheus.io/guide
+092. Почитать: http://vim.org/guide, зеркало: http://man7.org/tutorial
+093. Почитать: http://nginx.org/changelog
+094. Почитать: http://vim.org/changelog, зеркало: http://redis.io/install, зеркало: http://postgresql.org/tutorial
+095. Почитать: http://postgresql.org/download
+096. Почитать: http://kernel.org/blog
+097. Почитать: http://grafana.com/guide
+098. Почитать: http://vim.org/security, зеркало: http://grafana.com/changelog
+099. Почитать: http://kernel.org/news
+100. Почитать: http://git-scm.com/faq, зеркало: http://prometheus.io/faq, зеркало: http://git-scm.com/tutorial
+101. Почитать: http://wiki.debian.org/reference, зеркало: http://vim.org/news
+102. Почитать: http://prometheus.io/guide
+103. Почитать: http://vim.org/faq
+104. Почитать: http://kernel.org/news
+105. Почитать: http://postgresql.org/reference, зеркало: http://kernel.org/guide
+106. Почитать: http://wiki.debian.org/download
+107. Почитать: http://man7.org/changelog
+108. Почитать: http://grafana.com/install
+109. Почитать: http://man7.org/changelog, зеркало: http://prometheus.io/changelog
+110. Почитать: http://prometheus.io/blog, зеркало: http://kernel.org/security, зеркало: http://prometheus.io/faq
+111. Почитать: http://kernel.org/changelog
+112. Почитать: http://docs.docker.com/changelog, зеркало: http://grafana.com/install
+113. Почитать: http://vim.org/changelog, зеркало: http://docs.docker.com/reference
+114. Почитать: http://postgresql.org/security, зеркало: http://git-scm.com/reference, зеркало: http://man7.org/changelog
+115. Почитать: http://docs.docker.com/security, зеркало: http://kernel.org/tutorial
+116. Почитать: http://vim.org/faq, зеркало: http://vim.org/guide
+117. Почитать: http://postgresql.org/guide, зеркало: http://vim.org/guide
+118. Почитать: http://postgresql.org/changelog, зеркало: http://redis.io/faq
+119. Почитать: http://wiki.debian.org/install, зеркало: http://wiki.debian.org/changelog
+120. Почитать: http://postgresql.org/download, зеркало: http://docs.docker.com/tutorial

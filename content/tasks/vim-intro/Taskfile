@@ -20,7 +20,7 @@ hidden hp
 settings
   pager on
 
-say "Те самые три буквы..."
+say "Пушкин против vim. Ставки сделаны."
 read brief.md
 
 stage
@@ -29,7 +29,7 @@ stage
   observe /home/student/edit.txt
   allow ./task.sh task.sh ./check.sh check.sh vimtutor
   neutral ls
-  on pass say "Вот теперь ты знаешь vim чуть-чуть. Остальное — в vimtutor: семь уроков, по одному в день."
+  on pass say "Пушкин спасён. Уроки 5–7 vimtutor, которых не было в курсе, — внешние команды, копирование и настройки: vimtutor -l ru."
   hint output "Внимательнее, салага!" say "Различия ещё есть. :diffthis в обоих окнах подсветит каждое."
   hint tries 5 say "Как выйти из vim, сохранив оба окна? Посмотри в шапку файла — там всё сказано."
 

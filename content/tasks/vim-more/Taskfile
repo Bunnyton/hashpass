@@ -1,19 +1,21 @@
-# vim-more — замена и свои клавиши в vim (исходники it_bastion: vim/20_s «:%s, остановитесь на
-# wonderful» и vim/21_nnoremap «теперь все, и используйте nnoremap»). Шаг 1: в vim.txt обернуть
-# слова в print(data["…"]) с Adorable до Wonderful — :s с диапазоном. Шаг 2: в vim2.txt — все,
-# своей клавишей из ~/.vimrc (nnoremap). Приёмка — по содержимому файла (observe); на шаге 2
-# ещё и способ: в ~/.vimrc есть своя клавиша (accept file). Редактировать можно только vim-ом: sed/awk/perl и т.п. закрыты (allow).
-# Чистые копии файлов — в /opt/vim-more (испортил и сохранил — cp оттуда, сказано в брифе).
+# vim-more — замена :s в vim (исходник it_bastion: vim/20_s «:%s, остановитесь на wonderful»).
+# Три конкретные замены, каждая принимается по содержимому файла (observe):
+#   1) vim.txt — обернуть в print(data["…"]) слова с Adorable (строка 1) до Wonderful (33):
+#      диапазон строк. Строки-инструкции в файле нет: шаблон диапазона (/Adorable/) цеплял её
+#      и портил файл — цель звучит в консоли;
+#   2) links.txt — все http:// на https:// (в строке бывает до трёх ссылок — нужен флаг g);
+#   3) report.py — переименовать переменную cnt в orders_count, не задев cnt_max и
+#      discount_cnt: границы слова \< \> (доза words.md, когда cat покажет испорченное).
+# Свои клавиши (nnoremap) — отдельное задание vim-map. Править можно только vim (allow); чистые
+# копии — /opt/vim-more.
 
 image vim-more:1
 
-run apt-get update >/dev/null 2>&1
-run DEBIAN_FRONTEND=noninteractive apt-get install -y vim >/dev/null 2>&1
-# data: vim.txt/vim2.txt и эталоны hp/*.want — из списка слов исходника (vim/20_s/vim.txt),
-# сделаны однократным python-скриптом: шапка-задание, пустая строка, 100 слов
+# data: vim.txt — список слов исходника (vim/20_s/vim.txt); links.txt — однократным
+# python-скриптом (120 строк, 196 ссылок); report.py — руками
 copy data/home /home/student
 copy data/home /opt/vim-more
-run chown student:student /home/student/vim.txt /home/student/vim2.txt
+run chown -R student:student /home/student
 
 hidden hp
 
@@ -24,27 +26,36 @@ say "vim умеет не только печатать. Он умеет рабо
 read brief.md
 
 stage
-  say "Открой vim.txt и сделай, что написано в первой строке. Одной командой"
-  solve sed -i '3,35s/.*/print(data["&"])/' /home/student/vim.txt
+  say "В vim.txt оберни слова в print(data["слово"]) — с Adorable до Wonderful включительно, остальные не трогай. Одной командой"
+  solve sed -i '1,33s/.*/print(data["&"])/' /home/student/vim.txt
   observe /home/student/vim.txt
   allow vim vi
   neutral ls cat less cd pwd cp
-  on pass say "Диапазон, шаблон, замена — и сотня строк правится одной командой."
-  hint tries 5 say "Номера строк покажет :set nu. Диапазон пишут перед s: :3,10s/…/…/"
+  on pass say "Диапазон, шаблон, замена — и три десятка строк правятся одной командой."
+  hint tries 5 say "На какой строке Wonderful? Номер — слева от неё."
   hint tries 10 say "В замене & — это всё найденное. А .* находит всю строку."
 
 stage
-  say "А теперь vim2.txt — все слова, но без :s. Заведи в ~/.vimrc свою клавишу и пройди ей по файлу"
-  solve:
-    echo 'nnoremap <F2> Iprint(data["<Esc>A"])<Esc>j' > /home/student/.vimrc
-    sed -i '3,$s/.*/print(data["&"])/' /home/student/vim2.txt
-  accept file /home/student/.vimrc "^\s*:?n?(nore)?map\s"
-  observe /home/student/vim2.txt
-  on enter read mapping.md
+  say "В links.txt переведи все ссылки с http:// на https://"
+  solve sed -i 's|http://|https://|g' /home/student/links.txt
+  observe /home/student/links.txt
   allow vim vi
   neutral ls cat less cd pwd cp
-  hint tries 5 say "Клавиша должна обернуть строку и спуститься на следующую. Тогда её можно просто держать."
-  hint tries 10 say "I — вставить в начало строки, A — в конец, <Esc> — выйти из вставки, j — вниз."
-  on pass say "Своя клавиша в ~/.vimrc — навсегда. Так vim и подгоняют под себя."
+  on pass say "196 ссылок за одну команду. Флаг g — самый частый спутник :%s."
+  hint output ", зеркало: http://" say "Первые ссылки в строках заменились, а зеркала — нет. Что заменяет :s в строке по умолчанию?"
+  hint tries 5 say "Сравни с cat links.txt: остались ли где-нибудь http://?"
+  hint tries 10 say "Флаги замены пишут в самом конце команды — что там говорится про все совпадения в строке?"
+
+stage
+  say "В report.py переименуй переменную cnt в orders_count. cnt_max и discount_cnt — другие переменные, их не трогай"
+  solve sed -i 's/\bcnt\b/orders_count/g' /home/student/report.py
+  observe /home/student/report.py
+  allow vim vi
+  neutral ls cat less cd pwd cp
+  on pass say "Так и переименовывают в vim: \<слово\> или * на нём, потом :%s//новое/g. Без IDE и без мыши."
+  hint output "orders_count_max" read words.md
+  hint output "discount_orders_count" read words.md
+  hint tries 5 say "Сравни с cat report.py: не задела ли замена соседние имена?"
+  hint tries 10 say "Нужно найти cnt только как целое слово. Как в шаблоне отметить начало и конец слова?"
 
 exec finale
