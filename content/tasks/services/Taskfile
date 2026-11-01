@@ -17,9 +17,6 @@ copy data/systemd /etc/systemd/system
 copy data/wiki /srv/wiki
 run chmod 755 /usr/local/bin/legacy-api /usr/local/lib/hp-proc/check-services
 run systemctl enable legacy-api.service
-# /etc/hosts в базе принадлежит не root (runtime кладётся rsync-ом с владельцем автора) — а в
-# задании он должен быть системным файлом, который правят через sudo
-run chown root:root /etc/hosts && chmod 644 /etc/hosts
 
 hidden hp
 

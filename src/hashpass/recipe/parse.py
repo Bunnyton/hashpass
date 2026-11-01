@@ -42,6 +42,7 @@ class _Acc:
     version: str = _DEFAULT_VERSION
     parents: list[str] = field(default_factory=list)
     steps: list[CopyStep | RunStep] = field(default_factory=list)
+    user: str = "root"                     # owner of the next `copy` files (`user <name>`)
     stages: list[StageSpec] = field(default_factory=list)
     hidden: str | None = None
     readme: str | None = None
@@ -293,7 +294,15 @@ def _do_copy(value: str, acc: _Acc) -> None:
     if len(fields) != _COPY_ARGC:
         msg = f"copy requires <src> <dst>: {value!r}"
         raise ValueError(msg)
-    acc.steps.append(CopyStep(fields[0], fields[1]))
+    acc.steps.append(CopyStep(fields[0], fields[1], owner=acc.user))
+
+
+def _do_user(value: str, acc: _Acc) -> None:
+    fields = value.split()
+    if len(fields) != 1:
+        msg = f"user requires one user name: {value!r}"
+        raise ValueError(msg)
+    acc.user = fields[0]
 
 
 def _do_run(value: str, acc: _Acc) -> None:
@@ -358,6 +367,7 @@ _TOP_HANDLERS = {
     "exec": _do_exec,
     "from": _do_from,
     "copy": _do_copy,
+    "user": _do_user,
     "run": _do_run,
     "hidden": _do_hidden,
     "readme": _do_readme,
@@ -654,6 +664,7 @@ def parse_recipe(text: str) -> Recipe:
     Parse Imagefile/Taskfile text into a Recipe (image directives + task + interactivity).
 
     Top-level (column 0): `image <name>:<ver>` (required, once), `from`, `copy`, `run`,
+    `user <name>` (owner of the following `copy` files; root before it),
     `hidden <src>`, `readme <file>`, `react on command <action>`, the `settings`/`voice`
     blocks, and `stage` blocks. A stage body holds an optional `say "…"` (its text, the goal line) and
     `solve`/`observe`/`exclude`/`neutral`/`check`/`on enter|pass`/`hint <cond> <action>`.

@@ -438,3 +438,23 @@ def test_check_live_parses_a_shell_command_for_the_live_machine():
 def test_check_live_rejects_duplicates_and_empty(text):
     with pytest.raises(ValueError, match="check"):
         parse_recipe(text)
+
+
+@pytest.mark.tier1
+def test_user_directive_sets_owner_of_following_copies():
+    # `user student` (как USER в Dockerfile): следующие copy кладут файлы от его имени;
+    # до неё — от root. На run не влияет.
+    recipe = parse_recipe("image t:1\ncopy a /opt/a\nuser student\ncopy b /home/student/b\n"
+                          "run chown x y\nuser root\ncopy c /etc/c\n")
+    assert recipe.steps == (
+        CopyStep("a", "/opt/a"),
+        CopyStep("b", "/home/student/b", owner="student"),
+        RunStep("chown x y"),
+        CopyStep("c", "/etc/c"),
+    )
+
+
+@pytest.mark.tier1
+def test_user_directive_needs_one_name():
+    with pytest.raises(ValueError, match="user"):
+        parse_recipe("image t:1\nuser\n")

@@ -44,7 +44,53 @@ def _step_repr(step: _Step) -> str:
     """Canonical cache-relevant text for a step (RUN command; COPY dest + source content hash)."""
     if isinstance(step, RunStep):
         return "run\0" + step.cmd
-    return "copy\0" + step.dst + "\0" + _hash_source(step.src)
+    owner = "" if step.owner == "root" else "\0owner\0" + step.owner
+    return "copy\0" + step.dst + "\0" + _hash_source(step.src) + owner
+
+
+def _owner_ids(rootfs: Path, user: str) -> str:
+    """
+    Return `uid:gid` of `user` as the IMAGE knows it (its /etc/passwd), for `rsync --chown`.
+
+    A name would resolve against the host's passwd, where `student` does not exist (and uid 1000
+    is the author) -- so the ids come from the image itself.
+
+    Raises:
+        ValueError: the image has no such user.
+
+    """
+    if user == "root":
+        return "0:0"
+    for line in (rootfs / "etc" / "passwd").read_text(encoding="utf-8").splitlines():
+        fields = line.split(":")
+        if len(fields) > 3 and fields[0] == user:   # noqa: PLR2004 -- name:x:uid:gid
+            return f"{fields[2]}:{fields[3]}"
+    msg = f"user {user!r}: no such user in the image (create it with `run useradd` first)"
+    raise ValueError(msg)
+
+
+def _copy(step: CopyStep, rootfs: Path) -> None:
+    """
+    Copy a host file or directory into the image, owned by `step.owner`, without group/other write.
+
+    A directory source lands as its CONTENTS at dst (docker COPY semantics), so
+    `copy data/tree /home/student/tree` never nests a second `tree/` inside. Its entries are
+    copied one by one: an existing dst directory keeps its own owner and mode (`copy data/home
+    /home/student` must not hand the student's home to root, `copy data/bin /usr/local/bin` must
+    not hand /usr/local/bin to anyone); a missing one is created by root.
+    """
+    dst = rootfs / step.dst.lstrip("/")
+    rsync = ["sudo", "rsync", "-a", "--mkpath", f"--chown={_owner_ids(rootfs, step.owner)}",
+             "--chmod=go-w"]
+    src = Path(step.src)
+    if not src.is_dir():
+        subprocess.run([*rsync, str(src), str(dst)], check=True)
+        return
+    entries = sorted(str(p) for p in src.iterdir())
+    if not entries:
+        subprocess.run([*rsync, "--dirs", str(src) + "/", str(dst) + "/"], check=True)
+        return
+    subprocess.run([*rsync, *entries, str(dst) + "/"], check=True)
 
 
 def _base_stamp(base: Path) -> str:
@@ -140,11 +186,7 @@ def build(  # noqa: PLR0913
             if isinstance(step, CopyStep):
                 if progress is not None:
                     progress(f"{label}: копирую {step.src} → {step.dst}")
-                # A directory source lands as its CONTENTS at dst (docker COPY semantics), so
-                # `copy data/tree /home/student/tree` never nests a second `tree/` inside.
-                src = step.src.rstrip("/") + "/" if Path(step.src).is_dir() else step.src
-                subprocess.run(["sudo", "rsync", "-a", "--mkpath", src,
-                                str(mnt / step.dst.lstrip("/"))], check=True)
+                _copy(step, mnt)
             else:
                 if progress is not None:
                     progress(f"{label}: выполняю: {step.cmd}")

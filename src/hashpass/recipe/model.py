@@ -4,10 +4,16 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class CopyStep:
-    """A `copy <src> <dst>` build step: host source and in-image destination."""
+    """
+    A `copy <src> <dst>` build step: host source and in-image destination.
+
+    `owner` is the in-image user the files belong to: root by default (docker COPY), the name
+    from the last `user <name>` directive before this copy otherwise.
+    """
 
     src: str
     dst: str
+    owner: str = "root"
 
 
 @dataclass(frozen=True)

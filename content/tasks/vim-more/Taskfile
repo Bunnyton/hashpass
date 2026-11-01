@@ -5,7 +5,8 @@
 #      и портил файл — цель звучит в консоли;
 #   2) links.txt — все http:// на https:// (в строке бывает до трёх ссылок — нужен флаг g);
 #   3) report.py — переименовать переменную cnt в orders_count, не задев cnt_max и
-#      discount_cnt: границы слова \< \> (доза words.md, когда cat покажет испорченное).
+#      discount_cnt: замена с подтверждением, флаг c (доза confirm.md, когда cat покажет
+#      испорченное). Границ слова \< \> нет: регулярные выражения в курсе ещё впереди.
 # Свои клавиши (nnoremap) — отдельное задание vim-map. Править можно только vim (allow); чистые
 # копии — /opt/vim-more.
 
@@ -52,10 +53,10 @@ stage
   observe /home/student/report.py
   allow vim vi
   neutral ls cat less cd pwd cp
-  on pass say "Так и переименовывают в vim: \<слово\> или * на нём, потом :%s//новое/g. Без IDE и без мыши."
-  hint output "orders_count_max" read words.md
-  hint output "discount_orders_count" read words.md
+  on pass say "y, n, y, n… А с регулярными выражениями vim сам отличит слово cnt от cnt_max — до них ещё дойдём."
+  hint output "orders_count_max" read confirm.md
+  hint output "discount_orders_count" read confirm.md
   hint tries 5 say "Сравни с cat report.py: не задела ли замена соседние имена?"
-  hint tries 10 say "Нужно найти cnt только как целое слово. Как в шаблоне отметить начало и конец слова?"
+  hint tries 10 say "Какой флаг замены заставляет vim спрашивать про каждое совпадение?"
 
 exec finale

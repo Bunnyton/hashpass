@@ -101,3 +101,39 @@ def test_build_cache_skips_unchanged_rebuild(tmp_path, base_tar):
     assert sum("выполняю" in m for m in hot) == 2           # changed key -> full rebuild  # noqa: PLR2004
     assert img3.build_key != img.build_key
     assert (img3.layer / "a/two").exists() and not (img3.layer / "a/one").exists()
+
+
+@pytest.mark.tier3
+def test_copy_owner_is_root_unless_user_directive(tmp_path, base_tar):
+    # Без `user` всё, что кладёт copy, принадлежит root (как COPY в Docker), а владелец
+    # существующего каталога назначения не меняется: /home/student остаётся студенту.
+    # После `user student` файлы ложатся от имени студента.
+    src = tmp_path / "data" / "home"
+    (src / "sub").mkdir(parents=True)
+    (src / "a.txt").write_text("A", encoding="utf-8")
+    (src / "sub" / "b.txt").write_text("B", encoding="utf-8")
+    bin_src = tmp_path / "data" / "bin"
+    bin_src.mkdir()
+    (bin_src / "tool").write_text("#!/bin/sh\n", encoding="utf-8")
+    (bin_src / "tool").chmod(0o775)
+    mine = tmp_path / "data" / "mine.txt"
+    mine.write_text("M", encoding="utf-8")
+    store = ImageStore(tmp_path / "images")
+    recipe = parse_recipe(f"image demo:1\ncopy {src} /home/student\ncopy {bin_src} /usr/local/bin\n"
+                          f"user student\ncopy {mine} /home/student/mine.txt\n")
+    demo = build(recipe, store, base_tar=base_tar, workdir=tmp_path / "b1")
+    runner = run_image("demo:1", store, tmp_path / "r", base_tar=base_tar)
+    try:
+        paths = ("/home/student /home/student/a.txt /home/student/sub /usr/local/bin "
+                 "/usr/local/bin/tool /home/student/mine.txt")
+        res = runner.run(["sh", "-c", f"stat -c '%U %a %n' {paths}"])
+    finally:
+        runner.teardown()
+    assert demo.layer.exists()
+    lines = res.stdout.split("\n")
+    assert lines[0].startswith("student ")
+    assert lines[1].startswith("root ") and lines[1].endswith(" /home/student/a.txt")
+    assert lines[2].startswith("root ")
+    assert lines[3] == "root 755 /usr/local/bin"
+    assert lines[4] == "root 755 /usr/local/bin/tool"
+    assert lines[5].startswith("student ")

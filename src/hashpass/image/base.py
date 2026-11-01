@@ -163,8 +163,11 @@ def build_base(dest: Path, *, from_tar: Path) -> Path:
         stdin=subprocess.DEVNULL,
     )
     # Runtime layer (usr/bin/hash + .hash) in a single rsync -- only granted-sudo commands.
+    # --chown=0:0 --chmod=go-w: the source is the author's checkout (uid 1000, umask 002), and
+    # uid 1000 is `student` in the image -- without them the student owned /, /etc, /usr/bin and
+    # /etc/hosts (rsync -a also re-owns the existing directories it passes through).
     subprocess.run(
-        ["sudo", "rsync", "-a", str(_RUNTIME) + "/", str(dest) + "/"],
+        ["sudo", "rsync", "-a", "--chown=0:0", "--chmod=go-w", str(_RUNTIME) + "/", str(dest) + "/"],
         check=True,
     )
     # The comfortable vim + carbonyl, by the scripts the runtime just brought in.
