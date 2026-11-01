@@ -1,6 +1,6 @@
 # docker-limits — cgroups: сервис превью thumbs копит фото в памяти (до 128 МБ данных) →
 # запустить с лимитом 64 МБ → он падает, ядро убило его за лимит: код 137 (доза oom.md на
-# «137») в ~/exit-code.txt → cruncher грузит ядро на 100 % — запустить с лимитом в половину
+# «137») — виден в docker ps -a / docker inspect → cruncher грузит ядро на 100 % — запустить с лимитом в половину
 # ядра (доза cpu.md при входе) и посмотреть docker stats. Контейнеры живут только в работающей
 # консоли — check live. Продолжает docker-multistage: оттуда Docker и образы.
 
@@ -42,11 +42,12 @@ stage
   hint tries 5 say "Что пишет docker run --help про память — memory?"
 
 stage
-  say "Сервис thumbs остановился. Узнай, с каким кодом он завершился, и запиши этот код в ~/exit-code.txt"
+  say "Сервис thumbs остановился. Узнай, с каким кодом он завершился"
   solve:
     sleep 30
-    docker inspect -f '{{.State.ExitCode}}' thumbs > /home/student/exit-code.txt
-  check live [ "$(docker inspect -f '{{.State.OOMKilled}} {{.State.ExitCode}}' thumbs 2>/dev/null)" = "true 137" ] && [ "$(tr -d ' \n' < /home/student/exit-code.txt)" = 137 ]
+    docker inspect -f '{{.State.ExitCode}}' thumbs
+  accept output "(^|[^0-9])137([^0-9]|$)"
+  check live [ "$(docker inspect -f '{{.State.OOMKilled}} {{.State.ExitCode}}' thumbs 2>/dev/null)" = "true 137" ]
   neutral ls cat pwd cd
   on pass say "Это защита сервера: thumbs упал один, а сайт и база рядом даже не заметили. Без лимита ядро убивало бы, кого придётся."
   hint output "137" read oom.md

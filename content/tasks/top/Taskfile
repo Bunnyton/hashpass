@@ -2,8 +2,7 @@
 # вариация с разрешения пользователя). В образе две службы от student: indexer крутит пустой цикл
 # (100% одного ядра), cache-warmer держит ~200 МБ памяти. Их PID systemd пишет в /var/lib/hp-top
 # (только root), а при остановке — <имя>.dead (ExecStopPost): проверка идёт на копии файлов и
-# живых процессов не видит. Шаг 1: найти пожирателя процессора (P), записать PID и
-# остановить. Шаг 2: найти, кто держит память (M), и остановить. ps/pgrep/pkill/killall
+# живых процессов не видит. Шаг 1: найти пожирателя процессора (P) и остановить. Шаг 2: найти, кто держит память (M), и остановить. ps/pgrep/pkill/killall
 # закрыты — смотреть приходится через top.
 
 image top:1
@@ -22,9 +21,8 @@ say "Компьютер тормозит, вентилятор воет. Пор�
 read brief.md
 
 stage
-  say "Кто-то ест процессор. Найди его через top, запиши его PID в /home/student/cpu.txt и останови"
-  solve:
-    pid=$(cat /var/lib/hp-top/indexer.pid); echo "$pid" > /home/student/cpu.txt; kill "$pid"
+  say "Кто-то ест процессор. Найди его через top и останови"
+  solve kill "$(cat /var/lib/hp-top/indexer.pid)"
   check exec cpu
   neutral ls cat pwd cd top echo kill
   block ps match "." say "Сегодня смотрим только через top."
@@ -33,7 +31,7 @@ stage
   block killall match "." say "Останавливать — по номеру: kill PID или k прямо в top."
   on pass say "Вентилятор стих. Но память всё ещё кто-то держит."
   hint tries 5 say "В top нажми P — наверху окажется самый прожорливый по процессору. Его номер — в столбце PID."
-  hint tries 10 say "Номер в файл — через echo и >. Остановить — kill НОМЕР или k прямо в top."
+  hint tries 10 say "Остановить — kill НОМЕР или k прямо в top."
 
 stage
   say "Процессор свободен, но память кто-то держит. Найди его через top и останови"

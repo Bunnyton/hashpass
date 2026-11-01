@@ -1,4 +1,6 @@
-# fruit-store — фруктовый ларёк: sort → uniq → wc, три шага, каждый — файл для следующего.
+# fruit-store — фруктовый ларёк: sort → uniq → wc, три шага на экране — конвейер растёт на звено
+# за шаг. Вывод сравнивается множеством строк (повторы не видны), поэтому шаг uniq ещё и требует
+# ровно 17 строк — столько разных фруктов в журнале.
 
 image fruit-store:1
 
@@ -17,30 +19,31 @@ say "Утро в ларьке. Пора разобрать вчерашний ж
 read brief.md
 
 stage
-  say "Отсортируй журнал /home/student/store/sold.txt — результат в sorted.txt рядом"
-  solve sort /home/student/store/sold.txt > /home/student/store/sorted.txt
-  observe /home/student/store/sorted.txt
-  neutral ls cat pwd less
-  on pass say "sort -r перевернёт порядок, а sort -R перемешает строки — попробуй на экране."
-  hint tries 5 say "Отсортированное на экране? Отправь в файл."
-  hint tries 10 say "Загугли: «linux отсортировать строки файла» и «bash вывод команды в файл»."
+  say "Покажи журнал /home/student/store/sold.txt по алфавиту"
+  solve sort /home/student/store/sold.txt
+  accept cmd "sort"
+  observe output
+  neutral ls cat pwd less head
+  on pass say "Одинаковые фрукты теперь стоят рядом. sort -r перевернёт порядок, а sort -R перемешает строки."
+  hint tries 5 say "Какая из трёх команд в брифе расставляет строки по алфавиту?"
 
 stage
-  say "Убери повторы из sorted.txt — результат в /home/student/store/unique.txt"
-  solve uniq /home/student/store/sorted.txt > /home/student/store/unique.txt
-  observe /home/student/store/unique.txt
-  neutral ls cat pwd less
-  on pass say "uniq убирает повторы только у соседей — поэтому sort нужен раньше. А uniq -c ещё и посчитает каждый фрукт."
-  hint tries 5 say "Открой unique.txt: повторы ещё есть?"
-  hint tries 10 say "Загугли: «linux удалить повторяющиеся строки из файла». Название команды очень короткое."
+  say "Теперь убери повторы — каждый фрукт по одному разу"
+  solve sort /home/student/store/sold.txt | uniq
+  observe output
+  accept output "\A(?:[^\n]+\n){16}[^\n]+\n?\Z"
+  neutral ls cat pwd less head
+  on pass say "uniq сравнивает строку только с предыдущей — поэтому sort нужен раньше. А uniq -c ещё и посчитает каждый фрукт."
+  hint tries 5 say "Повторы остались? uniq видит только соседей — что должно случиться со строками до него?"
+  hint tries 10 say "Добавь к отсортированному следующее звено конвейера."
 
 stage
-  say "Сколько строк в unique.txt? Только число — в /home/student/store/howmany.txt"
-  solve wc -l < /home/student/store/unique.txt > /home/student/store/howmany.txt
-  observe /home/student/store/howmany.txt
-  neutral ls cat pwd less
-  on pass say "wc -w считает слова, wc -c — байты. А конвейером все три шага — одна строка: sort sold.txt | uniq | wc -l."
-  hint tries 5 say "cat howmany.txt: там только число, без имени файла?"
-  hint tries 10 say "Загугли: «wc посчитать строки без имени файла» или «bash перенаправление ввода»."
+  say "Так сколько разных фруктов в ларьке? Покажи одно число"
+  solve sort /home/student/store/sold.txt | uniq | wc -l
+  observe output
+  neutral ls cat pwd less head
+  on pass say "Три звена — один ответ. А sort -u умеет сразу и сортировать, и убирать повторы."
+  hint output "sold.txt" say "wc напечатал ещё и имя файла. А если отдать ему строки по конвейеру, а не имя файла?"
+  hint tries 5 say "Ещё одно звено в конце — какое из брифа считает строки?"
 
 exec finale
