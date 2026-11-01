@@ -23,6 +23,9 @@ def wire_script(lab: Lab) -> str:
     for i, m in enumerate(lab.machines):
         ns = q(m.name)
         out.append(f"ip -n {ns} link set lo up")
+        # systemd-sysctl does not run in a container (read-only /proc/sys), so a fresh netns keeps
+        # ping_group_range «1 0» and a plain user's ping fails «missing cap_net_raw»
+        out.append(f"ip netns exec {ns} sysctl -qw net.ipv4.ping_group_range='0 2147483647'")
         for k, n in enumerate(m.nets):
             veth = f"v{i}e{k}"
             out += [f"ip link add {veth} type veth peer name eth{k} netns {ns}",

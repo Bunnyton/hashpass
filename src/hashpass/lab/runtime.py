@@ -95,7 +95,8 @@ class LabRuntime:
             ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=no",
              "-M", machines.helper_name(), "--read-only",
              "--capability=CAP_NET_ADMIN,CAP_SYS_ADMIN",
-             f"--network-namespace-path=/proc/{self._leaders['']}/ns/net", *binds,
+             f"--network-namespace-path=/proc/{self._leaders['']}/ns/net", "--private-network",
+             *binds,
              "-D", str(self.base), "sh", "-c", wire_script(self.lab)],
             stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False)
         if res.returncode != 0:

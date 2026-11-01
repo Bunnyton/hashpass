@@ -213,8 +213,13 @@ class NspawnRunner:
             RuntimeError: If the machine does not register within 30 seconds.
 
         """
+        # A background machine must never read the terminal: with it as stdin nspawn runs an
+        # interactive console there and takes the keys typed into the student's console (a lab
+        # node swallowed `curl`, 2026-11-02). No console at all: nobody sits at it.
         self._proc = subprocess.Popen(
-            ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, *extra_args, "-D", str(self._mnt)],
+            ["sudo", "systemd-nspawn", "-b", "-q", "--console=passive", "-M", machine, *extra_args,
+             "-D", str(self._mnt)],
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
