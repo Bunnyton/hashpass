@@ -1124,13 +1124,16 @@ class PoolServer:
             return []
         sees = sees_hidden(user, self.pool_perms(user), course)
         mine = self.progress().get(user)
+        passed = self.passed_refs(user)
         rows: list[dict[str, object]] = []
         for block in course.blocks:
+            waiting = course_model.waiting_for(course, block, passed)   # a locked block: seen, not run
             for task in block["tasks"]:
                 visible = block.get("open", True) and not task.get("hidden")
                 own = task.get("added_by") == user
                 if not visible and not (sees or own):
                     continue
+                visible = visible and not waiting
                 latest = self.repo(task["repo"]).latest(task["tag"])
                 n = course_model.effective_n(course, task, latest=latest.n if latest else None)
                 rev = self.repo(task["repo"]).get(task["tag"], n)
@@ -1141,7 +1144,8 @@ class PoolServer:
                              "block_id": block["id"], "block_name": block["name"],
                              "available": visible, "hidden": task.get("hidden", False),
                              "block_open": block.get("open", True), "course": course.ref}
-                            | ({"preview": True} if not visible else {})
+                            | ({"preview": True} if not visible and (sees or own) else {})
+                            | ({"waiting_for": waiting} if waiting else {})
                             | ({"mine": True, "owner": user} if own else {})
                             | ({"pending_update": True} if own and latest and latest.n > n else {})
                             | ({"solved_n": solved} if solved else {})
@@ -1174,6 +1178,13 @@ class PoolServer:
                          "preview": True, "hidden": False, "block_open": False, "course": course.ref,
                          "owner": user} | said | ({"rejected": True} if state == "rejected" else {}))
         return rows
+
+    def passed_refs(self, user: str | None) -> set[str]:
+        """Return the tasks `user` has a pass for (anywhere): what a block's `needs` count."""
+        if not user:
+            return set()
+        return {ref for ref, rec in self.progress().get(user).items()
+                if isinstance(rec, dict) and rec.get("status") == "passed"}
 
     def _solved_n(self, rec: object, repo: str, tag: str) -> int | None:
         """Which version a credited task was solved in: recorded `n`, else found by its digest."""

@@ -218,6 +218,7 @@ class CourseApi:
         sees = sees_hidden(user, self.server.pool_perms(user), course)
         out = self._summary(course, user) | {"rev": course.rev}
         blocks = []
+        passed = self.server.passed_refs(user)
         for block in [] if course.closed else course.blocks:
             tasks = []
             for task in block["tasks"]:
@@ -235,8 +236,11 @@ class CourseApi:
                             "latest": latest, "added_by": task.get("added_by", "")}
                 tasks.append(row)
             if tasks or block.get("open", True) or sees:
+                waiting = cm.waiting_for(course, block, passed)        # opens once these are solved
                 blocks.append({"id": block["id"], "name": block["name"], "open": block.get("open", True),
-                               "tasks": tasks})
+                               "tasks": tasks}
+                              | ({"needs": block["needs"]} if block.get("needs") else {})
+                              | ({"waiting_for": waiting} if waiting else {}))
         out["blocks"] = blocks
         out["proposals"] = [p for p in course.proposals if staff or p.get("by") == user]
         if staff:
@@ -494,7 +498,8 @@ class CourseApi:
 
     def block(self, owner: str, name: str, block_id: str) -> Response:
         course, actor, err = self._load(owner, name, "content",
-                                        structure=request.method == "DELETE" or "name" in self._body())
+                                        structure=request.method == "DELETE" or "name" in self._body()
+                                        or "needs" in self._body())
         if err is not None:
             return err
         body = self._body()
@@ -507,10 +512,16 @@ class CourseApi:
                 cm.rename_block(c, block_id, str(body["name"]))
             if "open" in body:
                 cm.set_block_open(c, block_id, open_=bool(body["open"]))
+            if "needs" in body:
+                cm.set_block_needs(c, block_id, [str(i) for i in body["needs"] or []])
         was = next((b["name"] for b in course.blocks if b["id"] == block_id), block_id)
+        names = {b["id"]: b["name"] for b in course.blocks}
+        needs = [f"«{names.get(str(i), i)}»" for i in body.get("needs") or []] if "needs" in body else []
         what = (f"удалён блок «{was}»" if request.method == "DELETE"
                 else f"блок «{was}» переименован в «{body['name']}»" if "name" in body and body["name"] != was
-                else (f"блок «{was}» {'открыт' if body.get('open') else 'скрыт'}" if "open" in body else ""))
+                else (f"блок «{was}» {'открыт' if body.get('open') else 'скрыт'}" if "open" in body
+                      else f"блок «{was}» откроется после: {', '.join(needs)}" if needs
+                      else f"блок «{was}» открыт без условий" if "needs" in body else ""))
         err = self._edit(course.ref, change, by=actor, what=what)
         return err or self._json(HTTPStatus.OK, {"id": block_id})
 

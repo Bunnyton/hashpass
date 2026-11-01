@@ -154,3 +154,28 @@ def test_a_current_copy_says_its_origin_on_start(tmp_path: Path) -> None:
             line = app.query_one("#origin")
             await _until(pilot, lambda: str(line.render()) == "форк курса Linux от bob" and line.display)
     asyncio.run(drive())
+
+
+@pytest.mark.tier1
+def test_a_locked_block_says_what_opens_it(tmp_path: Path) -> None:
+    """User 2026-11-01: a block opens once others are solved -- the tree says which, Enter says it too."""
+    class _Locked(_Client):
+        def catalog(self, *, token: str) -> list[dict]:  # noqa: ARG002
+            return [{"number": 1, "ref": "bob/prize:1", "block_id": "b2", "block_name": "Приз",
+                     "available": False, "waiting_for": ["Git", "Regex"]}]
+
+    home = Home(tmp_path / "h")
+    my_courses.choose(home.root, URL, "bob/open")
+
+    async def drive() -> None:
+        from textual.widgets import Tree  # noqa: PLC0415
+        app = PoolTUI(home, URL, "kid", "tok")
+        app.client = _Locked()
+        async with app.run_test(size=(140, 32)) as pilot:
+            tree = app.query_one("#tasks", Tree)
+            await _until(pilot, lambda: bool(tree.root.children))
+            head = str(tree.root.children[0].label)
+            assert "🔒 откроется, когда решите: «Git», «Regex»" in head
+            row = app.rows[0]
+            assert (row.hidden, row.tree_label()) == (True, "[dim]закрыто[/]")
+    asyncio.run(drive())
