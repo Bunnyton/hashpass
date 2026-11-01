@@ -479,3 +479,41 @@ def test_a_command_is_shipped_with_the_directory_it_ran_in(tmp_path):
     cwds = [base64.b64decode(tok[4:]).decode() for line in log.read_text(encoding="utf-8").splitlines()
             if line.startswith("cmd ") for tok in line.split() if tok.startswith("cwd=")]
     assert cwds == [str(tmp_path / "sub"), str(tmp_path / "sub")]
+
+
+@pytest.mark.tier1
+def test_quoted_separators_do_not_split_a_command(tmp_path):
+    # Live regex task, 2026-11-01: `grep -o '[!?.;]' f` was cut at the quoted `;` -- the tail `]'`
+    # became a «command» to refuse (eval syntax errors in the output) and `block grep match "\|"`
+    # never saw the quoted `|`. Separators count only outside quotes.
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    (tmp_path / "f.txt").write_text("a!\nb;\nzz\n", encoding="utf-8")
+    rules = ",".join([_rule("grep", "match", r"\\\|", "Один шаблон, без списка"),
+                      _rule("|", "match", ".", "Без конвейера")])
+    bindir = _policy_shim(tmp_path, f"grep;;cat;{rules}")
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+           "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
+           "HOME": str(tmp_path), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 120), cwd=str(tmp_path))
+    child.expect("❯")
+    child.sendline("grep -o '[!?.;]' f.txt; echo END1")    # the bare `;` still separates: echo refused
+    child.expect("❯")
+    out = child.before
+    assert "syntax error" not in out
+    assert "!\r\n;" in out.replace("\r\r", "\r")
+    assert "Команда «echo» запрещена" in out
+    child.sendline("grep 'a\\|b' f.txt")                   # quoted | belongs to grep's pattern
+    child.expect("Один шаблон, без списка")
+    child.expect("❯")
+    assert "syntax error" not in child.before
+    child.sendline('grep -E "a|z" f.txt && cat f.txt')     # no conveyor here: both run
+    child.expect("❯")
+    out = child.before
+    assert "Без конвейера" not in out
+    assert "syntax error" not in out
+    assert out.count("zz") == 2  # noqa: PLR2004 -- grep and cat each print zz
+    child.sendline("exit")
+    child.expect(pexpect.EOF)

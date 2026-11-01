@@ -74,7 +74,7 @@ def _is_neutral(command: str, neutral: tuple[str, ...]) -> bool:
 def _base_cmds(command: str) -> list[str]:
     """Return the base command of every segment of a command line (split on `| && || ;`), no sudo."""
     out: list[str] = []
-    for seg in re.split(r"\s*(?:\|\||&&|;|\|)\s*", command.strip()):
+    for seg in _segments(command):
         if not seg.strip():
             continue
         try:
@@ -88,7 +88,7 @@ def _base_cmds(command: str) -> list[str]:
 
 def _blocked(sm: StageMeta, command: str) -> str | None:
     """Return the message of the first `block` rule this command trips (any segment), else None."""
-    for raw in _SEG_SPLIT.split(command):
+    for raw in _segments(command):
         seg = raw.strip()
         words = seg.split()
         if not words:
@@ -282,7 +282,43 @@ def perform_action(action: Action, ctx: HandlerContext, *, render: Renderer,  # 
     return res.stdout
 
 
-_SEG_SPLIT = re.compile(r"\s*(?:\|\||&&|;|\|)\s*")
+def _segments(command: str) -> list[str]:
+    r"""
+    Split a command line into its simple commands at `| || && ;` -- only OUTSIDE quotes.
+
+    `grep -o '[!?.;]' f` and `grep 'a\|b' f` are one command each: a quote-blind split cut them
+    into pieces no base command parsed from, so a right answer met «only through: grep».
+    """
+    out: list[str] = []
+    cur: list[str] = []
+    quote = ""
+    i, n = 0, len(command)
+    while i < n:
+        c = command[i]
+        if quote:
+            if quote == '"' and c == "\\" and i + 1 < n:
+                cur.append(command[i:i + 2])
+                i += 2
+                continue
+            if c == quote:
+                quote = ""
+            cur.append(c)
+        elif c == "\\" and i + 1 < n:
+            cur.append(command[i:i + 2])
+            i += 1
+        elif c in "'\"":
+            quote = c
+            cur.append(c)
+        elif c in ";|\n" or command.startswith("&&", i):
+            out.append("".join(cur).strip())
+            cur = []
+            if command.startswith(("||", "&&"), i):
+                i += 1
+        else:
+            cur.append(c)
+        i += 1
+    out.append("".join(cur).strip())
+    return [seg for seg in out if seg]
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _SUDO_OPTS_WITH_ARG = frozenset(("-u", "-g", "-C", "-D", "-h", "-p", "-r", "-R", "-t", "-T", "-U",
                                  "--user", "--group", "--chdir", "--host", "--prompt", "--role",
@@ -358,7 +394,7 @@ def _cmd_matches(pattern: str, command: str, *, cwd: str | None = None,
         return False
     want_pos = [w for w in want if not _is_option(w)]
     want_opt = [w for w in want if _is_option(w)]
-    for raw in _SEG_SPLIT.split(command.strip()):
+    for raw in _segments(command):
         got = _without_sudo(raw).split()
         got_pos = [w for w in got if not _is_option(w)]
         got_opt = [w for w in got if _is_option(w)]

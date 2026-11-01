@@ -3,7 +3,7 @@ import pytest
 
 from hashpass.handler import HandlerContext
 from hashpass.imagestore.store import ImageStore
-from hashpass.recipe.model import ExecAction, SayAction, Settings, ShowFileAction
+from hashpass.recipe.model import BlockRule, ExecAction, SayAction, Settings, ShowFileAction
 from hashpass.recipe.parse import parse_recipe
 from hashpass.render import Renderer
 from hashpass.runner.nspawn import RunResult
@@ -303,6 +303,19 @@ def test_policy_violation_allow_requires_a_whitelisted_command():
     assert _policy_violation(sm, "grep ERROR f | wc -l") is None     # wc is whitelisted
     assert _policy_violation(sm, "awk '/x/' f") is None
     assert _policy_violation(_sm(), "echo 3") is None                # no policy -> never blocks
+
+
+@pytest.mark.tier1
+def test_quoted_separators_stay_inside_their_command():
+    # Live regex task, 2026-11-01: `grep -o '[!?.;]' f` was cut at the quoted `;`, no segment
+    # parsed as grep, and the right answer met «Засчитывается только через: grep».
+    assert _base_cmds("grep -o '[^a-z][!?.;]' chat.txt") == ["grep"]
+    assert _base_cmds('grep -E "a|b" f && wc -l f') == ["grep", "wc"]
+    assert _base_cmds(r"grep a\;b f; echo x") == ["grep", "echo"]
+    sm = _sm(allow=("grep",))
+    assert _policy_violation(sm, "grep -o '[^a-zA-Z]{4}[!?.;]' chat.txt") is None
+    rule = BlockRule("grep", "match", r"\|", "один шаблон")
+    assert _policy_violation(_sm(blocks=(rule,)), r"grep 'a\|b' f") == "один шаблон"
 
 
 class _FakeRunner:

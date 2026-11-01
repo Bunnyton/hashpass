@@ -102,6 +102,32 @@ if [ -n "${HP_PORT-}" ]; then
     #      task truly cannot run `cp`, and `allow ls cd` refuses everything else.  A function
     #      defined here shadows the binary/builtin for THIS run only; __hp_postexec unsets
     #      them so the next command is judged fresh against the (possibly changed) policy.
+    # Split a command line into its simple commands, one per line, into __hp_flat; __hp_pipe=1
+    # when it has a real conveyor (an unquoted single `|`). Quotes ('…', "…") and `\` protect
+    # separators, as in bash itself.
+    __hp_split() {
+        local s=$1 out="" q="" c i n=${#1}
+        __hp_pipe=0
+        for ((i = 0; i < n; i++)); do
+            c=${s:i:1}
+            if [ -n "$q" ]; then
+                if [ "$q" = '"' ] && [ "$c" = '\' ]; then out+=$c${s:i+1:1}; i=$((i + 1)); continue; fi
+                [ "$c" = "$q" ] && q=""
+                out+=$c
+                continue
+            fi
+            case $c in
+                '\') out+=$c${s:i+1:1}; i=$((i + 1)) ;;
+                "'" | '"') q=$c; out+=$c ;;
+                ';' | $'\n') out+=$'\n' ;;
+                '&') if [ "${s:i+1:1}" = '&' ]; then out+=$'\n'; i=$((i + 1)); else out+=$c; fi ;;
+                '|') if [ "${s:i+1:1}" = '|' ]; then i=$((i + 1)); else __hp_pipe=1; fi; out+=$'\n' ;;
+                *) out+=$c ;;
+            esac
+        done
+        __hp_flat=$out
+    }
+
     __hp_preexec() {
         [ "$__hp_armed" -eq 1 ] || return
         local f
@@ -126,9 +152,10 @@ if [ -n "${HP_PORT-}" ]; then
         if [ -n "$blocks_s" ];  then IFS=',' read -ra blocks  <<< "$blocks_s";  fi
 
         # Walk each pipeline / && || ; segment; the base command is the first token
-        # (skipping a leading `sudo`).
+        # (skipping a leading `sudo`). Separators count only OUTSIDE quotes: `grep -o '[!?.;]'`
+        # and `grep 'a\|b'` are one command each (a quote-blind split made `]'` a «command»).
         local flat
-        flat=$(printf '%s' "$cmd" | sed -E 's/(\|\||&&|;|\|)/\n/g')
+        __hp_split "$cmd"; flat=$__hp_flat
         # `block | …` judges the WHOLE typed line: the console sees one simple command at a time
         # (BASH_COMMAND), so a conveyor shows only in the history line. A match refuses every
         # command of that line («реши без конвейера» -- grep-hunt).
@@ -136,7 +163,8 @@ if [ -n "${HP_PORT-}" ]; then
         local hist
         hist=$(HISTTIMEFORMAT='' builtin history 1 2>/dev/null)
         line=$(printf '%s' "$hist" | sed -E 's/^ *[0-9]+\*? *//')
-        if [[ "${line//||/}" == *"|"* ]]; then
+        __hp_split "$line"
+        if [ "$__hp_pipe" -eq 1 ]; then
             for b0 in "${blocks[@]}"; do
                 IFS=$'\x1f' read -r rb0 rm0 rp0 rmsg0 <<< "$(printf '%s' "$b0" | base64 -d 2>/dev/null)"
                 [ "$rb0" = "|" ] || continue
@@ -198,6 +226,7 @@ if [ -n "${HP_PORT-}" ]; then
                 # `builtin printf` so shadowing `printf`/`echo` doesn't recurse. The refusal is
                 # the system talking: a blank line and the cyan bar, like the host's replies.
                 local run="${toks[0]}"
+                [[ "$run" =~ ^[A-Za-z0-9_./+-]+$ ]] || continue   # not a name a function can take
                 if [ -n "$msg" ]; then
                     eval "$run() { builtin printf '\\n\\033[36m│\\033[0m %s\\n' $(printf '%q' "$msg") >&2; return 1; }"
                 else
