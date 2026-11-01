@@ -44,6 +44,7 @@ BLOCKS=(
     'bunnyton/linux | Процессы: proc-audit jobs signals top htop-btop services cow zombies'
     'bunnyton/linux | Vim: vim-start vim-edit vim-intro vim-more vim-map'
     'bunnyton/linux | Текст: fruit-store'
+    'bunnyton/linux | Регулярные выражения: regex regex-pro'
     'bunnyton/linux | Скрипты: my-command my-service'
     'bunnyton/git | Git: git-init git-log git-branch git-graph git-remote'
     'bunnyton/git | Git — глубже: git-ignore git-reset git-conflict git-stash git-rebase git-squash git-cherry-pick'

@@ -1,0 +1,9 @@
+2026-11-01 09:12:03 login user=alice ip=10.0.0.12 ok
+2026-11-01 09:13:44 login user=bob ip=10.0.0.31 fail
+2026-11-01 09:13:51 login user=bob ip=10.0.0.31 ok
+2026-11-01 09:20:10 sudo by user=carol cmd=apt
+2026-11-01 09:21:00 logout user=alice
+2026-11-01 09:30:27 login user=root ip=10.0.0.99 denied
+2026-11-01 09:31:12 login user=dave_ops ip=10.0.0.40 ok
+2026-11-01 09:40:00 cron job=backup owner=system
+2026-11-01 09:45:18 login user=eve ip=192.168.1.66 fail

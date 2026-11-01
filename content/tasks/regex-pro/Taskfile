@@ -1,0 +1,87 @@
+# regex-pro — продолжение regex, вторая половина regular_tutor (github.com/Bunnyton/regular_tutor):
+# \b и \S, grep -P, просмотр вперёд/назад, отрицательный просмотр, нежадные повторы.
+# Принимается то, что grep показал (любой шаблон с той же находкой: '[^']*' вместо '.*?', \K вместо
+# (?<=…)). Данные сделаны руками и сверены с GNU grep. Телефонный раздел исходника (\s*) здесь
+# опущен: телефоны уже дважды были в regex.
+
+image regex-pro:1
+
+user student
+copy data/home /home/student
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "Ты уже читаешь регулярки. Теперь — те, от которых плачут на code review."
+read brief.md
+
+stage
+  say "Покажи из tokens.txt слова от 3 до 12 символов, которые начинаются и кончаются цифрой. Слово — всё, что между пробелами"
+  solve:
+    cd /home/student
+    grep -oE '\b[0-9]\S{1,10}[0-9]\b' tokens.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "\b не съедает ни одного символа — как ^ и $, только на краю слова."
+  hint output "555555555555" say "Это кусок из 14 пятёрок — а слово длиннее 12. Шаблон должен начинаться и кончаться на краю слова."
+  hint output "1b2c3" say "1b2c3 — кусок слова a1b2c3, оно начинается с буквы. Нужен край слова."
+  hint tries 5 say "Пробелы попали в ответ или слова обрезаны? Нужен «край слова», который сам ничего не забирает."
+  hint tries 8 say "Посмотри в брифе, какой знак значит край слова, а какой — любой символ, кроме пробела."
+
+stage
+  say "Покажи из receipt.txt только суммы в рублях — сами числа, без « руб»"
+  on enter read lookahead.md
+  solve:
+    cd /home/student
+    grep -oP '\d+(?= руб)' receipt.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Проверил, что дальше «руб», — и не забрал его. Так из логов достают числа без единиц."
+  hint output "руб" say "« руб» попал в находку. Как проверить, что он идёт дальше, но не забирать его?"
+  hint tries 5 say "Сравни с cat receipt.txt: нет ли в ответе штук, процентов, номера чека?"
+
+stage
+  say "Покажи из access.log только имена пользователей — то, что стоит после user="
+  solve:
+    cd /home/student
+    grep -oP '(?<=user=)\w+' access.log
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Просмотр назад — тот же приём, только смотрит влево. Ещё бывает \K: «всё, что до меня, в находку не бери»."
+  hint output "user=" say "user= попал в находку. Рядом с просмотром вперёд был и просмотр назад — помнишь?"
+  hint tries 5 say "Нужно проверить, что слева стоит user=, но не забирать его. Как пишется просмотр назад?"
+
+stage
+  say "Покажи из distros.txt строки, где нет linux, — одним шаблоном, без -v"
+  on enter read negative.md
+  solve:
+    cd /home/student
+    grep -P '^((?!linux).)*$' distros.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  block grep match "(^| )-[a-zA-Z]*v|--invert" say "Без -v: пусть это скажет сам шаблон."
+  on pass say "В grep для этого есть -v, но в Python или в фильтре редактора его нет — а шаблон есть везде."
+  hint tries 5 say "Строка подходит, если ни с одной её позиции не начинается linux. Как сказать «здесь не начинается»?"
+  hint tries 8 say "Отрицательный просмотр в начале строки может заглянуть сразу на всю строку: .* внутри него."
+
+stage
+  say "Покажи из quotes.txt каждое слово в одинарных кавычках — по отдельности и вместе с кавычками"
+  on enter read lazy.md
+  solve:
+    cd /home/student
+    grep -oP "'.*?'" quotes.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Если ты сделал это сам — ты достоин. (с) regular_tutor"
+  hint output "пробел" say "Находка проглотила полстроки: * жадная и берёт как можно больше. Как сделать её скромной?"
+  hint tries 5 say "Внутри шаблона одинарная кавычка — значит, сам шаблон бери в двойные."
+
+exec finale

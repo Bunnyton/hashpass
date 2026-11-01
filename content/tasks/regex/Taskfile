@@ -1,0 +1,160 @@
+# regex — регулярные выражения в grep, по мотивам regular_tutor (github.com/Bunnyton/regular_tutor):
+# те же разделы и примеры (. [] [^] {} экранирование * + ^ $ ? ()), но ответ принимается не по
+# тексту шаблона, а по тому, что grep показал: любой шаблон с той же находкой верен.
+# Данные — постоянные файлы (наборы сделаны руками и сверены с GNU grep: эталонный шаблон и
+# разумные варианты дают одно и то же, типичные ошибки — другое).
+# Перечислять готовые ответы (|, -e … -e, -F, -f) нельзя: смысл — найти один общий шаблон.
+# [а-я] в консоли (LANG=C.UTF-8) даёт «Invalid collation character» — на этом держится шаг про [^].
+
+image regex:1
+
+user student
+copy data/home /home/student
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+block grep match "\||(^| )-[a-zA-Z]*[Ff]( |$)|--fixed|--file|(-e|--regexp)[ =].*(-e|--regexp)[ =]" say "Сегодня у grep один шаблон — без списка готовых ответов."
+
+say "Регулярные выражения выглядят как кошка прошлась по клавиатуре. Сейчас кошка будешь ты."
+read brief.md
+
+stage
+  say "Добейся, чтобы grep показал из words.txt ровно четыре слова: mindmap minimap minimax minimum"
+  solve:
+    cd /home/student
+    grep 'min.m..' words.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Точка — самый ленивый метасимвол: ей всё равно, какая буква."
+  hint tries 5 say "Что у этих четырёх слов на одних и тех же местах, а что — разное?"
+  hint tries 8 say "Буквы, которые у слов разные, в шаблоне заменяет точка."
+
+stage
+  say "Покажи из contacts.txt только сами номера вида 8(912) 123 12 34: первая цифра 7 или 8, дальше скобки, цифры и пробелы"
+  on enter read brackets.md
+  solve:
+    cd /home/student
+    grep -o '[78]([0-9][0-9][0-9]) [0-9][0-9][0-9] [0-9][0-9] [0-9][0-9]' contacts.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Двенадцать номеров. А шаблон длинный — скоро сократим."
+  hint output "7(9l8)" say "Присмотрись к 7(9l8): там правда одни цифры? Точка пропускает что угодно."
+  hint tries 5 say "Сравни найденное с cat contacts.txt: какие номера лишние, каких не хватает?"
+  hint tries 8 say "Одна цифра из двух — это набор из двух символов. А любая цифра — набор от 0 до 9."
+
+stage
+  say "Покажи из chat.txt слова из четырёх НЕ латинских букв, за которыми сразу идёт ! ? . или ;"
+  solve:
+    cd /home/student
+    LC_ALL=C.UTF-8 grep -o '[^a-zA-Z][^a-zA-Z][^a-zA-Z][^a-zA-Z][!?.;]' chat.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Иногда проще сказать, чего не надо. Это работает не только в регулярках."
+  hint output "Invalid collation character" read negation.md
+  hint output "ота!" say "ота! — кусок от cота!, а там первая буква c латинская. Сколько букв подряд нужно?"
+  hint tries 5 say "Сравни найденное с cat chat.txt: все ли слова — ровно из четырёх букв и без латиницы?"
+  hint tries 8 say "Не латинские — значит, всё, кроме a–z и A–Z. Как сказать «кроме» в квадратных скобках?"
+
+stage
+  say "Снова номера из contacts.txt — но шаблон в разы короче: повторы запиши через {}"
+  on enter read repeat.md
+  solve:
+    cd /home/student
+    grep -oE '[78]\([0-9]{3}\) [0-9]{3} [0-9]{2} [0-9]{2}' contacts.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  block grep unless "\{" say "Тот же поиск, но повторы — через {}."
+  on pass say "Те же двенадцать номеров — и шаблон влезает в одну строку."
+  hint tries 5 say "grep ничего не нашёл? Проверь, понимает ли он {} без -E — и что в -E стало со скобками."
+  hint tries 8 say "В -E скобки — часть языка. Настоящую скобку из номера экранируют: \( и \)."
+
+stage
+  say "Покажи из escapes.txt цепочки из пяти символов \ или ., за которыми сразу идёт {}()"
+  on enter read escape.md
+  solve:
+    cd /home/student
+    grep -oE '[\.]{5}\{\}\(\)' escapes.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Обратная косая — главный ключ от всех метасимволов. Включая её саму."
+  hint output "a.b.c" say "a.b.c — там нет ни точек подряд, ни обратных косых. Что делает точка вне квадратных скобок?"
+  hint tries 5 say "Внутри [] точка — просто точка. А снаружи { } ( ) — команды для grep или просто символы?"
+  hint tries 8 say "Каждую фигурную и круглую скобку из текста экранируй: \{ \} \( \)."
+
+stage
+  say "Покажи из numbers.txt все положительные числа — каждое целиком, нулей не надо"
+  on enter read plus.md
+  solve:
+    cd /home/student
+    grep -oE '[1-9][0-9]*' numbers.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Даже число из сотни цифр — одна находка. Звёздочке всё равно, сколько."
+  hint tries 5 say "Сравни с cat numbers.txt: нет ли в ответе нулей? С какой цифры не может начинаться положительное число?"
+  hint tries 8 say "Первая цифра — особенная, остальные — любые и сколько угодно. Как это записать?"
+
+stage
+  say "Покажи из sizes.txt только дробные числа: цифры, точка, цифры — например 3.14"
+  solve:
+    cd /home/student
+    grep -oE '[0-9]+\.[0-9]+' sizes.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "1234. и .5 — не дроби для этого шаблона: по обе стороны точки нужна хоть одна цифра."
+  hint output "1234 1234123" say "В находку попал пробел. Точка в шаблоне — любой символ, а нужна настоящая точка."
+  hint tries 5 say "До точки и после — хотя бы одна цифра. Какой метасимвол значит «один или больше»?"
+
+stage
+  say "Покажи из nginx.conf выключенные строки: # в самом начале строки, а после него что-то написано"
+  on enter read anchors.md
+  solve:
+    cd /home/student
+    grep -E '^#.+' nginx.conf
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Так и ищут, что в конфиге выключено. А grep -v '^#' — наоборот, только рабочие строки."
+  hint output "по числу ядер" say "Это комментарий в конце рабочей строки, она не выключена. Где должна стоять #?"
+  hint tries 5 say "Начало строки и «хоть один любой символ» — оба уже знакомы."
+
+stage
+  say "Покажи из orders.txt заказы с телефоном: 11 цифр, первая 7 или 8; + в начале, скобки и пробелы — где угодно или нигде"
+  on enter read optional.md
+  solve:
+    cd /home/student
+    grep -E '\+? ?[78] ?\(? ?[0-9] ?[0-9] ?[0-9] ?\)? ?[0-9] ?[0-9] ?[0-9] ?[0-9] ?[0-9] ?[0-9] ?[0-9]' orders.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  on pass say "Длинно? Ещё бы. На следующем шаге он сожмётся."
+  hint output "8(912)12345" say "У Жанны в номере не хватает цифр. Сколько их всего должно быть?"
+  hint output "домофон" say "У Лены нет телефона: 78 — номер квартиры. Сколько цифр в телефоне?"
+  hint tries 5 say "Сравни с cat orders.txt: какие заказы лишние, каких не хватает?"
+  hint tries 8 say "Между любыми двумя цифрами может быть пробел — а может и не быть. Это « ?»."
+
+stage
+  say "Сократи шаблон для orders.txt: повторяющийся кусок возьми в скобки и повтори через {}"
+  on enter read groups.md
+  solve:
+    cd /home/student
+    grep -E '\+? ?[78] ?\(?( ?[0-9]){3} ?\)?( ?[0-9]){7}' orders.txt
+  observe output
+  allow grep
+  neutral cat less ls head pwd
+  block grep unless "\)\{" say "Короче: повторяющийся кусок — в скобки, и {} сразу после них."
+  on pass say "Шаблон вдвое короче, а находит то же. Регулярки читаются — если знать алфавит."
+  hint tries 5 say "Какой кусок повторяется в длинном шаблоне раз за разом?"
+  hint tries 8 say "« ?[0-9]» — одна цифра с возможным пробелом. Сколько их до скобки и сколько после?"
+
+exec finale

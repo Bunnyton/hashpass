@@ -1,0 +1,12 @@
+Debian GNU/linux 13 trixie
+Ubuntu 24.04 LTS
+I love linux
+I love unix
+FreeBSD 14.1
+Arch linux (rolling)
+macOS Sequoia
+linux mint 22
+Alpine 3.20
+OpenBSD 7.6
+Fedora linux 41
+Windows 11 + WSL (а внутри linux)
