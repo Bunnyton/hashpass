@@ -1,0 +1,10 @@
+#!/bin/sh
+# Шаг «устройство»: в свежей ВМ после insmod hello.ko есть /dev/hashpass, и cat отдаёт Hello, kernel!
+[ -f /home/student/kmod/hello.ko ] || exit 1
+cat > /tmp/t.sh <<'T'
+#!/bin/sh
+insmod /mnt/hello.ko || exit 0
+[ -c /dev/hashpass ] || exit 0
+echo "@@READ:$(timeout 5 head -c 4096 /dev/hashpass)"
+T
+sh "$(dirname "$0")/vmrun" /tmp/t.sh | grep -qx '@@READ:Hello, kernel!'

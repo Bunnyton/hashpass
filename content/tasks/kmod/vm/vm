@@ -1,0 +1,22 @@
+#!/bin/sh
+# vm — маленькая виртуальная машина со своим ядром: модули грузят в неё, а не в ядро компьютера.
+#   vm                папка ~/kmod видна в ВМ как /mnt; выход — poweroff
+#   vm --run <файл>   выполнить скрипт в ВМ вместо шелла и выключить её
+set -eu
+kver=$(ls /lib/modules | head -n 1)
+share=${VM_SHARE:-$HOME/kmod}
+initrd=/usr/local/share/vm/initrd.gz
+if [ "${1:-}" = "--run" ]; then
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    mkdir "$tmp/x"
+    install -m 755 "$2" "$tmp/x/run.sh"
+    (cd "$tmp/x" && echo run.sh | cpio -o -H newc --quiet | gzip) > "$tmp/run.gz"
+    cat "$initrd" "$tmp/run.gz" > "$tmp/initrd.gz"
+    initrd=$tmp/initrd.gz
+fi
+[ -d "$share" ] || mkdir -p "$share"
+qemu-system-x86_64 -accel tcg -m 256 -nographic -no-reboot -nic none \
+    -kernel "/boot/vmlinuz-$kver" -initrd "$initrd" \
+    -append "console=ttyS0 quiet panic=-1 loglevel=3" \
+    -virtfs "local,path=$share,mount_tag=host,security_model=none,id=host"
