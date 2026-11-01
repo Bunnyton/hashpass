@@ -2,7 +2,7 @@
 import pytest
 
 from hashpass.recipe.parse import parse_recipe
-from hashpass.taskstore import StageMeta, meta_from_dict, meta_to_dict, TaskMeta
+from hashpass.taskstore import StageMeta, TaskMeta, meta_from_dict, meta_to_dict
 
 _HEAD = 'image t:1\nsay "Go"\n'
 
