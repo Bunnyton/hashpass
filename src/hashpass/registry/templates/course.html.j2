@@ -147,11 +147,17 @@
 <input name='name' value='{{ b.name }}' class='block-name-input'></form>
 {% else %}<b>{{ b.name }}</b>{% endif %}
 {% if not b.open %}<span class='pill closed'>скрыт</span>{% endif %}
+{% if b.needs and may.content %}{% set bnames = {} %}{% for x in c.blocks %}{% set _ = bnames.update({x.id: x.name}) %}{% endfor %}<span class='pill warn sm'>🔒 откроется после: {% for i in b.needs %}«{{ bnames.get(i, i) }}»{% if not loop.last %}, {% endif %}{% endfor %}</span>
+{% elif b.waiting_for %}<span class='pill warn sm'>🔒 откроется, когда решите: {% for n in b.waiting_for %}«{{ n }}»{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 <span class='sp'></span>
 {% if may.content %}
 <details class='menu block-menu'><summary class='menu-dot' title='действия с блоком'>⋯</summary>
 <div class='menu-list card'>
 {{ act('PUT', api ~ '/blocks/' ~ b.id, 'Сделать доступным' if not b.open else 'Скрыть от проходящих курс', fields={'open': not b.open}) }}
+{% if may.edit and c.blocks | length > 1 %}<form class='block-needs' data-api='PUT {{ api }}/blocks/{{ b.id }}'>
+<span class='small dim'>Откроется, когда решены блоки:</span>
+{% for x in c.blocks if x.id != b.id %}<label class='chip'><input type='checkbox' name='needs' value='{{ x.id }}' data-type='list'{% if x.id in (b.needs or []) %} checked{% endif %}>{{ x.name }}</label>{% endfor %}
+<button class='menu-item' type='submit'>Сохранить условие</button></form>{% endif %}
 {% if may.edit %}{{ act('DELETE', api ~ '/blocks/' ~ b.id, 'Удалить блок', 'menu-item danger', confirm='Удалить пустой блок?') }}{% endif %}
 </div></details>
 {% endif %}

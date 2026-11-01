@@ -121,6 +121,11 @@ class TaskRow:
     solved_n: int = 0               # the version the credit was earned in (an older one still counts)
     outside: bool = False           # earned outside this course (`hashpass run`, another course)
     mine: bool = False              # sent by this viewer: its task in the course or its proposal
+    waiting_for: tuple[str, ...] = ()   # the block opens once these blocks are solved (2026-11-01)
+
+    def locked_word(self) -> str:
+        """«откроется, когда решите: «Git», «Regex»» for a block still waiting, else ""."""
+        return "откроется, когда решите: " + ", ".join(f"«{b}»" for b in self.waiting_for) if self.waiting_for else ""
 
     def credit_word(self) -> str:
         """`зачтено` / `не зачтено`, and which version was solved when the course has moved on."""
@@ -662,7 +667,8 @@ class PoolTUI(App):
                 expires_at=float(e["expires_at"]) if e.get("expires_at") else None,
                 owner=str(e.get("owner") or ""),
                 n=int(e.get("n") or 0), solved_n=int(e.get("solved_n") or 0),
-                outside=bool(e.get("outside")), mine=bool(e.get("mine"))))
+                outside=bool(e.get("outside")), mine=bool(e.get("mine")),
+                waiting_for=tuple(str(b) for b in e.get("waiting_for") or ())))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
@@ -865,6 +871,8 @@ class PoolTUI(App):
                 head += "   [dim]· ваши задания, которых ещё нет в курсе[/]"
             elif not block_rows[0].block_open:
                 head += "   [yellow]· закрыт для проходящих курс[/]"
+            if block_rows[0].waiting_for:
+                head += f"   [yellow]🔒 {escape(block_rows[0].locked_word())}[/]"
             b_node = tree.root.add(head, expand=True, data=block_rows[0].block_id or None)
             for row in block_rows:
                 self._leaf_nodes[row.ref] = b_node.add_leaf(row.tree_label(), data=row)
@@ -1055,7 +1063,7 @@ class PoolTUI(App):
             event.node.toggle()
             return
         if row.hidden:
-            self._flash("Задание закрыто преподавателем")
+            self._flash(f"Блок {row.locked_word()}" if row.waiting_for else "Задание закрыто преподавателем")
             return
         if row.state == "грузится":
             self._flash(f"{row.ref} загружается — Enter, когда будет готово")

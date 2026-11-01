@@ -409,6 +409,45 @@ def remove_block(course: Course, block_id: str) -> None:
         msg = "блок не пуст — сначала уберите или перенесите задания"
         raise ValueError(msg)
     course.blocks = [b for b in course.blocks if b["id"] != block_id]
+    for block in course.blocks:
+        if block_id in block.get("needs", []):
+            set_block_needs(course, block["id"], [i for i in block["needs"] if i != block_id])
+
+
+def set_block_needs(course: Course, block_id: str, needs: Iterable[str]) -> None:
+    """
+    Make block `block_id` open to a student once every block of `needs` is solved (user 2026-11-01).
+
+    Kept in course order, once each; [] -- no condition (the default). Blocks waiting for each
+    other would never open, so that is refused.
+    """
+    block = _block(course, block_id)
+    wanted = set(needs)
+    for need in wanted:
+        _block(course, need)
+    if block_id in wanted:
+        msg = "блок не может ждать сам себя"
+        raise ValueError(msg)
+    after = {b["id"]: set(b.get("needs", [])) for b in course.blocks} | {block_id: wanted}
+    seen, todo = set(), list(wanted)
+    while todo:                                       # does any needed block wait for this one?
+        bid = todo.pop()
+        if bid == block_id:
+            msg = "блоки ждут друг друга — так ни один не откроется"
+            raise ValueError(msg)
+        if bid not in seen:
+            seen.add(bid)
+            todo.extend(after.get(bid, ()))
+    block.pop("needs", None)
+    if wanted:
+        block["needs"] = [b["id"] for b in course.blocks if b["id"] in wanted]
+
+
+def waiting_for(course: Course, block: dict, passed: set[str]) -> list[str]:
+    """Names of the blocks `block` needs that are not solved yet: a task not hidden and not in `passed`."""
+    by_id = {b["id"]: b for b in course.blocks}
+    return [by_id[i]["name"] for i in block.get("needs", []) if i in by_id
+            and any(f"{t['repo']}:{t['tag']}" not in passed for t in by_id[i]["tasks"] if not t.get("hidden"))]
 
 
 def add_task(course: Course, repo: str, tag: str, n: int, block_id: str, *, by: str,  # noqa: PLR0913

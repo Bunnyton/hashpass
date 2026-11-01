@@ -1,7 +1,8 @@
 """
 Copies of a course (spec 2026-10-31): mirrors follow their parent, forks are one's own.
 
-What a copy takes from its source is the course's *structure*: the blocks (id, name) and their
+What a copy takes from its source is the course's *structure*: the blocks (id, name, the blocks
+each one `needs` solved first) and their
 tasks (`repo, tag, n, pinned, added_by`) in order, and `auto_update`. A hidden task is the
 author's draft and is not part of it; whether a block is open is each course's own schedule.
 """
@@ -23,6 +24,7 @@ def structure(course: "Course") -> dict:
     return {"auto_update": bool(course.auto_update),
             "blocks": [{"id": b["id"], "name": b["name"],
                         "tasks": [structure_task(t) for t in b.get("tasks", []) if not t.get("hidden")]}
+                       | ({"needs": list(b["needs"])} if b.get("needs") else {})
                        for b in course.blocks]}
 
 
@@ -49,7 +51,8 @@ def apply_structure(course: "Course", struct: dict, *, source_open: dict[str, bo
         tasks = [structure_task(t) | {"hidden": False} for t in sb["tasks"]]
         is_open = bool(mine.get("open", True)) if mine else bool(source_open.get(sb["id"], True))
         blocks.append({"id": sb["id"], "name": sb["name"], "open": is_open,
-                       "tasks": tasks + hidden.pop(sb["id"], [])})
+                       "tasks": tasks + hidden.pop(sb["id"], [])}
+                      | ({"needs": list(sb["needs"])} if sb.get("needs") else {}))
     orphans = [t for ts in hidden.values() for t in ts]
     if orphans:
         if not blocks:
@@ -102,6 +105,9 @@ def diff(old: dict, new: dict) -> list[dict]:
             for b in new["blocks"] if b["id"] not in old_b]
     out += [{"op": "block_rename", "id": b["id"], "old": old_b[b["id"]]["name"], "new": b["name"]}
             for b in new["blocks"] if b["id"] in old_b and old_b[b["id"]]["name"] != b["name"]]
+    out += [{"op": "block_needs", "id": b["id"], "name": b["name"],
+             "old": old_b[b["id"]].get("needs", []), "new": b.get("needs", [])}
+            for b in new["blocks"] if b["id"] in old_b and old_b[b["id"]].get("needs", []) != b.get("needs", [])]
     common_new = [i for i in new_ids if i in old_b]
     kept = _kept([i for i in old_b if i in new_b], common_new)
     out += [{"op": "block_move", "id": i, "name": new_b[i]["name"], "after": _after(new_ids, i)}
@@ -134,7 +140,7 @@ def diff(old: dict, new: dict) -> list[dict]:
     return out
 
 
-def describe(change: dict) -> str:  # noqa: PLR0911
+def describe(change: dict) -> str:  # noqa: C901, PLR0911
     """Say one change in words, for the page and the sync report."""
     op = change["op"]
     if op == "task_add":
@@ -155,6 +161,9 @@ def describe(change: dict) -> str:  # noqa: PLR0911
         return f"блок «{change['old']}» → «{change['new']}»"
     if op == "block_move":
         return f"блок «{change['name']}» передвинут"
+    if op == "block_needs":
+        return (f"блок «{change['name']}» открывается после других блоков" if change["new"]
+                else f"блок «{change['name']}» открыт без условий")
     return f"автообновление: {'включено' if change['new'] else 'выключено'}"
 
 
@@ -167,7 +176,7 @@ def _key(change: dict) -> tuple[str, str, str]:
         aspect = change["field"] if op == "task_set" else ("place" if op == "task_move" else "exist")
         return ("task", change["ref"], aspect)
     if op.startswith("block_"):
-        aspect = {"block_rename": "name", "block_move": "place"}.get(op, "exist")
+        aspect = {"block_rename": "name", "block_move": "place", "block_needs": "needs"}.get(op, "exist")
         return ("block", change["id"], aspect)
     return ("auto_update", "", "")
 
@@ -194,7 +203,7 @@ def _block_for(struct: dict, change: dict) -> dict:
     return block
 
 
-def _apply(struct: dict, change: dict) -> None:
+def _apply(struct: dict, change: dict) -> None:  # noqa: C901
     op = change["op"]
     blocks = struct["blocks"]
     by_id = {b["id"]: b for b in blocks}
@@ -206,6 +215,10 @@ def _apply(struct: dict, change: dict) -> None:
     elif op == "block_move" and change["id"] in by_id:
         blocks.remove(by_id[change["id"]])
         _insert(blocks, by_id[change["id"]], change["after"], lambda b: b["id"])
+    elif op == "block_needs" and change["id"] in by_id:
+        by_id[change["id"]].pop("needs", None)
+        if needs := [i for i in change["new"] if i in by_id]:
+            by_id[change["id"]]["needs"] = needs
     elif op == "block_remove" and change["id"] in by_id:
         blocks.remove(by_id[change["id"]])
     elif op == "task_add" and _task_block(struct, change["ref"]) is None:
@@ -251,7 +264,8 @@ def merge3(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[dict]]:
             continue
         gone_here = (key[0], key[1], "exist") in mine_keys      # ours removed it
         if (change["op"] == "task_remove" and key[:2] in touched) or (
-                change["op"] in ("task_set", "task_move", "block_rename", "block_move") and gone_here):
+                change["op"] in ("task_set", "task_move", "block_rename", "block_move", "block_needs")
+                and gone_here):
             conflicts.append(change)
             continue
         if change["op"] == "block_remove":         # after the tasks: it may still hold ours
