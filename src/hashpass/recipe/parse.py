@@ -67,6 +67,7 @@ class _StageAcc:
     neutral: list[str] = field(default_factory=list)
     check: ExecAction | None = None
     check_live: str | None = None
+    check_node: str | None = None   # `check live on <machine>`: a lab machine, not the console
     on_enter: list[Action] = field(default_factory=list)
     on_pass: list[Action] = field(default_factory=list)
     hints: list[HintRule] = field(default_factory=list)
@@ -414,7 +415,16 @@ def _apply_check(value: str, sacc: _StageAcc) -> None:
         if not rest.strip():
             msg = "check live requires a shell command"
             raise ValueError(msg)
-        sacc.check_live = rest.strip()
+        rest = rest.strip()
+        head, _, tail = rest.partition(" ")
+        if head == "on":   # `check live on <machine> <cmd>` (labs, spec 2026-11-02)
+            machine, _, cmd = tail.strip().partition(" ")
+            if not machine or not cmd.strip():
+                msg = "check live on requires a machine and a shell command: check live on <машина> <команда>"
+                raise ValueError(msg)
+            sacc.check_node = machine
+            rest = cmd.strip()
+        sacc.check_live = rest
         return
     if verb != "exec":
         msg = (f"check requires an 'exec' or 'live' action, got: {value!r} "
@@ -536,6 +546,7 @@ def _finalize_stage(sacc: _StageAcc) -> StageSpec:
         neutral=tuple(sacc.neutral),
         check=sacc.check,
         check_live=sacc.check_live,
+        check_node=sacc.check_node,
         on_enter=tuple(sacc.on_enter),
         on_pass=tuple(sacc.on_pass),
         hints=tuple(sacc.hints),
@@ -612,7 +623,7 @@ def _parse_voice_block(lines: list[tuple[int, str]], start: int,
 
 _SETTING_FIELDS = {"type-mode": "type_mode", "type-speed": "type_speed",
                    "pager": "pager", "user": "user", "sudo": "sudo", "similarity": "similarity",
-                   "workdir": "workdir"}
+                   "workdir": "workdir", "hosts": "hosts"}
 
 
 def _coerce_setting(kw: str, value: str) -> object:
@@ -633,7 +644,7 @@ def _coerce_setting(kw: str, value: str) -> object:
         return pct
     if kw == "pager":
         return v == "on"
-    if kw == "sudo":
+    if kw in ("sudo", "hosts"):
         return v != "off"
     return v   # user: raw string
 

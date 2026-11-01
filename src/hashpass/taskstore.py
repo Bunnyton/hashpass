@@ -41,6 +41,7 @@ class StageMeta:
     deny: tuple[str, ...] = ()         # base commands that MAY NOT be the accepting command
     allow: tuple[str, ...] = ()        # if set, ONLY these base commands may be the accepting command
     blocks: tuple[BlockRule, ...] = () # commands the console refuses by their arguments (`block`)
+    check_node: str | None = None      # `check live on <machine>`: the lab machine `check` runs in
 
 
 @dataclass(frozen=True)
@@ -154,7 +155,8 @@ def _voice_from_dict(data: dict) -> Voice:
 def _settings_to_dict(settings: Settings) -> dict:
     return {"type_mode": settings.type_mode, "type_speed": settings.type_speed,
             "pager": settings.pager, "user": settings.user,
-            "sudo": settings.sudo, "similarity": settings.similarity, "workdir": settings.workdir}
+            "sudo": settings.sudo, "similarity": settings.similarity, "workdir": settings.workdir,
+            "hosts": settings.hosts}
 
 
 def _settings_from_dict(data: dict) -> Settings:
@@ -165,7 +167,8 @@ def _settings_from_dict(data: dict) -> Settings:
                     type_speed=data.get("type_speed", d.type_speed),
                     pager=data.get("pager", d.pager),
                     similarity=data.get("similarity", d.similarity),
-                    workdir=data.get("workdir", d.workdir))
+                    workdir=data.get("workdir", d.workdir),
+                    hosts=data.get("hosts", d.hosts))
 
 
 def _stage_to_dict(stage: StageMeta) -> dict:
@@ -185,6 +188,7 @@ def _stage_to_dict(stage: StageMeta) -> dict:
         "allow": list(stage.allow),
         "blocks": [{"base": b.base, "mode": b.mode, "pattern": b.pattern, "message": b.message}
                    for b in stage.blocks],
+        "check_node": stage.check_node,
     }
 
 
@@ -204,6 +208,7 @@ def _stage_from_dict(data: dict) -> StageMeta:
         deny=tuple(data.get("deny", [])),
         allow=tuple(data.get("allow", [])),
         blocks=tuple(BlockRule(**b) for b in data.get("blocks", [])),
+        check_node=data.get("check_node"),
     )
 
 

@@ -278,6 +278,7 @@ def _build_meta(ref: str, recipe: Recipe, acceptance: list[str]) -> TaskMeta:
             deny=s.deny,
             allow=s.allow,
             blocks=s.blocks,
+            check_node=s.check_node,
         )
         for i, s in enumerate(recipe.stages)
     )

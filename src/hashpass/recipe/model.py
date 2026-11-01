@@ -143,7 +143,8 @@ class Settings:
     sudo: bool = True       # whether that user is a (classic, password) sudoer in the container
     pager: bool = False
     similarity: int = 90    # percent (0-100): min output similarity to accept an `observe output` stage
-    workdir: str = "/home/student"  # base for `read`/`show file` lookups that fall through to the system FS
+    workdir: str = "/home/student"
+    hosts: bool = True      # labs: write every machine's /etc/hosts (`hosts off` for DNS tasks)  # base for `read`/`show file` lookups that fall through to the system FS
 
 
 @dataclass(frozen=True)
@@ -160,6 +161,7 @@ class StageSpec:
     # `check live <cmd>`: a shell command run as root INSIDE the student's live machine (running
     # containers, services, open ports -- what a throwaway overlay cannot see); exit 0 = accepted.
     check_live: str | None = None
+    check_node: str | None = None        # `check live on <machine>`: run it in that lab machine
     on_enter: tuple[Action, ...] = ()
     on_pass: tuple[Action, ...] = ()
     hints: tuple[HintRule, ...] = ()
