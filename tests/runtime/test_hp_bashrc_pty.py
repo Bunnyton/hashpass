@@ -2,6 +2,7 @@
 import base64
 import contextlib
 import os
+import socket
 import stat
 import threading
 from pathlib import Path
@@ -515,5 +516,28 @@ def test_quoted_separators_do_not_split_a_command(tmp_path):
     assert "Без конвейера" not in out
     assert "syntax error" not in out
     assert out.count("zz") == 2  # noqa: PLR2004 -- grep and cat each print zz
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("in_lab", [False, True])
+def test_a_lab_machine_names_itself_in_the_prompt(tmp_path, in_lab):
+    # User (2026-11-02): «пускай будет имя машины» -- `pc ~ ❯`, after `ssh web` `web ~ ❯`.
+    mark = tmp_path / "hp-lab"
+    if in_lab:
+        mark.write_text("net-hello\n")
+    bindir = _fake_hp_io(tmp_path)
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+           "HP_IO_LOG": str(tmp_path / "log"), "HOME": str(tmp_path), "TERM": "dumb",
+           "HP_LAB_MARK": str(mark)}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 100))
+    child.expect("❯")
+    child.sendline("true")
+    child.expect("❯")
+    host = socket.gethostname().split(".")[0]
+    assert (f"\x1b[93m{host}\x1b[0m \x1b[94m" in child.before) is in_lab
     child.sendline("exit")
     child.expect(pexpect.EOF)

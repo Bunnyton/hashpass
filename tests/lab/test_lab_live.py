@@ -48,18 +48,20 @@ stage
 """
 
 
-def _base() -> Path:
-    root = Path.home() / ".hashpass" / "images" / "bunnyton" / "debian"
-    layers = sorted((p / "layer" for p in root.glob("trixie*") if (p / "layer" / "usr/bin/systemd-socket-activate").exists()),
+_HOMES = (Path.home() / ".hashpass", Path("/var/tmp/hp-authoring"))  # noqa: S108   # the dev home, the authoring home
+
+
+def _base(need: str = "usr/bin/systemd-socket-activate") -> Path:
+    layers = sorted((p / "layer" for home in _HOMES
+                     for p in (home / "images" / "bunnyton" / "debian").glob("trixie*")
+                     if (p / "layer" / need).exists()),
                     key=lambda p: p.stat().st_mtime)
     if not layers:
-        pytest.skip("no built base image in ~/.hashpass")
+        pytest.skip(f"no built base image with {need}")
     return layers[-1]
 
 
-@pytest.fixture
-def lab_ref(tmp_path, monkeypatch) -> tuple[cli.Home, str, Path]:
-    base = _base()
+def _build(tmp_path, monkeypatch, labfile: str, base: Path) -> cli.Home:
     monkeypatch.setattr(cli, "ensure_base_image", lambda _env, _store, **_kw: base)
     monkeypatch.setattr(cli, "_author_identity", lambda _env, _io: "dev")
     monkeypatch.setenv("HASHPASS_POOL", "http://127.0.0.1:9")       # never the local service
@@ -68,10 +70,16 @@ def lab_ref(tmp_path, monkeypatch) -> tuple[cli.Home, str, Path]:
                     ("router", "echo router > /etc/hp-who")):
         (src / m).mkdir(parents=True)
         (src / m / "Taskfile").write_text(f"run {line}\n", encoding="utf-8")
-    (src / "Labfile").write_text(_LABFILE, encoding="utf-8")
+    (src / "Labfile").write_text(labfile, encoding="utf-8")
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "home")}, default_home=tmp_path)
     assert cli.cmd_build(env, str(src)) == 0
-    return env, "dev/netlab:1", base
+    return env
+
+
+@pytest.fixture
+def lab_ref(tmp_path, monkeypatch) -> tuple[cli.Home, str, Path]:
+    base = _base()
+    return _build(tmp_path, monkeypatch, _LABFILE, base), "dev/netlab:1", base
 
 
 def _alive() -> list[str]:
@@ -148,4 +156,60 @@ def test_two_labs_at_once_do_not_meet(lab_ref, tmp_path):
         stop_b.set()
         a.teardown()
         b.teardown()
+    assert _alive() == []
+
+
+_NET_LAB = """\
+lab outlab:1
+
+machine pc
+  console
+  build pc
+  net lan 10.79.0.10/24
+  gw 10.79.0.1
+
+machine router
+  build router
+  net lan 10.79.0.1/24
+  net wan 192.168.79.2/24
+
+machine web
+  build web
+  net wan 192.168.79.20/24
+
+say "Наружу"
+
+stage
+  solve true
+  check live on web true
+"""
+
+_OUT = "bash -c 'exec 3<>/dev/tcp/deb.debian.org/80 && printf \"HEAD / HTTP/1.0\\r\\nHost: deb.debian.org\\r\\n\\r\\n\" >&3 && head -1 <&3 | grep -q 200'"
+
+
+@pytest.mark.tier3
+def test_a_lab_reaches_the_internet_like_docker_compose(tmp_path, monkeypatch):
+    # User (2026-11-02): «хочу, чтобы был интернет. В docker-compose он же есть».
+    base = _base("usr/bin/slirp4netns")
+    env = _build(tmp_path, monkeypatch, _NET_LAB, base)
+    session, _, stop = _open(env, "dev/outlab:1", base, tmp_path)
+    try:
+        pc, web, router = session.student, session.nodes["web"], session.nodes["router"]
+        assert web.check_live("ip route show default | grep -q 'via 192.168.79.1'") == 0
+        assert web.check_live("getent hosts deb.debian.org") == 0      # DNS
+        assert web.check_live(_OUT) == 0                                 # TCP out
+        assert web.check_live("su student -c 'ping -c1 -W5 1.1.1.1'") == 0
+        assert router.check_live(_OUT) == 0
+        # pc is behind the lab's router: out only once the router forwards
+        assert pc.check_live("timeout 5 " + _OUT) != 0
+        assert router.check_live("sysctl -qw net.ipv4.ip_forward=1") == 0
+        assert pc.check_live(_OUT) == 0
+        # the host's loopback stays shut (the local pool, grade servers)
+        assert web.check_live("timeout 3 bash -c 'exec 3<>/dev/tcp/100.64.250.2/22'") != 0
+        # the prompt's mark is in every machine
+        assert pc.check_live("grep -qx outlab /etc/hp-lab") == 0
+        assert web.check_live("grep -qx outlab /etc/hp-lab") == 0
+    finally:
+        stop.set()
+        session.teardown()
     assert _alive() == []

@@ -7,6 +7,10 @@ machine's grade relay -- `systemd-socket-activate -l 127.0.0.1:<port>` + `system
 to a host unix socket, so the console's hooks reach `127.0.0.1:$HP_PORT` as in a plain task.
 One more holder is the switch: its netns gets a bridge per network and the veth pairs
 (wire.py). Nodes then boot into their ready namespaces; the console joins its own.
+
+The way out (§6а) is one more helper, on the host's network: slirp4netns from the base enters the
+switch's netns, makes `tap0` there and carries its traffic through ordinary host sockets -- no
+root route, NAT rule or bridge on the host (rootless podman does the same).
 """
 from __future__ import annotations
 
@@ -16,12 +20,14 @@ import shutil
 import subprocess
 import tempfile
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hashpass import machines
 from hashpass.emulation import nspawn_emulation_args
-from hashpass.lab.config import PORT_UNIT, hosts_text, port_unit
+from hashpass.lab.config import LAB_MARK, PORT_UNIT, hosts_text, port_unit, resolv_text
+from hashpass.lab.model import UPLINK_CIDR
 from hashpass.lab.wire import wire_script
 
 if TYPE_CHECKING:
@@ -31,6 +37,7 @@ if TYPE_CHECKING:
 _GRADE_IN = "/run/hp-grade"          # where a holder sees the host's socket directory
 _SOCKET_ACTIVATE = "/usr/bin/systemd-socket-activate"
 _PROXYD = "/usr/lib/systemd/systemd-socket-proxyd"
+_SLIRP = "/usr/bin/slirp4netns"
 _LEADER_WAIT = 20.0                  # seconds for a holder to come up
 _POLL = 0.1
 _STOP_TRIES = 6                      # x _STOP_WAIT: a slow holder gets 30 s to register and go
@@ -72,7 +79,15 @@ class LabRuntime:
 
     def __init__(self, lab: Lab, hosts: bool, console: NspawnRunner,  # noqa: FBT001, PLR0913, PLR0917
                  nodes: dict[str, NspawnRunner], base: Path, sock_dir: Path) -> None:
-        """Bind the lab config to its prepared runners; `sock_dir` will hold the grade sockets."""
+        """
+        Bind the lab config to its prepared runners; `sock_dir` will hold the grade sockets.
+
+        The way out needs a gateway somewhere and a base with slirp4netns + nft (runtime >= 50):
+        a lab pinned to an older base runs as before, without the internet.
+        """
+        if lab.internet and not (lab.gateways() and all(
+                (base / tool).is_file() for tool in (_SLIRP.lstrip("/"), "usr/sbin/nft"))):
+            lab = replace(lab, internet=False)
         self.lab, self.hosts, self.console, self.nodes = lab, hosts, console, nodes
         self.base, self.sock_dir = base, sock_dir
         self.sockets = {sock_dir / f"{m.name}.sock": (None if m.console else m.name)
@@ -99,6 +114,18 @@ class LabRuntime:
                     raise RuntimeError(msg)
                 time.sleep(_POLL)
             self._leaders[key] = pid
+
+    def _uplink(self) -> None:
+        """Start slirp4netns into the switch's netns (wire.py waits for its tap0)."""
+        name = machines.helper_name()
+        self._holders["<uplink>"] = name
+        self._procs.append(subprocess.Popen(
+            ["sudo", "systemd-nspawn", "-q", "--console=pipe", "--register=yes", "-M", name,
+             "--read-only", "--capability=CAP_NET_ADMIN,CAP_SYS_ADMIN", "--bind=/dev/net/tun",
+             f"--bind-ro=/proc/{self._leaders['']}/ns/net:/run/netns/switch",
+             "-D", str(self.base), _SLIRP, "--configure", "--mtu=65520", "--disable-host-loopback",
+             f"--cidr={UPLINK_CIDR}", "--netns-type=path", "/run/netns/switch", "tap0"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
 
     def _wire(self) -> None:
         binds = [f"--bind=/proc/{self._leaders[m.name]}/ns/net:/run/netns/{m.name}"
@@ -129,6 +156,10 @@ class LabRuntime:
     def start(self, port: int) -> None:
         """Write the machines' files, raise the holders, wire the network, boot the nodes."""
         hosts = {"/etc/hosts": hosts_text(self.lab)} if self.hosts else {}
+        # the prompt names the machine in a lab (hp-bashrc reads the mark)
+        hosts[LAB_MARK] = f"{self.lab.name}\n"
+        if self.lab.internet:
+            hosts["/etc/resolv.conf"] = resolv_text()
         # the base names every machine «hashpass» in /etc/hostname, and systemd prefers it to
         # nspawn's --hostname: each lab machine is called by its own name
         _write_files(self.console, {**hosts, "/etc/hostname": f"{self.lab.console.name}\n"},
@@ -151,6 +182,8 @@ class LabRuntime:
                                   f"{_GRADE_IN}/{m.name}.sock"])
         self._holder("", ["sleep", "infinity"])
         self._await_leaders()
+        if self.lab.internet:
+            self._uplink()
         self._wire()
         for name, runner in self.nodes.items():
             machine = machines.machine_name()

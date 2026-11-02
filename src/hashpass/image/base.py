@@ -42,6 +42,8 @@ _SYSTEMD_INSTALL = (
     # not found», proc-audit installs psmisc) -- tests/image/test_base_packages.py guards this.
     "&& apt-get install -y vim nano less tree file htop lsof net-tools iproute2 iputils-ping "
     "dnsutils zip unzip xz-utils "
+    # labs: the switch masquerades (nft) and slirp4netns carries the lab out to the internet
+    "&& apt-get install -y nftables slirp4netns "
     # root:hashpass fallback; and a non-root `student` (bash shell, sudoer, password `student`
     # for people who care).  `student` gets NOPASSWD sudo -- otherwise a `solve` that uses
     # `sudo` at build (nspawn `--user=student`, no tty) would either hang on the password

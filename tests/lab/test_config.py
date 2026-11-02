@@ -107,3 +107,5 @@ def test_wire_script_builds_two_subnets_and_routes(lab) -> None:
     assert not any("route" in line for line in script if line.startswith("ip -n web"))
     # a plain user's ping: ICMP sockets for every group, in each machine's own netns
     assert "ip netns exec web sysctl -qw net.ipv4.ping_group_range='0 2147483647'" in script
+    # a fresh netns inherits the host's forwarding: every machine starts as a plain host
+    assert "ip netns exec router sysctl -qw net.ipv4.ip_forward=0" in script

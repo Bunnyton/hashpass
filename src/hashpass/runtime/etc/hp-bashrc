@@ -40,15 +40,19 @@ export PATH
 
 # Prompt: cwd in bright blue, then " ❯ " in bright green, a red ✗ mark on non-zero, and a green
 # «[Решено]» once the task is done (__hp_solved, set by the live-grade hooks below).
+# In a lab (several machines, /etc/hp-lab) the machine's name goes first, in bright yellow:
+# `pc ~ ❯` and, after `ssh web`, `web ~ ❯` -- the student always sees where they are.
 # Snapshot $? first so PS1 sees the previous command's status, not PROMPT_COMMAND's own.
 _hp_last_status=0
 __hp_solved=0
+__hp_host=''
+[ -e "${HP_LAB_MARK:-/etc/hp-lab}" ] && __hp_host='\[\e[93m\]\h\[\e[0m\] '
 _hp_render_prompt() {
     _hp_last_status=$?
     local mark='' done=''
     (( _hp_last_status != 0 )) && mark=$'\[\e[91m\] ✗\[\e[0m\]'
     (( __hp_solved == 1 )) && done=$'\[\e[1;92m\] [Решено]\[\e[0m\]'
-    PS1='\[\e[94m\]\w\[\e[0m\]'"$done$mark"'\[\e[92m\] ❯ \[\e[0m\]'
+    PS1="$__hp_host"'\[\e[94m\]\w\[\e[0m\]'"$done$mark"'\[\e[92m\] ❯ \[\e[0m\]'
 }
 
 # OSC 133 semantic prompts (used by `_extract_output` on the host to isolate a command's

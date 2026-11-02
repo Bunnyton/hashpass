@@ -9,16 +9,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hashpass.lab.model import Lab, Machine, NetAddr
+from hashpass.lab.model import UPLINK_DNS, Lab, Machine, NetAddr
 
 NODES_DIR = ".hp-nodes"
 LAB_JSON = "lab.json"
 PORT_UNIT = "hp-port.service"
+LAB_MARK = "/etc/hp-lab"        # in every lab machine: the prompt shows the machine's name
 
 
 def lab_to_dict(lab: Lab, *, hosts: bool) -> dict:
     """Serialize a lab (+ whether /etc/hosts is written) for lab.json."""
-    return {"name": lab.name, "version": lab.version, "hosts": hosts, "machines": [
+    return {"name": lab.name, "version": lab.version, "hosts": hosts, "internet": lab.internet,
+            "machines": [
         {"name": m.name, "console": m.console, "gw": m.gw,
          "nets": [{"net": n.net, "addr": n.addr} for n in m.nets]} for m in lab.machines]}
 
@@ -28,7 +30,8 @@ def lab_from_dict(data: dict) -> tuple[Lab, bool]:
     machines = tuple(Machine(name=m["name"], console=bool(m.get("console")), gw=m.get("gw"),
                              nets=tuple(NetAddr(n["net"], n["addr"]) for n in m.get("nets", [])))
                      for m in data["machines"])
-    return Lab(data["name"], data["version"], machines), bool(data.get("hosts", True))
+    lab = Lab(data["name"], data["version"], machines, internet=bool(data.get("internet", True)))
+    return lab, bool(data.get("hosts", True))
 
 
 def find_lab(lowers: list[Path]) -> tuple[Lab, bool, Path] | None:
@@ -61,6 +64,11 @@ def hosts_text(lab: Lab) -> str:
     lines = ["127.0.0.1\tlocalhost", "::1\tlocalhost ip6-localhost ip6-loopback"]
     lines += [f"{n.ip}\t{m.name}" for m in lab.machines for n in m.nets]
     return "\n".join(lines) + "\n"
+
+
+def resolv_text() -> str:
+    """/etc/resolv.conf for every machine: the uplink's DNS (reached through the gateways)."""
+    return f"nameserver {UPLINK_DNS}\n"
 
 
 def port_unit(port: int) -> str:

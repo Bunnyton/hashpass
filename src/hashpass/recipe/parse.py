@@ -623,7 +623,8 @@ def _parse_voice_block(lines: list[tuple[int, str]], start: int,
 
 _SETTING_FIELDS = {"type-mode": "type_mode", "type-speed": "type_speed",
                    "pager": "pager", "user": "user", "sudo": "sudo", "similarity": "similarity",
-                   "workdir": "workdir", "hosts": "hosts"}
+                   "workdir": "workdir", "hosts": "hosts",
+                   "internet": "internet"}
 
 
 def _coerce_setting(kw: str, value: str) -> object:
@@ -644,7 +645,7 @@ def _coerce_setting(kw: str, value: str) -> object:
         return pct
     if kw == "pager":
         return v == "on"
-    if kw in ("sudo", "hosts"):
+    if kw in ("sudo", "hosts", "internet"):
         return v != "off"
     return v   # user: raw string
 

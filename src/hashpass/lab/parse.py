@@ -13,7 +13,15 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
-from hashpass.lab.model import MAX_IFACES, MAX_MACHINES, MAX_NETS, Lab, Machine, NetAddr
+from hashpass.lab.model import (
+    MAX_IFACES,
+    MAX_MACHINES,
+    MAX_NETS,
+    UPLINK_CIDR,
+    Lab,
+    Machine,
+    NetAddr,
+)
 from hashpass.recipe.parse import _kw_value, _significant, parse_recipe
 
 if TYPE_CHECKING:
@@ -23,6 +31,7 @@ LABFILE = "Labfile"
 _MACHINE_NAME = re.compile(r"[a-z][a-z0-9-]{0,14}")
 _NET_NAME = re.compile(r"[a-z][a-z0-9-]{0,11}")
 _BUILD_STEPS = ("from", "run", "copy", "user", "image")
+_UPLINK = ipaddress.ip_network(UPLINK_CIDR)
 
 
 def _fail(msg: str) -> NoReturn:
@@ -85,6 +94,8 @@ def _check_nets(lab: Lab) -> None:
         mine = []
         for n in m.nets:
             iface = _iface(m, n)
+            if iface.network.overlaps(_UPLINK):
+                _fail(f"машина {m.name}: {n.addr} — диапазон {UPLINK_CIDR} занят выходом в интернет")
             if subnets.setdefault(n.net, iface.network) != iface.network:
                 _fail(f"машина {m.name}: {n.addr} не в подсети сети {n.net} ({subnets[n.net]})")
             if (prev := used.get(n.ip)) is not None:
@@ -145,9 +156,9 @@ def parse_labfile(text: str) -> tuple[Lab, Recipe]:
             i += 1
     if not name:
         _fail("в Labfile нет строки lab <имя>:<версия>")
-    lab = Lab(name, version, tuple(machines))
-    validate(lab)
     recipe = parse_recipe("\n".join([f"image {name}:{version}", *rest]) + "\n")
+    lab = Lab(name, version, tuple(machines), internet=recipe.settings.internet)
+    validate(lab)
     known = {m.name for m in lab.machines}
     for stage in recipe.stages:
         if stage.check_node is not None and stage.check_node not in known:

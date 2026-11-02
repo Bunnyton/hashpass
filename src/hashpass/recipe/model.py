@@ -144,6 +144,7 @@ class Settings:
     pager: bool = False
     similarity: int = 90    # percent (0-100): min output similarity to accept an `observe output` stage
     workdir: str = "/home/student"
+    internet: bool = True   # labs: a NAT gateway out on each network's .1 (`internet off`: none)
     hosts: bool = True      # labs: write every machine's /etc/hosts (`hosts off` for DNS tasks)  # base for `read`/`show file` lookups that fall through to the system FS
 
 
