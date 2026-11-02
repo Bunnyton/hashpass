@@ -541,3 +541,31 @@ def test_a_lab_machine_names_itself_in_the_prompt(tmp_path, in_lab):
     assert (f"\x1b[93m{host}\x1b[0m \x1b[94m" in child.before) is in_lab
     child.sendline("exit")
     child.expect(pexpect.EOF)
+
+
+@pytest.mark.tier1
+def test_grep_paints_its_matches_and_the_host_sees_the_typed_command(tmp_path):
+    # regex tasks: like regular_tutor (`alias grep="grep --color=always"`), the console's grep
+    # highlights what it found; the alias stays the console's business -- `accept cmd`, `block`
+    # and hints judge the command as the student typed it.
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    (tmp_path / "f.txt").write_text("foo bar\n", encoding="utf-8")
+    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+           "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "xterm-256color"}
+    env.pop("HP_GREETED", None)
+    env.pop("GREP_COLORS", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 100), cwd=str(tmp_path))
+    child.expect("❯")
+    child.sendline("grep 'o\\+' f.txt")
+    child.expect(r"\x1b\[[0-9;]*m(?:\x1b\[K)?oo")         # the match itself is painted
+    child.expect("❯")
+    child.sendline("grep -c bar f.txt | cat")              # into a pipe: plain text, no colours
+    child.expect("❯")
+    assert "\x021\r\n" in child.before, repr(child.before)
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+    cmds = [r for r in _requests(log) if r.startswith("cmd ")]
+    assert "cmd grep 'o\\+' f.txt" in cmds, cmds
+    assert not any("--color" in c for c in cmds), cmds

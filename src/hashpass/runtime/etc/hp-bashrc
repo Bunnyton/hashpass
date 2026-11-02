@@ -69,6 +69,8 @@ PROMPT_COMMAND='_hp_render_prompt; printf "\e]133;D;%s\a" "$_hp_last_status"'
 alias ll='ls -alh --color=auto'
 alias la='ls -A --color=auto'
 alias l='ls -CF --color=auto'
+# grep paints what it found (regular_tutor did the same); only on a terminal, a pipe stays plain.
+alias grep='grep --color=auto'
 
 # ---------------------------------------------------------------------------------------
 # Live-grade hooks -- ONLY inside a task (HP_PORT set).
@@ -229,12 +231,13 @@ if [ -n "${HP_PORT-}" ]; then
                 # functions), so the word to shadow is the segment's first token, not the base.
                 # `builtin printf` so shadowing `printf`/`echo` doesn't recurse. The refusal is
                 # the system talking: a blank line and the cyan bar, like the host's replies.
+                # `function name {`, not `name() {`: an alias (grep) would expand the `name()` form.
                 local run="${toks[0]}"
                 [[ "$run" =~ ^[A-Za-z0-9_./+-]+$ ]] || continue   # not a name a function can take
                 if [ -n "$msg" ]; then
-                    eval "$run() { builtin printf '\\n\\033[36m│\\033[0m %s\\n' $(printf '%q' "$msg") >&2; return 1; }"
+                    eval "function $run { builtin printf '\\n\\033[36m│\\033[0m %s\\n' $(printf '%q' "$msg") >&2; return 1; }"
                 else
-                    eval "$run() { return 1; }"
+                    eval "function $run { return 1; }"
                 fi
                 __hp_shadow+=("$run")
             fi
@@ -305,9 +308,11 @@ if [ -n "${HP_PORT-}" ]; then
     # `hp-io*` is ours too: without it the greeting below lands in __hp_cmd and the FIRST
     # PROMPT_COMMAND ships "hp-io hello" as a student command -- one phantom try per session
     # (every `hint tries N` fired a rung early) and a bogus first entry in the history.
+    # BASH_COMMAND comes alias-expanded: our `grep --color=auto` goes back to the typed `grep`,
+    # or `accept cmd`, `block` and hints would judge a flag the student never wrote.
     trap '[[ "$BASH_COMMAND" == __hp_* || "$BASH_COMMAND" == _hp_* ]] || \
           [[ "$BASH_COMMAND" == PROMPT_COMMAND* || "$BASH_COMMAND" == hp-io* ]] || \
-          { __hp_cmd="$BASH_COMMAND"; __hp_cwd="$PWD"; }; __hp_preexec "$__hp_cmd"' DEBUG
+          { __hp_cmd="${BASH_COMMAND/#grep --color=auto/grep}"; __hp_cwd="$PWD"; }; __hp_preexec "$__hp_cmd"' DEBUG
 
     # PROMPT_COMMAND runs BETWEEN commands: ship the last one to the host, blank the
     # buffer, arm the next timing sample, then render the prompt.
