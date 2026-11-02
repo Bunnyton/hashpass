@@ -2,13 +2,13 @@
 
 `*` и `+` **жадные**: берут как можно больше и отступают, только если иначе не выйдет.
 
-    $ echo "/home/user/Downloads" | grep -oP '^/.+/'
-    /home/user/                      ← .+ дотянулся до последнего /
+    $ echo "/home/user/Downloads" | grep -P '^/.+/'
+    ==/home/user/==Downloads
 
 Знак `?` после повтора делает его **нежадным** — как можно меньше:
 
-    $ echo "/home/user/Downloads" | grep -oP '^/.+?/'
-    /home/                           ← остановился на первом /
+    $ echo "/home/user/Downloads" | grep -P '^/.+?/'
+    ==/home/==user/Downloads
 
 То же для `*?`, `+?`, `{2,5}?`.
 

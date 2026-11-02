@@ -220,6 +220,11 @@ def _take_quoted(rest: str) -> tuple[str, str]:
     return tok, tail.strip()
 
 
+def _line_breaks(text: str) -> str:
+    r"""`\n` in an output hint is a line break (`"\n1b2c3\n"` = that whole line), `\\` one backslash."""
+    return re.sub(r"\\([n\\])", lambda m: "\n" if m[1] == "n" else "\\", text)
+
+
 def _parse_cmd_cond(rest: str) -> tuple[CmdCond, str]:
     """Parse `<base> [has <f...>] [missing <f...>]` up to the action verb; return (cond, action)."""
     toks = rest.split()
@@ -261,7 +266,7 @@ def _parse_condition(value: str) -> tuple[Condition, str]:
         return IdleCond(float(_positive_int(tok, "idle"))), tail.strip()
     if kind == "output":
         substr, tail = _take_quoted(rest)
-        return OutputCond(substr), tail
+        return OutputCond(_line_breaks(substr)), tail
     if kind == "cmd":
         return _parse_cmd_cond(rest)
     msg = f"unknown hint condition: {kind!r} (expected tries/idle/cmd/output)"

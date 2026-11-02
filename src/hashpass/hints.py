@@ -78,7 +78,8 @@ def _cond_matches(cond: Condition, *, tries: int, idle: float,
     if isinstance(cond, CmdCond):
         return _cmd_matches(cond, command)
     if isinstance(cond, OutputCond):
-        return cond.substr in output
+        # framed in line breaks, so "\nX\n" in a hint is a whole line of output -- the first too
+        return cond.substr in f"\n{output}\n"
     msg = f"unknown condition: {cond!r}"
     raise TypeError(msg)
 

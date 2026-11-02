@@ -2,11 +2,14 @@ Debian GNU/linux 13 trixie
 Ubuntu 24.04 LTS
 I love linux
 I love unix
+linux mint 22 — для тех, кто ушёл с Windows
 FreeBSD 14.1
 Arch linux (rolling)
 macOS Sequoia
-linux mint 22
+мама сидит на linux mint и довольна
 Alpine 3.20
-OpenBSD 7.6
 Fedora linux 41
+OpenBSD 7.6
+у соседа тоже linux mint
 Windows 11 + WSL (а внутри linux)
+Kali linux — не для ежедневной работы

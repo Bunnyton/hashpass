@@ -458,3 +458,13 @@ def test_user_directive_sets_owner_of_following_copies():
 def test_user_directive_needs_one_name():
     with pytest.raises(ValueError, match="user"):
         parse_recipe("image t:1\nuser\n")
+
+
+@pytest.mark.tier1
+def test_an_output_hint_spells_a_line_break_as_backslash_n():
+    text = ('image t:1\nstage\n  say "x"\n  solve echo hi\n'
+            '  hint output "\\n1b2c3\\n" say "piece"\n'
+            '  hint output "a\\\\b" say "slash"\n')
+    hints = parse_recipe(text).stages[0].hints
+    assert hints[0].condition == OutputCond("\n1b2c3\n")
+    assert hints[1].condition == OutputCond("a\\b")        # \\ stays one backslash

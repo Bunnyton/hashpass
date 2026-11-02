@@ -144,3 +144,23 @@ def test_match_rule_without_fired_keeps_repeating():
     rules = (HintRule(TriesCond(2), SayAction("again")),)
     assert match_rule(rules, **{**_NO, "tries": 2}) == SayAction("again")
     assert match_rule(rules, **{**_NO, "tries": 3}) == SayAction("again")
+
+
+@pytest.mark.tier1
+def test_an_output_hint_can_name_a_whole_line():
+    # regex-pro (user 2026-11-03): «1b2c3 — кусок слова a1b2c3» is about `grep -o` printing the
+    # piece on its own; the same letters inside a whole printed line must not fire it. "\n…\n"
+    # names a line of the output, the first and the last one too.
+    rules = (HintRule(OutputCond("\n1b2c3\n"), SayAction("piece")),)
+    assert match_rule(rules, **{**_NO, "output": "9xx9\n1b2c3\n4you2"}) == SayAction("piece")
+    assert match_rule(rules, **{**_NO, "output": "1b2c3"}) == SayAction("piece")
+    assert match_rule(rules, **{**_NO, "output": "asf 4234 a1b2c3 9xx9 3-2-1\n"}) is None
+    assert match_rule((HintRule(OutputCond("руб"), SayAction("s")),),
+                      **{**_NO, "output": "360 руб"}) == SayAction("s")   # a plain substring as before
+
+
+@pytest.mark.tier1
+def test_grep_without_o_in_a_pipeline_is_seen():
+    rules = (HintRule(CmdCond("grep", (), ("-o",)), SayAction("lines")),)
+    assert match_rule(rules, **{**_NO, "command": 'grep -E "\\b[0-9]\\S{1,10}[0-9]\\b"'}) == SayAction("lines")
+    assert match_rule(rules, **{**_NO, "command": "grep -oE 'x' tokens.txt"}) is None

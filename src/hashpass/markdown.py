@@ -20,6 +20,10 @@ _H2 = 2   # heading level at/above which the brighter colour is used
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _ITAL_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
 _CODE_RE = re.compile(r"`([^`]+)`")
+# `==found==` in a code line: what grep found in an example, painted as grep paints it
+# (GREP_COLORS ms=01;31) -- the regex briefs show their examples' output like the console does.
+_MATCH_RE = re.compile(r"==([^=\n]+?)==")
+_MATCH = "\x1b[01;31m"
 
 
 def _inline(text: str) -> str:
@@ -27,6 +31,11 @@ def _inline(text: str) -> str:
     text = _BOLD_RE.sub(_BOLD + r"\1" + _RESET, text)
     text = _ITAL_RE.sub(_ITAL + r"\1" + _RESET, text)
     return _CODE_RE.sub(_YELLOW + r"\1" + _RESET, text)
+
+
+def _code(line: str) -> str:
+    """Render a code line: dim, every `==match==` red, then dim again."""
+    return _DIM + _MATCH_RE.sub(_RESET + _MATCH + r"\1" + _RESET + _DIM, line) + _RESET
 
 
 def render_markdown(text: str) -> str:
@@ -39,12 +48,12 @@ def render_markdown(text: str) -> str:
             in_code = not in_code
             continue
         if in_code:
-            out.append(_DIM + "    " + line + _RESET)
+            out.append(_code("    " + line))
             continue
         # A 4-space (or tab) indented line after a blank line is a code block, as in every brief:
         # it is shown as typed -- `-iname "abc*"` lost its stars to italics (find, 2026-10-13).
         if re.match(r"^(?: {4}|\t)", line) and (not out or out[-1] == "" or out[-1].startswith(_DIM)):
-            out.append(_DIM + line + _RESET)
+            out.append(_code(line))
             continue
         heading = re.match(r"^(#{1,6})\s+(.*)$", line)
         if heading:
