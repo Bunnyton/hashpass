@@ -124,8 +124,11 @@ class WikiWeb:
             return self.server._empty(HTTPStatus.BAD_REQUEST)  # noqa: SLF001
         if not self._sees(user, repo):
             return self.server._not_found(repo)                # noqa: SLF001
+        base, keep = request.args.get("base", type=int, default=0), request.args.get("keep") == "mine"
         try:
-            head, merged = store.rebase(request.args.get("base", type=int, default=0), unpack(request.get_data()))
+            local = unpack(request.get_data())
+            clash = store.conflicts(base, local)
+            head, merged = store.rebase(base, local, keep_mine=keep)
         except WikiRejected as exc:
             return self.server._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})  # noqa: SLF001
         except WikiConflict as exc:
@@ -133,6 +136,7 @@ class WikiWeb:
                                                            "head": store.head()})
         resp = self.server._blob(HTTPStatus.OK, pack(merged))  # noqa: SLF001
         resp.headers["X-Wiki-Version"] = str(head)
+        resp.headers["X-Wiki-Conflict"] = ",".join(clash)
         return resp
 
     # -- site -----------------------------------------------------------------
@@ -158,7 +162,7 @@ class WikiWeb:
     def _ctx(self, repo: str, user: str, store: WikiStore, **more: object) -> dict:
         idx = self.server.repo(repo)
         tag = next(iter(idx.tags()), "")
-        files = store.files()
+        files = store.names()
         return {"nav": True, "active": "", "repo": repo, "head": store.head(), "card": f"{repo}:{tag}" if tag else repo,
                 "pages": sorted(p for p in files if p.endswith(".md")),
                 "pictures": sorted(p for p in files if not p.endswith(".md")),

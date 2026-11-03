@@ -191,3 +191,23 @@ def test_a_page_equal_to_the_pool_one_is_no_conflict(tmp_path: Path) -> None:
     assert s.save(0, s.local_changes(0, {"wiki.md": b"same", "wiki/n.md": b"n"}), by="bob") == 2  # noqa: PLR2004
     with pytest.raises(WikiConflict):
         s.save(0, s.local_changes(0, {"wiki.md": b"other"}), by="bob")
+
+
+@pytest.mark.tier1
+def test_a_base_newer_than_the_pool_counts_as_starting_from_nothing(tmp_path: Path) -> None:
+    # review 2026-11-03: a folder remembering v7 of a pool that was reset (head 2) must not overwrite
+    s = _store(tmp_path)
+    s.save(0, {"wiki.md": b"alice"}, by="alice")
+    s.save(1, {"wiki.md": b"bob"}, by="bob")
+    with pytest.raises(WikiConflict):
+        s.save(7, s.local_changes(7, {"wiki.md": b"alice-old"}), by="alice")
+    with pytest.raises(WikiConflict):
+        s.rebase(7, {"wiki.md": b"alice-old"})
+    assert s.files()["wiki.md"] == b"bob"
+
+
+@pytest.mark.tier1
+def test_names_list_a_version_without_reading_it(tmp_path: Path) -> None:
+    s = _store(tmp_path)
+    s.save(0, {"wiki.md": b"x", "wiki/p.png": PNG}, by="bob")
+    assert s.names() == ["wiki.md", "wiki/p.png"] and s.names(0) == []

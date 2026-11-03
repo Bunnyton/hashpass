@@ -67,7 +67,8 @@ def _lone_youtube(tokens: list, idx: int) -> str | None:
     return m.group(1) if m else None
 
 
-def _title(body: str) -> str:
+def page_title(body: str) -> str:
+    """Return the first `# ...` heading of a page body ('' when there is none)."""
     m = re.search(r"^#\s+(.+?)\s*#*\s*$", body, re.MULTILINE)
     return m.group(1).strip() if m else ""
 
@@ -76,8 +77,8 @@ def render_page(text: str) -> tuple[Markup, list[str], str]:
     """Render one wiki page: (safe HTML, its tags, its title -- the first `# ...`)."""
     tags, body = parse_tags(text)
     if MarkdownIt is None:
-        return Markup("<pre>{}</pre>").format(body), tags, _title(body)
-    return Markup(_md().render(body, {})), tags, _title(body)  # noqa: S704  (no raw HTML, links validated)
+        return Markup("<pre>{}</pre>").format(body), tags, page_title(body)
+    return Markup(_md().render(body, {})), tags, page_title(body)  # noqa: S704  (no raw HTML, links validated)
 
 
 def plain(text: str) -> str:
@@ -93,7 +94,7 @@ def plain(text: str) -> str:
 def snippet(text: str, q: str, width: int = 160) -> str:
     """About `width` characters of the page around the first match of `q` (else its start)."""
     flat = plain(text)
-    title = _title(parse_tags(text)[1])
+    title = page_title(parse_tags(text)[1])
     if title and flat.startswith(title):
         flat = flat[len(title):].strip()
     at = flat.casefold().find(q.casefold()) if q else -1

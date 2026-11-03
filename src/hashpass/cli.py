@@ -11,6 +11,7 @@ import re
 import secrets
 import select
 import selectors
+import shutil
 import signal
 import socket
 import stat
@@ -1965,7 +1966,8 @@ def _push_call(fn: Callable[..., object], *args: object, **kwargs: object) -> ob
 
 _SOURCE_NAME = "source.tar.gz"          # the whole task dir, attached on push (authors/admins read it)
 _SOURCE_MAX = 8 * 1024 * 1024           # the pool's per-attachment cap
-_NOT_SOURCES = ("wiki.md", "wiki", ".hashpass.json")   # the wiki goes aside; the clone marker stays home
+_WIKI_ASIDE = ".hashpass-wiki-pool"     # the pool's copy of pages both sides changed (clone)
+_NOT_SOURCES = ("wiki.md", "wiki", ".hashpass.json", _WIKI_ASIDE)   # wiki aside; local markers stay home
 
 
 def pack_task_source(task_dir: Path) -> bytes:
@@ -2236,7 +2238,7 @@ def _push_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io, message:
         done = client.wiki_push(name, base, wiki_pack(files), message)
     except WikiConflict as exc:
         io.write(f"\x1b[33m⚠ wiki на пуле правили после твоей версии (страницы: {', '.join(exc.paths)}) — "
-                 f"скачай изменения: hashpass clone {name} . — и отправь снова\x1b[0m\n")
+                 f"скачай изменения: hashpass clone {name} {folder} — и отправь снова\x1b[0m\n")
         return
     except (urllib.error.URLError, OSError, RuntimeError, ValueError) as exc:
         io.write(f"\x1b[33m⚠ wiki не отправлена: {exc}\x1b[0m\n")
@@ -2258,19 +2260,27 @@ def _pull_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io) -> None:
             return
         head, blob = got
         merged = wiki_unpack(blob)
+        clash: list[str] = []
     else:
-        try:
-            head, blob = client.wiki_rebase(name, base, wiki_pack(local))
-        except WikiConflict as exc:
-            msg = (f"wiki: страницы {', '.join(exc.paths)} поменяли и на пуле, и здесь — ничего не тронул; "
-                   f"сверь со страницей на сайте и перенеси свои правки вручную")
-            raise RuntimeError(msg) from exc
+        head, blob, clash = client.wiki_rebase(name, base, wiki_pack(local), keep_mine=True)
         merged = wiki_unpack(blob)
     if not head:
+        io.write(f"\x1b[2mу {name} на пуле wiki пока нет\x1b[0m\n")
         return
     _write_wiki(folder, merged)
     _set_wiki_base(folder, client.base_url, head)
     io.write(f"\x1b[32m✓ wiki обновлена до версии {head}\x1b[0m\n")
+    if clash:                         # mine stay; the pool's lie aside for the author to reconcile
+        got = client.wiki_get(name)
+        theirs = wiki_unpack(got[1]) if got else {}
+        aside = folder / _WIKI_ASIDE
+        shutil.rmtree(aside, ignore_errors=True)
+        for path in clash:
+            if path in theirs:
+                (aside / path).parent.mkdir(parents=True, exist_ok=True)
+                (aside / path).write_bytes(theirs[path])
+        io.write(f"\x1b[33m⚠ страницы {', '.join(clash)} поменяли и на пуле, и здесь: твои — на месте, "
+                 f"версии с пула — в {aside}/. Сверь, перенеси нужное и снова hashpass push\x1b[0m\n")
 
 
 def _set_visibility(client: RemoteRegistry, name: str, visibility: str) -> None:

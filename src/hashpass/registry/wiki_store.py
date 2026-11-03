@@ -204,8 +204,20 @@ class WikiStore:
             raise FileNotFoundError(path)
         return target.read_bytes()
 
+    def names(self, n: int | None = None) -> list[str]:
+        """Return the paths of version `n` (None: the newest) without reading them."""
+        root = self.snapshot(n)
+        if root is None or not root.is_dir():
+            return []
+        return sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file())
+
+    def _base(self, base: int) -> int:
+        """Treat a version this wiki never had (the pool was reset, the wiki made anew) as «from nothing»."""
+        return base if 0 <= base <= self.head() else 0
+
     def changed_since(self, base: int) -> set[str]:
         """Return the pages changed by the versions after `base`."""
+        base = self._base(base)
         return {p for r in self._index() if int(r["n"]) > base for p in r.get("changed", [])}
 
     def _clash(self, base: int, changes: dict[str, bytes | None], head_files: dict[str, bytes]) -> list[str]:
@@ -214,18 +226,27 @@ class WikiStore:
 
     def local_changes(self, base: int, local: dict[str, bytes]) -> dict[str, bytes | None]:
         """Return what `local` changed against version `base` (None: deleted)."""
-        old = self.files(base)
+        old = self.files(self._base(base))
         out: dict[str, bytes | None] = {p: data for p, data in local.items() if old.get(p) != data}
         out.update({p: None for p in old if p not in local})
         return out
 
-    def rebase(self, base: int, local: dict[str, bytes]) -> tuple[int, dict[str, bytes]]:
-        """Return (head, the newest wiki with `local`'s own changes on top); write nothing."""
+    def conflicts(self, base: int, local: dict[str, bytes]) -> list[str]:
+        """Return the pages `local` and the pool both changed since `base`, now different."""
+        return self._clash(base, self.local_changes(base, local), self.files())
+
+    def rebase(self, base: int, local: dict[str, bytes], *, keep_mine: bool = False) -> tuple[int, dict[str, bytes]]:
+        """
+        Return (head, the newest wiki with `local`'s own changes on top); write nothing.
+
+        A page both sides changed raises WikiConflict -- or, with `keep_mine`, stays as `local`
+        has it (the caller puts the pool's copy aside for the author to reconcile).
+        """
         mine = self.local_changes(base, local)
         head = self.head()
         merged = self.files(head)
         clash = self._clash(base, mine, merged)
-        if clash:
+        if clash and not keep_mine:
             raise WikiConflict(clash)
         for path, data in mine.items():
             if data is None:

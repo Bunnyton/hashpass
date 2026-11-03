@@ -22,7 +22,7 @@ from hashpass.registry import courses as course_model
 from hashpass.registry.access import can
 from hashpass.registry.revisions import revision_version
 from hashpass.registry.web import _env, history_href
-from hashpass.registry.wiki_render import plain, render_page, snippet
+from hashpass.registry.wiki_render import page_title, plain, snippet
 from hashpass.registry.wiki_store import parse_tags
 
 if TYPE_CHECKING:
@@ -158,13 +158,15 @@ class SearchWeb:
             if not self.server._may_see_repo(user, repo):         # noqa: SLF001
                 continue
             try:
-                files = self.server.wiki(repo).files()
-            except ValueError:
-                continue
-            main_tags = parse_tags(files.get("wiki.md", b"").decode("utf-8", "replace"))[0]
-            for page in sorted(p for p in files if p.endswith(".md")):
-                text = files[page].decode("utf-8", "replace")
-                _html, tags, title = render_page(text)
+                store = self.server.wiki(repo)
+                pages = {p: store.read(p).decode("utf-8", "replace") for p in store.names() if p.endswith(".md")}
+            except (ValueError, OSError):
+                continue            # pictures are never read: a search must not pull megabytes
+            main_tags = parse_tags(pages.get("wiki.md", ""))[0]
+            for page in sorted(pages):
+                text = pages[page]
+                tags, body = parse_tags(text)
+                title = page_title(body)
                 tags = tags or main_tags
                 if tag is not None:
                     hit = page == "wiki.md" and tag in tags

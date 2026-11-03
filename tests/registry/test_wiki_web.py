@@ -120,7 +120,7 @@ def test_the_card_has_a_wiki_button(pool: _Courses) -> None:
 
 
 @pytest.mark.tier1
-def test_deleting_the_task_drops_its_wiki_and_a_fork_keeps_a_copy(pool: _Courses) -> None:
+def test_deleting_the_task_keeps_its_wiki_and_a_fork_keeps_a_copy(pool: _Courses) -> None:
     _push(pool, {"wiki.md": MAIN.encode()})
     _push(pool, {"wiki.md": b"# v2\n"}, base=1)
     code, _ = _http("POST", f"{pool.url}/revisions/eve/git-init/fork", token=pool.tok["eve"],
@@ -130,5 +130,6 @@ def test_deleting_the_task_drops_its_wiki_and_a_fork_keeps_a_copy(pool: _Courses
     assert eve[0] in (200, 404)
     assert "версия 2" in _page(_browser(pool, "eve"), f"{pool.url}/web/wiki/eve/git-init/history")[1]
     assert _http("DELETE", f"{pool.url}/task/bob/git-init/1", token=pool.tok["bob"])[0] == 200  # noqa: PLR2004
-    assert not pool.r.store.root.joinpath(".repos/bob/git-init/wiki").exists()
+    # spec: the wiki goes only with the repository -- deleting a tag keeps it (review 2026-11-03)
+    assert pool.r.store.root.joinpath(".repos/bob/git-init/wiki/v2").is_dir()
     assert pool.r.store.root.joinpath(".repos/eve/git-init/wiki/v2").is_dir()

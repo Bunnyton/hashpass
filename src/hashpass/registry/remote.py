@@ -878,16 +878,24 @@ class RemoteRegistry:
             raise _wiki_error(exc) from exc
         return json.loads(raw.decode("utf-8")) if raw else {}
 
-    def wiki_rebase(self, name: str, base: int, blob: bytes, *, token: str | None = None) -> tuple[int, bytes]:
-        """Return (newest version, the newest wiki with the local changes on top); 409 -> WikiConflict."""
+    def wiki_rebase(self, name: str, base: int, blob: bytes, *, token: str | None = None,
+                    keep_mine: bool = False) -> tuple[int, bytes, list[str]]:
+        """
+        Return (newest version, the newest wiki with the local changes on top, pages both changed).
+
+        Without `keep_mine` a page both sides changed is a 409 -> WikiConflict; with it, the
+        local page stays and the page is named in the third item.
+        """
+        keep = "&keep=mine" if keep_mine else ""
         try:
             body, headers = self._request(
-                "POST", f"/wiki/{name}/rebase?base={int(base)}", data=blob,
+                "POST", f"/wiki/{name}/rebase?base={int(base)}{keep}", data=blob,
                 headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}",
                          "Content-Type": "application/gzip"})
         except urllib.error.HTTPError as exc:
             raise _wiki_error(exc) from exc
-        return int(headers.get("X-Wiki-Version") or 0), body
+        clash = [p for p in (headers.get("X-Wiki-Conflict") or "").split(",") if p]
+        return int(headers.get("X-Wiki-Version") or 0), body, clash
 
     def pull_task(self, ref: str, dest_task_dir: Path, *, token: str | None = None) -> None:
         """Pull a task's artifacts into dest_task_dir (requires a login token)."""

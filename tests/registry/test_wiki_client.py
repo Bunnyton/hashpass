@@ -111,7 +111,7 @@ def test_clone_into_the_working_folder_merges_and_the_next_push_goes(pool: _Pool
 
 
 @pytest.mark.tier1
-def test_clone_refuses_when_the_same_page_was_edited_on_both_sides(pool: _Pool, tmp_path: Path) -> None:
+def test_clone_puts_the_pool_page_aside_when_both_sides_edited_it(pool: _Pool, tmp_path: Path) -> None:
     env, d = _env(tmp_path), _folder(tmp_path)
     client = _client(pool, env)
     io, _out = _io()
@@ -119,9 +119,18 @@ def test_clone_refuses_when_the_same_page_was_edited_on_both_sides(pool: _Pool, 
     _http("POST", f"{pool.url}/wiki/bob/lab?base=1", token=pool.tok["bob"],
           data=pack({"wiki.md": b"# site\n", "wiki/more.md": b"# More\n"}))
     (d / "wiki.md").write_text("# mine\n", encoding="utf-8")
-    with pytest.raises(RuntimeError, match=r"wiki\.md"):
-        cli.cmd_source(env, "bob/lab:1", str(d), pool.url, io=io)
+    # review 2026-11-03: the clone must lead out of the conflict -- mine stays, the pool's lies aside,
+    # the base moves on, so the next push goes
+    assert cli.cmd_source(env, "bob/lab:1", str(d), pool.url, io=io) == 0
+    said = "".join(_out)
+    assert "wiki.md" in said and ".hashpass-wiki-pool" in said
     assert (d / "wiki.md").read_text(encoding="utf-8") == "# mine\n"
+    assert (d / ".hashpass-wiki-pool" / "wiki.md").read_text(encoding="utf-8") == "# site\n"
+    assert cli._wiki_base(d, pool.url) == 2  # noqa: PLR2004, SLF001
+    with tarfile.open(fileobj=BytesIO(cli.pack_task_source(d)), mode="r:gz") as tar:
+        assert not any(n.startswith(".hashpass-wiki-pool") for n in tar.getnames())
+    cli._push_wiki(client, "bob/lab", d, io, "")                  # noqa: SLF001
+    assert _head(pool) == 3  # noqa: PLR2004
 
 
 @pytest.mark.tier1

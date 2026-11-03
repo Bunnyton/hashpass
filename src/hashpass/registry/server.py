@@ -464,9 +464,6 @@ class PoolServer:
                 shutil.rmtree(self.attachments().ref_path(rev_ref), ignore_errors=True)
             with contextlib.suppress(ValueError, OSError):
                 shutil.rmtree(self.store.dir(r_name, r_version), ignore_errors=True)
-        if not self.repo(name).tags():                 # the last tag is gone: so is the wiki
-            with contextlib.suppress(ValueError):
-                self.wiki(name).drop()
 
     def _purge_rejected(self) -> None:
         """
