@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+# weather — прогноз погоды. Город берёт из переменной окружения CITY, единицы — из UNITS
+# (C — по умолчанию, F — Фаренгейты). Сети не нужно: прогноз — из таблицы, для остальных
+# городов — честно выдуманный по названию.
+use strict;
+use warnings;
+# Только perl-base (в системе нет полного perl): строки — байты UTF-8 как есть.
+
+my %sky = (
+    'Казань'    => [3,   'мокрый снег'],
+    'Мурманск'  => [-12, 'полярная ночь, ясно'],
+    'Москва'    => [1,   'пасмурно'],
+    'Сочи'      => [14,  'солнце'],
+    'Новосибирск' => [-9, 'снег'],
+);
+my @kinds = ('ясно', 'облачно', 'дождь', 'снег', 'туман', 'ветер');
+
+my $city = $ENV{CITY};
+if (!defined $city || $city eq '') {
+    print STDERR "weather: в окружении нет CITY — не знаю, где ты.\n";
+    exit 1;
+}
+my $units = $ENV{UNITS} // 'C';
+if ($units ne 'C' && $units ne 'F') {
+    print STDERR "weather: UNITS бывает C или F, а не «$units».\n";
+    exit 2;
+}
+my ($t, $what);
+if ($sky{$city}) {
+    ($t, $what) = @{ $sky{$city} };
+} else {
+    my $sum = 0;
+    $sum += ord($_) for split //, $city;
+    $sum = $sum * 7 + length $city;
+    $t = $sum % 41 - 20;
+    $what = $kinds[$sum % @kinds];
+}
+$t = sprintf('%.0f', $t * 9 / 5 + 32) if $units eq 'F';
+printf "%s: %s%d°%s, %s\n", $city, ($t > 0 ? '+' : ''), $t, $units, $what;

@@ -46,6 +46,7 @@ BLOCKS=(
     'bunnyton/linux | Текст: fruit-store'
     'bunnyton/linux | Регулярные выражения: regex regex-pro'
     'bunnyton/linux | Скрипты: my-command my-service'
+    'bunnyton/linux | Bash-скрипты: bash-env'
     'bunnyton/git | Git: git-init git-log git-branch git-graph git-remote'
     'bunnyton/git | Git — глубже: git-ignore git-reset git-conflict git-stash git-rebase git-squash git-cherry-pick'
     'bunnyton/git | Git — мастер: git-reflog git-bisect git-internals git-hooks git-deploy'

@@ -1,0 +1,67 @@
+# bash-env — переменные окружения (модуль «Bash-скрипты», дизайн
+# docs/superpowers/specs/2026-11-04-модуль-bash-design.md). Персонаж — weather (perl): город берёт
+# из окружения (CITY), единицы — из UNITS. Шаги: показать окружение → задать CITY так, чтобы
+# weather увидела (доза export.md, когда переменная осталась в оболочке) → Мурманск в °F только
+# для одной команды → следом снова Казань в °C (доза prefix.md, если CITY/UNITS переписаны).
+# Ответы — на экране, приёмка по выводу: у «CITY=X weather» первое слово — присваивание, по
+# команде его не узнать.
+
+image bash-env:1
+
+# data: data/bin/weather — руками
+copy data/bin /usr/local/bin
+run chmod 755 /usr/local/bin/weather
+
+hidden hp
+
+settings
+  pager on
+
+say "Программе мало знать, что делать. Ей нужно знать, где она и для кого."
+read brief.md
+
+stage
+  say "Покажи все переменные окружения своей оболочки"
+  solve env
+  accept output "^HOME=/home/student$"
+  accept output "^PATH=/"
+  on pass say "HOME, USER, PATH, LANG система задала при входе — и их видит каждая программа, которую ты запускаешь."
+  hint tries 5 say "Какие команды показывают окружение, сказано в теории; readme покажет её снова."
+
+stage
+  say "weather не знает, где ты. Скажи ей, что ты в Казани, и покажи прогноз"
+  solve:
+    export CITY=Казань
+    weather
+  accept output "^Казань: "
+  neutral ls cat pwd echo printenv env
+  on pass say "Теперь CITY видит любая программа, запущенная из этой оболочки. Но только из этой: в новом терминале её нет."
+  hint output "в окружении нет CITY" read export.md
+  hint output "CITY: command not found" say "Пробелы вокруг = превращают присваивание в команду: bash ищет программу с именем CITY."
+  hint tries 5 say "Что показывают printenv CITY и echo $CITY? Почему они расходятся?"
+  hint tries 10 say "help export — справка прямо в bash."
+
+stage
+  say "Друг из Мурманска спрашивает погоду в Фаренгейтах. Покажи её только для этой команды: потом weather снова про Казань и в Цельсиях"
+  solve:
+    export CITY=Казань
+    CITY=Мурманск UNITS=F weather
+  accept output "^Мурманск: .*°F"
+  neutral ls cat pwd echo printenv env
+  on pass say "Мурманск в Фаренгейтах: +10 звучит теплее, чем -12."
+  hint output "UNITS бывает" say "Прочитай ответ weather: какие значения UNITS она понимает?"
+  hint tries 5 say "Город weather берёт из окружения. Откуда она может взять единицы?"
+  hint tries 10 say "man bash, раздел ENVIRONMENT: как дать переменную одной команде."
+
+stage
+  solve:
+    export CITY=Казань
+    weather
+  accept output "^Казань: .*°C"
+  neutral ls cat pwd echo printenv env
+  hint output "Мурманск" read prefix.md
+  hint output "°F" say "Город тот, а градусы — нет. Как убрать переменную из окружения совсем?"
+  hint tries 5 say "Что сейчас лежит в CITY и UNITS? printenv покажет."
+  on pass say "weather написана на Perl и читает $ENV{CITY}. Python берёт то же из os.environ, Node.js — из process.env, Go — os.Getenv: окружение одно на все языки."
+
+exec finale
