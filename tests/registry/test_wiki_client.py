@@ -61,7 +61,7 @@ def test_push_sends_the_wiki_once_and_remembers_its_version(pool: _Pool, tmp_pat
     client = _client(pool, env)
     io, out = _io()
     cli._push_wiki(client, "bob/lab", d, io, "первая")           # noqa: SLF001
-    assert _head(pool) == 1 and cli._wiki_base(d) == 1            # noqa: SLF001
+    assert _head(pool) == 1 and cli._wiki_base(d, pool.url) == 1            # noqa: SLF001
     assert "wiki: версия 1" in "".join(out)
     cli._push_wiki(client, "bob/lab", d, io, "")                  # noqa: SLF001
     assert _head(pool) == 1 and "wiki без изменений" in "".join(out)
@@ -89,7 +89,7 @@ def test_a_browser_edit_of_the_same_page_stops_the_wiki_not_the_task(pool: _Pool
     cli._push_wiki(client, "bob/lab", d, io, "")                  # noqa: SLF001
     said = "".join(out)
     assert "правили после твоей версии" in said and "wiki.md" in said and "hashpass clone bob/lab" in said
-    assert _head(pool) == 2 and cli._wiki_base(d) == 1  # noqa: PLR2004, SLF001
+    assert _head(pool) == 2 and cli._wiki_base(d, pool.url) == 1  # noqa: PLR2004, SLF001
 
 
 @pytest.mark.tier1
@@ -104,7 +104,7 @@ def test_clone_into_the_working_folder_merges_and_the_next_push_goes(pool: _Pool
     assert cli.cmd_source(env, "bob/lab:1", str(d), pool.url, io=io) == 0
     assert (d / "wiki.md").read_text(encoding="utf-8") == "# Lab from the site\n"
     assert (d / "wiki" / "more.md").read_text(encoding="utf-8") == "# More, local\n"
-    assert (d / "Taskfile").read_text(encoding="utf-8") == "stage\n" and cli._wiki_base(d) == 2  # noqa: PLR2004, SLF001
+    assert (d / "Taskfile").read_text(encoding="utf-8") == "stage\n" and cli._wiki_base(d, pool.url) == 2  # noqa: PLR2004, SLF001
     assert "wiki обновлена до версии 2" in "".join(out)
     cli._push_wiki(client, "bob/lab", d, io, "")                  # noqa: SLF001
     assert _head(pool) == 3  # noqa: PLR2004
@@ -141,3 +141,14 @@ def test_a_proposal_push_does_not_send_the_wiki(pool: _Pool, tmp_path: Path) -> 
     cli._push_wiki(_client(pool, env, "eve"), "bob/lab", d, io, "", proposal=True)  # noqa: SLF001
     assert "wiki не отправлена" in "".join(out)
     assert RemoteRegistry(pool.url).wiki_get("bob/lab", token=pool.tok["bob"]) is None
+
+
+@pytest.mark.tier1
+def test_each_pool_keeps_its_own_wiki_version_in_the_folder(pool: _Pool, tmp_path: Path) -> None:
+    # pushing the same folder to two pools: the version one pool gave says nothing about the other
+    d = _folder(tmp_path)
+    cli._set_wiki_base(d, "https://other.example:8080", 7)       # noqa: SLF001
+    io, _out = _io()
+    cli._push_wiki(_client(pool, _env(tmp_path)), "bob/lab", d, io, "")  # noqa: SLF001
+    assert cli._wiki_base(d, pool.url) == 1                       # noqa: SLF001
+    assert cli._wiki_base(d, "https://other.example:8080") == 7  # noqa: PLR2004, SLF001

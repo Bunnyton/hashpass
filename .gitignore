@@ -46,3 +46,6 @@ dist/
 content/material/
 # task data ships build output on purpose (git-ignore: a dist/ the student hides)
 !content/tasks/*/data/**/dist/
+
+# a clone/push marker of one machine (origin, wiki version per pool)
+.hashpass.json

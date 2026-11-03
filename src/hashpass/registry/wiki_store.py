@@ -208,6 +208,10 @@ class WikiStore:
         """Return the pages changed by the versions after `base`."""
         return {p for r in self._index() if int(r["n"]) > base for p in r.get("changed", [])}
 
+    def _clash(self, base: int, changes: dict[str, bytes | None], head_files: dict[str, bytes]) -> list[str]:
+        """Pages both sides changed since `base` -- and that really differ from the newest version."""
+        return sorted(p for p in set(changes) & self.changed_since(base) if changes[p] != head_files.get(p))
+
     def local_changes(self, base: int, local: dict[str, bytes]) -> dict[str, bytes | None]:
         """Return what `local` changed against version `base` (None: deleted)."""
         old = self.files(base)
@@ -218,11 +222,11 @@ class WikiStore:
     def rebase(self, base: int, local: dict[str, bytes]) -> tuple[int, dict[str, bytes]]:
         """Return (head, the newest wiki with `local`'s own changes on top); write nothing."""
         mine = self.local_changes(base, local)
-        clash = sorted(set(mine) & self.changed_since(base))
-        if clash:
-            raise WikiConflict(clash)
         head = self.head()
         merged = self.files(head)
+        clash = self._clash(base, mine, merged)
+        if clash:
+            raise WikiConflict(clash)
         for path, data in mine.items():
             if data is None:
                 merged.pop(path, None)
@@ -259,11 +263,11 @@ class WikiStore:
             else:
                 check_file(path, data)
         with self._locked():
-            clash = sorted(set(changes) & self.changed_since(base))
-            if clash:
-                raise WikiConflict(clash)
             head = self.head()
             current = self.files(head)
+            clash = self._clash(base, changes, current)
+            if clash:
+                raise WikiConflict(clash)
             real = {p: d for p, d in changes.items() if current.get(p) != d and not (d is None and p not in current)}
             if not real:
                 return head

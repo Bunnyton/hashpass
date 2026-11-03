@@ -180,3 +180,14 @@ def test_pack_unpack_round_trip_and_an_escaping_member_is_refused() -> None:
         tar.addfile(info, io.BytesIO(b"x"))
     with pytest.raises(WikiRejected):
         unpack(buf.getvalue())
+
+
+@pytest.mark.tier1
+def test_a_page_equal_to_the_pool_one_is_no_conflict(tmp_path: Path) -> None:
+    # a folder that never kept its version (or lost the marker) but holds exactly the pool's pages
+    s = _store(tmp_path)
+    s.save(0, {"wiki.md": b"same"}, by="bob")
+    assert s.rebase(0, {"wiki.md": b"same"}) == (1, {"wiki.md": b"same"})
+    assert s.save(0, s.local_changes(0, {"wiki.md": b"same", "wiki/n.md": b"n"}), by="bob") == 2  # noqa: PLR2004
+    with pytest.raises(WikiConflict):
+        s.save(0, s.local_changes(0, {"wiki.md": b"other"}), by="bob")

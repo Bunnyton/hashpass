@@ -2196,17 +2196,25 @@ def _marker(folder: Path) -> dict[str, object]:
     return data if isinstance(data, dict) else {}
 
 
-def _wiki_base(folder: Path) -> int:
-    """Return the wiki version this folder started from (0: never cloned or pushed)."""
+def _wiki_base(folder: Path, pool: str) -> int:
+    """
+    Return the wiki version this folder started from on `pool` (0: never cloned or pushed there).
+
+    Kept per pool: a folder pushed to an author's local pool and to the real one has two
+    histories, and the version one gave says nothing about the other.
+    """
+    bases = _marker(folder).get("wiki")
     try:
-        return int(_marker(folder).get("wiki") or 0)
+        return int(bases.get(registry_key(pool)) or 0) if isinstance(bases, dict) else 0
     except (TypeError, ValueError):
         return 0
 
 
-def _set_wiki_base(folder: Path, n: int) -> None:
-    (folder / _ORIGIN_FILE).write_text(json.dumps(_marker(folder) | {"wiki": n}, ensure_ascii=False) + "\n",
-                                       encoding="utf-8")
+def _set_wiki_base(folder: Path, pool: str, n: int) -> None:
+    marker = _marker(folder)
+    bases = marker.get("wiki") if isinstance(marker.get("wiki"), dict) else {}
+    marker["wiki"] = {**bases, registry_key(pool): n}
+    (folder / _ORIGIN_FILE).write_text(json.dumps(marker, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def _push_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io, message: str = "", *,  # noqa: PLR0913
@@ -2223,7 +2231,7 @@ def _push_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io, message:
     if proposal:
         io.write("\x1b[33m⚠ wiki не отправлена: её правят владелец и соавторы задания\x1b[0m\n")
         return
-    base = _wiki_base(folder)
+    base = _wiki_base(folder, client.base_url)
     try:
         done = client.wiki_push(name, base, wiki_pack(files), message)
     except WikiConflict as exc:
@@ -2235,7 +2243,7 @@ def _push_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io, message:
         return
     n = int(done.get("n") or 0)
     if n > base:
-        _set_wiki_base(folder, n)
+        _set_wiki_base(folder, client.base_url, n)
         io.write(f"\x1b[36m↑ wiki: версия {n}\x1b[0m ({', '.join(map(str, done.get('changed', [])))})\n")
     else:
         io.write("\x1b[2mwiki без изменений\x1b[0m\n")
@@ -2243,7 +2251,7 @@ def _push_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io, message:
 
 def _pull_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io) -> None:
     """Bring the pool's newest wiki into a working folder, keeping its own unsent pages."""
-    base, local = _wiki_base(folder), _local_wiki(folder)
+    base, local = _wiki_base(folder, client.base_url), _local_wiki(folder)
     if not local and not base:
         got = client.wiki_get(name)
         if got is None:
@@ -2261,7 +2269,7 @@ def _pull_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io) -> None:
     if not head:
         return
     _write_wiki(folder, merged)
-    _set_wiki_base(folder, head)
+    _set_wiki_base(folder, client.base_url, head)
     io.write(f"\x1b[32m✓ wiki обновлена до версии {head}\x1b[0m\n")
 
 
