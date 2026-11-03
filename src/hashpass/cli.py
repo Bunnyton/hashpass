@@ -76,6 +76,9 @@ from hashpass.registry.remote import RemoteRegistry
 from hashpass.registry.revisions import check_tag, human_ref, parse_version
 from hashpass.registry.server import PoolServer, make_server
 from hashpass.registry.token import token_user
+from hashpass.registry.wiki_store import WikiConflict
+from hashpass.registry.wiki_store import pack as wiki_pack
+from hashpass.registry.wiki_store import unpack as wiki_unpack
 from hashpass.taskbuild import build_task
 from hashpass.taskdigest import task_digest
 from hashpass.taskrun import run_task, task_goal
@@ -1962,6 +1965,7 @@ def _push_call(fn: Callable[..., object], *args: object, **kwargs: object) -> ob
 
 _SOURCE_NAME = "source.tar.gz"          # the whole task dir, attached on push (authors/admins read it)
 _SOURCE_MAX = 8 * 1024 * 1024           # the pool's per-attachment cap
+_NOT_SOURCES = ("wiki.md", "wiki", ".hashpass.json")   # the wiki goes aside; the clone marker stays home
 
 
 def pack_task_source(task_dir: Path) -> bytes:
@@ -1969,9 +1973,10 @@ def pack_task_source(task_dir: Path) -> bytes:
     buf = _bytes_io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for path in sorted(task_dir.rglob("*")):
-            if "__pycache__" in path.parts:
-                continue
-            tar.add(path, arcname=path.relative_to(task_dir).as_posix(), recursive=False)
+            rel = path.relative_to(task_dir)
+            if "__pycache__" in path.parts or rel.parts[0] in _NOT_SOURCES:
+                continue      # the wiki has a home of its own on the pool (spec 2026-11-03)
+            tar.add(path, arcname=rel.as_posix(), recursive=False)
     return buf.getvalue()
 
 
@@ -2142,7 +2147,122 @@ def cmd_push(env: Home, ref: str, registry: str | None = None, *,  # noqa: PLR09
             sys.stdout.write(f"отправлено {human_ref(done['ref'])}\n")
     if visibility is not None and not any(d.get("proposal") for d in client.last_push):
         _set_visibility(client, name, visibility)
+    folder = _task_folder(store, ref)
+    if folder is not None:
+        _push_wiki(client, getattr(client, "push_target", "") or name, folder, io, message,
+                   proposal=any(d.get("proposal") for d in client.last_push))
     return 0
+
+
+def _task_folder(store: ImageStore, ref: str) -> Path | None:
+    """Return the folder of the Taskfile `ref` was built from (None: an image, or it is gone)."""
+    try:
+        taskfile = store.get(ref).taskfile_path
+    except KeyError:
+        return None
+    path = Path(taskfile) if taskfile else None
+    return path.parent if path is not None and path.is_file() else None
+
+
+def _local_wiki(folder: Path) -> dict[str, bytes]:
+    """Read a task folder's wiki: wiki.md and every file under wiki/ (path -> bytes)."""
+    files: dict[str, bytes] = {}
+    if (folder / "wiki.md").is_file():
+        files["wiki.md"] = (folder / "wiki.md").read_bytes()
+    root = folder / "wiki"
+    for path in sorted(root.rglob("*")) if root.is_dir() else []:
+        rel = path.relative_to(folder)
+        if path.is_file() and not any(part.startswith(".") or part == "__pycache__" for part in rel.parts):
+            files[rel.as_posix()] = path.read_bytes()
+    return files
+
+
+def _write_wiki(folder: Path, files: dict[str, bytes]) -> None:
+    """Make the folder's wiki exactly `files` (pages gone on the pool go here too)."""
+    for path in _local_wiki(folder):
+        if path not in files:
+            (folder / path).unlink()
+    for path, data in files.items():
+        target = folder / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+
+def _marker(folder: Path) -> dict[str, object]:
+    try:
+        data = json.loads((folder / _ORIGIN_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _wiki_base(folder: Path) -> int:
+    """Return the wiki version this folder started from (0: never cloned or pushed)."""
+    try:
+        return int(_marker(folder).get("wiki") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _set_wiki_base(folder: Path, n: int) -> None:
+    (folder / _ORIGIN_FILE).write_text(json.dumps(_marker(folder) | {"wiki": n}, ensure_ascii=False) + "\n",
+                                       encoding="utf-8")
+
+
+def _push_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io, message: str = "", *,  # noqa: PLR0913
+               proposal: bool = False) -> None:
+    """
+    Send the folder's wiki as a version of its own, on top of the version it started from.
+
+    Spec 2026-11-03: a wiki edited on the pool since then is never overwritten -- the push says
+    which pages and how to get them (`hashpass clone`); the task itself is already sent.
+    """
+    files = _local_wiki(folder)
+    if not files:
+        return
+    if proposal:
+        io.write("\x1b[33m⚠ wiki не отправлена: её правят владелец и соавторы задания\x1b[0m\n")
+        return
+    base = _wiki_base(folder)
+    try:
+        done = client.wiki_push(name, base, wiki_pack(files), message)
+    except WikiConflict as exc:
+        io.write(f"\x1b[33m⚠ wiki на пуле правили после твоей версии (страницы: {', '.join(exc.paths)}) — "
+                 f"скачай изменения: hashpass clone {name} . — и отправь снова\x1b[0m\n")
+        return
+    except (urllib.error.URLError, OSError, RuntimeError, ValueError) as exc:
+        io.write(f"\x1b[33m⚠ wiki не отправлена: {exc}\x1b[0m\n")
+        return
+    n = int(done.get("n") or 0)
+    if n > base:
+        _set_wiki_base(folder, n)
+        io.write(f"\x1b[36m↑ wiki: версия {n}\x1b[0m ({', '.join(map(str, done.get('changed', [])))})\n")
+    else:
+        io.write("\x1b[2mwiki без изменений\x1b[0m\n")
+
+
+def _pull_wiki(client: RemoteRegistry, name: str, folder: Path, io: Io) -> None:
+    """Bring the pool's newest wiki into a working folder, keeping its own unsent pages."""
+    base, local = _wiki_base(folder), _local_wiki(folder)
+    if not local and not base:
+        got = client.wiki_get(name)
+        if got is None:
+            return
+        head, blob = got
+        merged = wiki_unpack(blob)
+    else:
+        try:
+            head, blob = client.wiki_rebase(name, base, wiki_pack(local))
+        except WikiConflict as exc:
+            msg = (f"wiki: страницы {', '.join(exc.paths)} поменяли и на пуле, и здесь — ничего не тронул; "
+                   f"сверь со страницей на сайте и перенеси свои правки вручную")
+            raise RuntimeError(msg) from exc
+        merged = wiki_unpack(blob)
+    if not head:
+        return
+    _write_wiki(folder, merged)
+    _set_wiki_base(folder, head)
+    io.write(f"\x1b[32m✓ wiki обновлена до версии {head}\x1b[0m\n")
 
 
 def _set_visibility(client: RemoteRegistry, name: str, visibility: str) -> None:
@@ -2364,6 +2484,9 @@ def cmd_source(env: Home, ref: str, dest: str | None = None, registry: str | Non
     client = RemoteRegistry(url, cache=CredentialCache(env.creds))
     name, version = split_ref(ref)
     out = Path(dest) if dest else Path.cwd() / name.rsplit("/", 1)[-1]
+    if (out / "Taskfile").is_file():           # a working folder: bring only the wiki's changes
+        _pull_wiki(client, name, out, io)
+        return 0
     if out.exists() and any(out.iterdir()):
         msg = f"{out} уже существует и не пуст — укажите другой каталог: hashpass clone {ref} <каталог>"
         raise RuntimeError(msg)
@@ -2381,6 +2504,7 @@ def cmd_source(env: Home, ref: str, dest: str | None = None, registry: str | Non
         if filename in ("", _SOURCE_NAME):
             unpack_task_source(blob, out)
             _remember_origin(out, name)
+            _pull_wiki(client, name, out, io)
             io.write(f"\x1b[32m✓ исходники {ref}\x1b[0m → {out}\n"
                      f"\x1b[2m  поправьте, соберите (hashpass build) и отправьте (hashpass push -m «что "
                      f"поменялось») — версия уйдёт в {name}: сразу или предложением владельцу\x1b[0m\n")

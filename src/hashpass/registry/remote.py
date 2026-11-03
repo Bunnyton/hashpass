@@ -36,6 +36,7 @@ from hashpass.registry.creds import CredentialCache
 from hashpass.registry.refs import closure_refs, normalize_ref, split_ref
 from hashpass.registry.revisions import parse_version
 from hashpass.registry.token import token_expiry
+from hashpass.registry.wiki_store import WikiConflict
 
 _TIMEOUT = 30
 _DIGEST_HEADER = "X-Image-Digest"
@@ -852,6 +853,42 @@ class RemoteRegistry:
         result = self._get_json("/progress", token=self._auth_token(token))
         return dict(result.get("progress", {}))
 
+    # -- the task wiki (spec 2026-11-03): versions of its own, aside from the revisions ----------
+
+    def wiki_get(self, name: str, *, token: str | None = None) -> tuple[int, bytes] | None:
+        """Return (version, tar.gz) of `name`'s newest wiki; None when it has none."""
+        try:
+            body, headers = self._request("GET", f"/wiki/{name}",
+                                          headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}"})
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.NOT_FOUND:
+                return None
+            raise
+        return int(headers.get("X-Wiki-Version") or 0), body
+
+    def wiki_push(self, name: str, base: int, blob: bytes, message: str = "", *,
+                  token: str | None = None) -> dict[str, object]:
+        """Send the whole local wiki on top of version `base`: {"n", "changed"}; 409 -> WikiConflict."""
+        query = urllib.parse.urlencode({"base": base, "message": message})
+        try:
+            raw = self._send("POST", f"/wiki/{name}?{query}", data=blob,
+                             headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}",
+                                      "Content-Type": "application/gzip"})
+        except urllib.error.HTTPError as exc:
+            raise _wiki_error(exc) from exc
+        return json.loads(raw.decode("utf-8")) if raw else {}
+
+    def wiki_rebase(self, name: str, base: int, blob: bytes, *, token: str | None = None) -> tuple[int, bytes]:
+        """Return (newest version, the newest wiki with the local changes on top); 409 -> WikiConflict."""
+        try:
+            body, headers = self._request(
+                "POST", f"/wiki/{name}/rebase?base={int(base)}", data=blob,
+                headers={"Authorization": f"Bearer {self._auth_token(token or self.token)}",
+                         "Content-Type": "application/gzip"})
+        except urllib.error.HTTPError as exc:
+            raise _wiki_error(exc) from exc
+        return int(headers.get("X-Wiki-Version") or 0), body
+
     def pull_task(self, ref: str, dest_task_dir: Path, *, token: str | None = None) -> None:
         """Pull a task's artifacts into dest_task_dir (requires a login token)."""
         unpack_task(self._get_task(ref, token=self._auth_token(token)), dest_task_dir)
@@ -889,3 +926,15 @@ class RemoteRegistry:
         for item, base in (data.get("bases") or {}).items():
             self._closure_bases[str(item)] = str(base)
         return data["refs"]
+
+
+def _wiki_error(exc: urllib.error.HTTPError) -> Exception:
+    """Turn a wiki API refusal into WikiConflict (409, with pages) or a RuntimeError with the pool's words."""
+    try:
+        body = json.loads(exc.read() or b"{}")
+    except ValueError:
+        body = {}
+    if exc.code == HTTPStatus.CONFLICT:
+        return WikiConflict([str(p) for p in body.get("paths", [])])
+    return RuntimeError(str(body.get("error") or exc))
+
