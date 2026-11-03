@@ -126,6 +126,7 @@ def emulated(machine: Callable[[], str] = platform.machine) -> bool:
 
 
 _NO_MAN_SECCOMP = "MAN_DISABLE_SECCOMP=1"
+_LOADER = "/lib64/ld-linux-x86-64.so.2"      # the x86_64 images' dynamic loader
 
 
 def _man_without_seccomp(rootfs: Path) -> list[str]:
@@ -149,8 +150,11 @@ def _man_without_seccomp(rootfs: Path) -> list[str]:
             (out_dir / "hp-emulated-bashrc").write_text(f"export {_NO_MAN_SECCOMP}\n{rc}", encoding="utf-8")
             args.append(f"--bind-ro={out_dir / 'hp-emulated-bashrc'}:/etc/hp-bashrc")
         wrapper = out_dir / "hp-emulated-man"
-        wrapper.write_text(f'#!/bin/sh\n# hashpass under qemu: man-db without seccomp\n'
-                           f'{_NO_MAN_SECCOMP} exec /usr/bin/man "$@"\n', encoding="utf-8")
+        # through the loader: the HOST's AppArmor profile for /usr/bin/man (Ubuntu's man-db) would
+        # attach to «/usr/bin/man» and send troff/tbl/col into man_groff/man_filter, which may not
+        # map qemu-x86_64 -- they segfault (arm64 Ubuntu, hp-diag 2026-11-04)
+        wrapper.write_text(f'#!/bin/sh\n# hashpass under qemu: man-db without seccomp and the host man profile\n'
+                           f'{_NO_MAN_SECCOMP} exec {_LOADER} /usr/bin/man "$@"\n', encoding="utf-8")
         wrapper.chmod(0o755)
         args.append(f"--bind-ro={wrapper}:/usr/local/bin/man")
     except OSError:

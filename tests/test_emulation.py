@@ -156,7 +156,11 @@ def test_man_runs_without_its_seccomp_sandbox_under_emulation(tmp_path) -> None:
     bashrc = binds["/etc/hp-bashrc"].read_text(encoding="utf-8")
     assert bashrc.startswith("export MAN_DISABLE_SECCOMP=1\n") and "PS1='> '" in bashrc  # every shell
     wrapper = binds["/usr/local/bin/man"]                                               # sudo man too:
-    assert "MAN_DISABLE_SECCOMP=1 exec /usr/bin/man" in wrapper.read_text(encoding="utf-8")  # secure_path
+    # arm64 Ubuntu, 2026-11-04 (hp-diag): the HOST's AppArmor profile for /usr/bin/man attaches to the
+    # container's man by its path; its man_groff/man_filter children may not map qemu-x86_64 → troff,
+    # tbl, col segfault. Started through the loader, man is not «/usr/bin/man» -- no profile attaches.
+    assert ("MAN_DISABLE_SECCOMP=1 exec /lib64/ld-linux-x86-64.so.2 /usr/bin/man"
+            in wrapper.read_text(encoding="utf-8"))                                      # secure_path
     assert wrapper.stat().st_mode & 0o111
     assert not any(str(p).startswith(str(rootfs)) for p in binds.values())             # host side
     assert nspawn_emulation_args(machine=lambda: "x86_64", rootfs=rootfs) == []

@@ -9,6 +9,9 @@ sleep 20
     man -P cat man >/dev/null 2>/tmp/hp-man.err; echo "без выключателя: exit=$?"; tail -3 /tmp/hp-man.err
     MAN_DISABLE_SECCOMP=1 /usr/bin/man -P cat man >/dev/null 2>/tmp/hp-man.err
     echo "MAN_DISABLE_SECCOMP=1: exit=$?"; tail -3 /tmp/hp-man.err
+    MAN_DISABLE_SECCOMP=1 /lib64/ld-linux-x86-64.so.2 /usr/bin/man -P cat man >/dev/null 2>/tmp/hp-man.err
+    echo "через загрузчик (без профиля AppArmor хоста): exit=$?"; tail -3 /tmp/hp-man.err
+    echo "профиль: $(cat /proc/self/attr/current 2>/dev/null)"
     echo "## system"
     uname -a
     echo "page size: $(getconf PAGESIZE)"
