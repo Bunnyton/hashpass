@@ -434,6 +434,7 @@ a.item-title:hover{color:var(--accent);text-decoration:underline}
 .cell{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;font-size:12px;font-weight:800;
   background:var(--surface2);color:var(--faint);border:1px solid var(--border)}
 .cell.passed{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.cell.passed.pasted{background:var(--warn-soft);color:var(--warn)}
 .cell.started,.cell.failed{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .legend{display:inline-flex;align-items:center;gap:6px;margin:0}
 .legend .cell{width:18px;height:18px;font-size:11px}

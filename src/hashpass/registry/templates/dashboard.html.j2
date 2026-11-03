@@ -1,7 +1,7 @@
 {% extends 'base.html.j2' %}
 {% block main %}
 <h1>Прогресс студентов</h1>
-<p class='sub small legend'><span class='dim'>·</span> не выполнялось &nbsp; <span class='run'>◐</span> выполняется &nbsp; <span class='ok'>✓</span> зачтено</p>
+<p class='sub small legend'><span class='dim'>·</span> не выполнялось &nbsp; <span class='run'>◐</span> выполняется &nbsp; <span class='ok'>✓</span> зачтено &nbsp; <span class='no'>✓⚠</span> зачтено со вставками</p>
 {% if groups %}
 <p>Группы: <a class='pill' href='/web'>все</a>
 {% for g in groups %} <a class='pill' href='/web?group={{ g }}'>{{ g }}</a>{% endfor %}</p>

@@ -215,3 +215,22 @@ def test_a_renamed_course_is_followed_by_its_id(tmp_path: Path) -> None:
     assert RemoteRegistry(url).course == "bob/base"
     assert not my_courses.follow(tmp_path, url, [seen[1]])           # not listed: left as it is
     assert my_courses.mine(tmp_path, url) == ["bob/base", "eve/git"]
+
+
+@pytest.mark.tier2
+def test_a_solution_with_pastes_is_marked_next_to_every_tick(pool: _Courses, tmp_path: Path) -> None:
+    """User 2026-11-03: «куча зелёных галочек, и не видно, что человек решал не сам» -- even 2 pastes of 7."""
+    _env(tmp_path, pool)
+    invite = pool.call("GET", "/courses/bob/linux", "bob")[1]["invite"]
+    assert pool.call("POST", "/courses/bob/linux/join", "kid", {"invite": invite})[0] == 200  # noqa: PLR2004
+    use_course(pool.url, "bob/linux")
+    tok = pool.tok["kid"]
+    client = RemoteRegistry(pool.url, token=tok)
+    digest = RepoIndex(pool.r.store.root / ".repos", "bob/git-init").get("1", 1).task_digest
+    auth = {"verdict": "typed", "typed": 5, "pasted": 2}
+    assert client.submit("bob/git-init:1", digest, passed=True, authenticity=auth, token=tok)["status"] == "passed"
+    from tests.registry.test_course_web import _browser, _page  # noqa: PLC0415
+    admin = _browser(pool, "bunnyton")
+    assert "вставок: 2" in _page(admin, f"{pool.url}/c/bob/linux")[1]              # the course's matrix
+    assert "вставок: 2" in _page(admin, f"{pool.url}/c/bob/linux/u/kid")[1]        # the student in the course
+    assert "вставок: 2" in _page(_browser(pool, "kid"), f"{pool.url}/u/kid")[1]    # own page, «Решено»

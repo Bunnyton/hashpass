@@ -423,6 +423,24 @@ def history_href(user: str, ref: str, *, solved: bool) -> str:
     return f"{href}#solution" if solved else href
 
 
+def pasted_in(record: dict | None) -> int:
+    """
+    How many commands of the credited solution were pasted (0 -- typed by hand, or unknown).
+
+    User 2026-11-03: the mark stands next to every tick, not only inside the task -- and any paste
+    counts, not only a majority of them (the client's verdict says `pasted` only then).
+    """
+    auth = (record or {}).get("authenticity") or {}
+    n = auth.get("pasted")
+    n = int(n) if isinstance(n, (int, float)) and n > 0 else 0
+    return n or (1 if auth.get("verdict") == "pasted" else 0)
+
+
+def pasted_word(n: int) -> str:
+    """«вставок: N» -- the words next to a tick."""
+    return f"вставок: {n}" if n else ""
+
+
 def _cell(user: str, ref: str, record: dict | None, summary: dict | None = None) -> dict:
     """
     One matrix cell (spec 2026-10-16): `·` not run, `◐` in progress, `✓` passed.
@@ -434,11 +452,11 @@ def _cell(user: str, ref: str, record: dict | None, summary: dict | None = None)
     summary = summary or {}
     href = history_href(user, ref, solved=False)
     if status == "passed" or summary.get("passed"):
-        verdict = ((record or {}).get("authenticity") or {}).get("verdict")
-        pasted = verdict == "pasted"
+        pasted = pasted_in(record)
         return {"mark": "✓⚠" if pasted else "✓", "cls": "c no" if pasted else "c ok",
-                "href": history_href(user, ref, solved=True), "title": "зачтено" + (" (вставки)" if pasted else ""),
-                "rank": 2 if pasted else 3}
+                "href": history_href(user, ref, solved=True),
+                "title": "зачтено" + (f", {pasted_word(pasted)}" if pasted else ""),
+                "pasted": pasted, "rank": 2 if pasted else 3}
     if status == "failed" or summary.get("sessions"):
         live = bool(summary.get("live"))
         return {"mark": "◐", "cls": "c run live" if live else "c run", "href": href,
@@ -767,7 +785,8 @@ def _profile_row(user: str, number: object, ref: str, record: dict | None,
                           default=None, key=lambda v: float(v or 0)))
     return {"number": number if number is not None else "", "ref": ref,
             "ref_url": quote(ref, safe="/:"), "cell": cell,
-            "status": _STATUS_RU.get(cell["mark"], ""), "tries": len(recs),
+            "status": (f"зачтено, {pasted_word(cell['pasted'])}" if cell.get("pasted")
+                       else _STATUS_RU.get(cell["mark"], "")), "tries": len(recs),
             "spent": _duration(spent) if recs else "—", "spent_s": int(spent),
             "last": last or None, "passed_at": passed_at,
             "passed_s": _epoch(passed_at) or 0}

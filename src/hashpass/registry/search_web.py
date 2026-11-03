@@ -21,7 +21,7 @@ from flask import Flask, Response, current_app, has_app_context, request, send_f
 from hashpass.registry import courses as course_model
 from hashpass.registry.access import can
 from hashpass.registry.revisions import revision_version
-from hashpass.registry.web import _env, history_href
+from hashpass.registry.web import _env, history_href, pasted_in, pasted_word
 from hashpass.registry.wiki_render import page_title, plain, snippet
 from hashpass.registry.wiki_store import parse_tags
 
@@ -352,7 +352,8 @@ class SearchWeb:
             rows.append({"ref": ref, "repo": repo, "tag": tag, "n": n, "at": rec.get("ts"),
                          "courses": [{"ref": c, "title": t} for c, t in used.items()],
                          "version_ref": f"{repo}:{tag}_v{n}" if n else ref,
-                         "solution": history_href(login, ref, solved=True)})
+                         "solution": history_href(login, ref, solved=True),
+                         "pasted": pasted_word(pasted_in(rec))})
         rows.sort(key=lambda r: str(r["at"] or ""), reverse=True)
         return {"rows": rows, "total": len(rows), "taking": len(self._taking(login))}
 

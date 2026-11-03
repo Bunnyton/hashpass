@@ -13,7 +13,7 @@ from flask import Flask, Response, request
 from hashpass.registry import perms
 from hashpass.registry.access import can, course_perms
 from hashpass.registry.progress_store import outside_course
-from hashpass.registry.web import _env, history_href, render_profile
+from hashpass.registry.web import _env, history_href, pasted_in, pasted_word, render_profile
 
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
@@ -140,7 +140,10 @@ class CourseWeb:
                 mark, word = ("✓", "решено") if status == "passed" else (("◐", "начато") if status else ("·", "не начато"))
                 if status == "passed" and outside_course(progress.get(r), course.ref):
                     word = "решено не в курсе"
-                cells.append({"n": i, "ref": r, "mark": mark, "word": word, "cls": status or "none",
+                cls = status or "none"
+                if status == "passed" and (pasted := pasted_in(progress.get(r))):
+                    mark, word, cls = "⚠", f"{word}, {pasted_word(pasted)}", "passed pasted"
+                cells.append({"n": i, "ref": r, "mark": mark, "word": word, "cls": cls,
                               "about": about[r],
                               "href": history_href(student, r, solved=status == "passed") if status
                               else f"/c/{course.ref}/u/{quote(student, safe='')}#t{i}"})
