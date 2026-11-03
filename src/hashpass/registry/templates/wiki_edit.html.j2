@@ -1,0 +1,30 @@
+{% extends 'base.html.j2' %}
+{#- Edit one wiki page on top of version `base`; a conflict comes back here with the text kept. -#}
+{% block main %}
+<nav class='crumb' aria-label='Путь'><a href='/web/wiki/{{ repo }}/{{ page if page.endswith(".md") else "wiki.md" }}'>← wiki {{ repo }}</a></nav>
+<h1>Правка wiki</h1>
+{% if conflict %}<div class='card warn-box' role='alert'><p><b>Пока ты правил, эту страницу уже поменяли</b> ({{ conflict | join(', ') }}) — сейчас на пуле версия {{ base }}.
+Твой текст ниже не потерян: сверь со <a href='/web/wiki/{{ repo }}/{{ conflict[0] }}' target='_blank'>свежей версией</a>, перенеси нужное и сохрани ещё раз.</p></div>{% endif %}
+{% if error %}<div class='card warn-box' role='alert'><p>{{ error }}</p></div>{% endif %}
+<form class='card wiki-edit' method='post' action='/web/wiki/{{ repo }}/edit'>
+<input type='hidden' name='base' value='{{ base }}'>
+<label>Страница <input class='mono' name='page' value='{{ page }}' required></label>
+<p class='sub small'>Главная — <code>wiki.md</code>, остальные — <code>wiki/имя.md</code>. Теги — в начале wiki.md: <code>---</code> / <code>tags: regex, grep</code> / <code>---</code>. Видео — ссылка на YouTube отдельной строкой.</p>
+<textarea name='text' rows='28' class='mono' spellcheck='true'>{{ text }}</textarea>
+<label>Что поменял <input name='message' value='{{ message }}' placeholder='коротко, для истории'></label>
+<div class='row'><button class='btn' type='submit'>Сохранить</button></div>
+</form>
+<form class='card' method='post' action='/web/wiki/{{ repo }}/upload' enctype='multipart/form-data'>
+<input type='hidden' name='base' value='{{ base }}'>
+<h3>Картинка</h3>
+<p class='sub small'>PNG, JPG, GIF или WebP до 8 МиБ — ляжет в <code>wiki/</code>; на странице: <code>![подпись](wiki/имя.png)</code> (из wiki.md) или <code>![подпись](имя.png)</code> (из wiki/…).</p>
+<input type='file' name='file' accept='image/png,image/jpeg,image/gif,image/webp' required>
+<button class='btn sm' type='submit'>Загрузить</button>
+</form>
+{% if page != 'wiki.md' and page in pages + pictures %}
+<form class='card' method='post' action='/web/wiki/{{ repo }}/delete'>
+<input type='hidden' name='base' value='{{ base }}'><input type='hidden' name='page' value='{{ page }}'>
+<button class='btn sm danger' type='submit'>Удалить {{ page }}</button>
+</form>
+{% endif %}
+{% endblock %}

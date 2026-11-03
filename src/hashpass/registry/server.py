@@ -88,6 +88,8 @@ from hashpass.registry.web import (
     render_users,
     render_versions,
 )
+from hashpass.registry.wiki_store import WikiStore
+from hashpass.registry.wiki_web import WikiWeb
 from hashpass.taskdigest import task_digest
 from hashpass.uninstall import text as uninstall_text
 
@@ -289,6 +291,10 @@ class PoolServer:
         """Open the tags + revisions index of repository `name` (spec 2026-10-21 §2)."""
         return RepoIndex(Path(self.store.root) / ".repos", name)
 
+    def wiki(self, name: str) -> WikiStore:
+        """Open the wiki of repository `name` -- versions of its own, aside from the revisions."""
+        return WikiStore(Path(self.store.root) / ".repos", name)
+
     def resolve(self, name: str, version: str) -> str | None:
         """
         Resolve a requested version to the stored ref that serves it, or None.
@@ -458,6 +464,9 @@ class PoolServer:
                 shutil.rmtree(self.attachments().ref_path(rev_ref), ignore_errors=True)
             with contextlib.suppress(ValueError, OSError):
                 shutil.rmtree(self.store.dir(r_name, r_version), ignore_errors=True)
+        if not self.repo(name).tags():                 # the last tag is gone: so is the wiki
+            with contextlib.suppress(ValueError):
+                self.wiki(name).drop()
 
     def _purge_rejected(self) -> None:
         """
@@ -529,6 +538,7 @@ class PoolServer:
         with contextlib.suppress(OSError):
             self.course_api.courses.heal()       # mirrors a stopped server left behind (spec 2026-10-31 §2)
         CourseWeb(self).register(app)
+        WikiWeb(self).register(app)
         self.people = SearchWeb(self)
         self.people.register(app)
         app.before_request(self._legacy_catalog_gone)
@@ -2160,6 +2170,8 @@ class PoolServer:
             except (OSError, ValueError, KeyError) as exc:
                 return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"форк не создан: {exc}"})
             w.set_meta(fork_of=resolved, visibility=self.repo(src_name).visibility)
+        with contextlib.suppress(ValueError, OSError):
+            self.wiki(src_name).copy_to(self.wiki(name))    # a fork takes the wiki with its history
         return self._json(HTTPStatus.CREATED, {"ref": ref, "n": 1})
 
     def _revision_delete(self, tail: str) -> Response:  # noqa: PLR0911
@@ -2795,7 +2807,14 @@ class PoolServer:
             "people": self._people(name, idx),
             "may_people": self._repo_level(viewer, name) >= OWNER,
             "role_ru": _ROLE_RU,
+            "has_wiki": self._wiki_exists(name),
         }
+
+    def _wiki_exists(self, name: str) -> bool:
+        try:
+            return self.wiki(name).exists()
+        except ValueError:
+            return False
 
     def _web_source_file(self) -> Response:  # noqa: PLR0911  (page / folder / raw / download)
         """

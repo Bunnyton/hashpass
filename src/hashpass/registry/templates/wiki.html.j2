@@ -1,0 +1,34 @@
+{% extends 'base.html.j2' %}
+{#- A task's wiki page (spec 2026-11-03): the page, its tags, the other pages on the side. -#}
+{% from '_files.html.j2' import icon %}
+{% block main %}
+{% if forbidden %}
+<div class='empty card'><h1>Нет прав</h1><p class='sub'>Wiki {{ repo }} правят владелец и соавторы задания.</p></div>
+{% else %}
+<nav class='crumb' aria-label='Путь'><a href='/web/image/{{ card | ref_url }}'>← {{ repo }}</a></nav>
+<header class='repo-head'><div class='row'>
+<h1 class='repo-title'>{{ icon('file') }} Wiki <span class='mono dim'>{{ repo }}</span></h1>
+<span class='sp'></span>
+{% if head %}<a class='btn sm ghost' href='/web/wiki/{{ repo }}/history'>{{ icon('history') }} История <span class='count-pill'>{{ head }}</span></a>{% endif %}
+{% if may_edit and not version %}<a class='btn sm' href='/web/wiki/{{ repo }}/edit?page={{ (page or "wiki.md") | q }}'>Править</a>{% endif %}
+</div></header>
+<div class='repo-grid'>
+<div class='repo-main'>
+{% if version %}<p class='pill warn sm'>версия {{ version }} из {{ head }} — <a href='/web/wiki/{{ repo }}/{{ page }}'>открыть свежую</a></p>{% endif %}
+{% if empty %}
+<div class='empty card'><p class='sub'>У задания пока нет wiki.{% if may_edit %} Её можно начать прямо здесь — <a href='/web/wiki/{{ repo }}/edit?page=wiki.md'>создать wiki.md</a> — или положить <code>wiki.md</code> рядом с Taskfile и отправить <code>hashpass push</code>.{% endif %}</p></div>
+{% else %}
+{% if tags %}<p class='wiki-tags'>{% for t in tags %}<a class='pill sm' href='/?q={{ ("#" ~ t) | q }}&type=wiki'>#{{ t }}</a> {% endfor %}</p>{% endif %}
+<article class='card md-body wiki-body'>{{ body }}</article>
+{% endif %}
+</div>
+<aside class='repo-side'>
+<section class='card'><h3>Страницы</h3>
+<ul class='plain'>{% for p in pages %}<li>{% if p == page %}<b class='mono'>{{ p }}</b>{% else %}<a class='mono' href='/web/wiki/{{ repo }}/{{ p }}'>{{ p }}</a>{% endif %}</li>{% else %}<li class='sub'>пока нет</li>{% endfor %}</ul>
+{% if pictures %}<h3>Картинки</h3><ul class='plain'>{% for p in pictures %}<li><a class='mono' href='/web/wiki/{{ repo }}/{{ p }}'>{{ p }}</a></li>{% endfor %}</ul>{% endif %}
+{% if may_edit %}<p class='small'><a href='/web/wiki/{{ repo }}/edit?page=wiki/new-page.md'>+ новая страница</a></p>{% endif %}
+</section>
+</aside>
+</div>
+{% endif %}
+{% endblock %}

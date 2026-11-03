@@ -27,7 +27,8 @@
 {% elif image.moderation == 'pending' %}<span class='pill warn'>на проверке</span>
 {% elif image.moderation == 'approved' %}<span class='pill'>одобрено</span>{% endif %}
 {% endif %}
-{% if may_people and repo_info %}<span class='sp'></span><a class='btn sm ghost' href='/web/settings/{{ repo }}'>{{ icon('gear') }} Настройки</a>{% endif %}
+<span class='sp'></span>{% if has_wiki %}<a class='btn sm' href='/web/wiki/{{ repo }}'>{{ icon('file') }} Wiki</a>{% elif owner and repo_info %}<a class='btn sm ghost' href='/web/wiki/{{ repo }}/edit?page=wiki.md'>{{ icon('file') }} Создать wiki</a>{% endif %}
+{% if may_people and repo_info %}<a class='btn sm ghost' href='/web/settings/{{ repo }}'>{{ icon('gear') }} Настройки</a>{% endif %}
 </div>
 </header>
 
