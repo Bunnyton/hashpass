@@ -14,7 +14,7 @@ TASKS = sorted(p for p in CONTENT.iterdir() if is_task_dir(p))
 # «baked in at build time» -- must not reach them (user rule 2026-09-28: «писать о стадиях
 # или внутреннем устройстве hashpass нельзя»).
 _FORBIDDEN = re.compile(
-    r"стади|этап|грейдер|засчит|зач[её]т|\bTaskfile\b|(?<![\w/])/hp\b|build time|\bcopy`",
+    r"стади|этап|грейдер|засчит|зач[её]т|\bTaskfile\b|(?<![\w/])/hp\b|build time|(?-i:\bcopy`)",  # the DSL word; a Dockerfile `COPY` is the world
     re.IGNORECASE)
 # Author-facing text (Taskfile `#` comments, NOTES.md, hp/* script comments) travels to the pool
 # with the task and is read there, so it speaks the world's language too; a file NAME (Taskfile)
@@ -91,6 +91,9 @@ def test_student_facing_text_does_not_repeat_itself(task: Path):
     seen: dict[str, str] = {}
     dups = []
     for where, text in _student_texts(task, assets=False):
+        rel = where.split("/", 1)[-1]
+        if rel == "wiki.md" or rel.startswith("wiki/"):
+            continue        # the wiki gathers the task's theory to read on the site, never in the console
         for ph in _phrases(text):
             if ph in seen and seen[ph] != where:
                 dups.append(f"{seen[ph]} ↔ {where}: {ph!r}")

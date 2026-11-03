@@ -75,7 +75,10 @@ stage
   neutral ls cat pwd cd vim vi nano
   on pass say "Теперь правка цен — пара секунд: библиотеки лежат в слое, который не меняется."
   hint output "ставлю" say "Библиотеки опять ставились. Сразу после перестановки так и будет — кэша для нового порядка ещё нет: поправь цену и собери снова. А если Dockerfile прежний — что в нём стоит выше RUN?"
-  hint output "deps.txt: nonexistent|can't open '/app/deps.txt'|install-deps.sh: not found|No such file" say "Установщик читает /app/deps.txt, а сам лежит в /app/install-deps.sh: оба файла должны оказаться в образе раньше, чем RUN."
+  hint output "deps.txt: nonexistent" say "Установщик читает /app/deps.txt, а сам лежит в /app/install-deps.sh: оба файла должны оказаться в образе раньше, чем RUN."
+  hint output "can't open '/app/deps.txt'" say "Установщик читает /app/deps.txt, а сам лежит в /app/install-deps.sh: оба файла должны оказаться в образе раньше, чем RUN."
+  hint output "install-deps.sh: not found" say "Установщик читает /app/deps.txt, а сам лежит в /app/install-deps.sh: оба файла должны оказаться в образе раньше, чем RUN."
+  hint output "No such file" say "Установщик читает /app/deps.txt, а сам лежит в /app/install-deps.sh: оба файла должны оказаться в образе раньше, чем RUN."
   hint tries 6 say "Что нужно для RUN с установкой? Только deps.txt и install-deps.sh. Положи в образ их, поставь библиотеки, а остальное — после."
 
 exec finale

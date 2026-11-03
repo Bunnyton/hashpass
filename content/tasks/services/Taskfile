@@ -52,6 +52,7 @@ stage
   on pass say "Вики жива. Пароль от Wi-Fi в переговорке — бонус."
   hint output "legacy-api" say "Отвечает не вики, а какой-то legacy-api. А работает ли сама вики? Пульт служб — в теории."
   hint output "Connection refused" say "Имя нашлось, но на порту никто не отвечает. Работает ли служба вики? Пульт — в теории."
+  hint output "Could not connect to server" say "Имя нашлось, но на порту никто не отвечает. Работает ли служба вики? Пульт — в теории."
   hint output "failed" say "Служба не поднялась. Почему — расскажет её журнал."
   hint output "Address already in use" read port.md
   hint output "Access denied" say "Менять состояние служб может только администратор."
