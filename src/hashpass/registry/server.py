@@ -80,6 +80,7 @@ from hashpass.registry.web import (
     render_install_script,
     render_login,
     render_profile,
+    render_register,
     render_repo_settings,
     render_reset_form,
     render_reset_link,
@@ -608,6 +609,8 @@ class PoolServer:
         app.add_url_rule("/web", "web_dashboard", self._web_dashboard, methods=["GET"])
         app.add_url_rule("/web/login", "web_login_get", self._web_login_get, methods=["GET"])
         app.add_url_rule("/web/login", "web_login_post", self._web_login_post, methods=["POST"])
+        app.add_url_rule("/web/register", "web_register_get", self._web_register_get, methods=["GET"])
+        app.add_url_rule("/web/register", "web_register_post", self._web_register_post, methods=["POST"])
         app.add_url_rule("/web/logout", "web_logout", self._web_logout, methods=["GET"])
         app.add_url_rule("/web/users", "web_users", self._web_users, methods=["GET"])
         app.add_url_rule("/web/users/auto-approve", "web_users_auto_approve",
@@ -2933,7 +2936,8 @@ class PoolServer:
             return self._redirect(next_url)
         if user is not None:
             return self._html(render_login(signed_in=user, role=self.users.role(user), courses=courses))
-        return self._html(render_login(next_url=next_url, courses=courses))
+        return self._html(render_login(next_url=next_url, courses=courses,
+                                       can_register=self.config.registration_open))
 
     def _web_login_post(self) -> Response:
         user = request.form.get("user", "").strip()
@@ -2948,6 +2952,38 @@ class PoolServer:
                                        next_url=_local_path(request.form.get("next", "")),
                                        courses=courses),
                           status=HTTPStatus.UNAUTHORIZED)
+
+    def _web_register_get(self) -> Response:
+        return self._html(render_register(closed=not self.config.registration_open))
+
+    def _web_register_post(self) -> Response:   # noqa: PLR0911
+        """Sign up on the site: the same rules as POST /register, then signed in (Todo 2026-11-03)."""
+        form = request.form
+        user = form.get("user", "").strip()
+        comment = form.get("comment", "").strip()[:_MAX_COMMENT]
+        password = form.get("password", "")
+
+        def again(error: str, status: HTTPStatus) -> Response:
+            return self._html(render_register(error, user=user, comment=comment), status=status)
+
+        if not self.config.registration_open:
+            return self._html(render_register("Регистрация закрыта.", closed=True), status=HTTPStatus.FORBIDDEN)
+        if form.get("website"):                      # a bot filled the field people never see
+            return again("Не получилось — попробуйте ещё раз.", HTTPStatus.BAD_REQUEST)
+        if not _USER_RE.match(user):
+            return again(LOGIN_RULE[:1].upper() + LOGIN_RULE[1:], HTTPStatus.BAD_REQUEST)
+        if password != form.get("password2", ""):
+            return again("Пароли не совпадают.", HTTPStatus.BAD_REQUEST)
+        try:
+            validate_password(password)
+        except WeakPasswordError as exc:
+            return again(str(exc)[:1].upper() + str(exc)[1:] + ".", HTTPStatus.BAD_REQUEST)
+        if self.users.has(user) or self.users.reserved(user):
+            return again("Этот логин занят — выберите другой.", HTTPStatus.CONFLICT)
+        self.users.add(user, password, group="", comment=comment)
+        token = issue_token(self.secret, user, now=time.time())
+        home = f"/u/{quote(user, safe='')}" if era.courses_on() else "/web"
+        return self._redirect(home, set_cookie=("hp_session", token))
 
     def _web_logout(self) -> Response:
         return self._redirect("/web/login", clear_cookie=True)

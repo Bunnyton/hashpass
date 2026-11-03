@@ -1,0 +1,22 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<div class='authwrap'>
+<h1>Регистрация</h1>
+<p class='sub'>Аккаунт для курсов, заданий и прогресса. Тот же логин подходит и для <code>hashpass login</code>.</p>
+{% if error %}<div class='err'>{{ error }}</div>{% endif %}
+{% if closed %}<p>Регистрация на этом пуле закрыта — аккаунт выдаёт администратор. <a href='/web/login'>Вход</a></p>
+{% else %}
+<form class='card' method='post' action='/web/register'>
+<label>Логин<input name='user' type='text' value='{{ user }}' autocomplete='username' autofocus></label>
+<p class='sub'>{{ login_rule }}</p>
+<label>Пароль<input name='password' type='password' autocomplete='new-password'></label>
+<label>Повторите пароль<input name='password2' type='password' autocomplete='new-password'></label>
+<p class='sub'>{{ hint }}</p>
+<label>О себе (необязательно)<input name='comment' type='text' value='{{ comment }}' maxlength='500' placeholder='группа, имя — чтобы преподаватель узнал'></label>
+<label class='trap' aria-hidden='true'>Сайт<input name='website' type='text' tabindex='-1' autocomplete='off'></label>
+<button type='submit'>Зарегистрироваться</button>
+</form>
+<p class='sub'>Уже есть аккаунт? <a href='/web/login'>Войти</a></p>
+{% endif %}
+</div>
+{% endblock %}

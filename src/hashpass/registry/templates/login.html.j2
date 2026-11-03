@@ -12,5 +12,6 @@
 <label>Пароль<input name='password' type='password' ></label>
 <button type='submit'>Войти</button>
 </form>
+{% if can_register %}<p class='sub'>Нет аккаунта? <a href='/web/register'>Зарегистрироваться</a></p>{% endif %}
 </div>
 {% endblock %}

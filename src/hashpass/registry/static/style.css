@@ -103,6 +103,7 @@ code,.mono{font-family:var(--mono);font-size:.92em}
 .cmd button{margin:0}
 .authwrap{max-width:400px;margin:7vh auto 0}
 .authwrap .card{margin-top:14px}
+.authwrap .trap{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 /* catalog editor: header row + single add button that toggles the add-panel */
 .cat-head{display:flex;align-items:center;gap:14px;margin:.4em 0 .2em}
 .cat-head h1{margin:0;flex:1}

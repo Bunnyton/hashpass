@@ -14,6 +14,7 @@ from markupsafe import Markup
 from hashpass.registry import era, perms
 from hashpass.registry.attempt_store import is_live
 from hashpass.registry.codeview import highlight_lines, render_markdown_html
+from hashpass.registry.passwords import LOGIN_RULE
 from hashpass.registry.progress_store import outside_course
 from hashpass.registry.reference import normalise as _norm_cmd
 from hashpass.version import TRUSTED_HOSTS
@@ -378,12 +379,20 @@ def render_front(pool_url: str) -> str:
         title="hashpass", nav=False, active="", url=url, flags=flags)
 
 
-def render_login(error: str = "", *, signed_in: str = "", role: str = "", next_url: str = "",
-                 courses: bool = False) -> str:
+def render_login(error: str = "", *, signed_in: str = "", role: str = "", next_url: str = "",  # noqa: PLR0913
+                 courses: bool = False, can_register: bool = False) -> str:
     """Login form; `signed_in` -- who is already in (sent here by an admin-only page)."""
     return _env.get_template("login.html.j2").render(
         title="Вход — hashpass", nav=False, active="", error=error, next=next_url, courses=courses,
+        can_register=can_register,
         signed_in=signed_in, role={"author": "автор", "admin": "администратор"}.get(role, role))
+
+
+def render_register(error: str = "", *, closed: bool = False, user: str = "", comment: str = "") -> str:
+    """Sign-up form on the site (Todo 2026-11-03): login, password twice, a free «about me»."""
+    return _env.get_template("register.html.j2").render(
+        title="Регистрация — hashpass", nav=False, active="", error=error, closed=closed,
+        user=user, comment=comment, hint=_PW_HINT, login_rule=LOGIN_RULE[:1].upper() + LOGIN_RULE[1:])
 
 
 def render_password_form(error: str = "", *, done: bool = False) -> str:

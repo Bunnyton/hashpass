@@ -36,7 +36,7 @@
 {%- if viewer_login() %}
 <a class='me{% if active == "/u/" ~ viewer_login() %} on{% endif %}' href='/u/{{ viewer_login() | q }}'{% if active == "/u/" ~ viewer_login() %} aria-current='page'{% endif %} title='Мой профиль'>{% if has_avatar is defined and has_avatar(viewer_login()) %}<img class='avatar xs' src='/u/{{ viewer_login() | q }}/avatar' alt=''>{% else %}<span class='avatar xs' aria-hidden='true'>{{ viewer_login()[:1] | upper }}</span>{% endif %}<span class='me-name'>{{ viewer_login() }}</span></a>
 <a class='logout' href='/web/logout'>Выход</a>
-{%- else %}<a class='btn sm' href='/web/login'>Войти</a>{% endif %}
+{%- else %}<a class='btn sm ghost' href='/web/register'>Регистрация</a> <a class='btn sm' href='/web/login'>Войти</a>{% endif %}
 </header>
 {%- endif %}
 <main id='main' tabindex='-1'>{% block main %}{% endblock %}</main>
