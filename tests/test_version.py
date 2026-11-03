@@ -131,6 +131,8 @@ def test_pip_install_uses_commit_tarball(monkeypatch):
     monkeypatch.setattr(version.subprocess, "run", run)
     assert version._pip_install(NEW)  # noqa: SLF001 is True
     assert run.calls[0][0][-1] == f"https://github.com/Bunnyton/hashpass/archive/{NEW}.tar.gz"
+    # every commit's tarball has its own URL: cached, it piles up forever (prod 2026-11-04: 1 GB)
+    assert "--no-cache-dir" in run.calls[0][0]
 
 
 @pytest.mark.tier1

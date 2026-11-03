@@ -73,7 +73,7 @@ def remote_commit(timeout: float = _LS_REMOTE_TIMEOUT) -> str | None:
 
 def _pip_install(commit: str) -> bool:
     pip = [sys.executable, "-m", "pip", "install", "--user", "--quiet", "--upgrade",
-           "--force-reinstall", "--no-deps"]
+           "--force-reinstall", "--no-deps", "--no-cache-dir"]
     try:
         helptext = subprocess.run([*pip[:4], "--help"], capture_output=True, text=True,
                                   timeout=60, check=False).stdout
