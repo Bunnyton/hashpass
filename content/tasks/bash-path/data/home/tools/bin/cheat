@@ -1,0 +1,6 @@
+#!/bin/bash
+# cheat <команда> — короткая шпаргалка из ~/tools/share/cheat
+d=~/tools/share/cheat
+if [ -z "$1" ]; then echo "cheat: про какую команду? Есть: $(ls "$d" | tr '\n' ' ')"; exit 1; fi
+if [ ! -f "$d/$1" ]; then echo "cheat: про $1 шпаргалки нет" >&2; exit 1; fi
+cat "$d/$1"

@@ -1,0 +1,63 @@
+# bash-path — PATH глубже, чем в my-command (модуль «Bash-скрипты», дизайн
+# docs/superpowers/specs/2026-11-04-модуль-bash-design.md). Шаги: символьная ссылка на свой скрипт
+# в /usr/local/bin → посмотреть, что там лежит на самом деле → весь каталог ~/tools/bin в PATH через
+# ~/.bashrc и source (доза bashrc.md на входе; source.md — когда правка не дошла до текущей оболочки;
+# затёртый PATH ломает и хуки консоли — дозу не доставить, поэтому верная форма — в bashrc.md). Консоль сама ~/.bashrc при входе не читает — его читает каждая
+# новая bash, поэтому source и нужен.
+
+image bash-path:1
+
+# data: data/home — руками (скрипты todo, cheat, calc, stamp, mkpass, weekday и шпаргалки)
+user student
+copy data/home /home/student
+run chmod 755 /home/student/projects/todo/todo /home/student/tools/bin/cheat /home/student/tools/bin/calc /home/student/tools/bin/stamp /home/student/tools/bin/mkpass /home/student/tools/bin/weekday
+
+hidden hp
+
+settings
+  pager on
+
+say "Свои скрипты есть у каждого, кто долго живёт в терминале. Пора сделать их командами."
+read brief.md
+
+stage
+  say "Пусть ~/projects/todo/todo запускается из любого каталога просто как todo — через символьную ссылку в /usr/local/bin"
+  solve:
+    sudo ln -s /home/student/projects/todo/todo /usr/local/bin/todo
+    todo
+  observe /usr/local/bin/todo
+  accept cmd "todo" ok
+  neutral ls cat pwd cd which type
+  on pass say "todo теперь команда — как ls. Только живёт она в твоём домашнем каталоге."
+  hint output "Permission denied" say "/usr/local/bin принадлежит системе. Как ты уже менял системные каталоги?"
+  hint output "todo: command not found" say "Оболочка не нашла todo ни в одном каталоге PATH. Есть ли в /usr/local/bin такое имя — и ведёт ли оно к живому файлу?"
+  hint cmd cp say "Копия отстанет от оригинала при первой же правке. А что умеет ln?"
+  hint cmd ln missing -s say "Без ключа ln делает жёсткую ссылку — а нужна символьная."
+  hint tries 5 say "Что показывает ls -l /usr/local/bin? Там уже есть todo?"
+  hint tries 10 say "man ln — первая строка SYNOPSIS: сначала цель, потом имя ссылки."
+
+stage
+  say "Посмотри, что на самом деле лежит в /usr/local/bin под именем todo и куда оно ведёт"
+  solve ls -l /usr/local/bin/todo
+  accept output "todo -> /home/student/projects/todo/todo|^/home/student/projects/todo/todo$"
+  neutral pwd cd
+  on pass say "В /usr/local/bin лежит только указатель. Поправишь ~/projects/todo/todo — изменится и команда; удалишь — ссылка повиснет."
+  hint output "todo is " say "Это где команду нашла оболочка. А что это за файл — обычный или ссылка?"
+  hint tries 5 say "Какая команда показывает у ссылки стрелку? Ты видел её в задании про ссылки."
+
+stage
+  say "Скриптов в ~/tools/bin много, ссылку на каждый делать скучно. Пусть весь этот каталог будет в PATH в каждой новой оболочке — и в этой тоже, без перезахода. Проверь: cheat tar"
+  solve:
+    echo 'export PATH="$PATH:$HOME/tools/bin"' >> /home/student/.bashrc
+    source /home/student/.bashrc
+    cheat tar
+  accept file /home/student/.bashrc "PATH=.*([$]\{?PATH.*tools/bin|tools/bin.*[$]\{?PATH)"
+  accept output "^tar -czf"
+  neutral ls cat pwd cd which type echo
+  on enter read bashrc.md
+  on pass say "В Debian ~/.profile сам добавляет в PATH ~/bin и ~/.local/bin, если они есть при входе: многие так и держат свои скрипты."
+  hint output "cheat: command not found" read source.md
+  hint tries 5 say "Что сейчас в PATH этой оболочки? echo $PATH. А в ~/.bashrc?"
+  hint tries 10 say "man bash — раздел INVOCATION: какие файлы читает интерактивная оболочка."
+
+exec finale

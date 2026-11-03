@@ -1,0 +1,9 @@
+#!/bin/bash
+# todo — список дел. todo add <дело> — добавить, todo — показать, todo done <номер> — вычеркнуть.
+f=~/.todo
+case $1 in
+    add)  shift; echo "$*" >> "$f"; echo "добавлено: $*" ;;
+    done) sed -i "${2}d" "$f" && echo "вычеркнуто: дело $2" ;;
+    "")   if [ -s "$f" ]; then nl -w2 -s'. ' "$f"; else echo "дел нет — можно пить чай"; fi ;;
+    *)    echo "todo: не понимаю «$1». Есть: add, done, без аргументов — список" >&2; exit 1 ;;
+esac

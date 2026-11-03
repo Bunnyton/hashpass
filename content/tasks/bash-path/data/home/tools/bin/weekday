@@ -1,0 +1,3 @@
+#!/bin/bash
+# weekday <дата> — день недели: weekday 2026-12-31
+date -d "${1:-today}" +%A

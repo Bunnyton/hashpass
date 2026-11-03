@@ -1,0 +1,4 @@
+ssh user@host                     войти
+ssh-keygen -t ed25519             создать ключ
+ssh-copy-id user@host             положить ключ на сервер
+scp файл user@host:путь           скопировать файл туда
