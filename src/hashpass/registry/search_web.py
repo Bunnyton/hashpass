@@ -22,13 +22,16 @@ from hashpass.registry import courses as course_model
 from hashpass.registry.access import can
 from hashpass.registry.revisions import revision_version
 from hashpass.registry.web import _env, history_href
+from hashpass.registry.wiki_render import plain, render_page, snippet
+from hashpass.registry.wiki_store import parse_tags
 
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
 
 _LIMIT = 200
 _STAFF_ROLES = ("owner", "admin", "author")   # a student's own enrolments stay private
-_KINDS = (("users", "Пользователи"), ("courses", "Курсы"), ("tasks", "Задания"), ("images", "Образы"))
+_KINDS = (("users", "Пользователи"), ("courses", "Курсы"), ("tasks", "Задания"), ("images", "Образы"),
+          ("wiki", "Wiki"))
 _ROLE_RU = {"owner": "владелец", "admin": "админ", "author": "автор", "member": "участник"}
 _SUMMARY_MAX = 140
 _AVATAR_MAX = 2 * 1024 * 1024
@@ -135,7 +138,43 @@ class SearchWeb:
     def _found(self, user: str | None, role: str | None, q: str) -> dict[str, list[dict]]:
         repos = self.repos(user, q)
         return {"users": self._users(q), "courses": self._courses(user, role, q),
-                "tasks": [r for r in repos if r["task"]], "images": [r for r in repos if not r["task"]]}
+                "tasks": [r for r in repos if r["task"]], "images": [r for r in repos if not r["task"]],
+                "wiki": self.wikis(user, q)}
+
+    def wikis(self, user: str | None, q: str) -> list[dict]:
+        """
+        Return the wiki pages `user` may read that match `q` (spec 2026-11-03 «wiki заданий»).
+
+        `#тег` -- the wikis whose wiki.md carries that tag, exactly; else a page whose text,
+        title or tags contain `q`. Nothing without signing in: a wiki is read signed in only.
+        """
+        if user is None or not q:
+            return []
+        root = Path(self.server.store.root) / ".repos"
+        tag = q[1:].strip().casefold() if q.startswith("#") else None
+        rows: list[dict] = []
+        for index in sorted(root.glob("*/*/wiki/versions.json")) if root.is_dir() else []:
+            repo = f"{index.parent.parent.parent.name}/{index.parent.parent.name}"
+            if not self.server._may_see_repo(user, repo):         # noqa: SLF001
+                continue
+            try:
+                files = self.server.wiki(repo).files()
+            except ValueError:
+                continue
+            main_tags = parse_tags(files.get("wiki.md", b"").decode("utf-8", "replace"))[0]
+            for page in sorted(p for p in files if p.endswith(".md")):
+                text = files[page].decode("utf-8", "replace")
+                _html, tags, title = render_page(text)
+                tags = tags or main_tags
+                if tag is not None:
+                    hit = page == "wiki.md" and tag in tags
+                else:
+                    hit = q.casefold() in f"{title} {plain(text)} {' '.join(tags)}".casefold()
+                if hit:
+                    rows.append({"repo": repo, "page": page, "title": title or page, "tags": tags,
+                                 "snippet": snippet(text, "" if tag is not None else q),
+                                 "href": f"/web/wiki/{repo}/{page}"})
+        return rows
 
     def repos_api(self) -> Response:
         """`GET /repos?q=` -- the client's search: tasks and images the caller may see (JSON)."""

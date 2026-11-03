@@ -17,6 +17,15 @@
 </a>
 {%- endmacro %}
 
+{% macro wiki_card(r) -%}
+<article class='card item-card' data-name='{{ r.repo }}/{{ r.page }}'>
+<div class='item-head'><span class='kind kind-task'>{{ icon('file') }} wiki</span><span class='mono small dim'>{{ r.repo }}</span></div>
+<a class='item-title stretched' href='{{ r.href }}'>{{ r.title }}</a>
+{% if r.snippet %}<p class='sub small clamp'>{{ r.snippet }}</p>{% endif %}
+{% if r.tags %}<div class='item-tags'>{% for t in r.tags %}<a class='tagchip' href='/?q={{ ("#" ~ t) | q }}&type=wiki'>#{{ t }}</a>{% endfor %}</div>{% endif %}
+</article>
+{%- endmacro %}
+
 {% macro repo_card(r) -%}
 <article class='card item-card' data-name='{{ r.name }}' data-at='{{ r.updated or (r.tags | map(attribute="at") | max) }}' data-pub='{{ r.published }}' data-owner='{{ r.name.split("/")[0] }}'>
 <div class='item-head'>
