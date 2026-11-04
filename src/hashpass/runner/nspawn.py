@@ -71,7 +71,7 @@ class NspawnRunner:
                 check=True,
             )
         stack = [Path(p) for p in lowers] + [self._lower]  # first = top
-        overlay_mount(stack, self._upper, self._work, self._mnt, sudo=True)
+        overlay_mount(stack, self._upper, self._work, self._mnt, sudo=True, root_like=self._lower)
 
     def run(self, argv: list[str], *, binds: list[tuple[str, str]] | None = None,
             setenv: dict[str, str] | None = None, user: str | None = None) -> RunResult:
@@ -179,7 +179,7 @@ class NspawnRunner:
         upper, work, mnt = hp / "upper", hp / "work", hp / "mnt"
         for d in (upper, work, mnt):
             d.mkdir(parents=True, exist_ok=True)
-        overlay_mount([self._mnt], upper, work, mnt, sudo=True)
+        overlay_mount([self._mnt], upper, work, mnt, sudo=True, root_like=self._mnt)
         try:
             extra = [f"--bind={host}:{dst}" for host, dst in binds]
             # Same locale as the student's console (hp-console exports C.UTF-8), so references

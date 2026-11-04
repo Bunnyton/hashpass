@@ -100,18 +100,19 @@ class BootedNspawnRunner(NspawnRunner):
 
     def _await_shell_ready(self) -> None:
         """Wait until `machinectl shell` reliably runs a command (session infra up post-boot)."""
-        marker = self._mnt / _READY_MARKER
         stable = 0
         for _ in range(_READY_TIMEOUT):
-            marker.unlink(missing_ok=True)
+            # a fresh name each try, written and removed by the machine itself: `/` is root's
+            name = f"{_READY_MARKER}-{uuid4().hex}"
             subprocess.run(
                 ["sudo", "machinectl", "shell", self._machine, "/bin/sh", "-c",
-                 f"printf 1 > /{_READY_MARKER}"],
+                 f"printf 1 > /{name}"],
                 capture_output=True, text=True, encoding="utf-8", check=False,
             )
-            stable = stable + 1 if marker.exists() else 0
+            stable = stable + 1 if (self._mnt / name).exists() else 0
+            subprocess.run(["sudo", "machinectl", "shell", self._machine, "/bin/rm", "-f", f"/{name}"],
+                           capture_output=True, check=False)
             if stable >= _READY_STABLE:
-                marker.unlink(missing_ok=True)
                 return
             time.sleep(1)
         # best-effort: proceed even if not confirmed ready; run() retries per-command flakiness
@@ -153,7 +154,7 @@ class BootedNspawnRunner(NspawnRunner):
         # Stack the booted machine's MERGED rootfs (self._mnt) as one read-only lower: it shows
         # the student's current fs (upper+image+base). Reusing the live upperdir directly fails
         # once the machine is booted; the merged mount is stable to nest under.
-        overlay_mount([self._mnt], upper, work, mnt, sudo=True)
+        overlay_mount([self._mnt], upper, work, mnt, sudo=True, root_like=self._mnt)
         try:
             extra = [f"--bind={host}:{dst}" for host, dst in binds]
             # Same locale as the student's console (hp-console exports C.UTF-8), so references

@@ -133,3 +133,24 @@ def test_an_umount_failing_for_another_reason_still_raises(tmp_path, monkeypatch
     with pytest.raises(overlay.OverlayError):
         overlay.overlay_umount(tmp_path / "mnt", sudo=True)
     assert len(calls) == 1
+
+
+@pytest.mark.tier1
+def test_the_mount_root_belongs_to_root_not_to_whoever_made_upper(tmp_path, monkeypatch) -> None:
+    """
+    The console's `/` is root's: its owner and mode come from the base, not from `upper`.
+
+    2026-11-04 (block «Возможности Linux»): `/` in the console was uid 1000 -- overlay takes the root's
+    owner from `upper`, which the host user made. systemd-tmpfiles refused («unsafe path transition»),
+    and the student owned `/`. The root's owner and mode now come from the base before the mount.
+    """
+    from hashpass import overlay  # noqa: PLC0415
+    calls = []
+    monkeypatch.setattr(overlay, "_run", lambda argv, sudo, _cwd=None: calls.append((argv, sudo)))
+    base, upper = tmp_path / "base", tmp_path / "upper"
+    overlay.overlay_mount([base], upper, tmp_path / "work", tmp_path / "mnt", sudo=True, root_like=base)
+    assert calls[0] == (["rsync", "-a", "--exclude=*", f"{base}/", f"{upper}/"], True)
+    assert calls[1][0][:3] == ["mount", "-t", "overlay"]
+    calls.clear()
+    overlay.overlay_mount([base], upper, tmp_path / "work", tmp_path / "mnt", sudo=True)
+    assert [c[0][0] for c in calls] == ["mount"]                          # builds: as before

@@ -42,13 +42,14 @@ def _run(argv: list[str], sudo: bool, cwd: Path | None = None) -> None:  # noqa:
         raise OverlayError(exc.returncode, exc.cmd, exc.output, exc.stderr) from exc
 
 
-def overlay_mount(
+def overlay_mount(  # noqa: PLR0913
     lowers: list[Path],
     upper: Path,
     work: Path,
     mnt: Path,
     *,
     sudo: bool,
+    root_like: Path | None = None,
 ) -> None:
     """
     Mount an overlayfs composed of the given layers.
@@ -59,8 +60,14 @@ def overlay_mount(
         work: Overlayfs work directory.
         mnt: Mountpoint for the composed filesystem.
         sudo: Whether to mount via sudo (rootless when False).
+        root_like: A directory whose owner and mode the mount's root takes (the base). Overlay
+            takes the root's from `upper`, which the host user made: `/` in the console was
+            uid 1000 -- the student owned it and systemd-tmpfiles refused (2026-11-04).
 
     """
+    if root_like is not None:
+        # only the directory itself: `--exclude=*` leaves every entry under it out
+        _run(["rsync", "-a", "--exclude=*", f"{root_like}/", f"{upper}/"], sudo)
     lowerdir = ":".join(str(p) for p in lowers)  # first = topmost
     cwd = None
     if len(lowerdir) > _MAX_LOWERDIR:
