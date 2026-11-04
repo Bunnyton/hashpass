@@ -234,3 +234,47 @@ def test_a_solution_with_pastes_is_marked_next_to_every_tick(pool: _Courses, tmp
     assert "вставок: 2" in _page(admin, f"{pool.url}/c/bob/linux")[1]              # the course's matrix
     assert "вставок: 2" in _page(admin, f"{pool.url}/c/bob/linux/u/kid")[1]        # the student in the course
     assert "вставок: 2" in _page(_browser(pool, "kid"), f"{pool.url}/u/kid")[1]    # own page, «Решено»
+
+
+def _join_kid(pool: _Courses, tmp_path: Path) -> tuple[RemoteRegistry, str]:
+    _env(tmp_path, pool)
+    invite = pool.call("GET", "/courses/bob/linux", "bob")[1]["invite"]
+    assert pool.call("POST", "/courses/bob/linux/join", "kid", {"invite": invite})[0] == 200  # noqa: PLR2004
+    use_course(pool.url, "bob/linux")
+    return RemoteRegistry(pool.url, token=pool.tok["kid"]), pool.tok["kid"]
+
+
+def _digest(pool: _Courses, repo: str = "bob/git-init", n: int = 1) -> str:
+    return RepoIndex(pool.r.store.root / ".repos", repo).get("1", n).task_digest
+
+
+@pytest.mark.tier2
+def test_a_hidden_task_is_neither_given_nor_credited_by_its_name(pool: _Courses, tmp_path: Path) -> None:
+    """
+    Hidden means neither downloaded nor credited, even by the task's name.
+
+    User 2026-11-04: «как он прошёл все задания, если у меня есть скрытые?» -- the catalog hid them,
+    but `hashpass run <ref>` in the course still downloaded and credited them.
+    """
+    client, tok = _join_kid(pool, tmp_path)
+    pool.call("PUT", "/courses/bob/linux/tasks/bob/git-init:1", "bob", {"hidden": True})
+    assert client.submit("bob/git-init:1", _digest(pool), passed=True, token=tok)["status"] != "passed"
+    pool.call("PUT", "/courses/bob/linux/tasks/bob/git-init:1", "bob", {"hidden": False})
+    assert client.submit("bob/git-init:1", _digest(pool), passed=True, token=tok)["status"] == "passed"
+
+
+@pytest.mark.tier2
+def test_a_closed_block_and_a_prize_not_yet_earned_credit_nothing(pool: _Courses, tmp_path: Path) -> None:
+    pool.push("bob/prize", "1", image="p", task="tp")
+    first = pool.call("GET", "/courses/bob/linux", "bob")[1]["blocks"][0]["id"]
+    prize = pool.call("POST", "/courses/bob/linux/blocks", "bob", {"name": "Приз"})[1]["id"]
+    pool.call("POST", "/courses/bob/linux/tasks", "bob", {"repo": "bob/prize", "tag": "1", "block_id": prize})
+    pool.call("PUT", f"/courses/bob/linux/blocks/{prize}", "bob", {"needs": [first]})
+    client, tok = _join_kid(pool, tmp_path)
+    prize_digest = _digest(pool, "bob/prize")
+    assert client.submit("bob/prize:1", prize_digest, passed=True, token=tok)["status"] != "passed"   # not earned
+    pool.call("PUT", f"/courses/bob/linux/blocks/{first}", "bob", {"open": False})
+    assert client.submit("bob/git-init:1", _digest(pool), passed=True, token=tok)["status"] != "passed"  # closed
+    pool.call("PUT", f"/courses/bob/linux/blocks/{first}", "bob", {"open": True})
+    assert client.submit("bob/git-init:1", _digest(pool), passed=True, token=tok)["status"] == "passed"
+    assert client.submit("bob/prize:1", prize_digest, passed=True, token=tok)["status"] == "passed"   # earned

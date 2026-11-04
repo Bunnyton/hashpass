@@ -420,11 +420,29 @@ class PoolServer:
             task = course.find_task(repo, tag)
             if task is None or course.closed or not can(user, self.pool_perms(user), course, action):
                 continue
+            if self._shut_for(user, course, task):
+                continue
             latest = self.repo(repo).latest(tag)
             eff = course_model.effective_n(course, task, latest=latest.n if latest else None)
             if n is None or n == eff:
                 return course, eff
         return None
+
+    def _shut_for(self, user: str | None, course: "course_model.Course", task: dict) -> bool:
+        """
+        Whether `task` is out of `user`'s reach in `course` -- what its catalog does not list for them.
+
+        Hidden, in a closed block, or in a prize block not earned yet.
+
+        User 2026-11-04: «как он прошёл все задания, если у меня есть скрытые?» -- the catalog hid
+        them, but a download or a credit by the task's name went through all the same.
+        """
+        if (bool(user) and task.get("added_by") == user) or sees_hidden(user, self.pool_perms(user), course):
+            return False
+        block = next((b for b in course.blocks if any(t is task for t in b["tasks"])), {})
+        if task.get("hidden") or not block.get("open", True):
+            return True
+        return bool(block.get("needs")) and bool(course_model.waiting_for(course, block, self.passed_refs(user)))
 
     def _reachable_in_course(self, user: str | None, ref: str) -> bool:
         """Whether a private image `ref` is a parent/base of a task `user` gets through a course."""
