@@ -24,17 +24,18 @@ say "В ~/planner — расписание кружков. Над ним раб�
 read brief.md
 
 stage
-  say "Одна ветка ещё не влита в main. От какого коммита main она отросла? Запиши его хеш в ~/fork.txt"
+  say "Одна ветка ещё не влита в main. Покажи коммит main, от которого она отросла"
   solve:
     cd /home/student/planner
     git log --oneline --graph --all
-    git merge-base main notify > /home/student/fork.txt
-  accept file /home/student/fork.txt "^\s*a87b12c[0-9a-f]{0,33}\s*$"
+    git show a87b12c
+  # shown = the output STARTS with it: `git show <hash>`, `git merge-base`; the whole tree starts elsewhere
+  accept output "\A(?:\s|\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*\x07|\x1b?[=>])*(?:commit )?a87b12c[0-9a-f]*\b"
   neutral ls cat pwd cd
   on pass say "Звёздочка, от которой линия уходит вбок, — развилка. Где две линии сходятся в одну звёздочку — слияние."
   hint tries 5 say "Простой git log показывает только ветку, в которой ты стоишь. Где остальные?"
   hint tries 10 say "В брифе есть ключ, который рисует историю всех веток сразу, а не только текущей."
-  hint tries 15 say "Нужен коммит main, из которого вниз уходит линия ветки notify, — ищи в дереве место, где линии расходятся."
+  hint tries 15 say "Нужен коммит main, из которого вниз уходит линия ветки notify, — ищи в дереве место, где линии расходятся, и покажи его через git show."
 
 stage
   say "Каждый раз набирать три ключа — долго. Заведи в git свою команду lg, которая рисует то же дерево"
