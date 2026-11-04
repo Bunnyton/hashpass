@@ -28,6 +28,7 @@ class _Sudo:
 def test_under_emulation_the_console_leaves_the_hosts_profiles(tmp_path, monkeypatch) -> None:
     """Ubuntu arm64, 2026-11-04: the host's /usr/bin/man profile attached to the console's man."""
     monkeypatch.delenv("HASHPASS_AA_ISOLATE", raising=False)
+    monkeypatch.setattr(apparmor, "DEFAULT_ON", True)
     run = _Sudo()
     got = apparmor.prefix(emulated=True, run=run, which=lambda _c: "/usr/bin/aa-exec", **_host(tmp_path))
     assert got == ISOLATED
@@ -37,7 +38,7 @@ def test_under_emulation_the_console_leaves_the_hosts_profiles(tmp_path, monkeyp
 
 @pytest.mark.tier1
 def test_a_failed_probe_keeps_the_old_way(tmp_path, monkeypatch) -> None:
-    monkeypatch.delenv("HASHPASS_AA_ISOLATE", raising=False)
+    monkeypatch.setenv("HASHPASS_AA_ISOLATE", "1")
     got = apparmor.prefix(emulated=True, run=_Sudo(ok=False), which=lambda _c: "/usr/bin/aa-exec", **_host(tmp_path))
     assert got == []
 
@@ -49,7 +50,7 @@ def test_a_failed_probe_keeps_the_old_way(tmp_path, monkeypatch) -> None:
     ({}, None),                                        # no aa-exec
 ])
 def test_no_apparmor_means_nothing_to_do(tmp_path, monkeypatch, host: dict, which: str | None) -> None:
-    monkeypatch.delenv("HASHPASS_AA_ISOLATE", raising=False)
+    monkeypatch.setenv("HASHPASS_AA_ISOLATE", "1")
     run = _Sudo()
     assert apparmor.prefix(emulated=True, run=run, which=lambda _c: which, **_host(tmp_path, **host)) == []
     assert run.calls == []
@@ -74,3 +75,11 @@ def test_the_console_and_lab_machines_start_through_the_prefix(monkeypatch) -> N
     for src in ("cli.py", "runner/nspawn.py"):
         text = (Path(apparmor.__file__).parent / src).read_text(encoding="utf-8")
         assert "apparmor.nspawn_cmd()" in text, src
+
+
+@pytest.mark.tier1
+def test_off_by_default_until_proven_live(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("HASHPASS_AA_ISOLATE", raising=False)
+    run = _Sudo()
+    assert apparmor.prefix(emulated=True, run=run, which=lambda _c: "/usr/bin/aa-exec", **_host(tmp_path)) == []
+    assert run.calls == []

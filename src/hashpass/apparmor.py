@@ -7,8 +7,8 @@ x86 emulation its man_groff/man_filter children may not map qemu-x86_64 -- troff
 segfault (Ubuntu arm64 in UTM, hp-diag 2026-11-04). LXD does the same thing for its containers:
 a namespace holds no profiles of the host, so nothing attaches inside it.
 
-User 2026-11-04: «погнали вторым способом пробовать» -- on by default under emulation;
-HASHPASS_AA_ISOLATE=1 turns it on anywhere, =0 off. The way is proven by a probe before a console
+User 2026-11-04: «погнали вторым способом пробовать» -- HASHPASS_AA_ISOLATE=1 turns it on, =0 off;
+once proven live (DEFAULT_ON) it is on by default under emulation. The way is proven by a probe before a console
 relies on it; when the probe fails, the console starts as before.
 """
 import os
@@ -18,6 +18,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 NAMESPACE = "hashpass"
+# Off until a whole console has booted in the namespace on a real machine (2026-11-04): then on
+# by default under emulation.
+DEFAULT_ON = False
 _ENABLED = Path("/sys/module/apparmor/parameters/enabled")
 _NAMESPACES = Path("/sys/kernel/security/apparmor/policy/namespaces")
 
@@ -39,7 +42,8 @@ def prefix(*, emulated: bool | None = None, run: Callable[[list[str]], bool] = _
            enabled: Path = _ENABLED, namespaces: Path = _NAMESPACES) -> list[str]:
     """`aa-exec … --` to put before systemd-nspawn (after sudo), or [] -- the console as before."""
     asked = os.environ.get("HASHPASS_AA_ISOLATE", "")
-    if asked == "0" or (asked != "1" and not (_emulated() if emulated is None else emulated)):
+    default = DEFAULT_ON and (_emulated() if emulated is None else emulated)
+    if asked == "0" or (asked != "1" and not default):
         return []
     try:
         on = enabled.read_text(encoding="utf-8").strip() == "Y"
