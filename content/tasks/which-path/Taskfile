@@ -1,0 +1,62 @@
+# which-path — где лежит программа: команда — это файл, найденный по PATH, и версий одной
+# программы может быть несколько; запускается первая по PATH. /opt — для сторонних программ.
+# Среда: старый /usr/local/bin/report 1.0; в /opt/acme (≈240 файлов вендора) — report 2.0 и 2.1,
+# а рядом каталоги share/doc/report и lib/report (ловушка для find без -type f). Шаги: где лежит
+# report, который запускается (одна строка с /usr/local/bin/report) → все файлы report в /opt
+# (observe output, similarity 100) → чтобы просто report запускал 2.1, и в новом терминале тоже:
+# accept по выводу «report 2.1» + check live —
+# новая оболочка студента (bash -lic) тоже видит 2.1. Доза hash.md на «No such file» — bash
+# помнит старый путь. Как менять PATH навсегда (~/.bashrc, source), объясняет bash-path — блок идёт
+# после «Bash-скрипты»; здесь — порядок версий, /opt и кэш hash.
+
+image which-path:1
+
+# data: python3 data/gen-opt.py data/opt; data/bin/report — руками
+copy data/opt /opt
+copy data/bin/report /usr/local/bin/report
+run chmod 755 /usr/local/bin/report && find /opt -path '*/bin/*' -type f -exec chmod 755 {} +
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "Коллеги просят отчёт в pdf. report говорит, что не умеет. Но вендор клянётся, что умеет."
+read brief.md
+
+stage
+  say "Где лежит report, который запускается, когда набираешь просто report? Покажи путь"
+  accept output "\A[^\n]*/usr/local/bin/report[^\n]*\n?\Z"
+  neutral ls pwd cd cat
+  on pass say "Это report 1.0 — его когда-то поставил предыдущий админ. В /usr/local кладут то, что ставят руками, мимо пакетов."
+  hint tries 5 say "Ты уже спрашивал у оболочки, где нашёлся ls, когда писал свою команду."
+  hint tries 10 say "Нужна одна строка — путь. Не весь список."
+
+stage
+  say "Вендор поставил в /opt новые версии report. Найди все файлы report в /opt"
+  solve find /opt -name report -type f
+  observe output
+  neutral ls pwd cd cat
+  on pass say "Две версии, и каждую можно запустить полным путём — оболочке не обязательно искать по PATH. Попробуй любую с ключом --version."
+  hint output "share/doc/report" say "В списке есть каталоги с тем же именем. Нужны только файлы."
+  hint tries 5 say "Каким инструментом ищут по имени во всём дереве?"
+  hint tries 10 say "find умеет отбирать по типу: файлы отдельно, каталоги отдельно."
+
+stage
+  say "Пусть по команде report — просто по имени — запускается версия 2.1. И в новом терминале тоже"
+  solve:
+    echo 'export PATH=/opt/acme/report-2.1/bin:$PATH' >> /home/student/.bashrc
+    export PATH=/opt/acme/report-2.1/bin:$PATH
+    report --version
+  accept output "(^|\n)report 2\.1"
+  check live runuser -u student -- bash -lic 'report --version' 2>/dev/null | grep -q '^report 2\.1'
+  on enter read path.md
+  neutral ls pwd cd cat
+  on pass say "Порядок в PATH и есть порядок поиска. А версия 1.0 никуда не делась: её по-прежнему можно запустить полным путём."
+  hint output "No such file or directory" read hash.md
+  hint output "report 1.0" say "Отвечает старая. В каком порядке оболочка перебирает каталоги PATH?"
+  hint tries 5 say "Что сейчас в PATH? Где в этом списке должен оказаться каталог с 2.1?"
+  hint tries 10 say "export живёт до выхода из оболочки. Что новая оболочка читает при старте?"
+
+exec finale

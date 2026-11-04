@@ -1,0 +1,6 @@
+#!/bin/sh
+# Acme Report 2.0 — генератор отчётов
+case "$1" in
+    --version|-V) echo "report 2.0" ;;
+    *) echo "report 2.0: отчёт за сегодня готов — 268 строк, формат xlsx" ;;
+esac
