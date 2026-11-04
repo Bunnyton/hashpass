@@ -20,6 +20,29 @@
 {{ join_form('Принять приглашение') }}
 {{ act('DELETE', api ~ '/invites/' ~ (signed_in | q), 'Отклонить', 'sm ghost', confirm='Отклонить приглашение?') }}
 {%- endmacro %}
+{% macro invite_card() -%}
+<div class='card invite-card'>
+<h3>Пригласить в курс</h3>
+<p class='sub small'>Ссылка-приглашение: кто откроет её и войдёт, станет участником курса{% if c.visibility == 'private' %} — даже приватного{% endif %}.</p>
+<div class='row'><code class='copy'>{{ invite_link }}</code>
+{{ act('PUT', api, 'Сменить ссылку', 'sm ghost', {'rotate_invite': true}, confirm='Старая ссылка перестанет работать. Сменить?') }}</div>
+<form class='invite-add' data-api='POST {{ api }}/invites' data-user-search>
+<label for='invite-q'>Или пригласите сами — начните вводить логин:</label>
+<div class='user-search'><input id='invite-q' type='search' autocomplete='off' placeholder='логин пользователя' aria-autocomplete='list' aria-controls='invite-hits'>
+<ul id='invite-hits' class='user-hits' role='listbox' hidden></ul></div>
+<div class='user-picked' aria-live='polite'></div>
+<input type='hidden' name='users' value=''>
+<button class='sm' type='submit'>Пригласить</button>
+</form>
+<p class='sub small'>Приглашённый станет участником, когда примет приглашение — на странице курса, в «Моих курсах» или в hashpass.</p>
+{% if waiting %}
+<h4 class='team-sub'>Ждут ответа <span class='count-pill'>{{ waiting | length }}</span></h4>
+<ul class='people waiting'>{% for w in waiting %}<li class='member'><div class='member-head'><a class='person' href='/u/{{ w.user | q }}'><span class='mono'>{{ w.user }}</span></a>
+<span class='small dim'>пригласил {{ w.by }}{% if w.at %}, {{ ago(w.at) }}{% endif %}</span>
+{{ act('DELETE', api ~ '/invites/' ~ (w.user | q), 'Отозвать', 'sm ghost', confirm='Отозвать приглашение ' ~ w.user ~ '?') }}</div></li>{% endfor %}</ul>
+{% endif %}
+</div>
+{%- endmacro %}
 {% block main %}
 <nav class='crumb' aria-label='Путь'><a href='/c'>← Мои курсы</a></nav>
 {% set ref_parts = c.ref.split('/', 1) %}
@@ -91,7 +114,8 @@
 {% if may.view %}
 <nav class='tabs' aria-label='Разделы курса'>
 <a href='#tasks' data-tab>{{ icon('task') }} Задания <span class='count'>{{ n_tasks }}</span></a>
-{% if may.students or may.people %}<a href='#students' data-tab>{{ icon('user') }} Участники курса <span class='count'>{{ students | length }}</span></a>{% endif %}
+{% if may.people and not may.students %}<a href='#invite-tab' data-tab>{{ icon('user') }} Пригласить</a>{% endif %}
+{% if may.students %}<a href='#students' data-tab>{{ icon('user') }} Участники курса <span class='count'>{{ students | length }}</span></a>{% endif %}
 {% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
 {% if may.people and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
 <a href='#people' data-tab>{{ icon('user') }} Команда курса <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
@@ -348,32 +372,15 @@
 </ol>
 {% else %}<div class='empty card'><p class='sub'>Изменений пока не было.</p></div>{% endif %}
 </section>
-{% if may.students or may.people %}
+{% if not may.students and may.people %}
+<section id='invite-tab' class='tab-panel' aria-label='Пригласить'>
+{{ invite_card() }}
+</section>
+{% endif %}
+{% if may.students %}
 <section id='students' class='tab-panel' aria-label='Участники курса'>
 <div class='cat-head'><h2>Участники курса <span class='count-pill'>{{ students | length }}</span></h2></div>
-{% if may.people %}
-<div class='card invite-card'>
-<h3>Пригласить в курс</h3>
-<p class='sub small'>Ссылка-приглашение: кто откроет её и войдёт, станет участником курса{% if c.visibility == 'private' %} — даже приватного{% endif %}.</p>
-<div class='row'><code class='copy'>{{ invite_link }}</code>
-{{ act('PUT', api, 'Сменить ссылку', 'sm ghost', {'rotate_invite': true}, confirm='Старая ссылка перестанет работать. Сменить?') }}</div>
-<form class='invite-add' data-api='POST {{ api }}/invites' data-user-search>
-<label for='invite-q'>Или пригласите сами — начните вводить логин:</label>
-<div class='user-search'><input id='invite-q' type='search' autocomplete='off' placeholder='логин пользователя' aria-autocomplete='list' aria-controls='invite-hits'>
-<ul id='invite-hits' class='user-hits' role='listbox' hidden></ul></div>
-<div class='user-picked' aria-live='polite'></div>
-<input type='hidden' name='users' value=''>
-<button class='sm' type='submit'>Пригласить</button>
-</form>
-<p class='sub small'>Приглашённый станет участником, когда примет приглашение — на странице курса, в «Моих курсах» или в hashpass.</p>
-{% if waiting %}
-<h4 class='team-sub'>Ждут ответа <span class='count-pill'>{{ waiting | length }}</span></h4>
-<ul class='people waiting'>{% for w in waiting %}<li class='member'><div class='member-head'><a class='person' href='/u/{{ w.user | q }}'><span class='mono'>{{ w.user }}</span></a>
-<span class='small dim'>пригласил {{ w.by }}{% if w.at %}, {{ ago(w.at) }}{% endif %}</span>
-{{ act('DELETE', api ~ '/invites/' ~ (w.user | q), 'Отозвать', 'sm ghost', confirm='Отозвать приглашение ' ~ w.user ~ '?') }}</div></li>{% endfor %}</ul>
-{% endif %}
-</div>
-{% endif %}
+{% if may.people %}{{ invite_card() }}{% endif %}
 {% if students %}
 <div class='card'>
 <div class='row students-tools'>

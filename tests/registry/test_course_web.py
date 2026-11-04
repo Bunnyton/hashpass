@@ -173,6 +173,7 @@ def test_a_pool_admin_without_progress_does_not(pool: _Courses) -> None:
     pool.r.users.set_perms("clerk", ["people", "content"])
     page = _page(_browser(pool, "clerk"), f"{pool.url}/c/bob/linux")[1]
     assert "id='students'" not in page
+    assert "id='invite-tab'" in page and "POST /courses/bob/linux/invites" in page   # invites, no progress
     assert _page(_browser(pool, "clerk"), f"{pool.url}/c/bob/linux/u/kid")[0] == 403  # noqa: PLR2004
 
 
