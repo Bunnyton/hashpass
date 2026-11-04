@@ -1,0 +1,63 @@
+# tmp-clean — /tmp и перезагрузка. /tmp живёт в памяти (tmpfs) и пустеет при перезагрузке;
+# /var/tmp на диске переживает её, но тоже чистится по возрасту; правила — tmpfiles.d. Шаги:
+# узнать, что /tmp — tmpfs (df/findmnt/mount) → найти, через сколько дней чистится /var/tmp
+# (/usr/lib/tmpfiles.d/tmp.conf, доза tmpfiles.md при входе) → своё правило в /etc/tmpfiles.d,
+# чтобы /tmp/builder появлялся после каждой перезагрузки. Настоящий reboot выключает консоль,
+# поэтому перезагрузку изображает restart, а reboot/poweroff/shutdown/halt закрыты.
+# Шаг 3 принимает check live: data/lib/check-builder. hp/rootfix при входе отдаёт корень root —
+# без этого systemd-tmpfiles в этой машине не работает (см. комментарий в скрипте).
+
+image tmp-clean:1
+
+# data: data/bin/restart, data/lib/check-builder — руками
+copy data/bin/restart /usr/local/bin/restart
+copy data/lib/check-builder /usr/local/lib/hp-tmp/check-builder
+run chmod 755 /usr/local/bin/restart /usr/local/lib/hp-tmp/check-builder
+
+hidden hp
+
+settings
+  pager on
+
+block reboot match "." say "Настоящая перезагрузка закроет консоль. Здесь её изображает команда restart."
+block poweroff match "." say "Выключать машину не нужно. Перезагрузку здесь изображает команда restart."
+block shutdown match "." say "Выключать машину не нужно. Перезагрузку здесь изображает команда restart."
+block halt match "." say "Выключать машину не нужно. Перезагрузку здесь изображает команда restart."
+block systemctl match "(reboot|poweroff|halt|kexec)" say "Настоящая перезагрузка закроет консоль. Здесь её изображает команда restart."
+
+say "«Я же сохранил его в /tmp!» — классика понедельника."
+read brief.md
+
+stage
+  say "/tmp на этой машине — на диске или в оперативной памяти? Покажи, на чём он смонтирован"
+  accept output "tmpfs[^\n]*/tmp\b|/tmp\s+tmpfs"
+  on enter apply rootfix
+  neutral ls pwd cd
+  on pass say "tmpfs — файловая система в оперативной памяти: быстрая, а при выключении всё в ней исчезает. Поэтому /tmp после перезагрузки пустой — его просто не с чего восстановить."
+  hint tries 5 say "Чем ты смотрел, на каком диске живёт каталог, в примере из теории? Спроси так же про /tmp."
+  hint tries 10 say "Первый столбец — что смонтировано. Чем это отличается у /home и у /tmp?"
+
+stage
+  say "/var/tmp живёт на диске, но и его система чистит. Через сколько дней пропадают файлы в /var/tmp? Покажи правило"
+  accept output "/var/tmp\s+1777\s+root\s+root\s+30d"
+  on enter read tmpfiles.md
+  neutral ls pwd cd
+  on pass say "В /tmp файлы живут 10 дней или до перезагрузки, в /var/tmp — 30 дней. Нужно дольше — это уже не временный файл: ему место в /var/lib или в домашнем каталоге."
+  hint output "No such file or directory" say "Такого файла нет. Какие файлы лежат в каталоге правил?"
+  hint tries 5 say "Правил — десятки файлов. Как найти тот, где упоминается /var/tmp, не открывая каждый?"
+  hint tries 10 say "grep ищет и по всем файлам каталога сразу."
+
+stage
+  say "Сборщику builder после каждой перезагрузки нужен каталог /tmp/builder, владелец — student. Сделай, чтобы он появлялся сам, и проверь перезагрузкой"
+  solve:
+    printf 'd /tmp/builder 0755 student student -\n' | sudo tee /etc/tmpfiles.d/builder.conf >/dev/null
+    restart
+  check live /usr/local/lib/hp-tmp/check-builder
+  neutral ls pwd cd cat
+  on pass say "Так пакеты и заводят свои каталоги в /run и /tmp: строка в tmpfiles.d — и каталог есть после каждой загрузки, с нужным владельцем."
+  hint cmd mkdir say "Сейчас каталог будет. А после restart?"
+  hint output "Permission denied" say "Правила системы — в /etc, а туда пишут через sudo."
+  hint tries 5 say "Что делает система с tmpfiles.d при загрузке? Какой тип строки создаёт каталог — см. man tmpfiles.d."
+  hint tries 10 say "Строка правила: тип, путь, права, владелец, группа, возраст. Где у тебя ошибка — сравни со строкой для /var/tmp."
+
+exec finale

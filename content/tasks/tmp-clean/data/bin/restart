@@ -1,0 +1,11 @@
+#!/bin/sh
+# restart — изображает перезагрузку: настоящий reboot закрыл бы консоль. При загрузке /tmp
+# монтируется заново (пустой tmpfs), а systemd-tmpfiles выполняет правила из tmpfiles.d —
+# здесь то же самое.
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+echo "Перезагрузка…"
+if ! systemctl restart tmp.mount 2>/dev/null; then
+    umount -l /tmp && systemctl start tmp.mount
+fi
+systemd-tmpfiles --create --remove --boot >/dev/null 2>&1
+echo "…готово: система как после включения."

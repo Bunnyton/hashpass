@@ -1,0 +1,6 @@
+#!/bin/sh
+# Проверка задания tmp-clean: правило tmpfiles.d для /tmp/builder работает.
+# Перезагрузка проигрывается в своём пространстве монтирования — на пустом /tmp, — так что
+# настоящий /tmp студента не трогается. Плюс: каталог есть и сейчас (restart уже был).
+owner_after_boot=$(unshare -m sh -c 'mount -t tmpfs tmpfs /tmp && systemd-tmpfiles --create --prefix=/tmp/builder >/dev/null 2>&1; stat -c %U /tmp/builder 2>/dev/null')
+[ "$owner_after_boot" = student ] && [ "$(stat -c %U /tmp/builder 2>/dev/null)" = student ]
