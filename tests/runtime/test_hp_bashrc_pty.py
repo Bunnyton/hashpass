@@ -42,7 +42,7 @@ def test_console_ships_only_the_students_commands(tmp_path):
     # is greeted exactly once.
     log = tmp_path / "hp-io.log"
     log.touch()
-    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+    env = {**os.environ, "PATH": f"{(b := _fake_hp_io(tmp_path))}:{os.environ['PATH']}", "__HP_IO_TEST": f"{b}/hp-io",
            "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
     _drive_and_check(str(_RC), env, log)
@@ -58,7 +58,7 @@ def test_startup_lines_after_the_rc_are_not_a_try(tmp_path):
     rc = tmp_path / "bashrc"
     rc.write_text(f". {_RC}\nalias ls='ls --color=auto'\nHOSTTAG=$(hostname)\n"
                   "[ -f /nonexistent ] && . /nonexistent\ntrue\n", encoding="utf-8")
-    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+    env = {**os.environ, "PATH": f"{(b := _fake_hp_io(tmp_path))}:{os.environ['PATH']}", "__HP_IO_TEST": f"{b}/hp-io",
            "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
     _drive_and_check(str(rc), env, log)
@@ -92,7 +92,7 @@ def test_prompt_gets_a_solved_label_once_the_host_says_so(tmp_path):
                     '[ "$1" = state ] && [ -f "$HP_SOLVED" ] && echo solved\nexit 0\n',
                     encoding="utf-8")
     shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "__HP_IO_TEST": f"{bindir}/hp-io", "HP_PORT": "1",
            "HP_IO_LOG": str(log), "HP_SOLVED": str(flag), "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
     child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
@@ -140,7 +140,7 @@ def test_block_rules_refuse_commands_by_their_arguments(tmp_path):
                       _rule("rm", "unless", r"\*", "А где же звёздочка?"),
                       _rule("cat", "match", "^sudo ", "Сначала без sudo")])
     bindir = _policy_shim(tmp_path, f";;ls;{rules}")
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "__HP_IO_TEST": f"{bindir}/hp-io", "HP_PORT": "1",
            "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
            "HOME": str(work), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
@@ -181,7 +181,7 @@ def test_refusal_looks_like_the_systems_talk(tmp_path):
     log.touch()
     rules = ",".join([_rule("cd", "unless", "^cd +/", "no no no, mister fish!")])
     bindir = _policy_shim(tmp_path, f";rm;;{rules}")
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "__HP_IO_TEST": f"{bindir}/hp-io", "HP_PORT": "1",
            "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
            "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
@@ -312,7 +312,7 @@ def test_bash_inside_a_root_shell_does_not_replay_the_intro(tmp_path):
     log = tmp_path / "hp-io.log"
     log.touch()
     (tmp_path / "port").write_text("1\n", encoding="utf-8")
-    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+    env = {**os.environ, "PATH": f"{(b := _fake_hp_io(tmp_path))}:{os.environ['PATH']}", "__HP_IO_TEST": f"{b}/hp-io",
            "HP_IO_LOG": str(log), "HP_PORT_FILE": str(tmp_path / "port"),
            "HOME": str(tmp_path), "TERM": "dumb"}
     for k in ("HP_PORT", "HP_GREETED"):
@@ -408,7 +408,7 @@ def test_readme_asks_for_the_theory_and_is_not_a_try(tmp_path):
     log = tmp_path / "hp-io.log"
     log.touch()
     bindir = _policy_shim(tmp_path, "cat;;;")                # allow: cat only
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "__HP_IO_TEST": f"{bindir}/hp-io", "HP_PORT": "1",
            "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
            "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
@@ -435,7 +435,7 @@ def test_a_conveyor_can_be_refused_and_refusals_reach_the_screen(tmp_path):
     rules = ",".join([_rule("|", "match", ".", "Без конвейера: grep умеет сам"),
                       _rule("wc", "match", ".", "wc в отпуске")])
     bindir = _policy_shim(tmp_path, f";;;{rules}")
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "__HP_IO_TEST": f"{bindir}/hp-io", "HP_PORT": "1",
            "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
            "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
@@ -465,7 +465,7 @@ def test_a_command_is_shipped_with_the_directory_it_ran_in(tmp_path):
     log = tmp_path / "hp-io.log"
     log.touch()
     (tmp_path / "sub").mkdir()
-    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+    env = {**os.environ, "PATH": f"{(b := _fake_hp_io(tmp_path))}:{os.environ['PATH']}", "__HP_IO_TEST": f"{b}/hp-io",
            "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
     child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
@@ -493,7 +493,7 @@ def test_quoted_separators_do_not_split_a_command(tmp_path):
     rules = ",".join([_rule("grep", "match", r"\\\|", "Один шаблон, без списка"),
                       _rule("|", "match", ".", "Без конвейера")])
     bindir = _policy_shim(tmp_path, f"grep;;cat;{rules}")
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "__HP_IO_TEST": f"{bindir}/hp-io", "HP_PORT": "1",
            "HP_IO_LOG": str(log), "HP_POLICY": str(tmp_path / "policy"),
            "HOME": str(tmp_path), "TERM": "dumb"}
     env.pop("HP_GREETED", None)
@@ -528,7 +528,7 @@ def test_a_lab_machine_names_itself_in_the_prompt(tmp_path, in_lab):
     if in_lab:
         mark.write_text("net-hello\n")
     bindir = _fake_hp_io(tmp_path)
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HP_PORT": "1",
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "__HP_IO_TEST": f"{bindir}/hp-io", "HP_PORT": "1",
            "HP_IO_LOG": str(tmp_path / "log"), "HOME": str(tmp_path), "TERM": "dumb",
            "HP_LAB_MARK": str(mark)}
     env.pop("HP_GREETED", None)
@@ -551,7 +551,7 @@ def test_grep_paints_its_matches_and_the_host_sees_the_typed_command(tmp_path):
     log = tmp_path / "hp-io.log"
     log.touch()
     (tmp_path / "f.txt").write_text("foo bar\n", encoding="utf-8")
-    env = {**os.environ, "PATH": f"{_fake_hp_io(tmp_path)}:{os.environ['PATH']}",
+    env = {**os.environ, "PATH": f"{(b := _fake_hp_io(tmp_path))}:{os.environ['PATH']}", "__HP_IO_TEST": f"{b}/hp-io",
            "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "xterm-256color"}
     env.pop("HP_GREETED", None)
     env.pop("GREP_COLORS", None)
@@ -569,3 +569,24 @@ def test_grep_paints_its_matches_and_the_host_sees_the_typed_command(tmp_path):
     cmds = [r for r in _requests(log) if r.startswith("cmd ")]
     assert "cmd grep 'o\\+' f.txt" in cmds, cmds
     assert not any("--color" in c for c in cmds), cmds
+
+
+@pytest.mark.tier1
+def test_a_wiped_path_still_ships_the_students_commands(tmp_path):
+    """bash-path, 2026-11-04: `PATH=~/tools/bin` cut the hooks off -- no command reached grading."""
+    log = tmp_path / "hp-io.log"
+    log.touch()
+    env = {**os.environ, "PATH": f"{(b := _fake_hp_io(tmp_path))}:{os.environ['PATH']}", "__HP_IO_TEST": f"{b}/hp-io",
+           "HP_PORT": "1", "HP_IO_LOG": str(log), "HOME": str(tmp_path), "TERM": "dumb"}
+    env.pop("HP_GREETED", None)
+    child = pexpect.spawn("bash", ["--rcfile", str(_RC), "-i"], env=env, encoding="utf-8",
+                          timeout=10, dimensions=(24, 100))
+    child.expect("❯")
+    child.sendline("PATH=/nonexistent")
+    child.expect("❯")
+    child.sendline("echo after")
+    child.expect("❯")
+    child.sendline("exit")
+    child.expect(pexpect.EOF)
+    cmds = [r for r in _requests(log) if r.startswith("cmd ")]
+    assert cmds == ["cmd PATH=/nonexistent", "cmd echo after"], cmds

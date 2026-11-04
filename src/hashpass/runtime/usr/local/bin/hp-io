@@ -5,6 +5,8 @@
 # get the rest at once (that is how `read` pages long theory). Ctrl+C while the host is still
 # typing asks for the same: the rest at once, no more pauses. The host does all the work; this
 # only streams the reply and handles the pause.
+# its own PATH: the student may have wiped theirs (bash-path, 2026-11-04)
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 [ -n "$HP_PORT" ] || exit 0
 exec 3<>"/dev/tcp/127.0.0.1/$HP_PORT" 2>/dev/null || exit 0
 printf '%s\n' "$1" >&3

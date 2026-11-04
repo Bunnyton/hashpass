@@ -4,6 +4,9 @@
 # tab-completion, history and Cyrillic input out of the box.
 
 # Interactive-only.
+# The hooks call their tools by full path: a student may wipe PATH (bash-path, 2026-11-04), and a
+# PATH of their own would flush bash's `hash` on every command. __HP_IO_TEST: the tests' stand-in.
+__hp_io=${__HP_IO_TEST:-/usr/local/bin/hp-io}
 case $- in *i*) ;; *) return ;; esac
 
 # Once per shell. The console starts bash with `--rcfile /etc/hp-bashrc`; every other
@@ -18,7 +21,7 @@ __HP_LOADED=1
 __hp_nested=0
 __hp_port_file=${HP_PORT_FILE:-/run/hp/port}          # overridable for the pty tests only
 if [ -z "${HP_PORT-}" ] && [ -r "$__hp_port_file" ]; then
-    HP_PORT=$(cat "$__hp_port_file" 2>/dev/null)
+    HP_PORT=$(/usr/bin/cat "$__hp_port_file" 2>/dev/null)
     export HP_PORT
     __hp_nested=1
 fi
@@ -98,7 +101,7 @@ if [ -n "${HP_PORT-}" ]; then
     # Called BEFORE the prompt is drawn -- record when the prompt appeared so we can compute
     # (submit_t - prompt_t) as an approximate typing time and let the host flag pastes.
     __hp_precmd() {
-        __hp_prompt_t=$(date +%s.%N)
+        __hp_prompt_t=$(/usr/bin/date +%s.%N)
     }
 
     # Called BEFORE the student's command runs.  We do two things:
@@ -140,11 +143,11 @@ if [ -n "${HP_PORT-}" ]; then
         for f in "${__hp_shadow[@]}"; do unset -f "$f" 2>/dev/null; done
         __hp_shadow=()
 
-        __hp_submit_t=$(date +%s.%N)
+        __hp_submit_t=$(/usr/bin/date +%s.%N)
 
         local cmd="$1"
         local pol
-        pol=$(hp-io policy 2>/dev/null) || return
+        pol=$("$__hp_io" policy 2>/dev/null) || return
         [ -z "$pol" ] && return
 
         local allow_s deny_s neutral_s blocks_s
@@ -168,11 +171,11 @@ if [ -n "${HP_PORT-}" ]; then
         local conveyor_msg="" line rb0 rm0 rp0 rmsg0 b0
         local hist
         hist=$(HISTTIMEFORMAT='' builtin history 1 2>/dev/null)
-        line=$(printf '%s' "$hist" | sed -E 's/^ *[0-9]+\*? *//')
+        line=$(printf '%s' "$hist" | /usr/bin/sed -E 's/^ *[0-9]+\*? *//')
         __hp_split "$line"
         if [ "$__hp_pipe" -eq 1 ]; then
             for b0 in "${blocks[@]}"; do
-                IFS=$'\x1f' read -r rb0 rm0 rp0 rmsg0 <<< "$(printf '%s' "$b0" | base64 -d 2>/dev/null)"
+                IFS=$'\x1f' read -r rb0 rm0 rp0 rmsg0 <<< "$(printf '%s' "$b0" | /usr/bin/base64 -d 2>/dev/null)"
                 [ "$rb0" = "|" ] || continue
                 if [[ "$line" =~ $rp0 ]]; then
                     [ "$rm0" = match ] && conveyor_msg="$rmsg0"
@@ -209,7 +212,7 @@ if [ -n "${HP_PORT-}" ]; then
             trimmed="${seg#"${seg%%[![:space:]]*}"}"
             if [ "$blocked" -ne 1 ]; then
                 for b in "${blocks[@]}"; do
-                    IFS=$'\x1f' read -r rb rm rp rmsg <<< "$(printf '%s' "$b" | base64 -d 2>/dev/null)"
+                    IFS=$'\x1f' read -r rb rm rp rmsg <<< "$(printf '%s' "$b" | /usr/bin/base64 -d 2>/dev/null)"
                     [ "$rb" = "$base" ] || continue
                     if [[ "$trimmed" =~ $rp ]]; then
                         [ "$rm" = match ] && blocked=1
@@ -249,7 +252,7 @@ if [ -n "${HP_PORT-}" ]; then
     # `cmd <cmd_b64> <output_b64> <typing_seconds>` to the host.  Cap the output at
     # 64 KiB to keep the socket message bounded.
     # `readme`: show the task's theory once more (the brief and the doses given so far).
-    readme() { hp-io readme 2>/dev/null; }
+    readme() { "$__hp_io" readme 2>/dev/null; }
 
     __hp_postexec() {
         # FIRST statement: $? is still the student's command status here (PROMPT_COMMAND runs
@@ -266,7 +269,7 @@ if [ -n "${HP_PORT-}" ]; then
         local size out=""
         size=$(stat -c %s "$log" 2>/dev/null || echo 0)
         if [ "$size" -gt "${__hp_off:-0}" ]; then
-            out=$(tail -c +$((__hp_off + 1)) "$log" 2>/dev/null | tail -c 65536 | base64 -w0)
+            out=$(/usr/bin/tail -c +$((__hp_off + 1)) "$log" 2>/dev/null | /usr/bin/tail -c 65536 | /usr/bin/base64 -w0)
         fi
         __hp_off=$size
         # `readme` is the console's own command (the theory once more), not the student's work:
@@ -275,17 +278,17 @@ if [ -n "${HP_PORT-}" ]; then
 
         local typing=""
         if [ -n "$__hp_prompt_t" ] && [ -n "$__hp_submit_t" ]; then
-            typing=$(awk -v a="$__hp_prompt_t" -v b="$__hp_submit_t" \
+            typing=$(/usr/bin/awk -v a="$__hp_prompt_t" -v b="$__hp_submit_t" \
                      'BEGIN{ printf "%.6f", b - a }' 2>/dev/null)
         fi
 
         local cmd_b64
-        cmd_b64=$(printf '%s' "$cmd" | base64 -w0)
+        cmd_b64=$(printf '%s' "$cmd" | /usr/bin/base64 -w0)
         # cwd = the directory the line's LAST simple command ran in (`cd x && find .` -> x): the
         # host reads relative paths in the output against it (hashpass/paths.py).
         local cwd_b64
-        cwd_b64=$(printf '%s' "${__hp_cwd:-$PWD}" | base64 -w0)
-        hp-io "cmd $cmd_b64 $out $typing rc=$rc cwd=$cwd_b64" 2>/dev/null
+        cwd_b64=$(printf '%s' "${__hp_cwd:-$PWD}" | /usr/bin/base64 -w0)
+        "$__hp_io" "cmd $cmd_b64 $out $typing rc=$rc cwd=$cwd_b64" 2>/dev/null
 
         # After hp-io's reply streamed back through the terminal (and was captured by
         # script(1)), advance the offset past it so the NEXT command doesn't see the reply
@@ -298,7 +301,7 @@ if [ -n "${HP_PORT-}" ]; then
     # for the rest of the session and we stop asking.
     __hp_check_solved() {
         [ "$__hp_solved" -eq 1 ] && return
-        [ "$(hp-io state 2>/dev/null)" = solved ] && __hp_solved=1
+        [ "$("$__hp_io" state 2>/dev/null)" = solved ] && __hp_solved=1
     }
 
     # Snapshot BASH_COMMAND into __hp_cmd on every simple command, EXCEPT when the current
@@ -311,7 +314,7 @@ if [ -n "${HP_PORT-}" ]; then
     # BASH_COMMAND comes alias-expanded: our `grep --color=auto` goes back to the typed `grep`,
     # or `accept cmd`, `block` and hints would judge a flag the student never wrote.
     trap '[[ "$BASH_COMMAND" == __hp_* || "$BASH_COMMAND" == _hp_* ]] || \
-          [[ "$BASH_COMMAND" == PROMPT_COMMAND* || "$BASH_COMMAND" == hp-io* ]] || \
+          [[ "$BASH_COMMAND" == PROMPT_COMMAND* || "$BASH_COMMAND" == hp-io* || "$BASH_COMMAND" == '"$__hp_io"'* ]] || \
           { __hp_cmd="${BASH_COMMAND/#grep --color=auto/grep}"; __hp_cwd="$PWD"; }; __hp_preexec "$__hp_cmd"' DEBUG
 
     # PROMPT_COMMAND runs BETWEEN commands: ship the last one to the host, blank the
@@ -324,7 +327,7 @@ if [ -n "${HP_PORT-}" ]; then
     # /bin/bash inside `sudo su` inherits the recovered port and must not replay the intro.
     if [ "$__hp_nested" -eq 0 ] && [ -z "${HP_GREETED-}" ]; then
         export HP_GREETED=1
-        hp-io hello 2>/dev/null
+        "$__hp_io" hello 2>/dev/null
     fi
     export HP_GREETED=1
     __hp_cmd=""
