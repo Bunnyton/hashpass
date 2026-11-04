@@ -1,0 +1,18 @@
+#!/bin/sh
+# Коллега добавляет страницу /status — и забывает точку с запятой. Потом перезапускает nginx,
+# и тот не поднимается: сайт лежит целиком.
+f=/etc/nginx/sites-available/default
+grep -q 'location /status' "$f" && exit 0
+# убрать последнюю закрывающую скобку блока server, что бы ни стояло после неё
+tac "$f" | sed '0,/^}/{/^}/d}' | tac > "$f.new" && cat "$f.new" > "$f" && rm -f "$f.new"
+cat >> "$f" <<'CONF'
+
+	# добавил Петров: страница для мониторинга
+	location /status {
+		default_type text/plain;
+		return 200 "работает\n"
+	}
+}
+CONF
+systemctl restart nginx >/dev/null 2>&1
+exit 0

@@ -1,0 +1,15 @@
+# Сайт отдела снабжения.
+# Порт и адрес, на которых nginx ждёт посетителей, задаёт listen.
+
+server {
+	listen 127.0.0.1:8472;
+
+	root /var/www/snab;
+	index index.html;
+
+	server_name snab.local;
+
+	location / {
+		try_files $uri $uri/ =404;
+	}
+}

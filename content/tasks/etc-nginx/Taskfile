@@ -1,0 +1,57 @@
+# etc-nginx — конфиг и служба: программа читает настройки при запуске. Сайт отдела (nginx,
+# 127.0.0.1:8472) переезжает на 8473: найти конфиг в /etc/nginx, поправить listen и дать nginx
+# перечитать его (доза reload.md, когда правка есть, а сайт на новом порту молчит). Второй шаг:
+# коллега добавил в конфиг страницу /status без «;» и перезапустил nginx — сайт лежит (on enter
+# apply break). Причину покажут журнал службы и nginx -t (доза test.md на emerg); принят, когда
+# работают и сайт, и /status. Служба и сеть живут только в работающей консоли — check live.
+# Сеть консоли общая с компьютером, поэтому сайт слушает только 127.0.0.1.
+
+image etc-nginx:1
+
+run apt-get install -y nginx curl >/dev/null
+# data: data/nginx/default, data/www — руками
+copy data/nginx/default /etc/nginx/sites-available/default
+copy data/www /var/www/snab
+run chmod 644 /etc/nginx/sites-available/default /var/www/snab/index.html && chmod 755 /var/www/snab
+run systemctl enable nginx
+
+hidden hp
+
+settings
+  pager on
+
+say "Отдел снабжения переезжает. Не в другой офис — на другой порт."
+read brief.md
+
+stage
+  say "Пусть сайт отдела открывается по адресу http://localhost:8473/"
+  solve:
+    sudo sed -i 's/8472/8473/' /etc/nginx/sites-available/default
+    sudo systemctl reload nginx
+  check live curl -fsS -m 3 http://127.0.0.1:8473/ | grep -q 'Отдел снабжения'
+  neutral ls pwd cd cat
+  on pass say "Правка в файле — только половина дела: служба узнаёт о ней, когда перечитает конфиг."
+  hint output "Permission denied" say "Настройки в /etc принадлежат root — править их можно только через sudo."
+  hint output "Failed to connect" say "На 8473 nginx никого не ждёт. А откуда он вообще узнаёт, какой порт слушать?"
+  hint output "E212" say "vim не может записать файл: настройки в /etc принадлежат root. Открой его через sudo."
+  hint tries 5 say "Откуда nginx узнаёт, какой порт слушать, — и когда он это узнаёт?"
+  hint tries 7 read reload.md
+  hint tries 12 say "Ищи по содержимому: какой номер порта у сайта сейчас?"
+
+stage
+  say "Петров добавил на сайт страницу /status и перезапустил nginx. Теперь не открывается ничего. Пусть работают и сайт, и http://localhost:8473/status"
+  solve:
+    sudo sed -i 's|return 200 "работает\\n"$|return 200 "работает\\n";|' /etc/nginx/sites-available/default
+    sudo systemctl restart nginx
+  check live systemctl is-active -q nginx && curl -fsS -m 3 http://127.0.0.1:8473/ | grep -q 'Отдел снабжения' && curl -fsS -m 3 http://127.0.0.1:8473/status | grep -q 'работает'
+  on enter apply break
+  neutral ls pwd cd cat
+  on pass say "Перед каждым перезапуском — nginx -t. Сломанный конфиг тогда остаётся на диске, а не роняет работающий сайт."
+  hint output "emerg" read test.md
+  hint output "Job for nginx.service failed" say "Служба не поднялась. Почему — расскажет её журнал."
+  hint output "not seeing messages" say "Журналы системных служб читает администратор."
+  hint output "Failed to connect" say "На порту никто не отвечает. Жива ли сама служба?"
+  hint tries 5 say "Что пишет systemctl status nginx? А журнал этой службы?"
+  hint tries 10 say "В журнале nginx назвал файл и номер строки. Открой файл и посмотри на соседние строки."
+
+exec finale
