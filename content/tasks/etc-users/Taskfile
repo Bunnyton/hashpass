@@ -1,0 +1,58 @@
+# etc-users — учётки — это строки в файлах /etc: пользователи в /etc/passwd, группы в /etc/group,
+# а домашний каталог новичку собирается из шаблона /etc/skel. Шаги: завести intern с домашним
+# каталогом (useradd -m; в доме — файлы из шаблона) → чтобы каждый новый получал ПАМЯТКА.txt
+# (положить в /etc/skel; проверка на intern2 — копия прямо в /home/intern2 не примется: в шаблоне
+# пусто; дома новичков закрыты от чужих, поэтому их проверяет check live в работающей консоли) → дать intern sudo и показать это (членство в группе — строка в /etc/group).
+
+image etc-users:1
+
+# data: data/home/ПАМЯТКА.txt — руками
+user student
+copy data/home /home/student
+
+hidden hp
+
+settings
+  pager on
+
+say "Завтра выходит стажёр. Учётку ему заводить тебе."
+read brief.md
+
+stage
+  say "Заведи учётку стажёра intern — с домашним каталогом"
+  solve sudo useradd -m intern
+  check live test -f /home/intern/.profile
+  neutral ls pwd cd cat
+  on pass say "В доме у intern уже лежат .bashrc и .profile. Ты их туда не клал — значит, их кто-то откуда-то скопировал."
+  hint output "already exists" say "Учётка уже есть, только без дома. Удали её — команда называется почти как useradd — и заведи заново."
+  hint output "Permission denied" say "Учётки — дело администратора."
+  hint tries 5 say "Есть ли у intern домашний каталог? Загляни в /home."
+  hint tries 10 say "man useradd — найди ключ про создание домашнего каталога (home)."
+
+stage
+  say "Пусть каждый новый сотрудник находит у себя в домашнем каталоге ПАМЯТКА.txt (она у тебя в ~). Проверь на стажёре intern2"
+  solve:
+    sudo cp /home/student/ПАМЯТКА.txt /etc/skel/
+    sudo useradd -m intern2
+  check live test -f /etc/skel/ПАМЯТКА.txt && test -f /home/intern2/ПАМЯТКА.txt
+  neutral ls pwd cd cat
+  on pass say "/etc/skel — шаблон домашнего каталога. Положил туда .vimrc — и у всех новых vim настроен с первого дня."
+  hint output "already exists" say "intern2 уже есть. Удали его (userdel) вместе с домом (ключ в man userdel) и заведи снова."
+  hint output "Permission denied" say "Это системный каталог — писать туда можно только через sudo."
+  hint tries 5 say "Откуда у intern взялись .bashrc и .profile? Найди, откуда useradd их берёт: man useradd, слово skel."
+  hint tries 10 say "Положить в дом intern2 руками — не то: у intern3 памятки снова не будет. Что useradd копирует в каждый новый дом?"
+
+stage
+  say "Дай стажёру intern право на sudo и покажи, что оно у него есть"
+  solve:
+    sudo usermod -aG sudo intern
+    id intern
+  accept output "groups=[^\n]*\(sudo\)|intern ?: [^\n]*\bsudo\b|sudo:x:27:[^\n]*\bintern\b"
+  on enter read groups.md
+  neutral ls pwd cd cat
+  on pass say "usermod просто дописал intern в строку группы sudo в /etc/group. Ту же строку можно было поправить в vim — sudo vigr для этого и есть."
+  hint output "usermod: group" say "Такой группы нет. Как называется группа, которой разрешён sudo? Посмотри, в каких группах ты сам."
+  hint tries 5 say "Права sudo дают через группу. В какой группе состоишь ты сам? Спроси у id."
+  hint tries 10 say "man usermod — ключи про группы: append и groups."
+
+exec finale
