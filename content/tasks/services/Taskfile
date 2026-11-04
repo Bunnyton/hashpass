@@ -37,7 +37,7 @@ stage
   neutral ls cat pwd getent
   on pass say "Теперь имя ведёт сюда — /etc/hosts система читает раньше любого DNS."
   hint output "Could not resolve host" read hosts.md
-  hint output "Permission denied" say "/etc/hosts принадлежит root. Как дописывали в чужой файл в задании про репозиторий?"
+  hint output "Permission denied" say "/etc/hosts принадлежит root. Как писали в чужой файл в задании про репозиторий?"
   hint tries 5 say "Что ответил curl? Прочитай его сообщение целиком."
 
 stage
