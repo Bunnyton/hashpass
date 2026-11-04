@@ -1,0 +1,61 @@
+# bash-if — код возврата и условия (модуль «Bash-скрипты», дизайн
+# docs/superpowers/specs/2026-11-04-модуль-bash-design.md). 40 ночных бэкапов: целые, битые,
+# пустые. Шаги: OK/BROKEN по коду gzip -t (доза bracket.md, когда команду заворачивают в [ ]) →
+# пустые отдельно как EMPTY (доза tests.md на входе: проверки файлов, elif) → только целые больше
+# 50 000 байт (numbers.md: > в [ ] — перенаправление, числа сравнивают -gt). Ответ — на экране.
+
+image bash-if:1
+
+# data: python3 mkbackups.py (seed 11) — data/backups
+copy data/backups /home/student/backups
+run chown -R student:student /home/student/backups
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "Ночные бэкапы сайта копились месяц. Никто ни разу не проверял, распакуются ли они."
+read brief.md
+
+stage
+  say "Проверь каждый архив в ~/backups: для целого напечатай OK и имя, для битого — BROKEN и имя"
+  solve:
+    cd /home/student/backups
+    for f in *.tar.gz; do if gzip -t "$f" 2>/dev/null; then echo "OK $f"; else echo "BROKEN $f"; fi; done
+  observe output
+  neutral ls cat pwd cd
+  on pass say "Каждая команда отвечает кодом: 0 — успех, остальное — номер беды. if просто спрашивает этот код."
+  hint output "binary operator expected" read bracket.md
+  hint output "too many arguments" read bracket.md
+  hint tries 5 say "Что печатает echo $? сразу после gzip -t целого архива — и после битого?"
+  hint tries 10 say "help if — справка прямо в bash: что if проверяет на самом деле?"
+
+stage
+  say "Среди битых есть совсем пустые — 0 байт. Их отметь EMPTY, остальные — как раньше"
+  solve:
+    cd /home/student/backups
+    for f in *.tar.gz; do if [ ! -s "$f" ]; then echo "EMPTY $f"; elif gzip -t "$f" 2>/dev/null; then echo "OK $f"; else echo "BROKEN $f"; fi; done
+  observe output
+  neutral ls cat pwd cd
+  on enter read tests.md
+  on pass say "Пустой архив — почти всегда «диск кончился» или «скрипт бэкапа упал». BROKEN — повод разбираться, EMPTY — повод бежать."
+  hint output "bash: [" say "[ — это команда, а после имени команды нужен пробел. И перед ] — тоже."
+  hint tries 5 say "Какую проверку файла из теории нужно задать раньше — до gzip -t?"
+  hint tries 10 say "man test — там все проверки файлов по буквам."
+
+stage
+  say "Для переноса на другой сервер нужны только целые архивы больше 50 000 байт. Покажи их имена, по одному в строке"
+  solve:
+    cd /home/student/backups
+    for f in *.tar.gz; do if gzip -t "$f" 2>/dev/null && [ "$(stat -c %s "$f")" -gt 50000 ]; then echo "$f"; fi; done
+  observe output
+  neutral ls cat pwd cd
+  hint output "integer expression expected" say "-gt сравнивает только целые числа. Что на самом деле лежит в переменной с размером? Напечатай её."
+  hint tries 5 say "Загляни в ~/backups: не появились ли там новые файлы с числами вместо имён?"
+  hint tries 10 read numbers.md
+  hint tries 15 say "man stat — ищи %s."
+  on pass say "Шестнадцать из сорока. Месяц спокойного сна стоил двенадцать бесполезных архивов."
+
+exec finale
