@@ -40,12 +40,13 @@ stage
 
 stage
   say "Отмени этот коммит — но правки, сделанные после него, должны остаться"
+  on enter read revert.md
   solve git -C /home/student/shop revert --no-edit ae46b85
   check exec fixed
   neutral ls cat pwd cd
   on pass say "История не переписана: отмена — такой же коммит, его видно в git log. Так и чинят общие репозитории."
   hint output "HEAD is now at" say "reset передвинул ветку назад — и все коммиты после того места из неё пропали. git reflog помнит, где она была."
   hint tries 5 say "Сравни app.conf с последней версией: всё ли, кроме порта, осталось как было?"
-  hint tries 10 say "Отменить коммит в git — сделать новый коммит с обратной правкой. Команда так и называется: «вернуть» по-английски."
+  hint tries 10 say "Хеш для отмены — тот, что ты показал на прошлом шаге."
 
 exec finale
