@@ -1,0 +1,16 @@
+#!/bin/bash
+# disk-guard — ночная проверка дисков (учебная): при загрузке пишет в журнал отчёт.
+# Строка с <N> в начале — приоритет для журнала: 3 — ошибка, 4 — предупреждение, 6 — сведения.
+# Ошибок ровно 17 — все про /dev/sdb.
+n=0
+for round in 1 2 3 4 5 6 7 8 9 10; do
+    for part in sda1 sda2 sda3 sdc1 sdc2 sdc3 nvme0n1p1 nvme0n1p2 nvme0n1p3 nvme0n1p4 nvme0n1p5 nvme0n1p6 nvme0n1p7 nvme0n1p8 nvme0n1p9 nvme0n1p10 nvme0n1p11; do
+        echo "<6>проверка /dev/$part, проход $round: диск в порядке"
+    done
+    echo "<4>/dev/sdc1: заполнен на $((80 + round))%, пора чистить"
+    if [ $n -lt 17 ]; then
+        n=$((n + 1)); echo "<3>/dev/sdb1: ошибка чтения сектора $((104857 * n + 33))"
+        if [ $round -le 7 ]; then n=$((n + 1)); echo "<3>/dev/sdb1: ошибка чтения сектора $((104857 * n + 33))"; fi
+    fi
+done
+echo "<6>проверка завершена"

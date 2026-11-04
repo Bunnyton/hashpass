@@ -1,0 +1,55 @@
+# var-log — журналы: что случилось, спрашивают у журналов. Текстовые журналы программ — в
+# /var/log (журнал доступа nginx: 640 строк, 404 сыплются с одного адреса — сканера; читать их
+# может root и группа adm — доза adm.md на Permission denied), журнал служб systemd — journalctl
+# (служба disk-guard при загрузке пишет ~200 строк, из них 17 ошибок с приоритетом err — доза
+# prio.md, когда на экране весь её журнал). Ответы — на экране: адрес (observe output), число
+# (accept output; руками число не набрать — echo закрыт).
+
+image var-log:1
+
+run apt-get install -y nginx >/dev/null
+# nginx здесь только ради настоящего /var/log/nginx; сайт ему не нужен (и не нужен порт 80 компьютера)
+run rm -f /etc/nginx/sites-enabled/default && systemctl disable nginx
+# data: python3 data/gen-access.py > data/nginx/access.log (seed 7)
+copy data/nginx/access.log /var/log/nginx/access.log
+run chown www-data:adm /var/log/nginx/access.log && chmod 640 /var/log/nginx/access.log
+# data: data/bin/disk-guard, data/systemd/disk-guard.service — руками
+copy data/bin/disk-guard /usr/local/bin/disk-guard
+copy data/systemd/disk-guard.service /etc/systemd/system/disk-guard.service
+run chmod 755 /usr/local/bin/disk-guard && systemctl enable disk-guard
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "Ночью что-то было. Сервер молчит, зато всё записал."
+read brief.md
+
+stage
+  say "Кто-то ночью перебирал адреса на сайте и получал 404. С какого IP? Покажи только адрес"
+  solve sudo grep ' 404 ' /var/log/nginx/access.log | grep -oE '^[0-9.]+' | sort -u
+  observe output
+  neutral ls pwd cd
+  on pass say "203.0.113.0/24 — адреса для документации, в жизни их нет. А вот сканеры, которые ищут /.env и /wp-login.php, приходят на каждый сайт в первые же часы."
+  hint output "Permission denied" read adm.md
+  hint output "zgrab" say "Строки целиком — это улики. А ответ — один адрес. Как grep показывает только найденное?"
+  hint tries 5 say "Где nginx хранит свои журналы? Загляни в /var/log."
+  hint tries 10 say "Код ответа стоит в строке сразу после запроса в кавычках. Найди строки с 404 — что у них общего?"
+
+stage
+  say "Служба disk-guard проверяла диски при загрузке. Сколько ошибок она записала в журнал? Покажи одно число"
+  solve sudo journalctl -u disk-guard -p err -o cat | wc -l
+  accept output "\A[ \t]*17[ \t]*\n?\Z"
+  block echo match "." say "Пусть посчитает машина: число должна напечатать команда."
+  block printf match "." say "Пусть посчитает машина: число должна напечатать команда."
+  on enter read journal.md
+  neutral ls pwd cd
+  on pass say "-p err — это «ошибки и всё, что хуже». Утром админ первым делом смотрит journalctl -p err -b: всё плохое с последней загрузки, одним списком."
+  hint output "not seeing messages" say "Журналы системных служб читает администратор."
+  hint output "диск в порядке" read prio.md
+  hint tries 5 say "Сколько строк в журнале службы — и все ли из них ошибки?"
+  hint tries 10 say "man journalctl — найди слово priority."
+
+exec finale
