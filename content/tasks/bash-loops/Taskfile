@@ -1,0 +1,60 @@
+# bash-loops — циклы for/while и кавычки на фотоархиве (модуль «Bash-скрипты», дизайн
+# docs/superpowers/specs/2026-11-04-модуль-bash-design.md). 150 снимков с пробелами в именах:
+# переименовать .JPG → .jpg (дозы: mv не переименовывает пачкой — mv-glob.md; имя без кавычек
+# разваливается на слова — quotes.md) → удалить снимки по списку (while-read.md: for по $(cat)
+# режет имена) → разложить по каталогам годов. Эталон идёт в sh, поэтому ${f:0:4} — через bash -c. Результат — сам каталог: observe, а удаление по списку — check-deleted (observe не видит лишних файлов).
+
+image bash-loops:1
+
+# data: python3 mkphotos.py (seed 7) — data/photos и data/delete.txt
+copy data/photos /home/student/photos
+copy data/delete.txt /home/student/delete.txt
+run chown -R student:student /home/student/photos /home/student/delete.txt
+
+hidden hp
+
+settings
+  pager on
+
+say "Телефон сбросил в ~/photos полторы сотни снимков. Разбирать их руками — до пенсии."
+read brief.md
+
+stage
+  say "Переименуй все .JPG в ~/photos в .jpg — остальное в имени пусть останется как было"
+  solve:
+    cd /home/student/photos
+    for f in *.JPG; do mv "$f" "${f%.JPG}.jpg"; done
+  observe /home/student/photos
+  neutral ls cat pwd cd echo
+  on pass say "Сто тридцать шесть переименований одной строкой. Руками — полчаса и пара опечаток."
+  hint cmd mv has *.jpg read mv-glob.md
+  hint output "mv: target " read quotes.md
+  hint output "cannot stat" read quotes.md
+  hint tries 5 say "Сколько .JPG ещё осталось и что стало с теми, что уже переименованы? ls покажет."
+  hint tries 10 say "man bash — раздел Parameter Expansion, ищи ${parameter%word}."
+
+stage
+  say "В ~/delete.txt — снимки, которые не удались, по имени в строке. Удали их из ~/photos"
+  solve:
+    cd /home/student/photos
+    while IFS= read -r n; do rm "$n"; done < /home/student/delete.txt
+  check exec check-deleted
+  neutral ls cat pwd cd echo
+  on pass say "while read берёт строку целиком — пробелы ему не страшны. -r не трогает обратные косые, IFS= бережёт пробелы по краям."
+  hint output "cannot remove" read while-read.md
+  hint tries 5 say "Что получает rm: имя целиком или кусок? Поставь echo перед rm и посмотри."
+  hint tries 10 say "help read — справка прямо в bash."
+
+stage
+  say "Разложи снимки по каталогам годов: ~/photos/2023/…, ~/photos/2024/… — по году из начала имени"
+  solve:
+    cd /home/student/photos
+    bash -c 'for f in *.jpg; do y=${f:0:4}; mkdir -p "$y"; mv "$f" "$y/"; done'
+  observe /home/student/photos
+  neutral ls cat pwd cd echo
+  hint output "to '20" say "Каталога года ещё нет, а mv каталогов не создаёт. Кто их создаёт — и не ругается, если такой уже есть?"
+  hint tries 5 say "Год — первые четыре символа имени. Как в bash взять кусок строки, сказано в теории; readme покажет её снова."
+  hint tries 10 say "man mkdir — ищи parents."
+  on pass say "for перебирает слова и файлы, while — строки и условия. Почти любой скрипт — их комбинация."
+
+exec finale
