@@ -1,0 +1,45 @@
+#!/bin/sh
+# Проверка задания bash-service: служба живёт только в работающей консоли.
+#   run  — sorter работает от student, ExecStart — файл-скрипт (не bash -c), ~/inbox разбирается;
+#   env  — каталог служба берёт из /etc/default/sorter (EnvironmentFile=), там
+#          INBOX=/home/student/drop, и разбирает она именно его;
+#   stop — служба остановлена командой, и в журнале её последнего запуска ровно одна строка
+#          «разобрано N».
+u=sorter
+up() {
+    systemctl is-active -q $u || return 1
+    [ "$(systemctl show -p User --value $u)" = student ] || return 1
+    ! systemctl show -p ExecStart --value $u | grep -q -- ' -c '
+}
+sorts() {   # sorts <каталог>: подложенные файлы разложены по подкаталогам за 8 секунд
+    d=$1 t=test-$$
+    [ -d "$d" ] || return 1
+    for f in a.jpg b.png c.pdf d.txt e.bin; do runuser -u student -- touch "$d/$t-$f" || return 1; done
+    i=0
+    while [ $i -lt 16 ]; do
+        if [ -e "$d/images/$t-a.jpg" ] && [ -e "$d/images/$t-b.png" ] && [ -e "$d/docs/$t-c.pdf" ] &&
+           [ -e "$d/docs/$t-d.txt" ] && [ -e "$d/other/$t-e.bin" ]; then
+            rm -f "$d"/*/"$t"-*
+            return 0
+        fi
+        sleep 0.5
+        i=$((i + 1))
+    done
+    rm -f "$d/$t"-* "$d"/*/"$t"-*
+    return 1
+}
+case $1 in
+    run)
+        up && sorts /home/student/inbox ;;
+    env)
+        up && systemctl show -p EnvironmentFiles --value $u | grep -q /etc/default/sorter &&
+            grep -Eq '^INBOX=["'"'"']?/home/student/drop/?["'"'"']?$' /etc/default/sorter &&
+            sorts /home/student/drop ;;
+    stop)
+        systemctl is-active -q $u && exit 1
+        # после остановки InvocationID пуст — последний запуск ищем по строке systemd «Started sorter…»
+        n=$(journalctl -u $u -o cat --no-pager 2>/dev/null |
+            awk '/^Started sorter/ { n = 0 } /разобрано [0-9]/ { n++ } END { print n + 0 }')
+        [ "$n" -eq 1 ] ;;
+    *) exit 1 ;;
+esac

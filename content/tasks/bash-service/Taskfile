@@ -1,0 +1,70 @@
+# bash-service — служба на своём скрипте, всерьёз (модуль «Bash-скрипты», дизайн
+# docs/superpowers/specs/2026-11-04-модуль-bash-design.md). Повтор my-service, но скрипт —
+# настоящий: case по расширениям, каталог из EnvironmentFile (мост к bash-env), итог по trap на
+# остановку. Шаги: sorter разбирает ~/inbox (от student, ExecStart — файл) → каталог из
+# /etc/default/sorter, INBOX=~/drop (доза envfile.md на входе) → на systemctl stop одна строка
+# «разобрано N» в журнале (trap.md на входе). Служба живёт только в работающей консоли:
+# приёмка — check live data/lib/check-sorter run|env|stop.
+
+image bash-service:1
+
+# data: data/lib/check-sorter и data/inbox — руками
+copy data/lib /usr/local/lib/hp-proc
+run chmod 755 /usr/local/lib/hp-proc/check-sorter
+copy data/inbox /home/student/inbox
+run chown -R student:student /home/student/inbox
+
+hidden hp
+
+settings
+  pager on
+
+# kill -1 — «сигнал всем процессам»: снесёт консоль вместе с системой
+block kill match " -1 *$" say "kill с номером -1 бьёт по всем процессам сразу — вместе с этой консолью. Укажи конкретный PID."
+
+say "В ~/inbox сваливается всё подряд. Пусть порядок наводит служба — на твоём скрипте."
+read brief.md
+
+stage
+  say "Заведи службу sorter от пользователя student: раз в 2 секунды она разбирает ~/inbox — .jpg и .png в ~/inbox/images, .pdf и .txt в ~/inbox/docs, остальное в ~/inbox/other — и пишет в журнал, что куда переложила"
+  solve:
+    printf '%s\n' '#!/bin/bash' 'set -euo pipefail' 'INBOX=${INBOX:-/home/student/inbox}' 'count=0' 'trap '"'"'echo "sorter: остановлен, разобрано $count"; exit 0'"'"' TERM' 'mkdir -p "$INBOX/images" "$INBOX/docs" "$INBOX/other"' 'while true; do' '    for f in "$INBOX"/*; do' '        [ -f "$f" ] || continue' '        case $f in' '            *.jpg|*.png) d=images ;;' '            *.pdf|*.txt) d=docs ;;' '            *) d=other ;;' '        esac' '        mv -- "$f" "$INBOX/$d/"' '        echo "$(basename "$f") → $d"' '        count=$((count + 1))' '    done' '    sleep 2' 'done' | sudo tee /usr/local/bin/sorter >/dev/null
+    sudo chmod 755 /usr/local/bin/sorter
+    printf '[Unit]\nDescription=sorter\n\n[Service]\nExecStart=/usr/local/bin/sorter\nUser=student\nEnvironmentFile=-/etc/default/sorter\n\n[Install]\nWantedBy=multi-user.target\n' | sudo tee /etc/systemd/system/sorter.service >/dev/null
+  check live /usr/local/lib/hp-proc/check-sorter run
+  neutral ls cat pwd cd journalctl
+  on pass say "Разбирает. В journalctl -u sorter видно каждое перемещение — с меткой времени от systemd."
+  hint output "203/EXEC" say "systemd не смог запустить программу из ExecStart. Полный ли путь и может ли файл исполняться?"
+  hint output "217/USER" say "systemd не нашёл пользователя из User=. Как он называется?"
+  hint output "unbound variable" say "set -u поймал переменную без значения. Какую — сказано в сообщении; задана ли она там, где служба её ищет?"
+  hint output "Permission denied" say "Системные каталоги и службы — через sudo."
+  hint output "changed on disk" say "systemd предупреждает: юнит поменялся, а он работает по старой версии. Что делают после правки юнита?"
+  hint output "not seeing messages" say "Журналы системных служб читает администратор."
+  hint tries 5 say "Что пишут systemctl status sorter и journalctl -u sorter?"
+  hint tries 10 say "Скрипт сначала проверь руками: запусти его в терминале и подкинь файл в ~/inbox. Ctrl+C — остановить."
+
+stage
+  say "Каталог не должен быть зашит в скрипт. Пусть sorter берёт его из /etc/default/sorter (INBOX=…) и разбирает ~/drop"
+  solve:
+    echo 'INBOX=/home/student/drop' | sudo tee /etc/default/sorter >/dev/null
+  check live /usr/local/lib/hp-proc/check-sorter env
+  neutral ls cat pwd cd journalctl
+  on enter read envfile.md
+  on pass say "Тот же скрипт теперь разберёт любой каталог: правишь настройку, а не код. Так устроены почти все службы Debian — загляни в /etc/default."
+  hint output "changed on disk" say "systemd предупреждает: юнит поменялся, а он работает по старой версии. Что делают после правки юнита?"
+  hint tries 5 say "Что показывает systemctl show -p EnvironmentFiles sorter? А видит ли скрипт INBOX — напечатай её в журнал при старте."
+  hint tries 10 say "man systemd.exec — ищи EnvironmentFile."
+
+stage
+  say "Остановка — культурно: на systemctl stop sorter пусть служба напишет в журнал «разобрано N» — сколько файлов разобрала за запуск — и выйдет"
+  solve:
+    sudo systemctl stop sorter || true
+  check live /usr/local/lib/hp-proc/check-sorter stop
+  neutral ls cat pwd cd journalctl
+  on enter read trap.md
+  hint output "not seeing messages" say "Журналы системных служб читает администратор."
+  hint tries 5 say "Что пишет journalctl -u sorter в последних строках после остановки? Есть ли там строка от скрипта?"
+  hint tries 10 say "help trap — справка прямо в bash."
+  on pass say "Так прощаются настоящие демоны: дописывают файлы, закрывают соединения, сообщают итог. Сигнал TERM — это вежливая просьба, KILL — уже нет."
+
+exec finale
