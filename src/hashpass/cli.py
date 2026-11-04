@@ -36,7 +36,7 @@ from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 
-from hashpass import machines
+from hashpass import apparmor, machines
 from hashpass.account import current as account_current
 from hashpass.attempts import (
     AttemptUploader,
@@ -1186,7 +1186,7 @@ def _interactive_console(runner: object, *, user: str | None = None, sudo: bool 
     """
     machine = machines.machine_name()
     term, term_args = _console_term(Path(runner.rootfs), os.environ)
-    argv = ["sudo", "systemd-nspawn", "-b", "-q", "-M", machine, f"--setenv=TERM={term}", *term_args,
+    argv = [*apparmor.nspawn_cmd(), "-b", "-q", "-M", machine, f"--setenv=TERM={term}", *term_args,
             *_sound_args(os.environ)]
     if user:
         argv.append(f"--setenv=HP_USER={user}")

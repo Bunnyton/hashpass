@@ -5,6 +5,7 @@ import time
 import uuid
 from pathlib import Path
 
+from hashpass import apparmor
 from hashpass.machines import machine_name
 from hashpass.overlay import overlay_mount, overlay_umount
 
@@ -217,7 +218,7 @@ class NspawnRunner:
         # interactive console there and takes the keys typed into the student's console (a lab
         # node swallowed `curl`, 2026-11-02). No console at all: nobody sits at it.
         self._proc = subprocess.Popen(
-            ["sudo", "systemd-nspawn", "-b", "-q", "--console=passive", "-M", machine, *extra_args,
+            [*apparmor.nspawn_cmd(), "-b", "-q", "--console=passive", "-M", machine, *extra_args,
              "-D", str(self._mnt)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
