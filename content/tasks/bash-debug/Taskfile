@@ -1,0 +1,86 @@
+# bash-debug — найди ошибку (модуль «Bash-скрипты», дизайн
+# docs/superpowers/specs/2026-11-04-модуль-bash-design.md). В ~/broken четыре сломанных скрипта,
+# по одной классической ловушке в каждом: report.sh с концами строк Windows (crlf.md),
+# count-errors.sh теряет счётчик в подоболочке конвейера (subshell.md), ext.sh «возвращает»
+# строку через return (return.md), cleanup.sh с опечаткой в имени переменной показывает весь
+# корень (set-u.md) — его ещё и защитить set -u. Шаг принят, когда починенный скрипт запущен и
+# его вывод совпал с эталоном (эталон — тот же скрипт, починенный в solve).
+
+image bash-debug:1
+
+run apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq shellcheck >/dev/null
+
+# data: data/broken — скрипты руками; logs — mkdata.py text --kind log --seed 401/402/403
+# --sprinkle ERROR --sprinkle-count 23/9/31 (--lines 220/180/260); data/*.csv — mkdata.py list
+# --seed 404/405/406; inbox и cache — пустышки руками
+copy data/broken /home/student/broken
+run chown -R student:student /home/student/broken
+run chmod 755 /home/student/broken/report.sh /home/student/broken/count-errors.sh /home/student/broken/ext.sh /home/student/broken/cleanup.sh
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "В ~/broken — четыре скрипта коллег. Каждый «работал у меня на машине»."
+read brief.md
+
+stage
+  say "report.sh прислали с Windows-машины, и он не запускается. Почини его и запусти"
+  solve:
+    cd /home/student/broken
+    sed -i 's/\r$//' report.sh
+    ./report.sh
+  observe output
+  neutral ls cat pwd cd less head shellcheck
+  on pass say "Невидимый \r в конце каждой строки. Git на Windows делает такое сам — поэтому в репозиториях пишут .gitattributes."
+  hint output "required file not found" read crlf.md
+  hint output "\r'" say "Всё тот же невидимый символ в конце строк. readme покажет теорию снова."
+  hint tries 5 say "Что показывает cat -A report.sh в конце каждой строки?"
+  hint tries 10 say "Загугли: «bash \r command not found»."
+
+stage
+  say "count-errors.sh уверяет, что ошибок в журналах нет. Они есть. Почини и запусти"
+  solve:
+    cd /home/student/broken
+    sed -i 's/cat "$f" | while/while/; s/^    done$/    done < "$f"/' count-errors.sh
+    ./count-errors.sh
+  observe output
+  neutral ls cat pwd cd less head shellcheck grep
+  on pass say "Каждое звено конвейера — отдельный процесс. Переменные, изменённые там, умирают вместе с ним."
+  hint output "Ошибок: 0" say "grep -c ERROR в журналах скажет, что ошибки есть. Где теряется счёт? Напечатай count внутри цикла и после него."
+  hint tries 5 read subshell.md
+  hint tries 10 say "Загугли: «bash variable lost after while loop pipe»."
+
+stage
+  say "ext.sh должен печатать тип каждого файла из ~/broken/inbox. Почини и запусти"
+  solve:
+    cd /home/student/broken
+    sed -i 's/^        return "\${name##\*.}"$/        echo "${name##*.}"; return/; s/^    return "нет"$/    echo нет/' ext.sh
+    ./ext.sh
+  observe output
+  neutral ls cat pwd cd less head shellcheck
+  on pass say "Функция в bash общается с миром как программа: код возврата — да или нет, всё остальное — через вывод."
+  hint output "numeric argument required" read return.md
+  hint output "нет: акт.pdf" say "Теперь «нет» печатается лишний раз. Что делает функция после того, как напечатала расширение?"
+  hint tries 5 say "Что пишет bash про return? Прочитай сообщение целиком: номер строки, что ему не понравилось."
+  hint tries 10 say "help return — справка прямо в bash."
+
+stage
+  say "cleanup.sh собирался чистить кэш, а показывает весь корень. Почини и запусти — и пусть bash сам останавливает этот скрипт на такой опечатке"
+  solve:
+    cd /home/student/broken
+    sed -i 's/CAHCE_DIR/CACHE_DIR/; 1a set -euo pipefail' cleanup.sh
+    ./cleanup.sh
+  observe output
+  accept file /home/student/broken/cleanup.sh "^\s*set\s+-[a-z]*u|^\s*set\s+-o\s+nounset|^#!.*bash\s+-[a-z]*u"
+  neutral ls cat pwd cd less head shellcheck
+  hint output "удаляю: /bin" say "Откуда в пути взялся корень? bash -x cleanup.sh покажет каждую подстановку."
+  hint output "unbound variable" say "Вот bash и поймал опечатку: он назвал переменную, которой нет. Сравни её с той, что задана выше."
+  hint output "удаляю: /home/student/broken/cache/" read set-u.md
+  hint tries 5 say "Что напечатает echo \"$CAHCE_DIR\"? А shellcheck cleanup.sh?"
+  hint tries 10 say "help set — ищи -u."
+  on pass say "В 2015-м скрипт Steam для Linux стирал домашние каталоги: rm -rf \"$STEAMROOT/\"* с пустой переменной. Одна строка set -u."
+
+exec finale

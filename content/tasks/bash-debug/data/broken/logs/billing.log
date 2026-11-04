@@ -1,0 +1,260 @@
+2026-09-11 01:50:10 api-03 worker[2552]: INFO GET /static/app.js 304 72ms
+2026-09-05 04:29:10 web-02 redis[7694]: INFO GET /api/v1/users 200 62ms
+2026-09-18 11:38:55 cache-02 app[5712]: WARN clock skew 3ms detected
+2026-09-04 02:10:25 web-01 cron[1504]: INFO listening on port 8094
+2026-09-27 02:57:15 web-02 postgres[5323]: ERROR connection refused to db-01:5432
+2026-09-06 11:35:38 web-02 app[1741]: INFO reloaded configuration
+2026-09-20 04:11:54 db-01 sshd[8293]: INFO GET /api/v1/users 200 59ms
+2026-09-01 11:12:21 api-03 redis[3209]: INFO rotating log, 34 MB written
+2026-09-18 15:25:02 worker-05 postgres[6626]: WARN certificate expires in 81 days
+2026-09-14 21:00:38 worker-05 postgres[2918]: INFO GET /api/v1/users 200 87ms
+2026-09-01 13:53:47 worker-05 cron[9560]: WARN clock skew 80ms detected
+2026-09-04 04:52:51 cache-02 postgres[9492]: INFO listening on port 8041
+2026-09-12 05:38:00 web-02 systemd[4823]: INFO GET /static/app.js 304 77ms
+2026-09-21 20:54:17 api-03 redis[2393]: WARN certificate expires in 59 days
+2026-09-20 02:29:00 worker-05 worker[332]: INFO GET /api/v1/users 200 83ms
+2026-09-26 12:44:05 cache-02 redis[7827]: INFO health check ok
+2026-09-01 23:27:32 edge-07 redis[6850]: INFO GET /static/app.js 304 86ms
+2026-09-24 21:59:43 api-03 app[7581]: INFO GET /api/v1/users 200 37ms
+2026-09-05 14:51:31 api-03 systemd[1098]: ERROR job 54 failed: timeout after 56s
+2026-09-11 16:05:51 api-03 cron[9170]: INFO job 86 finished in 21s
+2026-09-06 06:39:14 api-03 cron[4993]: ERROR out of memory in worker 23
+2026-09-20 00:50:22 web-01 app[3986]: WARN retrying job 58 (64/3)
+2026-09-28 23:21:35 api-03 redis[1993]: INFO session opened for user student
+2026-09-16 06:28:55 api-03 cron[8165]: INFO GET /api/v1/users 200 55ms
+2026-09-02 20:28:13 edge-07 systemd[9162]: INFO rotating log, 20 MB written
+2026-09-13 02:02:08 worker-05 postgres[7768]: INFO health check ok
+2026-09-27 08:02:26 web-01 postgres[7631]: ERROR permission denied: /var/data/40.bin
+2026-09-01 11:39:29 worker-05 nginx[1633]: INFO connection accepted from 10.0.58.44
+2026-09-11 09:46:49 web-01 cron[3380]: INFO connection accepted from 10.0.14.41
+2026-09-25 12:56:35 web-02 sshd[4010]: WARN slow query (89ms): SELECT * FROM orders
+2026-09-11 19:35:16 api-03 cron[4142]: ERROR job 33 failed: timeout after 83s
+2026-09-15 20:17:11 worker-05 app[1285]: INFO POST /api/v1/orders 201 17ms
+2026-09-25 20:34:24 edge-07 nginx[6157]: ERROR job 28 failed: timeout after 3s
+2026-09-25 00:00:40 web-02 postgres[5485]: INFO reloaded configuration
+2026-09-12 19:32:52 cache-02 cron[6746]: ERROR job 48 failed: timeout after 24s
+2026-09-16 17:20:20 edge-07 redis[8809]: INFO health check ok
+2026-09-23 03:58:41 api-03 postgres[9995]: WARN GET /api/v1/report 429 rate limited
+2026-09-02 16:09:58 db-01 worker[5908]: INFO session opened for user student
+2026-09-06 14:35:42 api-03 systemd[4801]: INFO GET /api/v1/users 200 52ms
+2026-09-06 17:01:22 api-03 worker[5073]: ERROR GET /api/v1/users 500 50ms
+2026-09-27 11:58:07 web-01 postgres[1763]: INFO session opened for user student
+2026-09-06 15:01:48 worker-05 sshd[9998]: INFO job 73 finished in 14s
+2026-09-17 14:24:56 edge-07 postgres[7092]: INFO POST /api/v1/orders 201 71ms
+2026-09-09 23:16:08 worker-05 postgres[1612]: INFO POST /api/v1/orders 201 57ms
+2026-09-04 21:29:32 web-02 sshd[4328]: INFO reloaded configuration
+2026-09-17 12:21:34 edge-07 cron[1374]: INFO POST /api/v1/orders 201 46ms
+2026-09-28 00:25:37 api-03 sshd[9400]: INFO job 9 finished in 45s
+2026-09-02 21:38:41 web-02 app[6005]: INFO connection accepted from 10.0.28.81
+2026-09-22 13:02:13 cache-02 redis[9860]: WARN GET /api/v1/report 429 rate limited
+2026-09-11 19:00:37 worker-05 redis[1430]: INFO cache hit ratio 16%
+2026-09-09 08:14:03 web-02 sshd[6809]: INFO listening on port 803
+2026-09-15 22:25:43 web-01 worker[7215]: INFO connection accepted from 10.0.96.30
+2026-09-09 21:51:56 cache-02 systemd[2930]: INFO session opened for user student
+2026-09-27 13:28:58 db-01 redis[6823]: ERROR TLS handshake failed with 10.0.92.52
+2026-09-27 23:23:16 db-01 sshd[381]: WARN GET /api/v1/report 429 rate limited
+2026-09-06 13:32:32 worker-05 worker[7299]: INFO job 88 finished in 15s
+2026-09-26 20:09:21 edge-07 cron[2800]: INFO connection accepted from 10.0.62.56
+2026-09-10 04:43:39 web-02 systemd[7705]: INFO scheduled task 10 queued
+2026-09-16 22:11:45 web-02 app[6798]: INFO health check ok
+2026-09-14 21:38:38 cache-02 cron[6509]: INFO rotating log, 44 MB written
+2026-09-04 01:50:41 web-02 systemd[4487]: INFO reloaded configuration
+2026-09-06 15:36:10 api-03 redis[2806]: WARN retrying job 51 (59/3)
+2026-09-14 04:29:50 web-02 app[809]: INFO session opened for user student
+2026-09-05 16:14:08 web-02 nginx[8430]: INFO session opened for user student
+2026-09-15 14:36:30 edge-07 systemd[7589]: INFO listening on port 8076
+2026-09-03 16:18:19 web-01 nginx[3607]: INFO health check ok
+2026-09-13 18:04:08 edge-07 systemd[9235]: WARN queue depth 23
+2026-09-06 14:31:41 worker-05 cron[4862]: INFO cache hit ratio 51%
+2026-09-21 11:16:56 api-03 redis[2179]: INFO scheduled task 77 queued
+2026-09-28 05:45:14 web-01 worker[169]: INFO GET /api/v1/users 200 51ms
+2026-09-17 09:31:59 cache-02 cron[1271]: INFO scheduled task 87 queued
+2026-09-10 20:04:10 web-01 app[2938]: INFO POST /api/v1/orders 201 51ms
+2026-09-23 12:42:38 edge-07 sshd[6820]: INFO GET /api/v1/users 200 60ms
+2026-09-15 04:10:18 edge-07 cron[7639]: INFO POST /api/v1/orders 201 87ms
+2026-09-03 21:31:12 api-03 redis[1226]: INFO GET /static/app.js 304 85ms
+2026-09-20 11:28:39 api-03 redis[7134]: INFO scheduled task 92 queued
+2026-09-17 09:54:34 cache-02 sshd[1659]: INFO session opened for user student
+2026-09-27 14:30:07 edge-07 redis[5914]: INFO POST /api/v1/orders 201 30ms
+2026-09-21 22:10:31 edge-07 app[7415]: INFO health check ok
+2026-09-23 09:07:05 db-01 redis[1975]: WARN slow query (54ms): SELECT * FROM orders
+2026-09-04 18:28:32 cache-02 postgres[2644]: INFO job 92 finished in 64s
+2026-09-21 04:55:27 api-03 postgres[9741]: WARN certificate expires in 9 days
+2026-09-09 03:15:33 web-02 cron[6739]: WARN retrying job 90 (60/3)
+2026-09-05 23:14:34 edge-07 cron[394]: INFO listening on port 8054
+2026-09-21 17:49:00 api-03 cron[2384]: INFO health check ok
+2026-09-22 08:42:56 db-01 nginx[5038]: WARN certificate expires in 76 days
+2026-09-11 16:04:54 cache-02 app[2435]: INFO reloaded configuration
+2026-09-19 17:58:57 web-02 systemd[6306]: INFO POST /api/v1/orders 201 25ms
+2026-09-01 17:54:05 worker-05 nginx[7768]: INFO listening on port 8033
+2026-09-12 03:55:25 cache-02 postgres[6035]: INFO GET /static/app.js 304 78ms
+2026-09-28 09:21:56 worker-05 redis[7429]: INFO connection accepted from 10.0.93.85
+2026-09-16 20:33:07 web-01 worker[9937]: INFO reloaded configuration
+2026-09-01 01:07:16 api-03 systemd[7441]: INFO GET /api/v1/users 200 49ms
+2026-09-24 06:17:23 web-02 cron[4307]: INFO GET /static/app.js 304 34ms
+2026-09-15 21:09:26 edge-07 nginx[7951]: INFO session opened for user student
+2026-09-23 03:59:05 edge-07 worker[6401]: INFO listening on port 8043
+2026-09-13 09:12:46 web-01 worker[965]: INFO cache hit ratio 74%
+2026-09-26 11:36:16 web-02 nginx[6579]: ERROR upstream timed out (110)
+2026-09-14 20:47:55 web-01 redis[3885]: WARN GET /api/v1/report 429 rate limited
+2026-09-11 15:46:57 api-03 redis[5492]: INFO listening on port 8033
+2026-09-12 07:55:41 worker-05 postgres[6722]: INFO session opened for user student
+2026-09-27 06:37:24 web-02 nginx[6999]: INFO GET /static/app.js 304 56ms
+2026-09-20 18:41:27 edge-07 cron[8137]: INFO health check ok
+2026-09-08 16:36:22 edge-07 app[5463]: INFO job 2 finished in 90s
+2026-09-07 08:40:36 edge-07 worker[8731]: INFO health check ok
+2026-09-15 16:51:22 web-02 postgres[572]: INFO reloaded configuration
+2026-09-07 13:26:14 web-02 sshd[8211]: INFO connection accepted from 10.0.62.37
+2026-09-22 02:46:18 api-03 cron[2260]: ERROR job 68 failed: timeout after 9s
+2026-09-10 19:45:42 worker-05 worker[4027]: INFO session opened for user student
+2026-09-23 02:55:27 web-01 worker[416]: INFO connection accepted from 10.0.52.50
+2026-09-06 10:12:12 worker-05 app[4315]: INFO scheduled task 53 queued
+2026-09-03 15:26:40 db-01 redis[8983]: INFO reloaded configuration
+2026-09-13 06:02:27 cache-02 sshd[1384]: INFO GET /api/v1/users 200 89ms
+2026-09-27 14:55:17 db-01 worker[5146]: INFO job 8 finished in 63s
+2026-09-03 17:55:33 api-03 redis[1482]: INFO health check ok
+2026-09-18 11:26:42 edge-07 worker[8556]: ERROR TLS handshake failed with 10.0.82.17
+2026-09-01 02:31:51 worker-05 postgres[6768]: INFO POST /api/v1/orders 201 81ms
+2026-09-09 17:01:12 cache-02 systemd[1730]: INFO rotating log, 47 MB written
+2026-09-09 05:33:09 api-03 worker[997]: INFO GET /static/app.js 304 94ms
+2026-09-28 01:24:15 db-01 postgres[1028]: INFO scheduled task 19 queued
+2026-09-07 04:29:22 web-01 app[9269]: INFO connection accepted from 10.0.24.6
+2026-09-09 04:06:43 web-01 sshd[877]: INFO session opened for user student
+2026-09-17 22:18:34 db-01 app[4369]: INFO connection accepted from 10.0.17.48
+2026-09-21 07:47:33 db-01 postgres[5668]: WARN retrying job 43 (89/3)
+2026-09-07 19:10:59 cache-02 postgres[5196]: INFO cache hit ratio 44%
+2026-09-28 18:15:16 web-02 app[2428]: INFO POST /api/v1/orders 201 52ms
+2026-09-20 09:18:58 cache-02 cron[2412]: ERROR connection refused to db-01:5432
+2026-09-08 13:14:09 edge-07 postgres[230]: INFO job 20 finished in 44s
+2026-09-11 06:24:12 web-02 app[7249]: INFO GET /api/v1/users 200 70ms
+2026-09-18 06:37:40 db-01 nginx[8151]: INFO GET /api/v1/users 200 8ms
+2026-09-28 06:07:01 web-01 postgres[7010]: INFO GET /api/v1/users 200 36ms
+2026-09-02 00:04:11 web-02 worker[5769]: INFO cache hit ratio 19%
+2026-09-26 22:38:03 cache-02 postgres[9416]: INFO rotating log, 67 MB written
+2026-09-11 06:47:24 web-02 cron[877]: INFO connection accepted from 10.0.82.14
+2026-09-04 04:13:25 db-01 systemd[9148]: INFO GET /static/app.js 304 48ms
+2026-09-05 17:35:39 web-02 postgres[5405]: ERROR permission denied: /var/data/24.bin
+2026-09-22 11:24:40 web-02 app[1301]: INFO health check ok
+2026-09-09 17:36:23 db-01 cron[7254]: INFO job 13 finished in 84s
+2026-09-26 18:34:32 edge-07 app[3178]: INFO GET /api/v1/users 200 26ms
+2026-09-15 00:41:31 api-03 worker[8895]: INFO health check ok
+2026-09-19 02:58:43 worker-05 systemd[6383]: WARN GET /api/v1/report 429 rate limited
+2026-09-07 18:51:22 cache-02 app[8148]: INFO cache hit ratio 53%
+2026-09-11 06:58:00 db-01 sshd[5494]: INFO scheduled task 55 queued
+2026-09-14 05:28:51 db-01 sshd[9763]: ERROR TLS handshake failed with 10.0.88.67
+2026-09-11 12:23:23 db-01 worker[5187]: INFO session opened for user student
+2026-09-10 08:13:13 worker-05 systemd[6745]: INFO rotating log, 47 MB written
+2026-09-27 00:31:18 web-01 app[1171]: INFO job 21 finished in 95s
+2026-09-16 11:56:22 db-01 nginx[2157]: INFO scheduled task 79 queued
+2026-09-01 05:24:23 worker-05 nginx[2074]: INFO POST /api/v1/orders 201 97ms
+2026-09-28 08:36:15 api-03 app[4050]: INFO cache hit ratio 6%
+2026-09-15 14:45:26 web-01 app[5763]: INFO health check ok
+2026-09-03 08:10:42 cache-02 app[2571]: INFO session opened for user student
+2026-09-16 13:24:15 edge-07 app[6604]: INFO rotating log, 82 MB written
+2026-09-10 06:16:38 db-01 worker[9954]: WARN disk usage at 24%
+2026-09-28 04:12:38 web-01 cron[7110]: INFO health check ok
+2026-09-16 09:57:52 web-01 sshd[4406]: WARN GET /api/v1/report 429 rate limited
+2026-09-26 10:00:25 worker-05 systemd[5056]: INFO health check ok
+2026-09-14 12:18:22 api-03 worker[1897]: INFO POST /api/v1/orders 201 56ms
+2026-09-08 12:35:35 edge-07 app[3589]: INFO GET /static/app.js 304 7ms
+2026-09-26 16:25:17 web-02 app[7268]: INFO session opened for user student
+2026-09-01 04:33:02 worker-05 worker[6365]: INFO GET /static/app.js 304 82ms
+2026-09-27 14:04:40 web-01 sshd[6710]: WARN retrying job 60 (92/3)
+2026-09-08 16:47:39 web-02 app[6171]: INFO listening on port 8013
+2026-09-12 06:25:05 worker-05 postgres[380]: INFO GET /api/v1/users 200 73ms
+2026-09-05 17:42:18 web-02 redis[7369]: WARN queue depth 65
+2026-09-18 07:05:05 api-03 redis[3574]: WARN retrying job 63 (92/3)
+2026-09-11 01:26:28 db-01 redis[7388]: INFO cache hit ratio 32%
+2026-09-09 07:06:36 web-02 redis[9851]: ERROR GET /api/v1/users 500 30ms
+2026-09-26 16:11:37 db-01 systemd[1784]: ERROR job 38 failed: timeout after 22s
+2026-09-11 06:51:49 worker-05 postgres[732]: INFO scheduled task 77 queued
+2026-09-15 09:51:19 db-01 sshd[5147]: INFO GET /static/app.js 304 12ms
+2026-09-03 04:33:31 worker-05 postgres[4738]: WARN queue depth 73
+2026-09-04 14:28:20 web-01 redis[7938]: INFO session opened for user student
+2026-09-02 07:24:44 cache-02 redis[303]: ERROR upstream timed out (110)
+2026-09-06 13:53:16 web-02 app[3500]: INFO POST /api/v1/orders 201 29ms
+2026-09-15 08:24:00 db-01 nginx[7229]: WARN disk usage at 71%
+2026-09-14 17:43:35 cache-02 sshd[6036]: ERROR out of memory in worker 21
+2026-09-25 13:59:10 web-01 worker[9725]: INFO listening on port 8089
+2026-09-01 16:45:12 api-03 sshd[4347]: INFO listening on port 8023
+2026-09-13 18:46:32 db-01 cron[9267]: INFO rotating log, 30 MB written
+2026-09-16 05:08:17 web-02 redis[3890]: INFO health check ok
+2026-09-23 14:57:53 web-02 app[5031]: ERROR connection refused to db-01:5432
+2026-09-15 04:38:27 cache-02 worker[4276]: INFO scheduled task 62 queued
+2026-09-21 21:41:12 api-03 app[7272]: INFO rotating log, 77 MB written
+2026-09-17 16:31:25 api-03 systemd[419]: INFO listening on port 806
+2026-09-27 00:24:51 web-01 cron[5486]: INFO rotating log, 3 MB written
+2026-09-12 16:31:36 web-02 app[9907]: ERROR disk full on /var/log
+2026-09-22 12:01:29 web-02 postgres[4006]: WARN worker 51 restarted
+2026-09-13 23:05:44 cache-02 postgres[8277]: WARN certificate expires in 90 days
+2026-09-28 14:17:58 db-01 systemd[3740]: ERROR segfault in worker 67
+2026-09-14 17:18:53 web-02 worker[5659]: ERROR GET /api/v1/users 500 96ms
+2026-09-13 18:57:55 edge-07 cron[5685]: INFO health check ok
+2026-09-18 00:12:43 db-01 redis[2156]: ERROR permission denied: /var/data/83.bin
+2026-09-13 20:29:53 api-03 systemd[3459]: INFO reloaded configuration
+2026-09-18 14:42:40 worker-05 worker[9691]: INFO scheduled task 54 queued
+2026-09-10 07:03:49 web-01 postgres[1840]: INFO GET /static/app.js 304 71ms
+2026-09-01 14:56:00 worker-05 worker[5052]: ERROR TLS handshake failed with 10.0.37.80
+2026-09-08 17:20:09 web-01 systemd[4051]: INFO session opened for user student
+2026-09-05 01:07:43 cache-02 worker[122]: INFO cache hit ratio 80%
+2026-09-19 14:55:30 web-01 nginx[1722]: INFO session opened for user student
+2026-09-09 23:16:59 cache-02 postgres[6696]: INFO rotating log, 92 MB written
+2026-09-27 21:53:58 worker-05 app[7668]: INFO scheduled task 15 queued
+2026-09-06 09:29:41 db-01 worker[1678]: WARN retrying job 72 (5/3)
+2026-09-13 17:43:37 cache-02 sshd[5078]: INFO listening on port 8028
+2026-09-09 07:21:14 api-03 redis[6379]: INFO cache hit ratio 7%
+2026-09-20 00:56:16 edge-07 worker[6683]: INFO health check ok
+2026-09-15 03:13:51 api-03 systemd[4602]: INFO GET /api/v1/users 200 56ms
+2026-09-13 17:47:12 web-02 redis[4982]: INFO reloaded configuration
+2026-09-09 06:10:28 web-01 redis[7727]: INFO connection accepted from 10.0.64.18
+2026-09-25 15:30:04 db-01 worker[8709]: INFO POST /api/v1/orders 201 85ms
+2026-09-23 14:38:21 cache-02 cron[6234]: INFO job 35 finished in 65s
+2026-09-19 21:52:36 web-01 worker[8064]: WARN queue depth 86
+2026-09-05 20:00:59 cache-02 cron[5221]: INFO health check ok
+2026-09-06 22:26:54 web-02 cron[259]: ERROR TLS handshake failed with 10.0.6.23
+2026-09-24 14:36:05 db-01 redis[6615]: ERROR segfault in worker 87
+2026-09-17 08:39:48 web-01 app[7538]: INFO job 17 finished in 97s
+2026-09-12 01:41:14 web-02 postgres[7959]: WARN queue depth 13
+2026-09-04 15:29:10 cache-02 nginx[7979]: INFO scheduled task 51 queued
+2026-09-28 05:01:28 worker-05 redis[1081]: INFO job 69 finished in 6s
+2026-09-13 04:26:42 web-01 app[8477]: INFO connection accepted from 10.0.3.9
+2026-09-14 18:43:04 worker-05 systemd[9171]: INFO listening on port 8045
+2026-09-02 14:59:46 edge-07 nginx[1479]: INFO cache hit ratio 28%
+2026-09-28 06:54:45 edge-07 redis[2029]: WARN queue depth 91
+2026-09-12 12:37:27 db-01 nginx[4602]: INFO job 75 finished in 31s
+2026-09-14 07:20:46 api-03 postgres[7562]: INFO reloaded configuration
+2026-09-16 10:09:11 edge-07 postgres[3352]: INFO health check ok
+2026-09-14 21:59:17 cache-02 sshd[651]: WARN GET /api/v1/report 429 rate limited
+2026-09-07 02:08:42 edge-07 nginx[8678]: INFO connection accepted from 10.0.94.76
+2026-09-11 14:19:49 cache-02 sshd[5682]: INFO listening on port 8067
+2026-09-15 12:21:18 web-02 app[436]: WARN certificate expires in 21 days
+2026-09-22 22:12:53 cache-02 cron[5543]: INFO connection accepted from 10.0.90.15
+2026-09-27 13:59:00 edge-07 sshd[6175]: WARN retrying job 11 (47/3)
+2026-09-05 21:13:12 cache-02 app[8309]: INFO scheduled task 96 queued
+2026-09-17 01:45:52 web-02 cron[3126]: INFO job 27 finished in 44s
+2026-09-28 16:26:44 db-01 redis[9562]: ERROR job 64 failed: timeout after 93s
+2026-09-05 21:58:01 edge-07 postgres[7432]: INFO health check ok
+2026-09-19 09:40:31 cache-02 redis[178]: INFO connection accepted from 10.0.53.42
+2026-09-25 13:37:02 db-01 cron[7120]: INFO reloaded configuration
+2026-09-18 05:41:14 edge-07 systemd[4025]: INFO cache hit ratio 56%
+2026-09-23 04:50:33 db-01 systemd[8826]: INFO scheduled task 77 queued
+2026-09-11 19:34:38 worker-05 redis[8863]: WARN slow query (4ms): SELECT * FROM orders
+2026-09-02 16:38:55 cache-02 redis[7226]: INFO connection accepted from 10.0.94.30
+2026-09-28 01:56:10 worker-05 redis[674]: INFO connection accepted from 10.0.35.11
+2026-09-27 06:59:13 worker-05 cron[3285]: INFO connection accepted from 10.0.17.63
+2026-09-21 21:20:59 cache-02 worker[7882]: ERROR out of memory in worker 31
+2026-09-25 15:07:04 edge-07 redis[9808]: ERROR permission denied: /var/data/32.bin
+2026-09-26 20:12:21 web-01 systemd[9764]: INFO GET /api/v1/users 200 68ms
+2026-09-05 06:29:14 cache-02 sshd[1530]: ERROR job 76 failed: timeout after 35s
+2026-09-08 01:33:28 api-03 worker[6976]: WARN slow query (96ms): SELECT * FROM orders
+2026-09-07 07:24:46 cache-02 postgres[8957]: WARN clock skew 6ms detected
+2026-09-07 02:27:23 edge-07 sshd[9808]: INFO health check ok
+2026-09-12 06:48:22 worker-05 worker[1768]: INFO listening on port 8057
+2026-09-21 11:07:27 web-02 postgres[8608]: INFO GET /api/v1/users 200 89ms
+2026-09-20 14:15:50 web-01 systemd[7017]: INFO job 90 finished in 2s
+2026-09-25 07:43:53 db-01 sshd[865]: INFO job 39 finished in 92s
+2026-09-23 20:46:35 api-03 app[6719]: INFO connection accepted from 10.0.84.25
+2026-09-10 20:22:03 web-01 worker[9777]: INFO listening on port 8043
+2026-09-04 09:36:10 api-03 sshd[7061]: INFO rotating log, 60 MB written
+2026-09-20 04:48:51 edge-07 worker[949]: INFO connection accepted from 10.0.54.44
+2026-09-25 18:15:54 cache-02 nginx[3257]: INFO reloaded configuration
