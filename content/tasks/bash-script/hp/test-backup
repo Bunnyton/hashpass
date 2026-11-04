@@ -1,0 +1,43 @@
+#!/bin/sh
+# Проверка команды backup. Программу студента нельзя проверить observe: её запускают от student
+# на каталогах, которых студент не видел (один — с пробелом в имени), и смотрят на архивы и коды
+# выхода. Шаг — HP_ARG_step: run (упаковка), errors (+ ошибки и коды), rotate (+ три последних).
+step=${HP_ARG_step:-run}
+B=/usr/local/bin/backup
+[ -x "$B" ] || exit 1
+t=$(mktemp -d /tmp/hp-backup.XXXXXX) || exit 1
+mkdir -p "$t/alpha/sub" "$t/my docs"
+echo a > "$t/alpha/a.txt"; echo b > "$t/alpha/sub/b.txt"; echo c > "$t/my docs/c.txt"
+chown -R student:student "$t"
+as() { runuser -u student -- env HOME=/home/student PATH=/usr/local/bin:/usr/bin:/bin "$@"; }
+D=/home/student/backups
+rm -f "$D"/alpha-*.tar.gz "$D"/"my docs"-*.tar.gz "$D"/beta-*.tar.gz
+has() {   # has <имя> <файл внутри>: ровно такой архив есть и в нём этот файл
+    set -- "$1" "$2" "$D/$1"-20[0-9][0-9]-[01][0-9]-[0-3][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9].tar.gz
+    [ -f "$3" ] && tar -tzf "$3" 2>/dev/null | grep -q "$2"
+}
+cd "$t" || exit 1
+as "$B" alpha "my docs" >/dev/null 2>&1 || exit 1
+has alpha 'alpha/sub/b.txt' && has "my docs" 'my docs/c.txt' || exit 1
+[ "$step" = run ] && exit 0
+
+rm -f "$D"/alpha-*.tar.gz "$D"/"my docs"-*.tar.gz
+out=$(as "$B" 2>&1 >/dev/null) && exit 1          # без аргументов — ошибка…
+[ -n "$out" ] || exit 1                             # …и объяснение в stderr
+mkdir "$t/beta" && echo z > "$t/beta/z.txt" && chown -R student:student "$t/beta"
+as "$B" alpha nope-dir beta >/dev/null 2>&1 && exit 1   # нет каталога — код не 0…
+has alpha 'alpha/a.txt' && has beta 'beta/z.txt' || exit 1   # …но остальные упакованы
+ls "$D"/nope-dir-* >/dev/null 2>&1 && exit 1
+[ "$step" = errors ] && exit 0
+
+rm -f "$D"/alpha-*.tar.gz
+for d in 2026-01-01 2026-01-02 2026-01-03 2026-01-04; do
+    cp "$(ls "$D"/beta-*.tar.gz | head -n 1)" "$D/alpha-${d}_000000.tar.gz"
+done
+chown student:student "$D"/alpha-*.tar.gz
+as "$B" alpha >/dev/null 2>&1 || exit 1
+n=$(ls "$D"/alpha-*.tar.gz | wc -l)
+[ "$n" -eq 3 ] || exit 1
+[ ! -e "$D/alpha-2026-01-01_000000.tar.gz" ] && [ ! -e "$D/alpha-2026-01-02_000000.tar.gz" ] || exit 1
+[ -e "$D/alpha-2026-01-04_000000.tar.gz" ] || exit 1
+exit 0

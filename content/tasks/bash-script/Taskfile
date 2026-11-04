@@ -1,0 +1,58 @@
+# bash-script — своя команда backup с аргументами, ошибками и ротацией (модуль «Bash-скрипты»,
+# дизайн docs/superpowers/specs/2026-11-04-модуль-bash-design.md). Шаги: упаковать каждый
+# каталог из аргументов в ~/backups/<имя>-<дата_время>.tar.gz → без аргументов объяснить и выйти
+# с ошибкой, нет каталога — сказать, остальные упаковать, код не 0 (доза exit.md на входе) →
+# хранить три последних архива каждого каталога (rotate.md: массив из шаблона и срез).
+# Приёмка — hp/test-backup: команду студента запускают от student на скрытых каталогах (один —
+# с пробелом в имени); observe программу не проверит.
+
+image bash-script:1
+
+# data: data/projects — руками
+copy data/projects /home/student/projects
+run chown -R student:student /home/student/projects
+
+hidden hp
+
+settings
+  pager on
+
+say "Бэкап руками делают ровно до первого забытого раза. Пора написать команду."
+read brief.md
+
+stage
+  say "Сделай команду backup в /usr/local/bin: backup каталог… упаковывает каждый каталог в ~/backups/<имя>-<ГГГГ-ММ-ДД_ЧЧММСС>.tar.gz. Проверь на ~/projects"
+  solve:
+    printf '%s\n' '#!/bin/bash' 'set -euo pipefail' 'dest=~/backups' 'if [ $# -eq 0 ]; then echo "Использование: backup каталог..." >&2; exit 1; fi' 'mkdir -p "$dest"' 'rc=0' 'for d in "$@"; do' '    if [ ! -d "$d" ]; then echo "backup: нет каталога $d" >&2; rc=2; continue; fi' '    name=$(basename "$d")' '    tar -czf "$dest/$name-$(date +%F_%H%M%S).tar.gz" -C "$(dirname "$d")" "$name"' '    old=("$dest/$name"-*.tar.gz)' '    n=${#old[@]}' '    if (( n > 3 )); then rm -f -- "${old[@]:0:n-3}"; fi' 'done' 'exit $rc' | sudo tee /usr/local/bin/backup >/dev/null
+    sudo chmod 755 /usr/local/bin/backup
+    backup /home/student/projects/site /home/student/projects/blog
+  check exec test-backup step=run
+  neutral ls cat pwd cd tar
+  on pass say "Каждый каталог — отдельный архив с датой в имени: видно, когда снят, и новый не затирает старый."
+  hint output "backup: Permission denied" say "Файл на месте, а запускать его нельзя. Какого права ему не хватает?"
+  hint output "Permission denied" say "/usr/local/bin — каталог системы. Как ты уже клал туда команды?"
+  hint output "Removing leading" say "tar сохранил полный путь от корня. Как упаковать каталог по имени, а не по пути? man tar — ищи --directory."
+  hint tries 5 say "Что лежит в ~/backups и что внутри архива? tar -tzf покажет без распаковки."
+  hint tries 10 say "Имя без пути даёт basename, дату с временем — date: man date, ищи FORMAT."
+
+stage
+  say "backup без аргументов должен объяснить, как им пользоваться, и выйти с ошибкой. Если какого-то каталога нет — сказать об этом, остальные всё равно упаковать и выйти с ошибкой"
+  solve backup /home/student/projects/site
+  check exec test-backup step=errors
+  neutral ls cat pwd cd tar
+  on enter read exit.md
+  on pass say "Код возврата — это API твоего скрипта: по нему cron, systemd и CI решают, всё ли в порядке."
+  hint tries 5 say "Что печатает echo $? сразу после backup без аргументов? А после backup с несуществующим каталогом?"
+  hint tries 10 say "Если скрипт выходит на первой ошибке, остальные каталоги не упакуются. Как запомнить, что ошибка была, и выйти с ней в конце?"
+
+stage
+  say "Архивы копятся бесконечно. Пусть backup после упаковки оставляет только три последних архива каждого каталога"
+  solve backup /home/student/projects/site
+  check exec test-backup step=rotate
+  neutral ls cat pwd cd tar
+  on enter read rotate.md
+  hint tries 5 say "В каком порядке шаблон отдаёт имена архивов одного каталога? Какие из них старые?"
+  hint tries 10 say "Сколько элементов удалить, если всего n, а оставить надо три?"
+  on pass say "Так и работает ротация: logrotate для журналов, хранилища бэкапов, снимки дисков. Своя — в пятнадцать строк."
+
+exec finale
