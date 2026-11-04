@@ -3,7 +3,7 @@
 # остаётся stderr самого exec_me.sh, он и объясняет потоки и настоящую цель (stdout.log /
 # stderr.log). Шаг 2: заглушить болтуна (chatterbox.sh) перенаправлением потоков друг в друга
 # и /dev/null (доза silence.md). Шаг 3: число слов в readme.txt одной командой и без имени файла
-# — wc -w < readme.txt (доза input.md).
+# — wc -w < readme.txt (доза input.md: wc и <).
 
 image streams:1
 

@@ -2,7 +2,7 @@
 # it_bastion: pipe/36_services, pipe/38_archives — одним заданием). Шаг 1: порты из
 # /etc/services — только номера (cut/awk, «загляни в царство конфигов»). Шаг 2: распаковать
 # 70 zip и 70 tar-архивов (с хитрым расширением .unknown_archive) в ДОМАШНИЙ каталог как можно
-# меньшим числом команд — unzip и tar берут по одному архиву, поэтому нужен xargs (доза xargs.md
+# меньшим числом команд — unzip и tar берут по одному архиву, поэтому нужен xargs (доза xargs.md: xargs + unzip/tar
 # при входе). Принято по файлам в ~ (observe /home/student, сами архивы — exclude).
 
 image xargs:1
