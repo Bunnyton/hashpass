@@ -152,7 +152,7 @@ def test_login_prompt_reasks_on_full_name_in_cyrillic():
 
 @pytest.mark.tier2
 def test_interactive_register_asks_no_group(registry, monkeypatch):
-    """Spec 2026-10-21 §3: groups are gone -- the comment carries one, if the student wants."""
+    """Spec 2026-10-21 §3: no group; 2026-11-04: no comment either -- it is asked per course on joining."""
     from hashpass import cli  # noqa: PLC0415
     prompts: list[str] = []
     monkeypatch.setattr(cli.getpass, "getpass", lambda _p: "pass123!")
@@ -162,5 +162,4 @@ def test_interactive_register_asks_no_group(registry, monkeypatch):
                               password="pass123!")  # noqa: S106
     assert not any("групп" in p.lower() and "необязательно" in p.lower() and "комментарий" not in p
                    for p in prompts)
-    assert len(prompts) == 1 and "приватный комментарий" in prompts[0]
-    assert registry.users.get("ivanov")["comment"] == "ИУ7-31 Иванов"
+    assert prompts == [] and registry.users.has("ivanov")

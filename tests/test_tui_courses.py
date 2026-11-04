@@ -22,6 +22,7 @@ class _Client:
     def __init__(self, *, courses: bool = True) -> None:
         self.has_courses = courses
         self.joined: list[str] = []
+        self.comments: list[str | None] = []
         self.requests: list[tuple[str, str]] = []
 
     def me(self, *, token: str) -> dict:  # noqa: ARG002
@@ -39,8 +40,9 @@ class _Client:
             return {"ref": ref, "title": "Открытый", "visibility": "public", "role": None, "blocks": []}
         return {"ref": ref, "title": "Закрытый", "visibility": "private", "access": "request"}
 
-    def join(self, ref: str, invite: str = "", *, token: str) -> dict:  # noqa: ARG002
+    def join(self, ref: str, invite: str = "", *, comment: str | None = None, token: str) -> dict:  # noqa: ARG002
         self.joined.append(ref)
+        self.comments.append(comment)
         return {"joined": ref}
 
     def request_access(self, ref: str, comment: str = "", *, token: str) -> None:  # noqa: ARG002
@@ -80,9 +82,13 @@ def test_first_start_asks_for_a_course_and_joins_a_public_one(tmp_path: Path) ->
             await pilot.press(*"open")
             await _until(pilot, lambda: [r["ref"] for r in app.screen.rows] == ["bob/open"])
             await pilot.press("enter")
-            await _until(pilot, lambda: not isinstance(app.screen, CoursePicker))
-            assert my_courses.current(app.env.root, URL) == "bob/open"
-            assert client.joined == ["bob/open"]
+            # user 2026-11-04: joining asks a comment the course's authors and admins see
+            await _until(pilot, lambda: isinstance(app.screen, AskScreen))
+            assert "авторы и админы курса" in str(app.screen.question)
+            await pilot.press(*"ИУ7", "enter")
+            await _until(pilot, lambda: client.joined == ["bob/open"])
+            await _until(pilot, lambda: my_courses.current(app.env.root, URL) == "bob/open")
+            assert client.comments == ["ИУ7"]
             assert "bob/open" in app.title
     asyncio.run(drive())
 

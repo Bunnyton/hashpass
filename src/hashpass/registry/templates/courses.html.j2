@@ -20,6 +20,22 @@
 </details>
 </div>
 {% if message %}<p class='sub'>{{ message }}</p>{% endif %}
+{% if invites %}
+<div class='card invites-card'>
+<h2>Приглашения <span class='count-pill'>{{ invites | length }}</span></h2>
+{% for i in invites %}
+<div class='invite-row'>
+<p><a href='/c/{{ i.ref }}'><b>{{ i.title or i.ref }}</b></a> <span class='mono dim'>{{ i.ref }}</span> — приглашает <a class='mono' href='/u/{{ i.by | q }}'>{{ i.by }}</a></p>
+<form class='join-form' data-api='POST /courses/{{ i.ref }}/join' data-then='go:/c/{{ i.ref }}'>
+<label for='inv-comment-{{ loop.index }}'>Хотите добавить комментарий, который увидят авторы и админы курса? <span class='dim'>Необязательно.</span></label>
+<textarea id='inv-comment-{{ loop.index }}' name='comment' rows='2' maxlength='500' placeholder='например: Иванов И., группа ИУ7-31'></textarea>
+<div class='row'><button class='btn' type='submit'>Принять</button></div>
+</form>
+<form class='inline' data-api='DELETE /courses/{{ i.ref }}/invites/{{ signed_in | q }}' data-confirm='Отклонить приглашение?'><button class='sm ghost' type='submit'>Отклонить</button></form>
+</div>
+{% endfor %}
+</div>
+{% endif %}
 <nav class='tabs' aria-label='Мои курсы'>
 <a href='#taking' data-tab>{{ icon('course') }} Прохожу <span class='count'>{{ taking | length }}</span></a>
 <a href='#running' data-tab>{{ icon('user') }} Веду <span class='count'>{{ runs | length }}</span></a>

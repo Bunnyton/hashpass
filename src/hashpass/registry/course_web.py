@@ -63,7 +63,9 @@ class CourseWeb:
         attempts = self.server.attempts()
         attempts.prune(login)
         return self.server._html(render_profile(                                 # noqa: SLF001
-            self.server.users.get(login) or {"user": login}, entries,
+            # in a course the comment is the one written to THIS course on joining (2026-11-04)
+            {**(self.server.users.get(login) or {"user": login}),
+             "comment": self.server.course_api.notes.of_course(course.id).get(login, "")}, entries,
             self.server.progress().get(login), attempts.by_task(login),
             course={"ref": course.ref, "title": course.title},
             about={e["ref"]: self.server.people.about(self.server._live_ref(e["ref"])) for e in entries}))  # noqa: SLF001
@@ -84,8 +86,13 @@ class CourseWeb:
         people = self.server.people
         runs = [people._course_row(c, role_of=user) for c in self.server.course_api.courses.all()  # noqa: SLF001
                 if c.role_of(user) in ("owner", "admin", "author")]
+        api = self.server.course_api
+        invites = [{"ref": c.ref, "title": c.title, "by": r.get("by", ""), "at": r.get("at")}
+                   for cid, r in api.invites.of(user).items()
+                   if (c := api.courses.by_id(cid)) is not None and not c.closed]
         return self.server._html(_env.get_template("courses.html.j2").render(  # noqa: SLF001
             title="Мои курсы — hashpass", nav=True, active="/c", signed_in=user, role_ru=_ROLE_RU,
+            invites=invites,
             taking=people._taking(user), runs=sorted(runs, key=lambda r: r["ref"]),  # noqa: SLF001
             message=request.args.get("message", "")))
 
@@ -114,11 +121,13 @@ class CourseWeb:
         link = f"{pool}/c/{course.ref}"
         invite_link = f"{link}?invite={quote(course.invite)}" if may["people"] else ""
         students = self._students(course) if may["students"] else []
+        waiting = ([{"user": u, **r} for u, r in sorted(api.invites.to_course(course.id).items())]
+                   if may["people"] else [])
         joined = user is not None and course.id in api.enrollments.of(user)
         return self.server._html(render_course(  # noqa: SLF001
             view, may=may, signed_in=user, link=link, invite_link=invite_link, pool=pool,
             curl_flags="-fsSLk" if pool.startswith("https://") else "-fsSL",
-            invite=request.args.get("invite", ""), students=students, joined=joined, givable=givable,
+            invite=request.args.get("invite", ""), students=students, waiting=waiting, joined=joined, givable=givable,
             copy=self.server.copy_api.page(course, user),
             api=f"/courses/{course.ref}", next_url=quote(request.full_path.rstrip("?"), safe="")))
 
@@ -128,12 +137,12 @@ class CourseWeb:
         refs = [f"{t['repo']}:{t['tag']}" for _b, t in course.tasks()]
         about = {r: self.server.people.about(self.server._live_ref(r)) for r in refs}  # noqa: SLF001
         rows = []
+        notes = api.notes.of_course(course.id)          # what each told the team on joining (2026-11-04)
         for student in api.enrollments.users_of(course.id):
             if course.role_of(student) in ("owner", "admin", "author"):
                 continue                                  # staff are not students of their course
             progress = self.server.progress().get(student)
             done = [r for r in refs if (progress.get(r) or {}).get("status") == "passed"]
-            profile = self.server.users.get(student) or {}
             cells = []
             for i, r in enumerate(refs, 1):
                 status = (progress.get(r) or {}).get("status", "")
@@ -147,7 +156,7 @@ class CourseWeb:
                               "about": about[r],
                               "href": history_href(student, r, solved=status == "passed") if status
                               else f"/c/{course.ref}/u/{quote(student, safe='')}#t{i}"})
-            rows.append({"user": student, "comment": profile.get("comment", ""),
+            rows.append({"user": student, "comment": notes.get(student, ""),
                          "done": len(done), "total": len(refs),
                          "pct": round(100 * len(done) / len(refs)) if refs else 0, "cells": cells})
         return sorted(rows, key=lambda r: (-r["done"], r["user"]))

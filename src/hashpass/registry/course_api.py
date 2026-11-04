@@ -10,7 +10,7 @@ import json
 import os
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -21,6 +21,7 @@ from hashpass.registry import courses as cm
 from hashpass.registry import perms
 from hashpass.registry.access import can, course_perms, sees_hidden
 from hashpass.registry.config import save_config
+from hashpass.registry.course_people import CourseInvites, CourseNotes, migrate_profile_comments
 from hashpass.registry.courses import Course, CourseConflictError, CourseStore
 from hashpass.registry.revisions import parse_version
 
@@ -103,9 +104,30 @@ class CourseApi:
     def enrollments(self) -> Enrollments:
         return Enrollments(Path(self.server.store.root) / ".enrollments")
 
+    @property
+    def notes(self) -> CourseNotes:
+        return CourseNotes(Path(self.server.store.root) / ".course-notes")
+
+    @property
+    def invites(self) -> CourseInvites:
+        return CourseInvites(Path(self.server.store.root) / ".course-invites")
+
+    def migrate_notes(self) -> int:
+        """Once per pool: the private profile comment becomes each course's note (spec 2026-11-04)."""
+        def members() -> Iterator[tuple[str, list[str]]]:
+            for course in self.courses.all():
+                admitted = [u for u, r in course.members.items() if r == "member"]
+                yield course.id, sorted(set(self.enrollments.users_of(course.id)) | set(admitted))
+
+        def comment_of(user: str) -> str:
+            return str((self.server.users.get(user) or {}).get("comment", ""))
+        root = Path(self.server.store.root) / ".course-notes"
+        return migrate_profile_comments(self.notes, members(), comment_of, root / ".migrated")
+
     # -- wiring -------------------------------------------------------------
 
     def register(self, app: Flask) -> None:
+        self.migrate_notes()
         rule = app.add_url_rule
         rule("/courses", "courses", self.list_or_create, methods=["GET", "POST"])
         rule("/courses/<owner>/<name>", "course", self.course, methods=["GET", "PUT", "DELETE"])
@@ -114,7 +136,9 @@ class CourseApi:
              methods=["POST"])
         rule("/courses/<owner>/<name>/requests/<user>", "course_request", self.decide_request,
              methods=["POST"])
-        rule("/courses/<owner>/<name>/students", "course_students", self.add_students, methods=["POST"])
+        rule("/courses/<owner>/<name>/invites", "course_invites", self.course_invites, methods=["GET", "POST"])
+        rule("/courses/<owner>/<name>/invites/<user>", "course_invite", self.drop_invite, methods=["DELETE"])
+        rule("/users", "user_logins", self.logins, methods=["GET"])
         rule("/courses/<owner>/<name>/students/<user>", "course_student", self.remove_student,
              methods=["DELETE"])
         rule("/courses/<owner>/<name>/members/<user>", "course_member", self.member,
@@ -278,13 +302,20 @@ class CourseApi:
             out["invite"] = course.invite
             out["requests"] = [r for r in course.requests if r["state"] == "open"]
         out["perms"] = {u: sorted(course_perms(course, u)) for u, r in course.members.items() if r == "admin"}
-        return out
+        out["enrolled"] = bool(user) and course.id in self.enrollments.of(user)   # asked a comment already
+        return out | self._invited(course, user)
 
     def _peek(self, course: Course, user: str | None) -> dict:
         mine = [r for r in course.requests if r["user"] == user]
         access = "requested" if any(r["state"] == "open" for r in mine) else "request"
-        return {"ref": course.ref, "title": course.title, "description": course.description,
-                "visibility": course.visibility, "access": access}
+        out = {"ref": course.ref, "title": course.title, "description": course.description,
+               "visibility": course.visibility, "access": access}
+        return out | self._invited(course, user)
+
+    def _invited(self, course: Course, user: str | None) -> dict:
+        """{"invited": {by, at}} when `user` has an invitation to `course` waiting, else {}."""
+        rec = self.invites.of(user).get(course.id) if user else None
+        return {"invited": rec} if rec else {}
 
     # -- routes ---------------------------------------------------------------
 
@@ -295,7 +326,12 @@ class CourseApi:
             rows = [self._summary(c, user) for c in self.courses.all()
                     if can(user, self.server.pool_perms(user), c, "view")
                     and (not q or q in f"{c.ref} {c.title} {c.description}".casefold())]
-            return self._json(HTTPStatus.OK, {"courses": rows})
+            mine = []
+            for cid, rec in (self.invites.of(user) if user else {}).items():
+                c = self.courses.by_id(cid)
+                if c is not None and not c.closed:
+                    mine.append({"ref": c.ref, "title": c.title, "by": rec.get("by", ""), "at": rec.get("at")})
+            return self._json(HTTPStatus.OK, {"courses": rows, "invites": mine})
         if user is None:
             return self._err(HTTPStatus.UNAUTHORIZED, "войдите, чтобы создать курс")
         body = self._body()
@@ -395,15 +431,25 @@ class CourseApi:
         course = self.courses.get(f"{owner}/{name}")
         if course is None:
             return self._err(HTTPStatus.NOT_FOUND, f"нет такого курса: {owner}/{name}")
+        invited = course.id in self.invites.of(user)
         if not can(user, self.server.pool_perms(user), course, "play"):
             joined: list[bool] = []
-            err = self._edit(course.ref, lambda c: joined.append(
-                cm.join_by_invite(c, user, str(self._body().get("invite", "")))))
+
+            def admit(c: Course) -> None:
+                if invited:                      # an invitation accepted: a seat, private or not
+                    c.members.setdefault(user, "member")
+                    joined.append(True)
+                else:
+                    joined.append(cm.join_by_invite(c, user, str(self._body().get("invite", ""))))
+            err = self._edit(course.ref, admit)
             if err is not None:
                 return err
             if not joined[0]:
                 return self._err(HTTPStatus.FORBIDDEN, "курс закрыт — нужна ссылка-приглашение или заявка")
         self.enrollments.enroll(user, course.id)
+        self.invites.drop(user, course.id)
+        if "comment" in self._body():            # «комментарий, который увидят авторы и админы курса»
+            self.notes.set(course.id, user, str(self._body().get("comment") or ""))
         return self._json(HTTPStatus.OK, {"joined": course.ref})
 
     def request_access(self, owner: str, name: str) -> Response:
@@ -426,50 +472,89 @@ class CourseApi:
                          by=actor, what=f"{'принята' if accept else 'отклонена'} заявка {user}")
         if err is None and accept:
             self.enrollments.enroll(user, course.id)
+            said = next((r.get("comment", "") for r in reversed(course.requests) if r.get("user") == user), "")
+            if said and not self.notes.has(course.id, user):   # the request's words become the note
+                self.notes.set(course.id, user, str(said))
         return err or self._json(HTTPStatus.OK, {"user": user, "accepted": accept})
 
-    def add_students(self, owner: str, name: str) -> Response:
+    def logins(self) -> Response:
         """
-        Put students into the course by login, several at once (user 2026-11-04: «вручную приглашать»).
+        Logins containing `q`, those starting with it first, at most 8 -- the users search on the site.
 
-        Each one is enrolled at once (the course is in their list, they are among its students); a
-        private course also admits them (role `member`). The team stays the team; unknown logins
-        are named back. `people` -- as for the invite link.
+        User 2026-11-04: «пользователи — открытая информация: начинаешь вводить, показывает». Only
+        logins: the profile's private comment is never searched or sent. Signed in only.
+        """
+        user, _role = self._caller()
+        if user is None:
+            return self._err(HTTPStatus.UNAUTHORIZED, "войдите, чтобы искать пользователей")
+        q = request.args.get("q", "").strip().casefold()
+        if not q:
+            return self._json(HTTPStatus.OK, {"users": []})
+        names = sorted(str(p["user"]) for p in self.server.users.all_users())
+        hits = [n for n in names if n.casefold().startswith(q)] + [n for n in names
+                                                                   if q in n.casefold() and not n.casefold().startswith(q)]
+        return self._json(HTTPStatus.OK, {"users": hits[:8]})
+
+    def course_invites(self, owner: str, name: str) -> Response:
+        """
+        GET: who waits for an answer; POST {"users"}: invite them (user 2026-11-04).
+
+        An invitation is no seat: the student is in only after accepting it (`join`). Who is
+        already in, already invited, in the team or not on the pool is named back.
         """
         course, actor, err = self._load(owner, name, "people")
         if err is not None:
             return err
+        if request.method == "GET":
+            waiting = self.invites.to_course(course.id)
+            return self._json(HTTPStatus.OK, {"invites": [{"user": u, **r} for u, r in sorted(waiting.items())]})
         raw = self._body().get("users", "")
         words = raw if isinstance(raw, list) else re.split(r"[\s,;]+", str(raw))
-        logins = list(dict.fromkeys(w.strip().lstrip("@") for w in words if str(w).strip()))
+        logins = list(dict.fromkeys(str(w).strip().lstrip("@") for w in words if str(w).strip()))
         if not logins:
             return self._err(HTTPStatus.BAD_REQUEST, "впишите логины — через пробел, запятую или с новой строки")
         out = self._sort_logins(course, logins)
-        if not (out["added"] or out["already"] or out["team"]):
+        if not (out["invited"] or out["already"] or out["pending"] or out["team"]):
             return self._err(HTTPStatus.NOT_FOUND, f"нет таких пользователей: {', '.join(out['missing'])}")
-        if out["added"] and course.visibility == "private":
-            err = self._edit(course.ref, lambda c: [c.members.setdefault(u, "member") for u in out["added"]],
-                             by=actor, what=f"добавлены в курс: {', '.join(out['added'])}")
-            if err is not None:
-                return err
-        for login in out["added"]:
-            self.enrollments.enroll(login, course.id)
-        said = [f"{w}: {', '.join(out[k])}" for k, w in (("added", "Добавлены"), ("already", "уже в курсе"),
-                                                           ("team", "в команде курса"),
+        for login in out["invited"]:
+            self.invites.add(login, course.id, by=str(actor))
+        if out["invited"]:
+            self._edit(course.ref, lambda _c: None, by=str(actor), check_rev=False,
+                       what=f"приглашены: {', '.join(out['invited'])}")
+        said = [f"{w}: {', '.join(out[k])}" for k, w in (("invited", "Приглашены"), ("pending", "уже приглашены"),
+                                                           ("already", "уже в курсе"), ("team", "в команде курса"),
                                                            ("missing", "нет таких пользователей")) if out[k]]
         return self._json(HTTPStatus.OK, {**out, "message": "; ".join(said) + "."})
 
+    def drop_invite(self, owner: str, name: str, user: str) -> Response:
+        """DELETE: the team revokes an invitation, or the invitee declines it."""
+        caller, _role = self._caller()
+        if caller is None:
+            return self._err(HTTPStatus.UNAUTHORIZED, "войдите")
+        course = self.courses.get(f"{owner}/{name}")
+        if course is None:
+            return self._err(HTTPStatus.NOT_FOUND, f"нет такого курса: {owner}/{name}")
+        if caller != user and not can(caller, self.server.pool_perms(caller), course, "people"):
+            return self._err(HTTPStatus.FORBIDDEN, "отозвать приглашение может команда курса")
+        if not self.invites.drop(user, course.id):
+            return self._err(HTTPStatus.NOT_FOUND, f"у {user} нет приглашения в этот курс")
+        word = "Приглашение отклонено." if caller == user else f"Приглашение {user} отозвано."
+        return self._json(HTTPStatus.OK, {"dropped": user, "message": word})
+
     def _sort_logins(self, course: Course, logins: list[str]) -> dict[str, list[str]]:
-        """Who of `logins` is new here, already a student, in the team, or not on the pool at all."""
+        """Who of `logins` gets an invitation, is already in or invited, is in the team, or is unknown."""
         enrolled = set(self.enrollments.users_of(course.id))
-        out: dict[str, list[str]] = {"added": [], "already": [], "team": [], "missing": []}
+        waiting = self.invites.to_course(course.id)
+        out: dict[str, list[str]] = {"invited": [], "pending": [], "already": [], "team": [], "missing": []}
         for login in logins:
             if not self.server.users.has(login):
                 out["missing"].append(login)
             elif course.role_of(login) in ("owner", "admin", "author"):
                 out["team"].append(login)
+            elif login in enrolled:
+                out["already"].append(login)
             else:
-                out["already" if login in enrolled else "added"].append(login)
+                out["pending" if login in waiting else "invited"].append(login)
         return out
 
     def remove_student(self, owner: str, name: str, user: str) -> Response:
@@ -485,6 +570,7 @@ class CourseApi:
             if err is not None:
                 return err
         self.enrollments.leave(user, course.id)
+        self.invites.drop(user, course.id)               # an old invitation must not let them back
         return self._json(HTTPStatus.OK, {"removed": user, "message": f"{user} больше не в курсе. Прогресс сохранён."})
 
     def member(self, owner: str, name: str, user: str) -> Response:  # noqa: PLR0911

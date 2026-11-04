@@ -8,7 +8,7 @@
 {{ avatar(p.user, 'md') }}
 <div class='grow'>
 <h1 class='mono'><a href='/u/{{ p.user | q }}'>{{ p.user }}</a></h1>
-{% if p.comment %}<p class='sub small'><span class='dim'>приватный комментарий:</span> {{ p.comment }}</p>{% endif %}
+{% if p.comment %}<p class='sub small'><span class='dim'>{% if course %}комментарий для авторов и админов курса:{% else %}приватный комментарий:{% endif %}</span> {{ p.comment }}</p>{% endif %}
 {% if course %}<p class='sub small'>в курсе «{{ course.title or course.ref }}»{% if p.created_at %} · с нами с {{ ts(p.created_at) }}{% endif %}</p>{% endif %}
 </div>
 <div class='ring' style='--pct:{{ pct }}' role='img' aria-label='решено {{ pct }}%'><span><b>{{ pct }}%</b><small>решено</small></span></div>

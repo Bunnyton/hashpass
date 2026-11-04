@@ -25,11 +25,11 @@ def test_the_form_is_reached_from_the_login_page(registry) -> None:
 @pytest.mark.tier1
 def test_signing_up_makes_the_account_and_signs_in(registry) -> None:
     status, headers, _ = _req(_opener(), "POST", f"{registry.base_url}/web/register",
-                              data=_form(comment="ИУ7-31 Иван"))
+                              data=_form())
     assert status == HTTPStatus.SEE_OTHER and headers["Location"] == "/u/kid"
     assert headers["Set-Cookie"].startswith("hp_session=")
     assert registry.users.verify("kid", PW)
-    assert registry.users.get("kid")["comment"] == "ИУ7-31 Иван"
+    assert "name='comment'" not in _req(_opener(), "GET", f"{registry.base_url}/web/register")[2]  # per course now
 
 
 @pytest.mark.tier1

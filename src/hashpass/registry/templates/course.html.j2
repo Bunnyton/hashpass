@@ -7,6 +7,19 @@
 {%- for k, v in fields.items() %}<input type='hidden' name='{{ k }}' value='{{ v }}'{% if v is sameas true or v is sameas false %} data-type='bool'{% elif v is number %} data-type='int'{% endif %}>{% endfor -%}
 <button class='{{ cls }}' type='submit'>{{ label }}</button></form>
 {%- endmacro %}
+{% macro join_form(label, fields={}) -%}
+<form class='join-form' data-api='POST {{ api }}/join'>
+{%- for k, v in fields.items() %}<input type='hidden' name='{{ k }}' value='{{ v }}'>{% endfor %}
+<label for='join-comment'>Хотите добавить комментарий, который увидят авторы и админы курса? <span class='dim'>Необязательно.</span></label>
+<textarea id='join-comment' name='comment' rows='2' maxlength='500' placeholder='например: Иванов И., группа ИУ7-31'></textarea>
+<button class='btn' type='submit'>{{ label }}</button>
+</form>
+{%- endmacro %}
+{% macro invited_box() -%}
+<p class='sub'><span class='pill open'>приглашение</span> <a class='mono' href='/u/{{ c.invited.by | q }}'>{{ c.invited.by }}</a> приглашает вас в этот курс.</p>
+{{ join_form('Принять приглашение') }}
+{{ act('DELETE', api ~ '/invites/' ~ (signed_in | q), 'Отклонить', 'sm ghost', confirm='Отклонить приглашение?') }}
+{%- endmacro %}
 {% block main %}
 <nav class='crumb' aria-label='Путь'><a href='/c'>← Мои курсы</a></nav>
 {% set ref_parts = c.ref.split('/', 1) %}
@@ -30,9 +43,11 @@
 {% if not signed_in %}
 <p class='sub'>Чтобы пройти курс, <a href='/web/login?next={{ next_url }}'>войдите</a>.</p>
 {% elif not may.view %}
-  {% if invite %}
-  <p class='sub'>Вас пригласили в этот курс.</p>
-  {{ act('POST', api ~ '/join', 'Вступить по приглашению', 'btn', {'invite': invite}) }}
+  {% if c.invited %}
+  {{ invited_box() }}
+  {% elif invite %}
+  <p class='sub'>Вас пригласили в этот курс по ссылке.</p>
+  {{ join_form('Вступить по приглашению', {'invite': invite}) }}
   {% elif c.access == 'requested' %}
   <p class='sub'><span class='pill warn'>заявка отправлена</span> — владелец курса её рассмотрит.</p>
   {% else %}
@@ -43,8 +58,10 @@
   </form>
   {% endif %}
 {% else %}
-  {% if not joined and c.visibility == 'public' and not c.role %}
-  {{ act('POST', api ~ '/join', 'Пройти курс', 'btn') }}
+  {% if c.invited %}
+  {{ invited_box() }}
+  {% elif not joined and c.visibility == 'public' and not c.role %}
+  {{ join_form('Пройти курс') }}
   {% endif %}
   <p class='sub small'>Пройти в терминале — курс появится в списке hashpass:</p>
   {{ cmd('hashpass add ' ~ link) }}
@@ -340,19 +357,28 @@
 <p class='sub small'>Ссылка-приглашение: кто откроет её и войдёт, станет участником курса{% if c.visibility == 'private' %} — даже приватного{% endif %}.</p>
 <div class='row'><code class='copy'>{{ invite_link }}</code>
 {{ act('PUT', api, 'Сменить ссылку', 'sm ghost', {'rotate_invite': true}, confirm='Старая ссылка перестанет работать. Сменить?') }}</div>
-<form class='invite-add' data-api='POST {{ api }}/students'>
-<label for='invite-users'>Или добавьте сами — логины через пробел, запятую или с новой строки:</label>
-<textarea id='invite-users' name='users' rows='2' placeholder='ivanov.ii petrov.pp' required></textarea>
-<button class='sm' type='submit'>Добавить в курс</button>
+<form class='invite-add' data-api='POST {{ api }}/invites' data-user-search>
+<label for='invite-q'>Или пригласите сами — начните вводить логин:</label>
+<div class='user-search'><input id='invite-q' type='search' autocomplete='off' placeholder='логин пользователя' aria-autocomplete='list' aria-controls='invite-hits'>
+<ul id='invite-hits' class='user-hits' role='listbox' hidden></ul></div>
+<div class='user-picked' aria-live='polite'></div>
+<input type='hidden' name='users' value=''>
+<button class='sm' type='submit'>Пригласить</button>
 </form>
-<p class='sub small'>Добавленные сразу видят курс у себя в «Мои курсы»{% if c.visibility == 'private' %} и получают к нему доступ{% endif %}.</p>
+<p class='sub small'>Приглашённый станет участником, когда примет приглашение — на странице курса, в «Моих курсах» или в hashpass.</p>
+{% if waiting %}
+<h4 class='team-sub'>Ждут ответа <span class='count-pill'>{{ waiting | length }}</span></h4>
+<ul class='people waiting'>{% for w in waiting %}<li class='member'><div class='member-head'><a class='person' href='/u/{{ w.user | q }}'><span class='mono'>{{ w.user }}</span></a>
+<span class='small dim'>пригласил {{ w.by }}{% if w.at %}, {{ ago(w.at) }}{% endif %}</span>
+{{ act('DELETE', api ~ '/invites/' ~ (w.user | q), 'Отозвать', 'sm ghost', confirm='Отозвать приглашение ' ~ w.user ~ '?') }}</div></li>{% endfor %}</ul>
+{% endif %}
 </div>
 {% endif %}
 {% if students %}
 <div class='card'>
 <div class='row students-tools'>
 <label class='visually-hidden' for='student-q'>Найти среди участников курса</label>
-<input id='student-q' type='search' placeholder='найти по логину или приватному комментарию' data-filter='#student-rows tr'>
+<input id='student-q' type='search' placeholder='найти по логину или комментарию' data-filter='#student-rows tr'>
 <span class='sub small legend'><span class='cell passed'>✓</span> решено <span class='cell passed pasted'>⚠</span> решено со вставками <span class='cell started'>◐</span> начато <span class='cell none'>·</span> не начато</span>
 </div>
 <div class='table-wrap'>
@@ -406,6 +432,7 @@
 {% endif %}
 <script src='/static/api.js'></script>
 <script src='/static/team.js'></script>
+{% if may.people %}<script src='/static/usersearch.js'></script>{% endif %}
 <script src='/static/filter.js'></script>
 {% if may.edit %}<script src='/static/catalog.js'></script>{% endif %}
 {% endblock %}

@@ -35,7 +35,7 @@ from textual.widgets import Footer, Input, Label, Static, Tree
 from hashpass import account, my_courses
 from hashpass.attempts import flush_outbox, sync_solutions
 from hashpass.auth_screens import LoginScreen
-from hashpass.course_cli import origin_said
+from hashpass.course_cli import JOIN_COMMENT_QUESTION, origin_said
 from hashpass.course_screen import LINK_PREFIX, AskScreen, CoursePicker
 from hashpass.imagestore.store import ImageStore, registry_key
 from hashpass.registry.remote import RemoteRegistry
@@ -537,17 +537,21 @@ class PoolTUI(App):
         self._enter_course(choice)
 
     def _enter_course(self, ref: str, invite: str = "") -> None:
-        """Make `ref` current: join a public course, use an invite, or ask for access."""
+        """Make `ref` current: join (asking a comment for its team), use an invite, or ask for access."""
         try:
             view = self.client.course_view(ref, token=self.token)
-            if "blocks" not in view and invite:
-                self.client.join(ref, invite, token=self.token)
-                view = self.client.course_view(ref, token=self.token)
         except urllib.error.HTTPError as exc:
             self.notify(f"{ref}: {'нет такого курса' if exc.code == HTTPStatus.NOT_FOUND else exc}",
                         severity="warning", timeout=6)
             return
-        if "blocks" not in view:                           # private, no access yet
+        opened = "blocks" in view
+        joining = (bool(view.get("invited")) or (not opened and bool(invite))
+                   or (opened and view.get("visibility") == "public" and not view.get("role")
+                       and not view.get("enrolled")))
+        if joining:                    # user 2026-11-04: a comment the course's authors and admins see
+            self._ask_and_join(ref, invite, view)
+            return
+        if not opened:                                     # private, no access yet
             if view.get("access") == "requested":
                 self.notify(f"Заявка в {ref} уже отправлена — ждите ответа", timeout=6)
                 return
@@ -564,9 +568,27 @@ class PoolTUI(App):
             self.push_screen(AskScreen(f"Курс [b]{escape(ref)}[/] закрытый. Пару слов о себе для заявки:",
                                        "кто вы, зачем курс"), callback=send)
             return
-        if view.get("visibility") == "public" and not view.get("role"):
-            with contextlib.suppress(Exception):           # «приступил» (spec §7)
-                self.client.join(ref, token=self.token)
+        self._open_course(ref, view)
+
+    def _ask_and_join(self, ref: str, invite: str, view: dict) -> None:
+        """Ask the comment for the course's team (Enter -- none, Esc -- cancel), then join and open."""
+        def join(comment: str | None) -> None:
+            if comment is None:
+                return
+            try:
+                self.client.join(ref, invite, comment=comment or None, token=self.token)
+                joined = self.client.course_view(ref, token=self.token)
+            except urllib.error.HTTPError as exc:
+                self.notify(f"{ref}: не вступить — {exc}", severity="warning", timeout=6)
+                return
+            self._open_course(ref, joined)
+        by = (view.get("invited") or {}).get("by")
+        head = f"[b]{escape(by)}[/] приглашает вас в курс [b]{escape(ref)}[/].\n" if by else ""
+        self.push_screen(AskScreen(head + escape(JOIN_COMMENT_QUESTION) + " Enter — без комментария, Esc — отмена.",
+                                   "например: Иванов И., группа ИУ7-31"), callback=join)
+
+    def _open_course(self, ref: str, view: dict) -> None:
+        """Make the course current and load its catalog."""
         my_courses.choose(self.env.root, self.url, ref)
         self._origins = getattr(self, "_origins", {}) | {ref: view.get("origin")}
         self._course_title()

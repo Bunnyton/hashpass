@@ -828,10 +828,13 @@ class RemoteRegistry:
         """One course as the caller sees it (an outsider of a private one: title + `access`)."""
         return self._get_json(f"/courses/{ref}", token=self._auth_token(token or self.token))
 
-    def join(self, ref: str, invite: str = "", *, token: str | None = None) -> dict[str, object]:
-        """Join a course: a public one, or a private one with its invite token."""
-        return self._post_json(f"/courses/{ref}/join", {"invite": invite} if invite else {},
-                               token=self._auth_token(token or self.token))
+    def join(self, ref: str, invite: str = "", *, comment: str | None = None,
+             token: str | None = None) -> dict[str, object]:
+        """Join a course (public, by invite token, or accepting an invitation); `comment` -- for its team."""
+        body: dict[str, str] = {"invite": invite} if invite else {}
+        if comment is not None:
+            body["comment"] = comment
+        return self._post_json(f"/courses/{ref}/join", body, token=self._auth_token(token or self.token))
 
     def request_access(self, ref: str, comment: str = "", *, token: str | None = None) -> None:
         """Ask the course's staff for access to a private course."""

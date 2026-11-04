@@ -139,7 +139,7 @@ class LoginScreen(Screen[Session | None]):
 
 
 class RegisterScreen(Screen[Session | None]):
-    """A new student account: login, password twice, a comment (name, group -- spec §3)."""
+    """A new student account: login, password twice (a comment is asked per course on joining, 2026-11-04)."""
 
     CSS = AUTH_CSS
     BINDINGS = [Binding("escape", "back", "Назад ко входу")]   # noqa: RUF012
@@ -168,8 +168,6 @@ class RegisterScreen(Screen[Session | None]):
                 with Vertical():
                     yield Label("Повторите пароль")
                     yield Input(placeholder="ещё раз", password=True, id="password2")
-            yield Label("Приватный комментарий (необязательно) — видят только преподаватели ваших курсов")
-            yield Input(placeholder="имя, фамилия, группа — например Иванов И., ИУ7-31", id="comment")
             yield Static(f"{PASSWORD_RULE}\n{TEACHER_SEES}", id="auth-note")
             yield Static("", id="auth-error")
             with Horizontal(id="auth-buttons"):
@@ -199,7 +197,7 @@ class RegisterScreen(Screen[Session | None]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Enter: to the next field; on the last one -- create the account."""
-        if event.input.id == "comment":
+        if event.input.id == "password2":
             self.submit()
         else:
             self.focus_next()
@@ -219,7 +217,7 @@ class RegisterScreen(Screen[Session | None]):
         """Create the account with what is typed (in a thread)."""
         self.query_one("#auth-error", Static).update("Создаю аккаунт…")
         v = {w: self.query_one(f"#{w}", Input).value
-             for w in ("pool", "user", "password", "password2", "comment")}
+             for w in ("pool", "user", "password", "password2")}
         self._register(v)
 
     @work(thread=True, exclusive=True)
@@ -227,7 +225,7 @@ class RegisterScreen(Screen[Session | None]):
         url, user = v["pool"].strip(), v["user"].strip()
         try:
             token = account.register(self.env, url, user, v["password"], v["password2"],
-                                     "", v["comment"])
+                                     "", "")
         except account.AuthError as exc:
             self.app.call_from_thread(self.query_one("#auth-error", Static).update, str(exc))
             return

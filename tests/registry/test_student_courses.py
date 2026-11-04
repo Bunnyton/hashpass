@@ -80,7 +80,7 @@ def test_add_by_invite_then_catalog_pull_and_credit_through_the_course(pool: _Co
 def test_a_private_course_without_invite_asks_for_access(pool: _Courses, tmp_path: Path) -> None:
     env = _env(tmp_path, pool)
     said: list[str] = []
-    io = cli.Io(read=lambda _p: "я из ИТ-21", write=said.append, clock=lambda: "")
+    io = cli.Io(read=lambda p: "д" if "[Д/н]" in p else "я из ИТ-21", write=said.append, clock=lambda: "")
     assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux", io) == 0
     assert "заявка" in said[-1]
     assert [r["user"] for r in pool.call("GET", "/courses/bob/linux", "bob")[1]["requests"]] == ["kid"]
@@ -93,7 +93,7 @@ def test_a_newcomer_registers_right_from_the_course_link(pool: _Courses, tmp_pat
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "new")}, default_home=tmp_path)
     pool.call("PUT", "/courses/bob/linux", "bob", {"visibility": "public"})
     monkeypatch.setattr(cli.getpass, "getpass", lambda _p: "pw-correct1!")
-    answers = iter(["newbie", "ИУ7-31"])
+    answers = iter(["newbie", "ИУ7-31"])          # the login, then the comment for the course's team
     said: list[str] = []
     io = cli.Io(read=lambda _p: next(answers), write=said.append, clock=lambda: "")
     assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux", io) == 0
@@ -278,3 +278,21 @@ def test_a_closed_block_and_a_prize_not_yet_earned_credit_nothing(pool: _Courses
     pool.call("PUT", f"/courses/bob/linux/blocks/{first}", "bob", {"open": True})
     assert client.submit("bob/git-init:1", _digest(pool), passed=True, token=tok)["status"] == "passed"
     assert client.submit("bob/prize:1", prize_digest, passed=True, token=tok)["status"] == "passed"   # earned
+
+
+@pytest.mark.tier2
+def test_hashpass_add_asks_a_comment_for_the_team_and_accepts_an_invitation(pool: _Courses, tmp_path: Path) -> None:
+    """User 2026-11-04: on joining (web or hashpass) — «комментарий, который увидят авторы и админы курса»."""
+    from hashpass.registry.course_people import CourseNotes  # noqa: PLC0415
+    env = _env(tmp_path, pool)
+    pool.call("POST", "/courses/bob/linux/invites", "bob", {"users": "kid"})          # a private course
+    asked: list[str] = []
+
+    def read(prompt: str) -> str:
+        asked.append(prompt)
+        return "Иванов И., ИУ7-31"
+    io = cli.Io(read=read, write=lambda _s: None, clock=lambda: "")
+    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux", io) == 0               # no invite token: invited
+    assert any("авторы и админы курса" in q for q in asked)
+    cid = pool.call("GET", "/courses/bob/linux", "bob")[1]["id"]
+    assert CourseNotes(pool.r.store.root / ".course-notes").of_course(cid) == {"kid": "Иванов И., ИУ7-31"}

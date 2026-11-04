@@ -2662,7 +2662,7 @@ def cmd_register(env: Home, pool_url: str | None = None, io: Io | None = None) -
         msg = "не задан адрес пула (--pool или HASHPASS_POOL)"
         raise RuntimeError(msg)
     user = _read_login(io)
-    comment = (io.read("приватный комментарий — имя, группа, напр. Иванов И., ИУ7-31 (необязательно; видят только преподаватели ваших курсов): ") or "").strip()
+    comment = ""          # asked per course on joining now (2026-11-04)
     password = _prompt_new_password(io)
     RemoteRegistry(url, cache=CredentialCache(env.creds)).register(user, password, "", comment)
     save_pool(env, url, user)
@@ -2735,7 +2735,7 @@ def _register_interactive(client: RemoteRegistry, user: str, io: Io,
     fall back to the full `_prompt_new_password` dialog.
     """
     io.write(f"\x1b[36mРегистрирую нового пользователя «{user}» на пуле.\x1b[0m\n")
-    comment = (io.read("приватный комментарий — имя, группа, напр. Иванов И., ИУ7-31 (необязательно; видят только преподаватели ваших курсов): ") or "").strip()
+    comment = ""          # asked per course on joining now (2026-11-04)
     while True:
         # Reuse the caller-supplied password on the first attempt (typed at login);
         # if the server refuses it as weak, ask through the strict double-entry prompt.
@@ -2897,6 +2897,7 @@ def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
     account the student signs in or, with a new login, registers on the spot.
     """
     from hashpass import my_courses  # noqa: PLC0415
+    from hashpass.course_cli import JOIN_COMMENT_QUESTION  # noqa: PLC0415
     io = io or _default_io()
     pool, ref, invite = my_courses.parse_link(_course_link(env, link))
     saved = _pool_url(env)
@@ -2913,17 +2914,18 @@ def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
         _require_pool_identity(env, io)
         url, _user, token = account_current(env)
     client = RemoteRegistry(url, token=token)
+    # user 2026-11-04: on joining -- «хотите ли Вы добавить комментарий, который увидят авторы и админы курса»
+    comment = (io.read(JOIN_COMMENT_QUESTION + " (Enter — без комментария): ") or "").strip()
     try:
-        client.join(ref, invite)
+        client.join(ref, invite, comment=comment or None)
     except urllib.error.HTTPError as exc:
         if exc.code == HTTPStatus.NOT_FOUND:
             msg = f"на пуле нет курса {ref} (или курсы там ещё не включены)"
             raise RuntimeError(msg) from exc
         if exc.code != HTTPStatus.FORBIDDEN:
             raise
-        comment = (io.read("Курс закрытый. Попросить доступ? Напишите пару слов о себе "
-                           "(пусто — не просить): ") or "").strip()
-        if not comment:
+        answer = (io.read("Курс закрытый, приглашения нет. Попросить доступ? [Д/н] ") or "д").strip().lower()
+        if answer not in ("д", "да", "y", "yes"):
             return 1
         client.request_access(ref, comment)
         io.write(f"заявка в {ref} отправлена — когда её примут, курс появится в hashpass\n")
