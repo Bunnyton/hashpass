@@ -74,7 +74,7 @@
 {% if may.view %}
 <nav class='tabs' aria-label='Разделы курса'>
 <a href='#tasks' data-tab>{{ icon('task') }} Задания <span class='count'>{{ n_tasks }}</span></a>
-{% if may.students %}<a href='#students' data-tab>{{ icon('user') }} Участники курса <span class='count'>{{ students | length }}</span></a>{% endif %}
+{% if may.students or may.people %}<a href='#students' data-tab>{{ icon('user') }} Участники курса <span class='count'>{{ students | length }}</span></a>{% endif %}
 {% if c.proposals or c.updates %}<a href='#proposals-tab' data-tab>Предложения <span class='count'>{{ (c.proposals | selectattr('state', 'equalto', 'open') | list | length) + (c.updates or []) | length }}</span></a>{% endif %}
 {% if may.people and c.requests %}<a href='#requests-tab' data-tab>Заявки <span class='count'>{{ c.requests | length }}</span></a>{% endif %}
 <a href='#people' data-tab>{{ icon('user') }} Команда курса <span class='count'>{{ 1 + (c.members or {}) | length }}</span></a>
@@ -331,9 +331,23 @@
 </ol>
 {% else %}<div class='empty card'><p class='sub'>Изменений пока не было.</p></div>{% endif %}
 </section>
-{% if may.students %}
+{% if may.students or may.people %}
 <section id='students' class='tab-panel' aria-label='Участники курса'>
 <div class='cat-head'><h2>Участники курса <span class='count-pill'>{{ students | length }}</span></h2></div>
+{% if may.people %}
+<div class='card invite-card'>
+<h3>Пригласить в курс</h3>
+<p class='sub small'>Ссылка-приглашение: кто откроет её и войдёт, станет участником курса{% if c.visibility == 'private' %} — даже приватного{% endif %}.</p>
+<div class='row'><code class='copy'>{{ invite_link }}</code>
+{{ act('PUT', api, 'Сменить ссылку', 'sm ghost', {'rotate_invite': true}, confirm='Старая ссылка перестанет работать. Сменить?') }}</div>
+<form class='invite-add' data-api='POST {{ api }}/students'>
+<label for='invite-users'>Или добавьте сами — логины через пробел, запятую или с новой строки:</label>
+<textarea id='invite-users' name='users' rows='2' placeholder='ivanov.ii petrov.pp' required></textarea>
+<button class='sm' type='submit'>Добавить в курс</button>
+</form>
+<p class='sub small'>Добавленные сразу видят курс у себя в «Мои курсы»{% if c.visibility == 'private' %} и получают к нему доступ{% endif %}.</p>
+</div>
+{% endif %}
 {% if students %}
 <div class='card'>
 <div class='row students-tools'>
@@ -347,7 +361,7 @@
 <tbody id='student-rows'>
 {% for s in students %}
 <tr data-text='{{ s.user }} {{ s.comment }}'>
-<td><a class='mono' href='/c/{{ c.ref }}/u/{{ s.user | q }}'>{{ s.user }}</a>{% if s.comment %}<div class='sub small'>{{ s.comment }}</div>{% endif %}</td>
+<td><a class='mono' href='/c/{{ c.ref }}/u/{{ s.user | q }}'>{{ s.user }}</a>{% if s.comment %}<div class='sub small'>{{ s.comment }}</div>{% endif %}{% if may.people %} {{ act('DELETE', api ~ '/students/' ~ (s.user | q), 'Убрать', 'sm ghost', confirm='Убрать ' ~ s.user ~ ' из курса? Прогресс сохранится.') }}{% endif %}</td>
 <td data-sort='{{ s.done }}'><div class='progress' role='progressbar' aria-valuemin='0' aria-valuemax='{{ s.total }}' aria-valuenow='{{ s.done }}' aria-label='решено {{ s.done }} из {{ s.total }}'><span style='width:{{ s.pct }}%'></span></div><span class='small num'>{{ s.done }} / {{ s.total }}</span></td>
 <td><div class='cells'>{% for x in s.cells %}<a class='cell {{ x.cls }}' href='{{ x.href }}' title='№{{ x.n }} {{ x.ref }} — {{ x.word }}{% if x.about %}. {{ x.about }}{% endif %}' aria-label='задание {{ x.n }}, {{ x.ref }}: {{ x.word }}'>{{ x.mark }}</a>{% endfor %}</div></td>
 </tr>
@@ -357,7 +371,7 @@
 </div>
 <p class='sub small'>Логин — его задания в этом курсе: попытки, время, история команд.</p>
 </div>
-{% else %}<div class='empty card'><p class='sub'>Курс пока никто не проходит. Поделитесь ссылкой: <code class='copy'>{{ link }}</code></p></div>{% endif %}
+{% else %}<div class='empty card'><p class='sub'>Курс пока никто не проходит.{% if not may.people %} Поделитесь ссылкой: <code class='copy'>{{ link }}</code>{% endif %}</p></div>{% endif %}
 </section>
 {% endif %}
 

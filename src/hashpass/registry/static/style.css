@@ -611,3 +611,9 @@ ol.history .why{color:var(--muted);font-style:italic}
 .chip:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .chip.static{cursor:default;font-size:12px;padding:2px 9px}
 .team-sub{font-size:14px;margin:18px 0 8px;color:var(--muted);font-weight:600}
+.invite-card{margin-bottom:14px}
+.invite-card h3{margin:0 0 6px}
+.invite-card .row{flex-wrap:wrap;gap:8px;align-items:center}
+.invite-card code.copy{overflow-wrap:anywhere}
+.invite-card .invite-add{margin-top:12px;display:grid;gap:8px}
+.invite-card .invite-add button{justify-self:start}

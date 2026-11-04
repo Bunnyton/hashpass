@@ -8,6 +8,7 @@ registry (`PoolServer.repo`) when added. Who joined which course is kept in `.en
 import fcntl
 import json
 import os
+import re
 import time
 from collections.abc import Callable
 from http import HTTPStatus
@@ -64,6 +65,20 @@ class Enrollments:
             tmp.write_text(json.dumps(data), encoding="utf-8")
             tmp.replace(self._root / f"{user}.json")
 
+    def leave(self, user: str, course_id: str) -> bool:
+        """Take `course_id` off `user`'s courses (locked, atomic); whether they had it."""
+        if not self._root.is_dir():
+            return False
+        with (self._root / f".{user}.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            data = self.of(user)
+            if data.pop(course_id, None) is None:
+                return False
+            tmp = self._root / f".{user}.{os.getpid()}.tmp"
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            tmp.replace(self._root / f"{user}.json")
+            return True
+
     def users_of(self, course_id: str) -> list[str]:
         if not self._root.is_dir():
             return []
@@ -99,6 +114,9 @@ class CourseApi:
              methods=["POST"])
         rule("/courses/<owner>/<name>/requests/<user>", "course_request", self.decide_request,
              methods=["POST"])
+        rule("/courses/<owner>/<name>/students", "course_students", self.add_students, methods=["POST"])
+        rule("/courses/<owner>/<name>/students/<user>", "course_student", self.remove_student,
+             methods=["DELETE"])
         rule("/courses/<owner>/<name>/members/<user>", "course_member", self.member,
              methods=["PUT", "DELETE"])
         rule("/courses/<owner>/<name>/blocks", "course_blocks", self.add_block, methods=["POST"])
@@ -409,6 +427,65 @@ class CourseApi:
         if err is None and accept:
             self.enrollments.enroll(user, course.id)
         return err or self._json(HTTPStatus.OK, {"user": user, "accepted": accept})
+
+    def add_students(self, owner: str, name: str) -> Response:
+        """
+        Put students into the course by login, several at once (user 2026-11-04: «вручную приглашать»).
+
+        Each one is enrolled at once (the course is in their list, they are among its students); a
+        private course also admits them (role `member`). The team stays the team; unknown logins
+        are named back. `people` -- as for the invite link.
+        """
+        course, actor, err = self._load(owner, name, "people")
+        if err is not None:
+            return err
+        raw = self._body().get("users", "")
+        words = raw if isinstance(raw, list) else re.split(r"[\s,;]+", str(raw))
+        logins = list(dict.fromkeys(w.strip().lstrip("@") for w in words if str(w).strip()))
+        if not logins:
+            return self._err(HTTPStatus.BAD_REQUEST, "впишите логины — через пробел, запятую или с новой строки")
+        out = self._sort_logins(course, logins)
+        if not (out["added"] or out["already"] or out["team"]):
+            return self._err(HTTPStatus.NOT_FOUND, f"нет таких пользователей: {', '.join(out['missing'])}")
+        if out["added"] and course.visibility == "private":
+            err = self._edit(course.ref, lambda c: [c.members.setdefault(u, "member") for u in out["added"]],
+                             by=actor, what=f"добавлены в курс: {', '.join(out['added'])}")
+            if err is not None:
+                return err
+        for login in out["added"]:
+            self.enrollments.enroll(login, course.id)
+        said = [f"{w}: {', '.join(out[k])}" for k, w in (("added", "Добавлены"), ("already", "уже в курсе"),
+                                                           ("team", "в команде курса"),
+                                                           ("missing", "нет таких пользователей")) if out[k]]
+        return self._json(HTTPStatus.OK, {**out, "message": "; ".join(said) + "."})
+
+    def _sort_logins(self, course: Course, logins: list[str]) -> dict[str, list[str]]:
+        """Who of `logins` is new here, already a student, in the team, or not on the pool at all."""
+        enrolled = set(self.enrollments.users_of(course.id))
+        out: dict[str, list[str]] = {"added": [], "already": [], "team": [], "missing": []}
+        for login in logins:
+            if not self.server.users.has(login):
+                out["missing"].append(login)
+            elif course.role_of(login) in ("owner", "admin", "author"):
+                out["team"].append(login)
+            else:
+                out["already" if login in enrolled else "added"].append(login)
+        return out
+
+    def remove_student(self, owner: str, name: str, user: str) -> Response:
+        """Take a student out: off their courses and, if only admitted, out of a private course; progress stays."""
+        course, actor, err = self._load(owner, name, "people")
+        if err is not None:
+            return err
+        if course.role_of(user) in ("owner", "admin", "author"):
+            return self._err(HTTPStatus.BAD_REQUEST, f"{user} — в команде курса: роль меняют во вкладке «Команда»")
+        if course.role_of(user) == "member":
+            err = self._edit(course.ref, lambda c: cm.remove_member(c, user), by=actor,
+                             what=f"{user} больше не в курсе")
+            if err is not None:
+                return err
+        self.enrollments.leave(user, course.id)
+        return self._json(HTTPStatus.OK, {"removed": user, "message": f"{user} больше не в курсе. Прогресс сохранён."})
 
     def member(self, owner: str, name: str, user: str) -> Response:  # noqa: PLR0911
         """
