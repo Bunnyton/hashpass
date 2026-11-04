@@ -137,7 +137,8 @@ POOL="__POOL__"
 echo "Установка hashpass; пул: $POOL"
 if [ "$(uname -s)" = Darwin ]; then
   echo "hashpass работает в Linux: задания -- это контейнеры systemd-nspawn." >&2
-  echo "На Mac поставьте Linux-виртуалку (например, Ubuntu в UTM) и запустите эту команду в ней." >&2
+  echo "На Mac поставьте Linux-виртуалку (например, Ubuntu в UTM на Apple Virtualization с галочкой" >&2
+  echo "«Enable Rosetta») и запустите эту команду в ней." >&2
   exit 1
 fi
 # As root everything lands in ~root (~/.local, ~/.hashpass) and the student's own `hashpass`
@@ -181,11 +182,41 @@ fi
 # The task images are x86_64 Debian. Another CPU (arm64: a Raspberry Pi, a Linux VM on a Mac)
 # runs them through an x86 emulator registered in binfmt_misc: Rosetta (UTM / Apple
 # Virtualization with «Enable Rosetta») when the VM has it, else qemu-user.
+# Rosetta, Apple's x86 translator, runs the tasks far more reliably than qemu-user (a UTM VM,
+# 2026-11-04: man and services crashed under qemu). A VM on Apple Virtualization with «Enable
+# Rosetta» shares it as the virtiofs tag `rosetta`; hook it up -- only if the user agrees.
+VIRTIOFS_DIR=/sys/fs/virtiofs; BINFMT_DIR=/proc/sys/fs/binfmt_misc
+ROSETTA_BINFMT=':rosetta:M::\\x7fELF\\x02\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x02\\x00\\x3e\\x00:\\xff\\xff\\xff\\xff\\xff\\xfe\\xfe\\x00\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xfe\\xff\\xff\\xff:/media/rosetta/rosetta:CF'
+hp_rosetta() {
+  [ -e "$BINFMT_DIR/rosetta" ] && return 0
+  local tag="" t ans
+  for t in "$VIRTIOFS_DIR"/*/tag; do
+    [ "$(cat "$t" 2>/dev/null)" = rosetta ] && tag=1
+  done
+  if [ -z "$tag" ]; then
+    echo "Совет: на Mac задания идут быстрее и надёжнее через Rosetta, а не через qemu. В UTM создайте"
+    echo "виртуалку на Apple Virtualization с галочкой «Enable Rosetta» и запустите установку снова."
+    return 1
+  fi
+  printf 'Подключить Rosetta (транслятор x86 от Apple) для заданий? Понадобится sudo. [Y/n] '
+  read -r ans <"$TTY" || ans=n
+  case "$ans" in [nNнН]*) echo "Rosetta не подключаю -- задания пойдут через qemu."; return 1 ;; esac
+  sudo mkdir -p /media/rosetta <"$TTY"
+  mountpoint -q /media/rosetta || sudo mount -t virtiofs rosetta /media/rosetta <"$TTY"
+  grep -qs '^rosetta[[:space:]]' /etc/fstab \\
+    || echo 'rosetta /media/rosetta virtiofs ro,nofail 0 0' | sudo tee -a /etc/fstab >/dev/null
+  printf '%s\\n' "$ROSETTA_BINFMT" | sudo tee /etc/binfmt.d/rosetta.conf >/dev/null
+  sudo systemctl restart systemd-binfmt <"$TTY" || true
+  if [ -e "$BINFMT_DIR/rosetta" ]; then echo "Rosetta подключена: задания x86 пойдут через неё."; return 0; fi
+  echo "Rosetta не включилась -- задания пойдут через qemu." >&2
+  return 1
+}
 ARCH="$(uname -m)"
 EMULATED=""
 case "$ARCH" in
   x86_64|amd64) ;;
   *) EMULATED=1
+     hp_rosetta || true
      if [ ! -e /proc/sys/fs/binfmt_misc/rosetta ] && [ ! -e /proc/sys/fs/binfmt_misc/qemu-x86_64 ]; then
        echo "процессор $ARCH: задания x86_64 пойдут через эмулятор x86"
        missing="$missing $P_QEMU"

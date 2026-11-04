@@ -299,3 +299,51 @@ def test_install_block_shows_the_uninstall_command():
     from hashpass.registry.web import render_front  # noqa: PLC0415
     page = render_front("http://pool.example/")
     assert "http://pool.example/uninstall.sh | bash" in page
+
+
+def _rosetta(tmp_path, *, tag: bool, answer: str) -> tuple[int, str, list[str]]:
+    """Run the installer's hp_rosetta with a fake sudo/mount; return (rc, stdout, the sudo calls)."""
+    script = render_install_script("http://pool.example/")
+    body = script[script.index("hp_rosetta() {"):script.index("\n}\n", script.index("hp_rosetta() {")) + 3]
+    consts = "\n".join(ln for ln in script.splitlines() if ln.startswith("ROSETTA_BINFMT="))
+    vfs, binfmt = tmp_path / "virtiofs", tmp_path / "binfmt"
+    (vfs / "0").mkdir(parents=True)
+    binfmt.mkdir()
+    (vfs / "0" / "tag").write_text("rosetta\n" if tag else "share\n", encoding="utf-8")
+    (tmp_path / "tty").write_text(answer, encoding="utf-8")
+    log = tmp_path / "sudo.log"
+    stub = f"""
+VIRTIOFS_DIR={vfs}; BINFMT_DIR={binfmt}; TTY={tmp_path / "tty"}
+sudo() {{ printf '%s\\n' "$*" >> {log}; if [ "$1" = systemctl ]; then touch {binfmt}/rosetta; fi; cat >/dev/null 2>&1 || true; }}
+mountpoint() {{ return 1; }}
+{consts}
+{body}
+hp_rosetta
+"""
+    proc = subprocess.run(["bash", "-c", stub], capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL)
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return proc.returncode, proc.stdout + proc.stderr, calls
+
+
+@pytest.mark.tier1
+def test_installer_hooks_up_rosetta_when_the_user_agrees(tmp_path):
+    """User 2026-11-04: «добавь в установщик под arm установку rosetta — с разрешения пользователя»."""
+    rc, out, calls = _rosetta(tmp_path, tag=True, answer="y\n")
+    assert rc == 0 and "Rosetta" in out
+    assert "mount -t virtiofs rosetta /media/rosetta" in calls
+    assert "tee /etc/binfmt.d/rosetta.conf" in calls and "systemctl restart systemd-binfmt" in calls
+    script = render_install_script("http://pool.example/")
+    line = next(ln for ln in script.splitlines() if ln.startswith("ROSETTA_BINFMT="))
+    assert r"\x7fELF\x02\x01\x01" in line and r"\x3e\x00" in line and ":/media/rosetta/rosetta:CF'" in line
+
+
+@pytest.mark.tier1
+def test_installer_leaves_rosetta_alone_when_the_user_says_no(tmp_path):
+    rc, _out, calls = _rosetta(tmp_path, tag=True, answer="n\n")
+    assert rc != 0 and calls == []
+
+
+@pytest.mark.tier1
+def test_installer_says_how_to_turn_rosetta_on_when_the_vm_has_none(tmp_path):
+    rc, out, calls = _rosetta(tmp_path, tag=False, answer="y\n")
+    assert rc != 0 and calls == [] and "Enable Rosetta" in out and "Apple Virtualization" in out
