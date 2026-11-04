@@ -1,0 +1,56 @@
+# bash-arrays — массивы bash (модуль «Bash-скрипты», дизайн
+# docs/superpowers/specs/2026-11-04-модуль-bash-design.md). Шаг 1: график дежурств на декабрь по
+# кругу из team.txt (ловушка: team=($(cat …)) режет «Имя Фамилия» на два элемента — доза
+# mapfile.md). Шаг 2: сколько неудачных входов с каждого адреса — ассоциативным массивом (доза
+# assoc.md на входе), sort/uniq/awk закрыты: задача на массивы. Ответ на экране; observe output
+# сравнивает строки множеством, поэтому число строк — отдельным accept output. Эталон идёт в sh,
+# поэтому массивы — через bash -c.
+
+image bash-arrays:1
+
+# data: python3 mkduty.py (seed 5) — data/duty
+copy data/duty /home/student/duty
+run chown -R student:student /home/student/duty
+
+hidden hp
+
+settings
+  pager on
+  similarity 100
+
+say "В отделе семь человек и тридцать дней декабря. Дежурить должен кто-то каждый день — по очереди."
+read brief.md
+
+stage
+  say "Покажи график: по строке на день — дата из ~/duty/days.txt и дежурный из ~/duty/team.txt, по кругу"
+  solve:
+    cd /home/student/duty
+    bash -c 'mapfile -t team < team.txt; mapfile -t days < days.txt; for i in "${!days[@]}"; do echo "${days[i]} ${team[i % ${#team[@]}]}"; done'
+  observe output
+  accept output "\A(?:[^\n]+\n){29}[^\n]+\n?\Z"
+  neutral ls cat pwd cd
+  on pass say "Индекс по кругу — остаток от деления: i % 7 после 6 снова даёт 0. Так же крутят расписания, балансировщики и раздачу задач."
+  hint output "\n2026-12-02 Петрова\n" read mapfile.md
+  hint output "division by 0" say "Делить на длину пустого массива нельзя. Что лежит в массиве на самом деле? declare -p покажет."
+  hint tries 5 say "Сколько элементов в массиве с людьми — и сколько строк в team.txt? Это одно и то же число?"
+  hint tries 10 say "man bash — раздел Arrays."
+
+stage
+  say "Сервер ломятся подобрать пароль. Сколько неудачных входов (FAIL) было с каждого адреса в ~/duty/auth.log? По строке «адрес число»"
+  solve:
+    cd /home/student/duty
+    bash -c 'declare -A n; while read -r d t st ip u; do if [ "$st" = FAIL ]; then n[$ip]=$(( ${n[$ip]:-0} + 1 )); fi; done < auth.log; for ip in "${!n[@]}"; do echo "$ip ${n[$ip]}"; done'
+  observe output
+  accept output "\A(?:[^\n]+\n){8}[^\n]+\n?\Z"
+  block sort match "." say "Отсортировать и посчитать умеют sort и uniq, но здесь задача на массивы: посчитай сам."
+  block uniq match "." say "И uniq не понадобится: массив посчитает сам."
+  block awk match "." say "awk — отдельный язык со своими массивами. Здесь — массивы bash."
+  neutral ls cat pwd cd head tail less
+  on enter read assoc.md
+  hint output "syntax error: invalid arithmetic operator" say "Индексный массив понимает только числа в [ ]. Адрес — не число: какой массив берёт строки?"
+  hint output "10.0.0." say "Здесь и удачные входы. Какие строки нужно пропускать?"
+  hint tries 5 say "Что лежит в каждой переменной после read? Напечатай их для первой строки."
+  hint tries 10 say "help declare — ищи -A."
+  on pass say "Девять адресов, двести попыток за сутки. Такие подсчёты и делает fail2ban — а потом закрывает адреса в файрволе."
+
+exec finale
