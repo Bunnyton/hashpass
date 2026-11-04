@@ -1,0 +1,3 @@
+# Уборка черновиков: всё, что лежит в ~/drafts, — мусор (Петров, 2024).
+# m h dom mon dow user  command
+* * * * * root find /home/student/drafts -type f -delete

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Черновики студента: появляются при входе в шаг — и через минуту-другую исчезают сами.
+d=/home/student/drafts
+mkdir -p "$d"
+for n in 1 2 3; do
+    echo "Черновик $n: план на неделю — разобраться, кто трогает мои файлы." > "$d/draft-$n.txt"
+done
+chown -R student:student "$d"

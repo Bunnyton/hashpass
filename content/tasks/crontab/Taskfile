@@ -1,0 +1,61 @@
+# crontab — расписание: cron запускает команды сам, по времени. Свои задачи пользователь ведёт
+# в crontab (crontab -e / -l), системные лежат в /etc/crontab и /etc/cron.d. Шаги: каждую минуту
+# дописывать время в ~/alive.log → weekly-report по будням в 9:30 → кто-то каждую минуту стирает
+# ~/drafts (задача root в /etc/cron.d/tidy-drafts; черновики кладёт on enter apply drafts) —
+# найти и остановить. crontab пользователя закрыт от чужих (0600 root:crontab), cron работает
+# только в живой консоли — шаги принимает check live.
+
+image crontab:1
+
+run apt-get install -y cron >/dev/null
+run systemctl enable cron
+# data: data/bin, data/cron.d, data/home/.selected_editor — руками (редактор для crontab -e — vim,
+# чтобы crontab не спрашивал при первом запуске)
+copy data/bin/weekly-report /usr/local/bin/weekly-report
+copy data/cron.d/tidy-drafts /etc/cron.d/tidy-drafts
+user student
+copy data/home /home/student
+run chmod 755 /usr/local/bin/weekly-report && chmod 644 /etc/cron.d/tidy-drafts
+run mkdir -p /home/student/drafts && chown student:student /home/student/drafts
+
+hidden hp
+
+settings
+  pager on
+
+say "Админ, который всё делает руками в три часа ночи, долго не живёт. Пусть делает машина."
+read brief.md
+
+stage
+  say "Пусть каждую минуту в ~/alive.log дописывается текущее время"
+  solve echo '* * * * * date >> /home/student/alive.log' | crontab -
+  check live crontab -l -u student 2>/dev/null | grep -qE '^[[:space:]]*(\*|\*/1)[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*[[:space:]].*alive\.log' && test -s /home/student/alive.log
+  neutral ls pwd cd cat crontab tail
+  on pass say "Каждую минуту — новая строка, и никто об этом не просил вслух. cron проверяет расписание раз в минуту, поэтому чаще, чем раз в минуту, он не умеет."
+  hint output "No such file or directory" say "Файла пока нет? cron просыпается раз в минуту — подожди и посмотри снова."
+  hint output "no crontab for" say "Твоё расписание пока пустое. Как его открыть на правку — в теории."
+  hint tries 5 say "Что показывает crontab -l? Сколько звёздочек в строке и что стоит после них?"
+  hint tries 10 say "Пять полей времени, потом команда. «Каждую минуту» — это когда все пять полей «любое»."
+
+stage
+  say "Сводка weekly-report должна запускаться по будням в 9:30"
+  solve echo '30 9 * * 1-5 /usr/local/bin/weekly-report' | crontab -
+  check live crontab -l -u student 2>/dev/null | grep -qiE '^[[:space:]]*30[[:space:]]+0?9[[:space:]]+\*[[:space:]]+\*[[:space:]]+(1-5|mon-fri|1,2,3,4,5)[[:space:]]+(/usr/local/bin/)?weekly-report'
+  neutral ls pwd cd cat tail
+  on pass say "Проверять расписания удобно на crontab.guru: вставляешь строку — он пишет словами, когда она сработает."
+  hint tries 5 say "Какое поле отвечает за дни недели и как записать «с понедельника по пятницу»?"
+  hint tries 10 say "man 5 crontab — там есть пример с днями недели через дефис."
+
+stage
+  say "Из ~/drafts пропадают черновики — каждую минуту. Твой crontab тут ни при чём. Найди, кто их стирает, и останови"
+  solve sudo rm /etc/cron.d/tidy-drafts
+  check live ! grep -rqsE '^[^#]*drafts' /etc/cron.d /etc/crontab && ! crontab -l -u root 2>/dev/null | grep -qE '^[^#]*drafts'
+  on enter apply drafts
+  neutral ls pwd cd cat tail
+  on pass say "Задачи в /etc/cron.d пишутся с лишним полем — от чьего имени запускать. Поэтому root может стирать файлы в чужом каталоге."
+  hint output "Permission denied" say "Системное расписание правит только администратор."
+  hint cmd crontab read system.md
+  hint tries 5 say "Кто, кроме тебя, может завести задачу по расписанию? Где лежат расписания системы?"
+  hint tries 10 say "cron пишет в журнал каждую команду, которую запускает. Что он запускал в последние минуты?"
+
+exec finale
