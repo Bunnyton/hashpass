@@ -2,7 +2,7 @@
 # docs/superpowers/specs/2026-11-04-модуль-bash-design.md). 150 снимков с пробелами в именах:
 # переименовать .JPG → .jpg (дозы: mv не переименовывает пачкой — mv-glob.md; имя без кавычек
 # разваливается на слова — quotes.md) → удалить снимки по списку (while-read.md: for по $(cat)
-# режет имена) → разложить по каталогам годов. Эталон идёт в sh, поэтому ${f:0:4} — через bash -c. Результат — сам каталог: observe, а удаление по списку — check-deleted (observe не видит лишних файлов).
+# режет имена) → разложить по каталогам годов (mkdir.md на входе: mkdir в курсе ещё не было). Эталон идёт в sh, поэтому ${f:0:4} — через bash -c. Результат — сам каталог: observe, а удаление по списку — check-deleted (observe не видит лишних файлов).
 
 image bash-loops:1
 
@@ -52,6 +52,7 @@ stage
     bash -c 'for f in *.jpg; do y=${f:0:4}; mkdir -p "$y"; mv "$f" "$y/"; done'
   observe /home/student/photos
   neutral ls cat pwd cd echo
+  on enter read mkdir.md
   hint output "to '20" say "Каталога года ещё нет, а mv каталогов не создаёт. Кто их создаёт — и не ругается, если такой уже есть?"
   hint tries 5 say "Год — первые четыре символа имени. Как в bash взять кусок строки, сказано в теории; readme покажет её снова."
   hint tries 10 say "man mkdir — ищи parents."

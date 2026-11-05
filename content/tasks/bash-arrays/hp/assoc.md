@@ -18,3 +18,9 @@
 
     read -r date time level msg <<< "2026-11-03 10:00:01 WARN диск заполнен"
     echo $level                     WARN
+
+Весь файл — так же, строка за строкой, в цикле `while`:
+
+    while read -r date time level msg; do
+        echo "$level"
+    done < app.log

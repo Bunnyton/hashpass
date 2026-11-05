@@ -2,7 +2,8 @@
 # docs/superpowers/specs/2026-11-04-модуль-bash-design.md). Персонаж — weather (perl): город берёт
 # из окружения (CITY), единицы — из UNITS. Шаги: показать окружение → задать CITY так, чтобы
 # weather увидела (доза export.md, когда переменная осталась в оболочке) → Мурманск в °F только
-# для одной команды → следом снова Казань в °C (доза prefix.md, если CITY/UNITS переписаны).
+# для одной команды (доза prefix.md на входе: как дать переменную одной команде) → следом снова
+# Казань в °C (проверка, что окружение оболочки не переписано).
 # Ответы — на экране, приёмка по выводу: у «CITY=X weather» первое слово — присваивание, по
 # команде его не узнать.
 
@@ -48,6 +49,7 @@ stage
     CITY=Мурманск UNITS=F weather
   accept output "^Мурманск: .*°F"
   neutral ls cat pwd echo printenv env
+  on enter read prefix.md
   on pass say "Мурманск в Фаренгейтах: +10 звучит теплее, чем -12."
   hint output "UNITS бывает" say "Прочитай ответ weather: какие значения UNITS она понимает?"
   hint tries 5 say "Город weather берёт из окружения. Откуда она может взять единицы?"
@@ -59,7 +61,7 @@ stage
     weather
   accept output "^Казань: .*°C"
   neutral ls cat pwd echo printenv env
-  hint output "Мурманск" read prefix.md
+  hint output "Мурманск" say "Мурманск остался в окружении оболочки — его туда записали, а не дали одной команде. readme покажет теорию снова."
   hint output "°F" say "Город тот, а градусы — нет. Как убрать переменную из окружения совсем?"
   hint tries 5 say "Что сейчас лежит в CITY и UNITS? printenv покажет."
   on pass say "weather написана на Perl и читает $ENV{CITY}. Python берёт то же из os.environ, Node.js — из process.env, Go — os.Getenv: окружение одно на все языки."

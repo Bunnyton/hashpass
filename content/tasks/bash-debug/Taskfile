@@ -1,7 +1,7 @@
 # bash-debug — найди ошибку (модуль «Bash-скрипты», дизайн
 # docs/superpowers/specs/2026-11-04-модуль-bash-design.md). В ~/broken четыре сломанных скрипта,
 # по одной классической ловушке в каждом: report.sh с концами строк Windows (crlf.md),
-# count-errors.sh теряет счётчик в подоболочке конвейера (subshell.md), ext.sh «возвращает»
+# count-errors.sh теряет счётчик в подоболочке конвейера (subshell.md на второй «Ошибок: 0»), ext.sh «возвращает»
 # строку через return (return.md), cleanup.sh с опечаткой в имени переменной показывает весь
 # корень (set-u.md) — его ещё и защитить set -u. Шаг принят, когда починенный скрипт запущен и
 # его вывод совпал с эталоном (эталон — тот же скрипт, починенный в solve).
@@ -50,7 +50,8 @@ stage
   neutral ls cat pwd cd less head shellcheck grep
   on pass say "Каждое звено конвейера — отдельный процесс. Переменные, изменённые там, умирают вместе с ним."
   hint output "Ошибок: 0" say "grep -c ERROR в журналах скажет, что ошибки есть. Где теряется счёт? Напечатай count внутри цикла и после него."
-  hint tries 5 read subshell.md
+  hint output "Ошибок: 0" read subshell.md
+  hint tries 5 say "Внутри цикла count растёт, а после — снова 0? Значит, цикл считал не ту переменную, которую печатают."
   hint tries 10 say "Загугли: «bash variable lost after while loop pipe»."
 
 stage

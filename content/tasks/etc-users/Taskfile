@@ -1,7 +1,7 @@
 # etc-users — учётки — это строки в файлах /etc: пользователи в /etc/passwd, группы в /etc/group,
 # а домашний каталог новичку собирается из шаблона /etc/skel. Шаги: завести intern с домашним
 # каталогом (useradd -m; в доме — файлы из шаблона) → чтобы каждый новый получал ПАМЯТКА.txt
-# (положить в /etc/skel; проверка на intern2 — копия прямо в /home/intern2 не примется: в шаблоне
+# (положить в /etc/skel — доза skel.md на входе: шаблон и где о нём в man; проверка на intern2 — копия прямо в /home/intern2 не примется: в шаблоне
 # пусто; дома новичков закрыты от чужих, поэтому их проверяет check live в работающей консоли) → дать intern sudo и показать это (членство в группе — строка в /etc/group).
 
 image etc-users:1
@@ -36,10 +36,11 @@ stage
     sudo useradd -m intern2
   check live test -f /etc/skel/ПАМЯТКА.txt && test -f /home/intern2/ПАМЯТКА.txt
   neutral ls pwd cd cat
+  on enter read skel.md
   on pass say "/etc/skel — шаблон домашнего каталога. Положил туда .vimrc — и у всех новых vim настроен с первого дня."
   hint output "already exists" say "intern2 уже есть. Удали его (userdel) вместе с домом (ключ в man userdel) и заведи снова."
   hint output "Permission denied" say "Это системный каталог — писать туда можно только через sudo."
-  hint tries 5 say "Откуда у intern взялись .bashrc и .profile? Найди, откуда useradd их берёт: man useradd, слово skel."
+  hint tries 5 say "Лежит ли памятка в шаблоне? Загляни в него — ls -a покажет и скрытые файлы."
   hint tries 10 say "Положить в дом intern2 руками — не то: у intern3 памятки снова не будет. Что useradd копирует в каждый новый дом?"
 
 stage

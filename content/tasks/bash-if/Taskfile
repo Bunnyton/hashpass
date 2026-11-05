@@ -2,7 +2,8 @@
 # docs/superpowers/specs/2026-11-04-модуль-bash-design.md). 40 ночных бэкапов: целые, битые,
 # пустые. Шаги: OK/BROKEN по коду gzip -t (доза bracket.md, когда команду заворачивают в [ ]) →
 # пустые отдельно как EMPTY (доза tests.md на входе: проверки файлов, elif) → только целые больше
-# 50 000 байт (numbers.md: > в [ ] — перенаправление, числа сравнивают -gt). Ответ — на экране.
+# 50 000 байт (size.md на входе: stat -c %s и где искать операторы чисел; numbers.md: > в [ ] —
+# перенаправление, числа сравнивают -gt). Ответ — на экране.
 
 image bash-if:1
 
@@ -52,10 +53,11 @@ stage
     for f in *.tar.gz; do if gzip -t "$f" 2>/dev/null && [ "$(stat -c %s "$f")" -gt 50000 ]; then echo "$f"; fi; done
   observe output
   neutral ls cat pwd cd
+  on enter read size.md
   hint output "integer expression expected" say "-gt сравнивает только целые числа. Что на самом деле лежит в переменной с размером? Напечатай её."
   hint tries 5 say "Загляни в ~/backups: не появились ли там новые файлы с числами вместо имён?"
   hint tries 10 read numbers.md
-  hint tries 15 say "man stat — ищи %s."
+  hint tries 15 say "Напечатай размер рядом с именем для пары архивов: то ли число, что ты сравниваешь?"
   on pass say "Шестнадцать из сорока. Месяц спокойного сна стоил двенадцать бесполезных архивов."
 
 exec finale
