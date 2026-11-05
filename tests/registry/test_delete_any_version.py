@@ -25,8 +25,10 @@ def _delete(pool: _Pool, ref: str, n: int, user: str = "bunnyton") -> tuple[int,
 @pytest.mark.tier1
 def test_a_version_a_live_image_stands_on_stays_until_that_image_goes(pool: _Pool) -> None:
     """
+    A version any live image (one's own too) stands on stays until that image goes.
+
     2026-11-05: base trixie_v3 left the index while 66 live task versions stood on it -- every
-    client pulling them got 404. A version any live image (one's own too) stands on stays.
+    client pulling them got 404.
     """
     pool.push("bob/lab", "1", image="one", task="t1", parents=BASE)          # lab v1 on base v1
     pool.push("bob/kit", "1", image="k1", task="k1", parents=("bob/lab:1",))  # kit v1 stands on lab v1
