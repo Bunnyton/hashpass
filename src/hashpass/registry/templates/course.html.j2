@@ -19,6 +19,12 @@
 {% macro need_names(needs, block_names) -%}
 {% for i in needs %}«{{ block_names.get(i) or i.partition(':')[0].rpartition('/')[2] }}»{% if not loop.last %}, {% endif %}{% endfor %}
 {%- endmacro %}
+{% macro order_switch(label, on, fields, hint) -%}
+{# user 2026-11-05: one switch opens blocks (or a block's tasks) one after another #}
+<form class='inline order-switch' data-api='PUT {{ api }}/order'>
+{%- for k, v in fields.items() %}<input type='hidden' name='{{ k }}' value='{{ v }}'{% if v is sameas true or v is sameas false %} data-type='bool'{% endif %}>{% endfor -%}
+<button class='switch{% if on %} on{% endif %}' type='submit' role='switch' aria-checked='{{ 'true' if on else 'false' }}' title='{{ hint }}'><span class='knob' aria-hidden='true'></span>{{ label }}</button></form>
+{%- endmacro %}
 {% macro join_form(label, fields={}) -%}
 <form class='join-form' data-api='POST {{ api }}/join'>
 {%- for k, v in fields.items() %}<input type='hidden' name='{{ k }}' value='{{ v }}'>{% endfor %}
@@ -193,9 +199,20 @@
 {% endif %}
 </div>
 {% if c.blocks %}
-<div id='cat'{% if may.edit %} data-layout-url='{{ api }}/layout' data-rev='{{ c.rev }}'{% endif %}>
+{% if may.edit and c.blocks | length > 1 %}
+<div class='card order-card'>
+<div class='order-head'><div><b>Порядок открытия</b>
+<p class='sub small'>{% if c.blocks_in_order %}Каждый блок откроется, когда решён предыдущий (скрытые и пустые цепочка пропускает). Новые и переставленные блоки встают в цепочку сами.{% else %}Блоки открыты сразу — кроме тех, где задано своё условие. Задания внутри блока — переключатель в самом блоке.{% endif %}</p></div>
+<span class='sp'></span>
+{{ order_switch('Блоки по порядку', c.blocks_in_order, {'blocks': not c.blocks_in_order}, 'Снять порядок: блоки откроются сразу' if c.blocks_in_order else 'Каждый блок откроется, когда решён предыдущий') }}</div>
+<ol class='order-flow{% if c.blocks_in_order %} chained{% endif %}' aria-label='что после чего открывается'>
+{% for b in c.blocks %}{% set own = (b.needs or []) | reject('equalto', b.after) | list %}<li class='flow-step{% if not b.open %} off{% endif %}'><a class='flow-chip' href='#blk-{{ b.id }}'{% if not b.open %} title='скрыт от проходящих курс'{% endif %}>{{ b.name }} <span class='dim'>{{ b.tasks | length }}</span>{% if b.tasks_in_order %} <span title='задания по порядку'>⇣</span>{% endif %}{% if own %} <span title='своё условие: {{ need_names(own, block_names) }}'>🔒</span>{% endif %}</a></li>{% endfor %}
+</ol>
+</div>
+{% endif %}
+<div id='cat'{% if may.edit %} data-layout-url='{{ api }}/layout' data-rev='{{ c.rev }}'{% if c.blocks_in_order or c.blocks | selectattr('tasks_in_order') | list %} data-chained='1'{% endif %}{% endif %}>
 {% for b in c.blocks %}
-<div class='block card{% if not b.open %} block-hidden{% endif %}' data-block-id='{{ b.id }}'>
+<div class='block card{% if not b.open %} block-hidden{% endif %}' id='blk-{{ b.id }}' data-block-id='{{ b.id }}'>
 <div class='block-head'>
 {% if may.edit %}
 <form class='inline block-rename' data-api='PUT {{ api }}/blocks/{{ b.id }}'>
@@ -203,15 +220,19 @@
 {% else %}<b>{{ b.name }}</b>{% endif %}
 {% if not b.open %}<span class='pill closed'>скрыт</span>{% endif %}
 {% if b.tasks | selectattr('has_wiki') | list %}<a class='small' href='/c/{{ c.ref }}/wiki?block={{ b.id }}'>wiki</a>{% endif %}
-{% if b.needs and may.content %}<span class='pill warn sm'>🔒 откроется после: {{ need_names(b.needs, block_names) }}</span>
+{% if b.needs and may.content %}{% set own = b.needs | reject('equalto', b.after) | list %}
+{% if b.after %}<span class='pill chain sm' title='блоки по порядку'>⤷ после «{{ block_names.get(b.after, b.after) }}»</span>{% endif %}
+{% if own %}<span class='pill warn sm'>🔒 откроется после: {{ need_names(own, block_names) }}</span>{% endif %}
 {% elif b.waiting_for %}<span class='pill warn sm'>🔒 откроется, когда решите: {% for n in b.waiting_for %}«{{ n }}»{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 <span class='sp'></span>
+{% if may.edit and b.tasks | length > 1 %}{{ order_switch('Задания по порядку', b.tasks_in_order, {'block': b.id, 'tasks': not b.tasks_in_order}, 'Снять порядок: задания блока откроются сразу' if b.tasks_in_order else 'Каждое задание блока откроется, когда решено предыдущее') }}{% endif %}
 {% if may.content %}
 <details class='menu block-menu'><summary class='menu-dot' title='действия с блоком'>⋯</summary>
 <div class='menu-list card'>
 {{ act('PUT', api ~ '/blocks/' ~ b.id, 'Сделать доступным' if not b.open else 'Скрыть от проходящих курс', fields={'open': not b.open}) }}
 {% if may.edit and c.blocks | length > 1 %}<form class='block-needs' data-api='PUT {{ api }}/blocks/{{ b.id }}'>
 <span class='small dim'>Откроется, когда решено:</span>
+{% if c.blocks_in_order %}<span class='small dim'>Блоки идут по порядку — предыдущий блок ставится сам; другие блоки здесь не нужны.</span>{% endif %}
 {{ needs_picker(b.needs, task_refs, skip_block=b.id) }}
 <button class='menu-item' type='submit'>Сохранить условие</button></form>{% endif %}
 {% if may.edit %}{{ act('DELETE', api ~ '/blocks/' ~ b.id, 'Удалить блок', 'menu-item danger', confirm='Удалить пустой блок?') }}{% endif %}
@@ -226,7 +247,9 @@
 <span class='tip card' role='tooltip' id='tip-{{ loop.index }}-{{ b.id }}'><span class='kind kind-task'>{{ icon('task') }} задание</span><b class='mono'>{{ rp[0] }}</b><span class='sub small'>{{ t.about or 'без описания' }}</span><a class='small' href='/web/image/{{ t.revision | ref_url }}'>открыть задание →</a></span></span>
 {% if t.has_wiki %}<a class='small' href='/web/wiki/{{ t.repo }}' title='теория задания'>wiki</a>{% endif %}
 {% if t.hidden %}<span class='pill closed sm'>скрыто</span>{% endif %}
-{% if t.needs and may.content %}<span class='pill warn sm'>🔒 откроется после: {{ need_names(t.needs, block_names) }}</span>
+{% if t.needs and may.content %}{% set own = t.needs | reject('equalto', t.after) | list %}
+{% if t.after %}<span class='pill chain sm' title='задания по порядку'>⤷ после «{{ t.after.partition(':')[0].rpartition('/')[2] }}»</span>{% endif %}
+{% if own %}<span class='pill warn sm'>🔒 откроется после: {{ need_names(own, block_names) }}</span>{% endif %}
 {% elif t.waiting_for %}<span class='pill warn sm'>🔒 откроется, когда решите: {% for n in t.waiting_for %}«{{ n }}»{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 {% if t.latest and t.latest > t.n %}<span class='pill warn sm'>есть версия {{ t.latest }}</span>{% endif %}
 <span class='sp'></span>
@@ -239,6 +262,7 @@
 {{ act('PUT', api ~ '/tasks/' ~ t.ref, 'Показать' if t.hidden else 'Скрыть', fields={'hidden': not t.hidden}) }}
 <form class='block-needs' data-api='PUT {{ api }}/tasks/{{ t.ref }}'>
 <span class='small dim'>Откроется, когда решено:</span>
+{% if b.tasks_in_order %}<span class='small dim'>Задания блока идут по порядку — предыдущее ставится само.</span>{% endif %}
 {{ needs_picker(t.needs, task_refs, skip_block=b.id, skip_ref=t.ref) }}
 <button class='menu-item' type='submit'>Сохранить условие</button></form>
 {% endif %}

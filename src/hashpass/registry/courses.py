@@ -62,6 +62,7 @@ class Course:
     allow_mirrors: bool = True
     allow_forks: bool = False
     merges: list[dict] = field(default_factory=list)   # whole forks offered back to this course
+    blocks_in_order: bool = False   # 2026-11-05: each block opens once the one before is solved
     created_at: str = ""
     rev: int = 0
 
@@ -337,6 +338,7 @@ class CourseStore:
                 raise CourseConflictError(msg)
             before = cc.structure(course)
             yield course
+            apply_order(course)                       # chains follow every change (2026-11-05)
             course.rev += 1
             self._save(course)
         if cc.structure(course) != before:
@@ -513,6 +515,97 @@ def set_task_needs(course: Course, repo: str, tag: str, needs: Iterable[str]) ->
         msg = "задание не может ждать само себя"
         raise ValueError(msg)
     _set_needs(course, task, _ordered_needs(course, wanted))
+
+
+# -- opening in order (user 2026-11-05: «одна кнопка в курсе», «одна кнопка в блоке») ----------
+
+def _ref(task: dict) -> str:
+    return f"{task['repo']}:{task['tag']}"
+
+
+def _put_needs(course: Course, holder: dict, needs: list[str]) -> None:
+    holder.pop("needs", None)
+    if needs:
+        holder["needs"] = _ordered_needs(course, set(needs))
+
+
+def apply_order(course: Course) -> None:
+    """
+    Recompute the chains the course's switches ask for; refuse one that would never open.
+
+    `blocks_in_order`: each block waits for the nearest block before it that students can solve
+    (open, with a task not hidden); its other block conditions go (the chain implies them), its
+    task conditions stay. A block's `tasks_in_order`: each task waits for the nearest task not
+    hidden before it in that block; its conditions on tasks of other blocks and on blocks stay.
+    Run on every save, so moves, new, hidden and removed tasks re-chain by themselves.
+    """
+    if not (course.blocks_in_order or any(b.get("tasks_in_order") for b in course.blocks)):
+        return
+    if course.blocks_in_order:
+        ids = {b["id"] for b in course.blocks}
+        prev = ""
+        for block in course.blocks:
+            _put_needs(course, block, [prev] * bool(prev) + [n for n in block.get("needs", []) if n not in ids])
+            if block.get("open", True) and any(not t.get("hidden") for t in block["tasks"]):
+                prev = block["id"]
+    for block in course.blocks:
+        if not block.get("tasks_in_order"):
+            continue
+        refs = {_ref(t) for t in block["tasks"]}
+        prev = ""
+        for task in block["tasks"]:
+            _put_needs(course, task, [prev] * bool(prev) + [n for n in task.get("needs", []) if n not in refs])
+            if not task.get("hidden"):
+                prev = _ref(task)
+    _check_no_cycles(course)
+
+
+def _switch_order(course: Course, turn: Callable[[], None]) -> None:
+    """Flip a switch with `turn`, re-chain; on a refusal put the blocks and the flags back."""
+    blocks, flag = json.loads(json.dumps(course.blocks)), course.blocks_in_order
+    try:
+        turn()
+        apply_order(course)
+    except ValueError:
+        course.blocks, course.blocks_in_order = blocks, flag
+        raise
+
+
+def set_blocks_in_order(course: Course, *, on: bool) -> None:
+    """Open each block once the one before is solved (`on`), or drop every block-on-block condition."""
+    def turn() -> None:
+        course.blocks_in_order = on
+        if not on:
+            ids = {b["id"] for b in course.blocks}
+            for block in course.blocks:
+                _put_needs(course, block, [n for n in block.get("needs", []) if n not in ids])
+    _switch_order(course, turn)
+
+
+def set_tasks_in_order(course: Course, block_id: str, *, on: bool) -> None:
+    """Open each task of a block once the one before is solved (`on`), or drop those conditions."""
+    block = _block(course, block_id)
+
+    def turn() -> None:
+        block.pop("tasks_in_order", None)
+        if on:
+            block["tasks_in_order"] = True
+            return
+        refs = {_ref(t) for t in block["tasks"]}
+        for task in block["tasks"]:
+            _put_needs(course, task, [n for n in task.get("needs", []) if n not in refs])
+    _switch_order(course, turn)
+
+
+def chained_after(course: Course, block: dict, task: dict | None = None) -> str:
+    """Return the condition a switch put on a block (or on its `task`): what it opens after, or ""."""
+    if task is None:
+        ids = {b["id"] for b in course.blocks}
+        on, needs = course.blocks_in_order, block.get("needs", [])
+    else:
+        ids = {_ref(t) for t in block["tasks"]}
+        on, needs = bool(block.get("tasks_in_order")), task.get("needs", [])
+    return next((n for n in needs if n in ids), "") if on else ""
 
 
 def need_name(course: Course, need: str) -> str:

@@ -46,6 +46,8 @@
         r.json().then(function (j) { if (j && j.rev !== undefined && cat) cat.setAttribute('data-rev', j.rev); })
           .catch(function () {});
         toast('Порядок сохранён');
+        // blocks / tasks open in order: the chain moved with them -- show the new «после …»
+        if (cat && cat.getAttribute('data-chained')) setTimeout(function () { location.reload(); }, 900);
         return;
       }
       toast(r.status === 403 ? 'Порядок заданий меняет только администратор'

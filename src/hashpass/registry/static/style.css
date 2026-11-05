@@ -639,3 +639,28 @@ ol.history .why{color:var(--muted);font-style:italic}
 .top-authors{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
 .top-authors .user-row{display:flex;align-items:center;gap:10px}
 .top-authors .rank{font-weight:800;color:var(--muted);min-width:1.4em;text-align:right}
+/* opening in order (2026-11-05): a switch per course and per block, a flow of the blocks */
+.pill.chain{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+button.switch{display:inline-flex;align-items:center;gap:8px;margin:0;padding:4px 11px 4px 5px;font-size:13px;
+  border-radius:999px;background:var(--surface2);color:var(--muted);border:1px solid var(--border-strong);white-space:nowrap}
+button.switch:hover{background:var(--surface2);border-color:var(--accent);color:var(--text)}
+button.switch .knob{position:relative;flex:0 0 30px;width:30px;height:18px;border-radius:999px;background:var(--border-strong);
+  transition:background .15s}
+button.switch .knob::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+  background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+button.switch.on{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+button.switch.on .knob{background:var(--accent)}
+button.switch.on .knob::after{transform:translateX(12px)}
+.order-card{margin-bottom:14px}
+.order-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.order-head .sub{margin:.2em 0 0}
+.order-head .sp{flex:1}
+.order-flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;list-style:none;margin:12px 0 0;padding:0}
+.order-flow .flow-step{display:inline-flex;align-items:center;gap:6px}
+.order-flow .flow-step+.flow-step::before{content:'·';color:var(--faint);font-weight:700}
+.order-flow.chained .flow-step+.flow-step::before{content:'→';color:var(--accent)}
+.flow-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:13px;
+  font-weight:600;text-decoration:none;color:var(--text);background:var(--surface2);border:1px solid var(--border)}
+.flow-chip:hover{border-color:var(--accent)}
+.flow-step.off .flow-chip{border-style:dashed;color:var(--muted)}
+@media (max-width:640px){.order-head .sp{display:none}}

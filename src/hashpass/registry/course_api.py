@@ -155,6 +155,7 @@ class CourseApi:
         rule("/courses/<owner>/<name>/blocks/<block_id>", "course_block", self.block,
              methods=["PUT", "DELETE"])
         rule("/courses/<owner>/<name>/layout", "course_layout", self.layout, methods=["PUT"])
+        rule("/courses/<owner>/<name>/order", "course_order", self.order, methods=["PUT"])
         rule("/courses/<owner>/<name>/tasks", "course_tasks", self.add_task, methods=["POST"])
         rule("/courses/<owner>/<name>/tasks/<path:task>", "course_task", self.task,
              methods=["PUT", "DELETE"])
@@ -284,14 +285,18 @@ class CourseApi:
                 if staff or task.get("added_by") == user:
                     row |= {"pinned": task.get("pinned", False), "hidden": task.get("hidden", False),
                             "latest": latest, "added_by": task.get("added_by", "")}
-                tasks.append(row | _own_needs(course, task, passed))
+                tasks.append(row | _own_needs(course, task, passed)
+                             | ({"after": after} if (after := cm.chained_after(course, block, task)) else {}))
             if tasks or block.get("open", True) or sees:
                 waiting = cm.waiting_for(course, block, passed)        # opens once these are solved
+                after = cm.chained_after(course, block)
                 blocks.append({"id": block["id"], "name": block["name"], "open": block.get("open", True),
-                               "tasks": tasks}
+                               "tasks": tasks, "tasks_in_order": bool(block.get("tasks_in_order"))}
                               | ({"needs": block["needs"]} if block.get("needs") else {})
+                              | ({"after": after} if after else {})
                               | ({"waiting_for": waiting} if waiting else {}))
         out["blocks"] = blocks
+        out["blocks_in_order"] = course.blocks_in_order
         out["proposals"] = [p for p in course.proposals if staff or p.get("by") == user]
         if staff:
             out["updates"] = [{"repo": r, "tag": t, "latest": n}
@@ -704,6 +709,30 @@ class CourseApi:
         if not isinstance(blocks, list):
             return self._err(HTTPStatus.BAD_REQUEST, "нужен список блоков")
         err = self._edit(course.ref, lambda c: cm.set_layout(c, blocks), by=actor, what="порядок заданий и блоков")
+        return err or self._json(HTTPStatus.OK, {"rev": self.courses.get(course.ref).rev})
+
+    def order(self, owner: str, name: str) -> Response:
+        """
+        One switch for the course, one per block (user 2026-11-05): open them one after another.
+
+        `{"blocks": bool}` -- each block once the one before is solved; `{"block": id, "tasks": bool}`
+        -- each task of that block once the one before is solved. Same rights as a block's condition.
+        """
+        course, actor, err = self._load(owner, name, "content", structure=True)
+        if err is not None:
+            return err
+        body = self._body()
+        if isinstance(body.get("blocks"), bool):
+            on = body["blocks"]
+            err = self._edit(course.ref, lambda c: cm.set_blocks_in_order(c, on=on), by=actor,
+                             what="блоки открываются " + ("по порядку" if on else "сразу"))
+        elif isinstance(body.get("tasks"), bool) and body.get("block"):
+            on, block_id = body["tasks"], str(body["block"])
+            was = next((b["name"] for b in course.blocks if b["id"] == block_id), block_id)
+            err = self._edit(course.ref, lambda c: cm.set_tasks_in_order(c, block_id, on=on), by=actor,
+                             what=f"задания блока «{was}» открываются " + ("по порядку" if on else "сразу"))
+        else:
+            return self._err(HTTPStatus.BAD_REQUEST, 'нужно {"blocks": true|false} или {"block": id, "tasks": true|false}')
         return err or self._json(HTTPStatus.OK, {"rev": self.courses.get(course.ref).rev})
 
     def _revision_ok(self, course: Course, user: str, repo: str, tag: str, n: int | None) -> str | int:
