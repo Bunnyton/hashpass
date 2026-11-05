@@ -24,10 +24,13 @@ say "Отдел снабжения переезжает. Не в другой о
 read brief.md
 
 stage
-  say "Пусть сайт отдела открывается по адресу http://localhost:8473/"
+  say "Пусть сайт отдела открывается по адресу http://localhost:8473/ — и открой его"
   solve:
     sudo sed -i 's/8472/8473/' /etc/nginx/sites-available/default
     sudo systemctl reload nginx
+    curl -s http://localhost:8473/
+  # user 2026-11-05: accepted when the student's own curl shows the site (and it really runs)
+  accept output "Отдел снабжения"
   check live curl -fsS -m 3 http://127.0.0.1:8473/ | grep -q 'Отдел снабжения'
   neutral ls pwd cd cat
   on pass say "Правка в файле — только половина дела: служба узнаёт о ней, когда перечитает конфиг."
@@ -40,10 +43,12 @@ stage
   hint tries 12 say "Ищи по содержимому: какой номер порта у сайта сейчас?"
 
 stage
-  say "Петров добавил на сайт страницу /status и перезапустил nginx. Теперь не открывается ничего. Пусть работают и сайт, и http://localhost:8473/status"
+  say "Петров добавил на сайт страницу /status и перезапустил nginx. Теперь не открывается ничего. Пусть работают и сайт, и http://localhost:8473/status — открой её"
   solve:
     sudo sed -i 's|return 200 "работает\\n"$|return 200 "работает\\n";|' /etc/nginx/sites-available/default
     sudo systemctl restart nginx
+    curl -s http://localhost:8473/status
+  accept output "работает"
   check live systemctl is-active -q nginx && curl -fsS -m 3 http://127.0.0.1:8473/ | grep -q 'Отдел снабжения' && curl -fsS -m 3 http://127.0.0.1:8473/status | grep -q 'работает'
   on enter apply break
   neutral ls pwd cd cat
