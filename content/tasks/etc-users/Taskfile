@@ -6,6 +6,9 @@
 
 image etc-users:1
 
+# the base's slim rootfs lost this package's man pages (`man …` in a dose) -- bring them back
+run apt-get install -y --reinstall passwd >/dev/null
+
 # data: data/home/ПАМЯТКА.txt — руками
 user student
 copy data/home /home/student

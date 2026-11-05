@@ -25,7 +25,9 @@ _SYSTEMD_INSTALL = (
     "&& printf 'APT::Install-Recommends \"false\";\\n"
     "Dpkg::Options { \"--force-confdef\"; \"--force-confold\"; };\\n' > /etc/apt/apt.conf.d/99hp "
     "&& echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections "
-    "&& apt-get install -y --reinstall coreutils grep findutils sudo apt dpkg bash "
+    # + every package whose pages a dose names (2026-11-05: `man useradd` -- «No manual entry»)
+    "&& apt-get install -y --reinstall coreutils grep findutils sudo apt dpkg bash passwd tar util-linux "
+    "procps sed gzip login mount "
     # libnss-myhostname: resolve the container's own (dynamic, per-run) hostname + localhost via
     # NSS, so name lookups work regardless of the nspawn machine name. nsswitch (from runtime/)
     # references it as `hosts: files myhostname dns`.

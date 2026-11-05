@@ -8,6 +8,9 @@
 
 image bash-script:1
 
+# the base's slim rootfs lost this package's man pages (`man …` in a dose) -- bring them back
+run apt-get install -y --reinstall tar >/dev/null
+
 # data: data/projects — руками
 copy data/projects /home/student/projects
 run chown -R student:student /home/student/projects
