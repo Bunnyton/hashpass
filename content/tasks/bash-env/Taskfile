@@ -52,7 +52,7 @@ stage
   on enter read prefix.md
   on pass say "Мурманск в Фаренгейтах: +10 звучит теплее, чем -12."
   hint output "UNITS бывает" say "Прочитай ответ weather: какие значения UNITS она понимает?"
-  hint tries 5 say "Город weather берёт из окружения. Откуда она может взять единицы?"
+  hint tries 5 say "Город weather берёт из окружения. Что ещё она оттуда читает? Спроси её саму."
   hint tries 10 say "man bash, раздел ENVIRONMENT: как дать переменную одной команде."
 
 stage

@@ -15,6 +15,22 @@ my %sky = (
 );
 my @kinds = ('ясно', 'облачно', 'дождь', 'снег', 'туман', 'ветер');
 
+if (@ARGV && ($ARGV[0] eq '-h' || $ARGV[0] eq '--help')) {
+    print <<'HELP';
+Использование: weather [-h|--help]
+Показывает прогноз погоды. Ключей у weather нет: всё, что ей нужно, она берёт из окружения.
+
+Переменные окружения:
+  CITY    город, для которого нужен прогноз (без неё weather не знает, где ты)
+  UNITS   единицы температуры: C — градусы Цельсия (по умолчанию), F — Фаренгейта
+HELP
+    exit 0;
+}
+if (@ARGV) {
+    print STDERR "weather: не знаю ключа «$ARGV[0]». Справка: weather --help\n";
+    exit 2;
+}
+
 my $city = $ENV{CITY};
 if (!defined $city || $city eq '') {
     print STDERR "weather: в окружении нет CITY — не знаю, где ты.\n";
