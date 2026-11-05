@@ -221,3 +221,62 @@ def test_the_report_names_the_emulator_and_its_version(tmp_path) -> None:
     (tmp_path / "rosetta").write_text("enabled\ninterpreter /media/rosetta/rosetta\nflags: CF\n")
     assert emulator_description(tmp_path).startswith("rosetta (/media/rosetta/rosetta)")
     assert emulator_description(tmp_path / "none") == "эмулятор x86 не найден"
+
+
+def _rosetta_env(tmp_path, *, tag: bool, vendor: str, rosetta: bool = False) -> dict:
+    vfs, binfmt, dmi = tmp_path / "vfs", tmp_path / "binfmt", tmp_path / "dmi"
+    (vfs / "0").mkdir(parents=True)
+    binfmt.mkdir()
+    dmi.mkdir()
+    (vfs / "0" / "tag").write_text("rosetta\n" if tag else "share\n", encoding="utf-8")
+    (dmi / "sys_vendor").write_text(vendor + "\n", encoding="utf-8")
+    if rosetta:
+        (binfmt / "rosetta").write_text("enabled\nflags: CF\n", encoding="utf-8")
+    return {"virtiofs_dir": vfs, "binfmt_dir": binfmt, "dmi_dir": dmi}
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize(("machine", "tag", "vendor", "rosetta"), [
+    ("x86_64", True, "Apple Inc.", False),          # native: nothing to say
+    ("aarch64", True, "Apple Inc.", True),          # Rosetta already runs the tasks
+    ("aarch64", False, "Raspberry Pi", False),      # not a Mac: qemu is the way
+])
+def test_no_rosetta_advice_where_it_does_not_apply(tmp_path, machine, tag, vendor, rosetta) -> None:
+    from hashpass.emulation import rosetta_advice  # noqa: PLC0415
+    said: list[str] = []
+    assert rosetta_advice(said.append, machine=lambda: machine, ask=lambda _q: "", run=lambda *_a, **_k: None,
+                          **_rosetta_env(tmp_path, tag=tag, vendor=vendor, rosetta=rosetta)) is False
+    assert said == []
+
+
+@pytest.mark.tier1
+def test_a_mac_vm_without_rosetta_hears_how_to_turn_it_on(tmp_path) -> None:
+    """User 2026-11-05: «рекомендации по включению rosetta при apple вынеси при запуске hashpass»."""
+    from hashpass.emulation import rosetta_advice  # noqa: PLC0415
+    said: list[str] = []
+    rosetta_advice(said.append, machine=lambda: "aarch64", ask=lambda _q: "", run=lambda *_a, **_k: None,
+                   **_rosetta_env(tmp_path, tag=False, vendor="QEMU"))
+    text = "".join(said)
+    assert "Rosetta" in text and "Apple Virtualization" in text and "Enable Rosetta" in text
+
+
+@pytest.mark.tier1
+def test_a_shared_but_idle_rosetta_is_hooked_up_when_the_user_agrees(tmp_path) -> None:
+    from hashpass.emulation import rosetta_advice  # noqa: PLC0415
+    env = _rosetta_env(tmp_path, tag=True, vendor="Apple Inc.")
+    calls: list[list[str]] = []
+
+    def run(argv, **_k: object) -> None:
+        calls.append(list(argv))
+        if argv[:3] == ["sudo", "systemctl", "restart"]:
+            (env["binfmt_dir"] / "rosetta").write_text("enabled\nflags: CF\n", encoding="utf-8")
+    said: list[str] = []
+    assert rosetta_advice(said.append, machine=lambda: "aarch64", ask=lambda _q: "д", run=run, **env) is True
+    flat = [" ".join(c) for c in calls]
+    assert any("mount -t virtiofs rosetta /media/rosetta" in c for c in flat)
+    assert any("tee /etc/binfmt.d/rosetta.conf" in c for c in flat)
+    assert "Rosetta подключена" in "".join(said)
+    calls.clear()
+    assert rosetta_advice(said.append, machine=lambda: "aarch64", ask=lambda _q: "н", run=run,
+                          **_rosetta_env(tmp_path / "again", tag=True, vendor="Apple Inc.")) is False
+    assert calls == []

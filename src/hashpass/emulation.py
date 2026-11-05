@@ -11,6 +11,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -113,6 +114,84 @@ def ensure_x86_emulation(write: Callable[[str], object], *,
         return True
     write("\x1b[33m⚠ не удалось включить эмулятор x86: задания не запустятся. Попробуйте "
           "`sudo apt-get install qemu-user qemu-user-binfmt` и перезагрузку.\x1b[0m\n")
+    return False
+
+
+_VIRTIOFS_DIR = Path("/sys/fs/virtiofs")
+_DMI_DIR = Path("/sys/class/dmi/id")
+# Rosetta for Linux takes x86_64 ELF binaries (F: also inside containers) -- as the installer does
+ROSETTA_BINFMT = (r":rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:"
+                  r"\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:"
+                  r"/media/rosetta/rosetta:CF")
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _rosetta_shared(virtiofs_dir: Path) -> bool:
+    """Whether the VM shares Apple's translator (UTM «Enable Rosetta»: the virtiofs tag `rosetta`)."""
+    return any(_read(t) == "rosetta" for t in virtiofs_dir.glob("*/tag"))
+
+
+def _ask_tty(question: str) -> str:
+    if not sys.stdin.isatty():
+        return ""
+    try:
+        return input(question)
+    except EOFError:
+        return ""
+
+
+def rosetta_advice(write: Callable[[str], object], *,  # noqa: PLR0913, PLR0911
+                   machine: Callable[[], str] = platform.machine,
+                   ask: Callable[[str], str] = _ask_tty,
+                   run: Callable[..., object] = subprocess.run,
+                   virtiofs_dir: Path = _VIRTIOFS_DIR, binfmt_dir: Path = _BINFMT_DIR,
+                   dmi_dir: Path = _DMI_DIR) -> bool:
+    """
+    At start, on a Mac VM still running the tasks through qemu: say how Rosetta helps; hook it up.
+
+    User 2026-11-05: «рекомендации по включению rosetta при apple вынеси при запуске hashpass».
+    Rosetta shared but idle -> offer to hook it up now (with consent); a Mac VM without it -> how
+    to turn it on in UTM. Native x86, Rosetta already working, or not a Mac -- silence. Returns
+    whether Rosetta got hooked up just now.
+    """
+    if machine() in _NATIVE or binfmt_ready(binfmt_dir / "rosetta"):
+        return False
+    shared = _rosetta_shared(virtiofs_dir)
+    vendor = _read(dmi_dir / "sys_vendor")
+    if not shared and not any(v in vendor for v in ("Apple", "QEMU")):
+        return False
+    if not shared:
+        write("\x1b[33m💡 Задания сейчас идут через эмулятор qemu. Если это виртуалка на Mac, через Rosetta "
+              "они пойдут быстрее и надёжнее:\x1b[0m\n"
+              "   UTM → новая машина «Virtualize» → «Linux», отметьте «Use Apple Virtualization» и\n"
+              "   «Enable Rosetta (x86_64 Emulation)», поставьте в неё Ubuntu arm64 и hashpass —\n"
+              "   установщик сам подключит Rosetta.\n")
+        return False
+    answer = ask("💡 Виртуалке доступна Rosetta (транслятор x86 от Apple), а задания идут через qemu. "
+                 "Подключить Rosetta? Понадобится sudo. [Д/н] ").strip().lower()
+    if answer in ("н", "n", "нет", "no"):
+        return False
+    if not answer:
+        write("   подключить потом: перезапустите hashpass в терминале и ответьте «д»\n")
+        return False
+    run(["sudo", "mkdir", "-p", "/media/rosetta"], check=False)
+    run(["sudo", "mount", "-t", "virtiofs", "rosetta", "/media/rosetta"], check=False)
+    fstab = ("grep -qs '^rosetta[[:space:]]' /etc/fstab || "
+             "echo 'rosetta /media/rosetta virtiofs ro,nofail 0 0' >> /etc/fstab")
+    run(["sudo", "sh", "-c", fstab], check=False)
+    run(["sudo", "tee", "/etc/binfmt.d/rosetta.conf"], input=ROSETTA_BINFMT + "\n", text=True,
+        capture_output=True, check=False)
+    run(["sudo", "systemctl", "restart", "systemd-binfmt"], check=False)
+    if binfmt_ready(binfmt_dir / "rosetta"):
+        write("\x1b[32m✓ Rosetta подключена: задания x86 пойдут через неё\x1b[0m\n")
+        return True
+    write("\x1b[33m⚠ Rosetta не включилась — задания пойдут через qemu, как раньше\x1b[0m\n")
     return False
 
 

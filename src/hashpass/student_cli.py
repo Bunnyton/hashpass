@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from hashpass import cli, my_courses, uninstall, version
 from hashpass.author_cli import add_author_commands, dispatch_author
-from hashpass.emulation import ensure_x86_emulation
+from hashpass.emulation import ensure_x86_emulation, rosetta_advice
 from hashpass.sudo import ensure_sudo
 
 _NEEDS_SUDO = (None, "run", "pull")   # these unpack/run containers via `sudo …`
@@ -71,6 +71,7 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911
         say = lambda s: (sys.stdout.write(s), sys.stdout.flush())  # noqa: E731
         ensure_sudo(say)
         ensure_x86_emulation(say)    # an ARM machine runs the x86_64 images through qemu
+        rosetta_advice(say)          # a Mac VM: Rosetta is faster and surer than qemu (2026-11-05)
     if command is None:
         return cli.cmd_pool_home(env)
     authored = dispatch_author(env, args)
