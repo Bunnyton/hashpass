@@ -1,0 +1,22 @@
+{% extends 'base.html.j2' %}
+{% block main %}
+<nav class='crumb' aria-label='Путь'><a href='/c/{{ course.ref }}'>← {{ course.title or course.ref }}</a>{% if block_name %} · <a href='/c/{{ course.ref }}/wiki'>wiki всего курса</a>{% endif %}</nav>
+<h1>Wiki {% if block_name %}блока «{{ block_name }}»{% else %}курса «{{ course.title or course.ref }}»{% endif %}</h1>
+<p class='sub'>Теория заданий — для чтения в любой момент, в том числе тем, кто задание ещё не открыл.</p>
+{% for b in blocks %}
+<section class='wiki-block'>
+{% if not block_name %}<h2 class='side-h'><a href='/c/{{ course.ref }}/wiki?block={{ b.id }}'>{{ b.name }}</a></h2>{% endif %}
+<div class='repo-grid'>
+{% for w in b.wikis %}
+<a class='card wiki-card' href='{{ w.href }}'>
+<b>{{ w.title }}</b> <span class='mono small dim'>{{ w.repo }}</span>
+{% if w.tags %}<div class='wiki-tags'>{% for t in w.tags %}<span class='pill sm'>#{{ t }}</span> {% endfor %}</div>{% endif %}
+<p class='sub small'>{{ w.intro }}</p>
+</a>
+{% endfor %}
+</div>
+</section>
+{% else %}
+<div class='empty card'><p class='sub'>У заданий {% if block_name %}этого блока{% else %}курса{% endif %} пока нет wiki.</p></div>
+{% endfor %}
+{% endblock %}

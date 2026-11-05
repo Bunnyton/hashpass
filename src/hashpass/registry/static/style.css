@@ -631,3 +631,6 @@ ol.history .why{color:var(--muted);font-style:italic}
 .needs-tasks{margin:4px 0}
 .needs-tasks summary{cursor:pointer}
 .needs-group{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:4px 0}
+.wiki-block{margin:18px 0}
+.wiki-card{display:block;text-decoration:none;color:inherit}
+.wiki-card:hover{border-color:var(--accent)}

@@ -153,3 +153,33 @@ def test_the_task_card_shows_the_wiki_under_the_readme(pool) -> None:
     readme, wiki = html.index("README.md"), html.index("Теория git")
     assert readme < wiki                                                    # the wiki comes under it
     assert 'href="/web/wiki/bob/git-init/wiki/sheet.md"' in html            # its links still lead home
+
+
+def _block_wiki_setup(pool) -> tuple[str, str]:
+    pool.push("bob/regex", "1", image="r", task="tr")
+    hidden = pool.push("bob/draft", "1", image="d", task="td")
+    assert hidden[0] == 201  # noqa: PLR2004
+    view = pool.call("GET", "/courses/bob/linux", "bob")[1]
+    first = view["blocks"][0]["id"]
+    second = pool.call("POST", "/courses/bob/linux/blocks", "bob", {"name": "Regex"})[1]["id"]
+    for repo in ("bob/regex", "bob/draft"):
+        pool.call("POST", "/courses/bob/linux/tasks", "bob", {"repo": repo, "tag": "1", "block_id": second})
+    pool.call("PUT", "/courses/bob/linux/tasks/bob/draft:1", "bob", {"hidden": True})
+    for repo, title in (("bob/git-init", "Теория git"), ("bob/regex", "Регулярки"), ("bob/draft", "Черновик")):
+        _http("POST", f"{pool.url}/wiki/{repo}?base=0", token=pool.tok["bob"],
+              data=pack({"wiki.md": f"# {title}\n\nПервый абзац про {title}.\n".encode()}))
+    return first, second
+
+
+@pytest.mark.tier1
+def test_the_course_wiki_gathers_its_tasks_wikis_by_block(pool) -> None:
+    """User 2026-11-05: «wiki ссылки курса и блока — нажимаешь на wiki блока — все wiki заданий со ссылками»."""
+    _first, second = _block_wiki_setup(pool)
+    html = _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux/wiki")[1]
+    assert html.index("Теория git") < html.index("Регулярки")                  # course order, by block
+    assert "href='/web/wiki/bob/regex'" in html and "Первый абзац про Регулярки" in html
+    assert "Черновик" not in html                                               # a hidden task stays hidden
+    block = _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux/wiki?block={second}")[1]
+    assert "Регулярки" in block and "Теория git" not in block
+    course = _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux")[1]
+    assert "href='/c/bob/linux/wiki'" in course and f"href='/c/bob/linux/wiki?block={second}'" in course

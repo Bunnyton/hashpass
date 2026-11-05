@@ -14,6 +14,7 @@ from hashpass.registry import perms
 from hashpass.registry.access import can, course_perms
 from hashpass.registry.progress_store import outside_course
 from hashpass.registry.web import _env, history_href, pasted_in, pasted_word, render_profile
+from hashpass.registry.wiki_render import render_page, snippet
 
 if TYPE_CHECKING:
     from hashpass.registry.server import PoolServer
@@ -47,6 +48,45 @@ class CourseWeb:
         app.add_url_rule("/c", "web_courses", self.courses, methods=["GET"])
         app.add_url_rule("/c/<owner>/<name>", "web_course", self.course, methods=["GET"])
         app.add_url_rule("/c/<owner>/<name>/u/<login>", "web_course_student", self.student, methods=["GET"])
+        app.add_url_rule("/c/<owner>/<name>/wiki", "web_course_wiki", self.course_wiki, methods=["GET"])
+
+    def course_wiki(self, owner: str, name: str) -> Response:
+        """
+        Show the wikis of a course's tasks, by block -- or of one block (`?block=`) -- with links.
+
+        User 2026-11-05: «wiki ссылки курса и блока — нажимаешь на wiki блока — показывает все wiki
+        заданий со ссылками; аналогично с курсом». Only what this viewer sees in the course itself.
+        """
+        user, role = self._viewer()
+        if user is None:
+            return self.server._redirect(f"/web/login?next={quote(request.full_path, safe='')}")  # noqa: SLF001
+        api = self.server.course_api
+        course = api.courses.get(f"{owner}/{name}")
+        if course is None or not can(user, self.server.pool_perms(user), course, "view"):
+            return self.server._empty(HTTPStatus.NOT_FOUND)                     # noqa: SLF001
+        want = request.args.get("block", "")
+        blocks = []
+        for block in api._view(course, user, role).get("blocks") or []:        # noqa: SLF001
+            if want and block["id"] != want:
+                continue
+            items = []
+            for task in block.get("tasks", []):
+                repo = task["repo"]
+                if not self.server._wiki_exists(repo) or not self.server._may_see_repo(user, repo):  # noqa: SLF001
+                    continue
+                try:
+                    text = self.server.wiki(repo).read("wiki.md").decode("utf-8")
+                except (ValueError, OSError, KeyError, UnicodeDecodeError):
+                    continue
+                _html, tags, title = render_page(text)
+                items.append({"repo": repo, "title": title or repo.rpartition("/")[2], "tags": tags,
+                              "intro": snippet(text, "", 220), "href": f"/web/wiki/{repo}"})
+            if items:
+                blocks.append({"id": block["id"], "name": block["name"], "wikis": items})
+        one = next((b["name"] for b in course.blocks if b["id"] == want), "") if want else ""
+        return self.server._html(_env.get_template("course_wiki.html.j2").render(  # noqa: SLF001
+            title=f"Wiki — {course.title or course.ref}", nav=True, active="/c", course=course,
+            block_name=one, blocks=blocks))
 
     def student(self, owner: str, name: str, login: str) -> Response:
         """One student inside a course: its tasks with status, tries, time -- for whoever holds `progress` here."""
