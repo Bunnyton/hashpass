@@ -2194,10 +2194,12 @@ class PoolServer:
 
     def _revision_delete(self, tail: str) -> Response:  # noqa: PLR0911
         """
-        Remove one revision (§2.7).
+        Remove one revision (§2.7) -- any one (user 2026-11-05: «разрешай удалять версии в принципе»).
 
-        Refused while other images stand on it (`from`, base). Used by someone else's course ->
-        a request the admin decides (the owner may withdraw it); the admin deletes at once.
+        One that the owner's own images stand on (`from`, base) goes too: out of every list at once,
+        its files stay hidden while a remaining image needs them. Someone else's image standing on
+        it blocks the deletion. Used by someone else's course -> a request the admin decides (the
+        owner may withdraw it); the admin deletes at once.
         """
         head, _, n_raw = tail.rpartition("/")
         parts = self._split_ref(head)
@@ -2213,11 +2215,13 @@ class PoolServer:
         ref = f"{name}:{revision_version(tag, n)}"
         if self.repo(name).get(tag, n) is None:
             return self._not_found(ref)
-        dependents = self._dependents(ref)
-        if dependents:
+        # user 2026-11-05: one's own images standing on it -- fine (their files stay hidden); someone
+        # else's -- «пусть блокируется удаление»
+        others = [d for d in self._dependents(ref) if _owner_of(d.partition(":")[0]) != _owner_of(name)]
+        if others:
             return self._json(HTTPStatus.CONFLICT, {
-                "error": f"на {ref} строятся другие образы: {', '.join(dependents)} — сначала их",
-                "dependents": dependents})
+                "error": f"на {ref} строятся чужие образы: {', '.join(others)} — удалить нельзя",
+                "dependents": others})
         foreign = self._foreign_courses(name, tag, n)
         if foreign and not self._perm(user, "content"):
             req = self.deletions().open(ref, by=user, courses=[c.ref for c in foreign])
@@ -2332,12 +2336,30 @@ class PoolServer:
             name, _, version = row["ref"].partition(":")
             tag, n, _latest = parse_version(version)
             if n is not None and self.repo(name).get(tag, n) is not None:
-                if self._dependents(row["ref"]):
-                    return self._json(HTTPStatus.CONFLICT, {"error": "на этой версии уже строятся другие образы"})
                 self._delete_revision(name, tag, n)
         state = {"approve": "approved", "reject": "rejected", "withdraw": "withdrawn"}[action]
         self.deletions().set_state(rid, state, user)
         return self._json(HTTPStatus.OK, {"id": rid, "state": state})
+
+    def _drop_files(self, ref: str) -> None:
+        """
+        Erase a deleted revision's files once no stored image stands on it; then its own parents'.
+
+        A deleted revision others need keeps its files hidden (no index entry: no list, no course);
+        the last dependent to go takes them along -- and so on down the chain.
+        """
+        if not self.store.exists(ref) or self._dependents(ref):
+            return
+        r_name, _, version = ref.partition(":")
+        img = self.store.get(ref)
+        below = [*img.parents, *([img.base] if img.base else [])]
+        with contextlib.suppress(ValueError, OSError):
+            shutil.rmtree(self.store.dir(r_name, version), ignore_errors=True)
+        for parent in below:
+            p_name, _, p_version = parent.partition(":")
+            p_tag, p_n, _ = parse_version(p_version)
+            if p_n is not None and self.repo(p_name).get(p_tag, p_n) is None:   # deleted, kept for us
+                self._drop_files(parent)
 
     def _dependents(self, ref: str) -> list[str]:
         return sorted(r for r in self.store.list() if r != ref and (
@@ -2370,8 +2392,7 @@ class PoolServer:
         self.sources().remove(ref)
         with contextlib.suppress(ValueError, OSError):
             shutil.rmtree(self.attachments().ref_path(ref), ignore_errors=True)
-        with contextlib.suppress(ValueError, OSError):
-            shutil.rmtree(self.store.dir(name, revision_version(tag, n)), ignore_errors=True)
+        self._drop_files(ref)
         for course in self.course_api.courses.courses_with(name, tag):
             self._settle_course(course.ref, name, tag, n, remaining, newest.n if newest else None)
 
@@ -2775,7 +2796,18 @@ class PoolServer:
         idx = self.repo(repo)
         if not idx.exists or not self._may_see_repo(viewer, repo):
             return self._web_not_found(repo)
-        return self._html(render_versions(repo, idx.as_dict(), owner=self._may_write(viewer, repo)))
+        owner = self._may_write(viewer, repo)
+        risks: dict[str, dict] = {}       # user 2026-11-05: warn about someone else's courses BEFORE deleting
+        if owner:
+            for tag in idx.tags():
+                for rev in idx.revisions(tag):
+                    ref = f"{repo}:{revision_version(tag, rev.n)}"
+                    courses = self._course_names(self._foreign_courses(repo, tag, rev.n), viewer)
+                    others = [d for d in self._dependents(ref)
+                              if _owner_of(d.partition(":")[0]) != _owner_of(repo)]
+                    if courses or others:
+                        risks[f"{tag}_v{rev.n}"] = {"courses": courses, "images": others}
+        return self._html(render_versions(repo, idx.as_dict(), owner=owner, risks=risks))
 
     def _web_repo_settings(self, repo: str) -> Response:
         """Show an image's settings on a page of their own (owner and the admin only)."""

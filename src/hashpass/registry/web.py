@@ -704,11 +704,11 @@ def render_repo_settings(repo: str, repo_info: dict, *, people: list[dict], role
         people=people, role_ru=role_ru)
 
 
-def render_versions(repo: str, repo_info: dict, *, owner: bool) -> str:
-    """Render all versions of one repository (its own page, like GitHub's commits)."""
+def render_versions(repo: str, repo_info: dict, *, owner: bool, risks: dict | None = None) -> str:
+    """Render all versions of one repository; `risks`: per version, someone else's courses and images on it."""
     return _env.get_template("versions.html.j2").render(
         title=f"Версии {repo} — hashpass", nav=True, active="", repo=repo, repo_info=repo_info,
-        owner=owner)
+        owner=owner, risks=risks or {})
 
 
 def _children(sources: list[dict], folder: str) -> list[dict]:
