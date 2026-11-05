@@ -1,20 +1,19 @@
-# which-path — где лежит программа: команда — это файл, найденный по PATH, и версий одной
-# программы может быть несколько; запускается первая по PATH. /opt — для сторонних программ.
-# Среда: старый /usr/local/bin/report 1.0; в /opt/acme (≈240 файлов вендора) — report 2.0 и 2.1,
-# а рядом каталоги share/doc/report и lib/report (ловушка для find без -type f). Шаги: где лежит
-# report, который запускается (одна строка с /usr/local/bin/report) → все файлы report в /opt
-# (observe output, similarity 100) → чтобы просто report запускал 2.1, и в новом терминале тоже:
-# accept по выводу «report 2.1» + check live —
-# новая оболочка студента (bash -lic) тоже видит 2.1. Доза hash.md на «No such file» — bash
-# помнит старый путь. Как менять PATH навсегда (~/.bashrc, source), объясняет bash-path — блок идёт
-# после «Bash-скрипты»; здесь — порядок версий, /opt и кэш hash.
+# which-path — команда это исполняемый файл, найденный по PATH (пользователь, 2026-11-05: «сначала
+# с более простого»). Шаги: свой скрипт ~/report (1.0, без x) — в /usr/local/bin и запустить по
+# имени (доза why.md: PATH, слева направо) → каталог bin вендора (/opt/acme/report-2.1/bin) — в PATH
+# навсегда (path.md: export, ~/.bashrc, source), запустить report-export → report всё ещё 1.0:
+# поменять каталоги местами и показать все report по порядку (order.md, type -a; hash.md на «No such
+# file») → админ надавал по рукам (admin.md): чужой каталог впереди перебивает системные команды —
+# report-export под именем whoami. whoami, а не pwd: pwd встроена в bash, PATH её не перебьёт;
+# хуки консоли до runtime 52 зовут ls/cat/stat по имени — их подменять нельзя.
+# В /opt/acme ещё report-2.0 и соседи — просто окружение вендора.
 
 image which-path:1
 
 # data: python3 data/gen-opt.py data/opt; data/bin/report — руками
 copy data/opt /opt
-copy data/bin/report /usr/local/bin/report
-run chmod 755 /usr/local/bin/report && find /opt -path '*/bin/*' -type f -exec chmod 755 {} +
+copy data/bin/report /home/student/report
+run chown student:student /home/student/report && chmod 644 /home/student/report && find /opt -path '*/bin/*' -type f -exec chmod 755 {} +
 
 hidden hp
 
@@ -22,41 +21,75 @@ settings
   pager on
   similarity 100
 
-say "Коллеги просят отчёт в pdf. report говорит, что не умеет. Но вендор клянётся, что умеет."
+# Удалить лишнюю версию — не решение: задание про то, какую найдёт оболочка (пользователь,
+# 2026-11-05: «запрети удаление»).
+block rm match "." say "Удалять тут ничего не нужно: пусть все версии живут. Вопрос в том, какую из них оболочка найдёт первой."
+
+say "Коллеги просят отчёт. Скрипт report у тебя уже есть — пора сделать из него настоящую команду."
 read brief.md
 
 stage
-  say "Где лежит report, который запускается, когда набираешь просто report? Покажи путь"
-  accept output "\A[^\n]*/usr/local/bin/report[^\n]*\n?\Z"
-  neutral ls pwd cd cat
-  on pass say "Это report 1.0 — его когда-то поставил предыдущий админ. В /usr/local кладут то, что ставят руками, мимо пакетов."
-  hint tries 5 say "Ты уже спрашивал у оболочки, где нашёлся ls, когда писал свою команду."
-  hint tries 10 say "Нужна одна строка — путь. Не весь список."
-
-stage
-  say "Вендор поставил в /opt новые версии report. Найди все файлы report в /opt"
-  solve find /opt -name report -type f
-  observe output
-  neutral ls pwd cd cat
-  on pass say "Две версии, и каждую можно запустить полным путём — оболочке не обязательно искать по PATH. Попробуй любую с ключом --version."
-  hint output "share/doc/report" say "В списке есть каталоги с тем же именем. Нужны только файлы."
-  hint tries 5 say "Каким инструментом ищут по имени во всём дереве?"
-  hint tries 10 say "find умеет отбирать по типу: файлы отдельно, каталоги отдельно."
-
-stage
-  say "Пусть по команде report — просто по имени — запускается версия 2.1. И в новом терминале тоже"
+  say "Положи ~/report в /usr/local/bin и запусти — просто по имени, report"
   solve:
-    echo 'export PATH=/opt/acme/report-2.1/bin:$PATH' >> /home/student/.bashrc
-    export PATH=/opt/acme/report-2.1/bin:$PATH
-    report --version
-  accept output "(^|\n)report 2\.1"
-  check live runuser -u student -- bash -lic 'report --version' 2>/dev/null | grep -q '^report 2\.1'
+    cp /home/student/report /usr/local/bin/report
+    chmod +x /usr/local/bin/report
+    report
+  accept cmd "report"
+  accept output "report 1\.0"
+  check live test -x /usr/local/bin/report
+  neutral ls pwd cd cat
+  on pass read why.md
+  hint output "Permission denied" say "Permission denied — или каталог не твой, или файлу не разрешено исполняться. ls -l покажет, что из двух."
+  hint output "report: command not found" say "Оболочка ищет команды не везде. Где report лежит сейчас?"
+  hint tries 5 say "Какие права у файла в /usr/local/bin? Есть там x?"
+  hint tries 10 say "Писать в /usr/local/bin может только root. Как ты уже менял системные каталоги?"
+
+stage
+  say "Вендор поставил report 2.1 в /opt/acme/report-2.1 — со своим каталогом bin. Добавь этот bin в PATH — и в новом терминале тоже — и запусти report-export"
+  solve:
+    echo 'export PATH="$PATH:/opt/acme/report-2.1/bin"' >> /home/student/.bashrc
+    export PATH="$PATH:/opt/acme/report-2.1/bin"
+    report-export
+  accept cmd "report-export"
+  accept output "report-export 2\.1"
+  check live runuser -u student -- bash -lic 'command -v report-export' >/dev/null 2>&1
   on enter read path.md
+  neutral ls pwd cd cat
+  on pass say "А теперь набери просто report — какая версия ответит?"
+  hint output "report-export: command not found" say "Оболочка ищет только по своему PATH. Что в нём сейчас? А в ~/.bashrc?"
+  hint tries 5 say "Что сейчас в PATH этой оболочки — и что окажется в нём у новой?"
+  hint tries 10 say "export живёт до выхода из оболочки. Что новая оболочка читает при старте?"
+
+stage
+  say "report всё ещё отвечает 1.0, а коллегам нужна 2.1. Поменяй каталоги в PATH местами — и в новом терминале тоже — и покажи все report по порядку"
+  solve:
+    sed -i 's|export PATH="$PATH:/opt/acme/report-2.1/bin"|export PATH="/opt/acme/report-2.1/bin:$PATH"|' /home/student/.bashrc
+    export PATH="/opt/acme/report-2.1/bin:$PATH"
+    type -a report
+  accept output "\A[^\n]*/opt/acme/report-2\.1/bin/report\b[^\n]*\n(?:[^\n]*\n)*?[^\n]*/usr/local/bin/report"
+  check live runuser -u student -- bash -lic 'report --version' 2>/dev/null | grep -q '^report 2\.1'
+  block mv match "/usr/local/bin" say "Переносить не нужно: пусть обе версии остаются на своих местах. Вопрос в том, какую оболочка найдёт первой."
+  on enter read order.md
   neutral ls pwd cd cat
   on pass say "Порядок в PATH и есть порядок поиска. А версия 1.0 никуда не делась: её по-прежнему можно запустить полным путём."
   hint output "No such file or directory" read hash.md
   hint output "report 1.0" say "Отвечает старая. В каком порядке оболочка перебирает каталоги PATH?"
   hint tries 5 say "Что сейчас в PATH? Где в этом списке должен оказаться каталог с 2.1?"
-  hint tries 10 say "export живёт до выхода из оболочки. Что новая оболочка читает при старте?"
+  hint tries 10 say "В ~/.bashrc уже есть твоя строка. Что в ней поменять, чтобы и новая оболочка ставила 2.1 первой?"
+
+stage
+  say "Пусть report-export в bin вендора называется whoami. А теперь спроси у системы, кто ты"
+  solve:
+    mv /opt/acme/report-2.1/bin/report-export /opt/acme/report-2.1/bin/whoami
+    whoami
+  accept cmd "whoami"
+  accept output "report-export 2\.1"
+  on enter read admin.md
+  neutral ls pwd cd cat
+  on pass say "Вместо тебя отвечает чужой скрипт. Поэтому чужие каталоги дописывают в конец PATH, а впереди системных держат только то, чему доверяют. А вот pwd так не подменить: она встроена в оболочку, и PATH до неё не доходит."
+  hint cmd whoami read hash.md
+  hint output "Permission denied" say "Каталог вендора принадлежит root. Как ты уже менял системные каталоги?"
+  hint tries 5 say "Чем переименовывают файл? Ты уже переносил файлы с места на место."
+  hint tries 10 say "Где оболочка ищет whoami раньше — в /usr/bin или в bin вендора? Спроси type -a whoami."
 
 exec finale
