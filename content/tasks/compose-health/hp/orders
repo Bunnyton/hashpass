@@ -2,7 +2,7 @@
 # Проверка живого сервиса заказов (выполняется в работающей консоли).
 # orders healthy | restart
 svc() { docker ps -aq --filter "label=com.docker.compose.service=$1" | head -1; }
-page() { curl -fs http://127.0.0.1:8090/ | grep -q 'принимаем'; }
+page() { curl -fs http://127.0.0.1:8095/ | grep -q 'принимаем'; }
 running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = true ]; }
 restarts() { docker inspect -f '{{.RestartCount}}' "$1"; }
 d=$(svc db) a=$(svc app)

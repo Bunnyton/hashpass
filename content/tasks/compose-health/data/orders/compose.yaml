@@ -4,4 +4,4 @@ services:
   app:
     image: orders-app
     ports:
-      - "8090:80"
+      - "8095:80"

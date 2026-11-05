@@ -50,10 +50,10 @@ stage
   hint tries 5 say "Что показывает docker compose ps -a? У кого статус Exited — и что он писал перед этим?"
 
 stage
-  say "Сделай так, чтобы app запускался, только когда база действительно отвечает, — и заказы открылись на http://localhost:8090"
+  say "Сделай так, чтобы app запускался, только когда база действительно отвечает, — и заказы открылись на http://localhost:8095"
   solve:
     cd /home/student/orders
-    printf '%s\n' 'services:' '  db:' '    image: orders-db' '    healthcheck:' '      test: ["CMD", "wget", "-qO-", "http://localhost/"]' '      interval: 2s' '      retries: 10' '  app:' '    image: orders-app' '    ports:' '      - "8090:80"' '    depends_on:' '      db:' '        condition: service_healthy' > compose.yaml
+    printf '%s\n' 'services:' '  db:' '    image: orders-db' '    healthcheck:' '      test: ["CMD", "wget", "-qO-", "http://localhost/"]' '      interval: 2s' '      retries: 10' '  app:' '    image: orders-app' '    ports:' '      - "8095:80"' '    depends_on:' '      db:' '        condition: service_healthy' > compose.yaml
     docker compose up -d
   check live /usr/local/lib/hp-orders/orders healthy
   neutral ls cat pwd cd vim vi nano
