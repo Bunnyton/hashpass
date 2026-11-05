@@ -664,3 +664,4 @@ button.switch.on .knob::after{transform:translateX(12px)}
 .flow-chip:hover{border-color:var(--accent)}
 .flow-step.off .flow-chip{border-style:dashed;color:var(--muted)}
 @media (max-width:640px){.order-head .sp{display:none}}
+.wiki-fold-bar{gap:8px;margin-bottom:12px}

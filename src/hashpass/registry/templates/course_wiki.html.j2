@@ -26,12 +26,4 @@
 {% else %}
 <div class='empty card'><p class='sub'>У заданий {% if block_name %}этого блока{% else %}курса{% endif %} пока нет wiki.</p></div>
 {% endfor %}
-<script>
-document.addEventListener('click', function (e) {
-  var b = e.target.closest('[data-wiki-fold]');
-  if (!b) return;
-  var open = b.getAttribute('data-wiki-fold') === 'open';
-  document.querySelectorAll('details.wiki-fold').forEach(function (d) { d.open = open; });
-});
-</script>
 {% endblock %}

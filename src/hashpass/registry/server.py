@@ -2200,9 +2200,9 @@ class PoolServer:
         """
         Remove one revision (§2.7) -- any one (user 2026-11-05: «разрешай удалять версии в принципе»).
 
-        One that the owner's own images stand on (`from`, base) goes too: out of every list at once,
-        its files stay hidden while a remaining image needs them. Someone else's image standing on
-        it blocks the deletion. Used by someone else's course -> a request the admin decides (the
+        A version a live image stands on (`from`, base -- anyone's) stays until that image goes:
+        clients pull it with them (2026-11-05). Files of a deleted version stay while a deleted-but-
+        stored image needs them. Used by someone else's course -> a request the admin decides (the
         owner may withdraw it); the admin deletes at once.
         """
         head, _, n_raw = tail.rpartition("/")
@@ -2219,13 +2219,17 @@ class PoolServer:
         ref = f"{name}:{revision_version(tag, n)}"
         if self.repo(name).get(tag, n) is None:
             return self._not_found(ref)
-        # user 2026-11-05: one's own images standing on it -- fine (their files stay hidden); someone
-        # else's -- «пусть блокируется удаление»
-        others = [d for d in self._dependents(ref) if _owner_of(d.partition(":")[0]) != _owner_of(name)]
-        if others:
+        # A live image standing on it -- one's own too -- blocks the deletion: its clients pull this
+        # version as a parent/base. 2026-11-05: base trixie_v3 left the index under 66 live task
+        # versions and every pull of them got 404. Deleted dependents (files kept) do not count.
+        live = [d for d in self._dependents(ref) if self._is_live(d)]
+        if live:
+            foreign = [d for d in live if _owner_of(d.partition(":")[0]) != _owner_of(name)]
+            shown = ", ".join(live[:8]) + (f" и ещё {len(live) - 8}" if len(live) > 8 else "")  # noqa: PLR2004
             return self._json(HTTPStatus.CONFLICT, {
-                "error": f"на {ref} строятся чужие образы: {', '.join(others)} — удалить нельзя",
-                "dependents": others})
+                "error": (f"на {ref} строятся {'чужие ' if foreign else ''}образы: {shown} — удалить нельзя, "
+                          "пока они есть"),
+                "dependents": live})
         foreign = self._foreign_courses(name, tag, n)
         if foreign and not self._perm(user, "content"):
             req = self.deletions().open(ref, by=user, courses=[c.ref for c in foreign])
@@ -2364,6 +2368,12 @@ class PoolServer:
             p_tag, p_n, _ = parse_version(p_version)
             if p_n is not None and self.repo(p_name).get(p_tag, p_n) is None:   # deleted, kept for us
                 self._drop_files(parent)
+
+    def _is_live(self, ref: str) -> bool:
+        """Whether stored image `ref` is still a listed revision (a deleted one keeps files only)."""
+        name, _, version = ref.rpartition(":")
+        tag, n, _latest = parse_version(version)
+        return n is None or self.repo(name).get(tag, n) is not None
 
     def _dependents(self, ref: str) -> list[str]:
         return sorted(r for r in self.store.list() if r != ref and (
@@ -2876,8 +2886,14 @@ class PoolServer:
             text = self.wiki(name).read("wiki.md").decode("utf-8")
         except (ValueError, OSError, KeyError, UnicodeDecodeError):
             return ""
+        return self._wiki_html(name, "wiki.md", text)
+
+    @staticmethod
+    def _wiki_html(name: str, page: str, text: str) -> str:
+        """Render one wiki page to show outside its own URL: relative links point at the wiki."""
         html = str(render_page(text)[0])
-        base = f"/web/wiki/{name}/"
+        folder = page.rpartition("/")[0]
+        base = f"/web/wiki/{name}/" + (f"{folder}/" if folder else "")
         return re.sub(r'(href|src)="(?![a-z][a-z0-9+.-]*:|/|#)', lambda m: f'{m.group(1)}="{base}', html)
 
     def _wiki_exists(self, name: str) -> bool:

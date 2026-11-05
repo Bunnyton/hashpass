@@ -179,7 +179,8 @@ class SearchWeb:
                 if hit:
                     rows.append({"repo": repo, "page": page, "title": title or page, "tags": tags,
                                  "snippet": snippet(text, "" if tag is not None else q),
-                                 "href": f"/web/wiki/{repo}/{page}"})
+                                 "href": f"/web/wiki/{repo}/{page}",
+                                 "html": self.server._wiki_html(repo, page, text)})   # noqa: SLF001
         return rows
 
     def repos_api(self) -> Response:
@@ -396,7 +397,8 @@ class SearchWeb:
                 continue
             tags, body = parse_tags(text)
             rows.append({"repo": repo, "page": "wiki.md", "title": page_title(body) or repo, "tags": tags,
-                         "snippet": snippet(text, ""), "href": f"/web/wiki/{repo}/wiki.md"})
+                         "snippet": snippet(text, ""), "href": f"/web/wiki/{repo}/wiki.md",
+                         "html": self.server._wiki_html(repo, "wiki.md", text)})   # noqa: SLF001
         return rows
 
     def _top_authors(self, user: str | None, limit: int = 8) -> list[dict]:

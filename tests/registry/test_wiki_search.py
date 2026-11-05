@@ -44,3 +44,15 @@ def test_a_private_task_keeps_its_wiki_out_of_others_search(pool: _Courses) -> N
     assert "/web/wiki/bob/solo" not in _page(_browser(pool, "eve"), f"{pool.url}/?q=%23regex&type=wiki")[1]
     assert "/web/wiki/bob/solo" in _page(_browser(pool, "bob"), f"{pool.url}/?q=%23regex&type=wiki")[1]
     assert "/web/wiki/" not in _page(_browser(pool, None), f"{pool.url}/?q=%23regex&type=wiki")[1]
+
+
+@pytest.mark.tier1
+def test_a_found_wiki_unfolds_right_in_the_results(pool: _Courses) -> None:
+    """User 2026-11-05: «здесь тоже предлагаю раскрывать карточки и читать»."""
+    _wiki(pool, "bob/git-init")
+    html = _page(_browser(pool, "eve"), f"{pool.url}/?q={quote('квантификатор')}&type=wiki")[1]
+    assert "<details class='card item-card wiki-fold'" in html
+    assert "один или больше" in html                    # the page's own text, not just a snippet
+    assert "data-wiki-fold='open'" in html               # «Раскрыть все»
+    home = _page(_browser(pool, "eve"), f"{pool.url}/")[1]
+    assert "wiki-fold" in home and "Вступление." in home  # the home page's «Wiki» unfolds too

@@ -1,10 +1,10 @@
 """
-Tier1: any version can be deleted -- even one other images stand on; its number is never reused.
+Tier1: any version can be deleted once no live image stands on it; its number is never reused.
 
 User 2026-11-05: «разрешай удалять версии в принципе. Вернуть их нельзя, просто можно сделать
 недоступными — удалить, номер версии остаётся неизменным… конкретные хочу посносить».
-A version one's own images stand on leaves the lists at once; its files stay hidden while a remaining
-image needs them, and go with the last one. Someone else's image standing on it blocks the deletion.
+A version a live image stands on (one's own too) stays until that image goes: clients pull it with
+the image. Someone else's image standing on it says so.
 """
 import pytest
 
@@ -23,16 +23,20 @@ def _delete(pool: _Pool, ref: str, n: int, user: str = "bunnyton") -> tuple[int,
 
 
 @pytest.mark.tier1
-def test_a_version_others_stand_on_is_deleted_and_its_files_wait_for_them(pool: _Pool) -> None:
+def test_a_version_a_live_image_stands_on_stays_until_that_image_goes(pool: _Pool) -> None:
+    """
+    2026-11-05: base trixie_v3 left the index while 66 live task versions stood on it -- every
+    client pulling them got 404. A version any live image (one's own too) stands on stays.
+    """
     pool.push("bob/lab", "1", image="one", task="t1", parents=BASE)          # lab v1 on base v1
     pool.push("bob/kit", "1", image="k1", task="k1", parents=("bob/lab:1",))  # kit v1 stands on lab v1
     pool.push("bob/lab", "1", image="two", task="t2", parents=BASE)          # lab v2
     code, body = _delete(pool, "bob/lab/1", 1)
-    assert code == 200, body  # noqa: PLR2004
-    assert _versions(pool, "bob/lab") == [2]                                 # gone from the list
-    assert pool.r.store.exists("bob/lab:1_v1")                               # kit still needs its files
+    assert code == 409 and "bob/kit:1_v1" in body["error"], body  # noqa: PLR2004
+    assert _versions(pool, "bob/lab") == [1, 2]                              # still listed, still pulled
     assert _delete(pool, "bob/kit/1", 1)[0] == 200  # noqa: PLR2004
-    assert not pool.r.store.exists("bob/lab:1_v1")                           # the last one let go
+    assert _delete(pool, "bob/lab/1", 1)[0] == 200  # noqa: PLR2004        # nothing stands on it now
+    assert not pool.r.store.exists("bob/lab:1_v1")
     assert pool.push("bob/lab", "1", image="three", task="t3", parents=BASE)[1]["n"] == 3  # never reused  # noqa: PLR2004
 
 

@@ -18,12 +18,17 @@
 {%- endmacro %}
 
 {% macro wiki_card(r) -%}
-<article class='card item-card' data-name='{{ r.repo }}/{{ r.page }}'>
-<div class='item-head'><span class='kind kind-task'>{{ icon('file') }} wiki</span><span class='mono small dim'>{{ r.repo }}</span></div>
-<a class='item-title stretched' href='{{ r.href }}'>{{ r.title }}</a>
-{% if r.snippet %}<p class='sub small clamp'>{{ r.snippet }}</p>{% endif %}
-{% if r.tags %}<div class='item-tags'>{% for t in r.tags %}<a class='tagchip' href='/?q={{ ("#" ~ t) | q }}&type=wiki'>#{{ t }}</a>{% endfor %}</div>{% endif %}
-</article>
+{# unfolds in place to read (user 2026-11-05: «раскрывать карточки и читать»), as the course wiki #}
+<details class='card item-card wiki-fold' data-name='{{ r.repo }}/{{ r.page }}'>
+<summary>
+<span class='item-head'><span class='kind kind-task'>{{ icon('file') }} wiki</span><span class='mono small dim'>{{ r.repo }}</span></span>
+<span class='item-title'>{{ r.title }}</span>
+{% if r.snippet %}<span class='sub small clamp fold-snippet'>{{ r.snippet }}</span>{% endif %}
+{% if r.tags %}<span class='item-tags'>{% for t in r.tags %}<a class='tagchip' href='/?q={{ ("#" ~ t) | q }}&type=wiki'>#{{ t }}</a>{% endfor %}</span>{% endif %}
+</summary>
+<div class='md-body fold-body'>{{ r.html | safe }}
+<p><a href='{{ r.href }}'>открыть страницу wiki отдельно →</a></p></div>
+</details>
 {%- endmacro %}
 
 {% macro repo_card(r) -%}
