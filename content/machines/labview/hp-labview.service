@@ -1,0 +1,11 @@
+[Unit]
+Description=hashpass lab viewer (mon0 + /run/hp-lab on port 8080)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/lib/hp-labview/labview.py
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

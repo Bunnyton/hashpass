@@ -22,13 +22,18 @@ def lab_to_dict(lab: Lab, *, hosts: bool) -> dict:
     return {"name": lab.name, "version": lab.version, "hosts": hosts, "internet": lab.internet,
             "machines": [
         {"name": m.name, "console": m.console, "gw": m.gw,
-         "nets": [{"net": n.net, "addr": n.addr} for n in m.nets]} for m in lab.machines]}
+         "nets": [{"net": n.net, "addr": n.addr} for n in m.nets],
+         **({"observe": list(m.observe)} if m.observe else {}),
+         **({"view": m.view} if m.view is not None else {}),
+         **({"control": list(m.control)} if m.control else {})} for m in lab.machines]}
 
 
 def lab_from_dict(data: dict) -> tuple[Lab, bool]:
     """Rebuild a lab (machines without their build source) and its hosts flag from lab.json."""
     machines = tuple(Machine(name=m["name"], console=bool(m.get("console")), gw=m.get("gw"),
-                             nets=tuple(NetAddr(n["net"], n["addr"]) for n in m.get("nets", [])))
+                             nets=tuple(NetAddr(n["net"], n["addr"]) for n in m.get("nets", [])),
+                             observe=tuple(m.get("observe", ())), view=m.get("view"),
+                             control=tuple(m.get("control", ())))
                      for m in data["machines"])
     lab = Lab(data["name"], data["version"], machines, internet=bool(data.get("internet", True)))
     return lab, bool(data.get("hosts", True))

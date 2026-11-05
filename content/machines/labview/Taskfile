@@ -1,0 +1,6 @@
+# labview — стандартный наблюдатель стенда (spec 2026-11-05): python3 + tcpdump и служба
+# просмотрщика на порту 8080. В Labfile: build ../../machines/labview, observe all, view 8080.
+run apt-get update && apt-get install -y python3 tcpdump curl openssh-server
+copy labview.py /usr/local/lib/hp-labview/labview.py
+copy hp-labview.service /etc/systemd/system/hp-labview.service
+run ln -sf /etc/systemd/system/hp-labview.service /etc/systemd/system/multi-user.target.wants/hp-labview.service

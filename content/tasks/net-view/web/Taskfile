@@ -1,0 +1,4 @@
+# web — сервер стенда net-hello: nginx со страницей-заглушкой и вход по ssh.
+run apt-get update && apt-get install -y nginx openssh-server
+copy data/index.html /var/www/html/index.html
+run rm -f /var/www/html/index.nginx-debian.html

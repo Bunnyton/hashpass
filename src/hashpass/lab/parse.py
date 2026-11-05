@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
 from hashpass.lab.model import (
+    CONTROL_OPS,
     MAX_IFACES,
     MAX_MACHINES,
     MAX_NETS,
@@ -32,22 +33,47 @@ _MACHINE_NAME = re.compile(r"[a-z][a-z0-9-]{0,14}")
 _NET_NAME = re.compile(r"[a-z][a-z0-9-]{0,11}")
 _BUILD_STEPS = ("from", "run", "copy", "user", "image")
 _UPLINK = ipaddress.ip_network(UPLINK_CIDR)
+_MAX_PORT = 65535
 
 
 def _fail(msg: str) -> NoReturn:
     raise ValueError(msg)
 
 
-def _parse_machine(name: str, body: list[str]) -> Machine:
+def _view_port(name: str, value: str, prev: int | None) -> int:
+    if prev is not None:
+        _fail(f"машина {name}: строка view — только одна")
+    if not value.isdigit() or not 0 < int(value) <= _MAX_PORT:
+        _fail(f"машина {name}: view {value!r} — нужен порт 1…{_MAX_PORT}")
+    return int(value)
+
+
+def _control_ops(name: str, value: str) -> tuple[str, ...]:
+    ops = tuple(op for op in re.split(r"[\s,]+", value) if op)
+    for op in ops:
+        if op not in CONTROL_OPS:
+            _fail(f"машина {name}: control {op!r} — бывает только {', '.join(CONTROL_OPS)}")
+    return tuple(dict.fromkeys(ops))
+
+
+def _parse_machine(name: str, body: list[str]) -> Machine:  # noqa: C901, PLR0912
     if not _MACHINE_NAME.fullmatch(name):
         _fail(f"имя машины {name!r}: строчные латинские буквы, цифры и «-», до 15 знаков, с буквы")
-    build = image = gw = None
+    build = image = gw = view = None
     console = False
     nets: list[NetAddr] = []
+    observe: tuple[str, ...] = ()
+    control: tuple[str, ...] = ()
     for line in body:
         kw, value = _kw_value(line)
         value = value.strip()
-        if kw == "console" and not value:
+        if kw == "observe" and value:
+            observe = tuple(dict.fromkeys(value.split()))
+        elif kw == "view":
+            view = _view_port(name, value, view)
+        elif kw == "control" and value:
+            control = _control_ops(name, value)
+        elif kw == "console" and not value:
             console = True
         elif kw == "build" and value:
             build = value
@@ -59,10 +85,34 @@ def _parse_machine(name: str, body: list[str]) -> Machine:
             net, _, addr = value.partition(" ")
             nets.append(NetAddr(net, addr.strip()))
         else:
-            _fail(f"машина {name}: непонятная строка {line!r} (console, build, image, net, gw)")
+            _fail(f"машина {name}: непонятная строка {line!r} "
+                  "(console, build, image, net, gw, observe, view, control)")
     if (build is None) == (image is None):
         _fail(f"машина {name}: нужен ровно один из build или image")
-    return Machine(name, build=build, image=image, nets=tuple(nets), gw=gw, console=console)
+    if control and not observe:
+        _fail(f"машина {name}: control — только у наблюдателя (строка observe в той же машине)")
+    return Machine(name, build=build, image=image, nets=tuple(nets), gw=gw, console=console,
+                   observe=observe, view=view, control=control)
+
+
+def _resolve_observe(lab: Lab) -> Lab:
+    """Check the observer (at most one, known networks) and spell out `observe all`."""
+    observers = [m for m in lab.machines if m.observe]
+    if len(observers) > 1:
+        _fail(f"наблюдатель (observe) в стенде один, а их {len(observers)}: "
+              f"{', '.join(m.name for m in observers)}")
+    if not observers:
+        return lab
+    obs = observers[0]
+    if obs.observe == ("all",):
+        nets = lab.networks
+    else:
+        for net in obs.observe:
+            if net not in lab.networks:
+                _fail(f"машина {obs.name}: observe {net} — в стенде нет сети {net}")
+        nets = obs.observe
+    return replace(lab, machines=tuple(replace(m, observe=nets) if m is obs else m
+                                       for m in lab.machines))
 
 
 def _iface(m: Machine, n: NetAddr) -> ipaddress.IPv4Interface | ipaddress.IPv6Interface:
@@ -159,6 +209,7 @@ def parse_labfile(text: str) -> tuple[Lab, Recipe]:
     recipe = parse_recipe("\n".join([f"image {name}:{version}", *rest]) + "\n")
     lab = Lab(name, version, tuple(machines), internet=recipe.settings.internet)
     validate(lab)
+    lab = _resolve_observe(lab)
     known = {m.name for m in lab.machines}
     for stage in recipe.stages:
         if stage.check_node is not None and stage.check_node not in known:

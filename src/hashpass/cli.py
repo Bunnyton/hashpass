@@ -1282,6 +1282,8 @@ def _run_task(env: Home, ref: str, store: ImageStore, io: Io, *,  # noqa: PLR091
                 raise RuntimeError(full)
             io.write(f"\x1b[2m▸ поднимаю стенд: {', '.join(m.name for m in lab.lab.machines)}…\x1b[0m\n")
             lab.start(port)
+            for name, url in lab.view_urls().items():     # `view` (spec 2026-11-05 §6)
+                io.write(f"\x1b[1m▸ просмотр {name}: {url}\x1b[0m — открой в браузере\n")
             extra = lab.console_args()
         # The whole interaction (greeting, per-command react/grade/hints/on_pass) runs live IN
         # the console over the grade socket -- so nothing is printed before the boot, where the

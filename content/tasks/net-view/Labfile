@@ -1,0 +1,55 @@
+# net-view — стенд net-hello плюс машина-наблюдатель mon (spec 2026-11-05): копия всех кадров
+# сети в её mon0, лента статуса и кабели, которыми можно щёлкать из браузера студента.
+# Студент смотрит, как его ping ходит по сети, выдёргивает кабель у web и возвращает его.
+lab net-view:1
+
+machine pc
+  console
+  build pc
+  net lan 10.20.0.10/24
+
+machine web
+  build web
+  net lan 10.20.0.20/24
+
+machine mon
+  build ../../machines/labview
+  net lan 10.20.0.30/24
+  observe all
+  view 8080
+  control link, netem
+
+hidden hp
+
+say "В серверной поставили наблюдателя: машина mon видит каждый кадр в сети и рисует схему в браузере. Посмотрим, что она покажет."
+read brief.md
+
+stage
+  say "Убедись, что web отвечает, и найди свои пакеты в просмотрщике"
+  solve ping -c 3 web
+  accept cmd "ping" ok
+  neutral ls cat pwd cd curl
+  on pass say "Каждый запрос и ответ — отдельная строка: ICMP туда, ICMP обратно. Перед ними — ARP: pc сначала спрашивал, у кого адрес 10.20.0.20."
+  hint output "Name or service not known" say "Такого имени система не знает. Посмотри, как зовут соседа."
+  hint tries 5 say "Какая команда спрашивает у машины «ты тут?» и ждёт ответа?"
+
+stage
+  say "Выдерни кабель у web и убедись, что он замолчал"
+  on enter read cable.md
+  solve true
+  accept output "100% packet loss"
+  neutral ls cat pwd cd
+  on pass say "Так выглядит авария со стороны: имя есть, адрес есть, а ответа нет. В просмотрщике видно, что запросы уходят, а до web не доходят."
+  hint tries 5 say "Кнопки у каждой машины в схеме просмотрщика — это и есть кабели."
+
+stage
+  say "Верни кабель и открой сайт web"
+  solve curl -s http://web/
+  accept output "на ремонте"
+  neutral ls cat pwd cd ping
+  on pass say "Кабель на месте, сайт снова отвечает — а в просмотрщике теперь видно и TCP: порт 80, рукопожатие и ответ."
+  hint output "Could not resolve host" say "Перечитай адрес: имя машины то же, что ты пинговал."
+  hint output "Failed to connect" say "Сайт не отвечает — а кабель у web точно вставлен?"
+  hint tries 5 say "Страницу сайта из консоли ты уже открывал на прошлом стенде."
+
+exec finale

@@ -10,6 +10,8 @@ MAX_IFACES = 4
 # The uplink (slirp4netns in the switch's netns): its own range, out of the authors' way.
 UPLINK_CIDR = "100.64.250.0/24"
 UPLINK_DNS = "100.64.250.3"
+CONTROL_OPS = ("link", "netem")    # what an observer may be allowed to change (spec 2026-11-05 §5)
+OBSERVER_IFACE = "mon0"            # the observer's mirror port
 _V4 = 4
 
 
@@ -36,6 +38,9 @@ class Machine:
     nets: tuple[NetAddr, ...] = ()
     gw: str | None = None
     console: bool = False
+    observe: tuple[str, ...] = ()      # networks mirrored into its mon0 (spec 2026-11-05)
+    view: int | None = None            # its port opened in the student's browser
+    control: tuple[str, ...] = ()      # what it may change through /run/hp-lab/control.sock
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,11 @@ class Lab:
     def nodes(self) -> tuple[Machine, ...]:
         """Every other machine (booted in the background)."""
         return tuple(m for m in self.machines if not m.console)
+
+    @property
+    def observer(self) -> Machine | None:
+        """The machine with `observe` (at most one), else None."""
+        return next((m for m in self.machines if m.observe), None)
 
     @property
     def networks(self) -> tuple[str, ...]:
