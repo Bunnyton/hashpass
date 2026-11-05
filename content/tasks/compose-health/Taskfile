@@ -1,9 +1,8 @@
 # compose-health — запуск по готовности: в ~/orders база db поднимается 8 секунд, а app
 # проверяет её один раз при старте и падает — причина в журнале → healthcheck у db +
-# depends_on с condition: service_healthy (доза healthcheck.md, когда app снова пишет «база
-# недоступна») → restart-политика: упавший app docker поднимает сам (доза restart.md при входе;
-# проверка роняет app изнутри через /tmp/crash). Скрипт проверки — копия hp/orders в
-# /usr/local/lib/hp-orders (check live выполняется в работающей консоли).
+# depends_on с condition: service_healthy (доза healthcheck.md при входе во второй шаг) →
+# restart-политика: упавший app docker поднимает сам (доза restart.md при входе; проверка
+# роняет app изнутри через /tmp/crash). Скрипт проверки — копия hp/orders в /usr/local/lib/hp-orders (check live выполняется в работающей консоли).
 # Продолжает docker-multistage: оттуда Docker, compose и образы.
 
 image compose-health:1
@@ -58,8 +57,8 @@ stage
     docker compose up -d
   check live /usr/local/lib/hp-orders/orders healthy
   neutral ls cat pwd cd vim vi nano
+  on enter read healthcheck.md
   on pass say "Теперь compose ждёт «healthy», а не просто «запущен». Статус здоровья видно в docker compose ps: (health: starting), потом (healthy)."
-  hint output "база недоступна" read healthcheck.md
   hint output "yaml:" say "compose не понял файл: в YAML важны отступы — только пробелы, вложенность ровная."
   hint output "is unhealthy" say "Проверка здоровья базы не проходит. Что она запускает — и есть ли эта программа в образе базы? docker inspect покажет последние попытки."
   hint tries 5 say "Что показывает docker compose ps: app запущен? А в журнале app что?"

@@ -53,6 +53,7 @@ stage
   solve:
     docker rmi stock localhost:5000/stock:1.0
     docker run -d localhost:5000/stock:1.0
+  on enter read rmi.md
   check live ! docker image inspect stock >/dev/null 2>&1 && docker ps --format '{{.Image}}' | grep -qx 'localhost:5000/stock:1.0'
   neutral ls cat pwd cd
   on pass say "Образ скачался из твоего реестра. Так и выкатывают: сборка отправляет образ в реестр, сервер делает docker pull — и никто не копирует файлы руками."

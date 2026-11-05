@@ -62,6 +62,6 @@ stage
   on pass say "docker run --rm удаляет контейнер сам, как только команда в нём закончится, — мусора не остаётся."
   hint output "No such container" say "Контейнер называют по ID или имени — оба есть в списке, который ты только что видел."
   hint tries 5 say "Файлы удаляет rm. Угадай, как называется команда docker, которая удаляет контейнеры."
-  hint tries 10 say "docker --help перечислит все команды; docker container --help — всё, что умеют с контейнерами."
+  hint tries 10 say "Что из списка docker --help похоже на удаление? А docker container --help — всё, что умеют с контейнерами."
 
 exec finale

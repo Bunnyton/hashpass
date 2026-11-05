@@ -33,6 +33,7 @@ stage
   neutral ls cat pwd cd
   on pass say "Порт машины слева, порт контейнера справа: так на одной машине уживаются десяток сайтов, и каждый уверен, что он на 80-м."
   hint output "Failed to connect" read ports.md
+  hint cmd carbonyl read ports.md
   hint output "address already in use" say "Этот порт на твоём компьютере уже кем-то занят. Возьми другой — любой свободный подойдёт."
   hint tries 5 say "Контейнер работает (docker ps)? А какой порт ты открываешь в браузере и откуда он должен взяться?"
   hint tries 10 say "docker run --help — найди ключ, который публикует порт контейнера на машине."

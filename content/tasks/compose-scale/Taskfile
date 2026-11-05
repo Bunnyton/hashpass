@@ -1,5 +1,5 @@
 # compose-scale — масштаб и сети в compose: три витрины shopfront на 8081–8083 (диапазон портов
-# + --scale; доза ranges.md на занятый порт) → их число в compose.yaml (deploy.replicas) →
+# + --scale; доза ranges.md на занятый порт) → их число в compose.yaml (deploy.replicas, доза replicas.md при входе) →
 # склад только во внутренней сети private (internal: true), витрины — в private и в public
 # (доза networks.md при входе). Скрипт проверки — копия hp/shop в /usr/local/lib/hp-shop
 # (check live выполняется в работающей консоли). Склад и витрина — образы из docker-network.
@@ -50,12 +50,12 @@ stage
     cd /home/student/shop
     sed -i 's/^    image: shopfront$/&\n    deploy:\n      replicas: 3/' compose.yaml
     docker compose up -d
+  on enter read replicas.md
   check live /usr/local/lib/hp-shop/shop replicas
   neutral ls cat pwd cd vim vi nano
   on pass say "deploy — раздел для кластеров. Тот же compose.yaml понимает Docker Swarm: docker stack deploy раскидает реплики по нескольким серверам."
   hint output "yaml:" say "compose не понял файл: в YAML важны отступы — только пробелы, вложенность ровная."
-  hint tries 5 say "Число копий сервиса в compose.yaml называется replicas. В каком разделе сервиса оно живёт — ищи в документации compose."
-  hint tries 10 say "Раздел называется deploy."
+  hint tries 5 say "Сколько витрин показывает docker compose ps после up без ключей?"
 
 stage
   say "Склад не должен видеть интернет и быть доступен никому, кроме витрин: держи его только во внутренней сети private, а витрины — в private и в обычной сети public"
