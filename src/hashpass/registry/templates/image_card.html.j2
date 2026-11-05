@@ -67,6 +67,10 @@
 {% if image.description %}<div class='about'>{% if image.about[0] %}<h3>{{ image.about[0] }}</h3>{% endif %}{% for p in image.about[1] %}<p>{{ p }}</p>{% endfor %}</div>{% else %}<p class='sub'>Описания нет.</p>{% endif %}
 {% if owner %}<p class='sub small'>Описание — файл <code>README.md</code> рядом с Taskfile: правится в задании и публикуется с <code>hashpass push</code>.</p>{% endif %}
 </article>
+{% if wiki_html %}<article class='readme card wiki-inline' aria-label='Wiki'>
+<div class='readme-head'>{{ icon('file') }} Wiki <span class='sp'></span><a class='small' href='/web/wiki/{{ repo }}'>вся wiki →</a></div>
+<div class='md-body'>{{ wiki_html | safe }}</div>
+</article>{% endif %}
 
 {% if merges or may_fork or (fork_origin and n) %}
 <section id='changes' class='repo-section' aria-label='Предложения'>

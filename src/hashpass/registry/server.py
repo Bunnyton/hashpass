@@ -89,6 +89,7 @@ from hashpass.registry.web import (
     render_users,
     render_versions,
 )
+from hashpass.registry.wiki_render import render_page
 from hashpass.registry.wiki_store import WikiStore
 from hashpass.registry.wiki_web import WikiWeb
 from hashpass.taskdigest import task_digest
@@ -2861,7 +2862,23 @@ class PoolServer:
             "may_people": self._repo_level(viewer, name) >= OWNER,
             "role_ru": _ROLE_RU,
             "has_wiki": self._wiki_exists(name),
+            "wiki_html": self._wiki_main(name),
         }
+
+    def _wiki_main(self, name: str) -> str:
+        """
+        Render the wiki's main page for the task card, under the README (user 2026-11-05).
+
+        Its relative links (`wiki/x.md`, pictures) are written from the wiki's own folder; on the
+        card they would lead astray, so they point at the wiki's pages instead.
+        """
+        try:
+            text = self.wiki(name).read("wiki.md").decode("utf-8")
+        except (ValueError, OSError, KeyError, UnicodeDecodeError):
+            return ""
+        html = str(render_page(text)[0])
+        base = f"/web/wiki/{name}/"
+        return re.sub(r'(href|src)="(?![a-z][a-z0-9+.-]*:|/|#)', lambda m: f'{m.group(1)}="{base}', html)
 
     def _wiki_exists(self, name: str) -> bool:
         try:

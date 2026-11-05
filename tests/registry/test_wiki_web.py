@@ -141,3 +141,15 @@ def test_the_course_page_links_each_task_to_its_wiki(pool) -> None:
     _http("POST", f"{pool.url}/wiki/bob/git-init?base=0", token=pool.tok["bob"], data=pack({"wiki.md": b"# Git\n"}))
     html = _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux")[1]
     assert "href='/web/wiki/bob/git-init'" in html
+
+
+@pytest.mark.tier1
+def test_the_task_card_shows_the_wiki_under_the_readme(pool) -> None:
+    """User 2026-11-05: «README идёт в о задании… а внизу сразу отображается wiki»."""
+    _http("POST", f"{pool.url}/wiki/bob/git-init?base=0", token=pool.tok["bob"],
+          data=pack({"wiki.md": "# Теория git\n\nСм. [шпаргалку](wiki/sheet.md).\n".encode(),
+                     "wiki/sheet.md": b"# Sheet\n"}))
+    html = _page(_browser(pool, "eve"), f"{pool.url}/web/image/bob/git-init:1")[1]
+    readme, wiki = html.index("README.md"), html.index("Теория git")
+    assert readme < wiki                                                    # the wiki comes under it
+    assert 'href="/web/wiki/bob/git-init/wiki/sheet.md"' in html            # its links still lead home
