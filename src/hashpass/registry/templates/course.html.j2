@@ -222,6 +222,7 @@
 {% if may.edit %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
 {% set rp = t.revision.rpartition('_v') %}<span class='tref has-tip'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}' aria-describedby='tip-{{ loop.index }}-{{ b.id }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span>{% if t.at %} <span class='small dim'>обновлено {{ ago(t.at) }}</span>{% endif %}
 <span class='tip card' role='tooltip' id='tip-{{ loop.index }}-{{ b.id }}'><span class='kind kind-task'>{{ icon('task') }} задание</span><b class='mono'>{{ rp[0] }}</b><span class='sub small'>{{ t.about or 'без описания' }}</span><a class='small' href='/web/image/{{ t.revision | ref_url }}'>открыть задание →</a></span></span>
+{% if t.has_wiki %}<a class='small' href='/web/wiki/{{ t.repo }}' title='теория задания'>wiki</a>{% endif %}
 {% if t.hidden %}<span class='pill closed sm'>скрыто</span>{% endif %}
 {% if t.needs and may.content %}<span class='pill warn sm'>🔒 откроется после: {{ need_names(t.needs, block_names) }}</span>
 {% elif t.waiting_for %}<span class='pill warn sm'>🔒 откроется, когда решите: {% for n in t.waiting_for %}«{{ n }}»{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}

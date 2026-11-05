@@ -133,3 +133,11 @@ def test_deleting_the_task_keeps_its_wiki_and_a_fork_keeps_a_copy(pool: _Courses
     # spec: the wiki goes only with the repository -- deleting a tag keeps it (review 2026-11-03)
     assert pool.r.store.root.joinpath(".repos/bob/git-init/wiki/v2").is_dir()
     assert pool.r.store.root.joinpath(".repos/eve/git-init/wiki/v2").is_dir()
+
+
+@pytest.mark.tier1
+def test_the_course_page_links_each_task_to_its_wiki(pool) -> None:
+    """User 2026-11-05: «я не увидел wiki» -- the course list, where students look, links it."""
+    _http("POST", f"{pool.url}/wiki/bob/git-init?base=0", token=pool.tok["bob"], data=pack({"wiki.md": b"# Git\n"}))
+    html = _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux")[1]
+    assert "href='/web/wiki/bob/git-init'" in html

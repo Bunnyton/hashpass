@@ -117,6 +117,7 @@ class CourseWeb:
         for block in view.get("blocks") or []:        # «what is this task» for the hover card
             for task in block.get("tasks", []):
                 task["about"] = self.server.people.about(str(task.get("revision") or task["ref"]))
+                task["has_wiki"] = self.server._wiki_exists(task["repo"])   # noqa: SLF001  (a «wiki» link in the list)
         pool = self.server._pool_url()                                         # noqa: SLF001
         link = f"{pool}/c/{course.ref}"
         invite_link = f"{link}?invite={quote(course.invite)}" if may["people"] else ""
