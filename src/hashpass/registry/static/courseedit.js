@@ -4,10 +4,27 @@
 (function () {
   var cat = document.getElementById('cat');
   if (!cat) return;
-  var toast = window.hpToast || function () {};
+  // catalog.js (structure editors) brings the toast; a mirror's page has only this file
+  var toast = window.hpToast || (function () {
+    var el = null, timer = null;
+    return function (text, bad) {
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'toast';
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        document.body.appendChild(el);
+      }
+      el.textContent = text;
+      el.classList.toggle('bad', !!bad);
+      el.classList.add('show');
+      clearTimeout(timer);
+      timer = setTimeout(function () { el.classList.remove('show'); }, bad ? 4000 : 1800);
+    };
+  })();
   // a bulk change can be taken back for a few seconds (ui-ux: undo-support for bulk actions)
   var undoEl = null, undoTimer = null;
-  function offerUndo(text, undo) {
+  function offerUndo(text, undo, expire) {
     if (!undoEl) {
       undoEl = document.createElement('div');
       undoEl.className = 'toast undo';
@@ -22,13 +39,13 @@
     btn.type = 'button';
     btn.className = 'undo-btn';
     btn.textContent = 'Отменить';
-    btn.addEventListener('click', function () { hide(); undo(); });
+    btn.addEventListener('click', function () { hide(); undo(); }, { once: true });
     undoEl.appendChild(span);
     undoEl.appendChild(btn);
     undoEl.classList.add('show');
     function hide() { clearTimeout(undoTimer); undoEl.classList.remove('show'); }
     clearTimeout(undoTimer);
-    undoTimer = setTimeout(hide, 7000);
+    undoTimer = setTimeout(function () { hide(); if (expire) expire(); }, 7000);
   }
   var KEY = 'hp-scroll:' + location.pathname;
 
@@ -69,6 +86,13 @@
     btn.setAttribute('aria-label', (hide ? 'Показать ' : 'Скрыть ') + what);
     btn.title = hide ? 'Скрыто — показать проходящим курс' : 'Скрыть от проходящих курс';
     holder.classList.toggle(isBlock ? 'block-hidden' : 'task-hidden', hide);
+    if (isBlock) {                                  // its chip in «Порядок открытия»
+      var chip = document.querySelector('.flow-chip[href="#blk-' + holder.getAttribute('data-block-id') + '"]');
+      if (chip) {
+        chip.parentNode.classList.toggle('off', hide);
+        if (hide) chip.title = 'скрыт от проходящих курс'; else chip.removeAttribute('title');
+      }
+    }
     var head = isBlock ? holder.querySelector('.block-head') : holder;
     var pill = head.querySelector(isBlock ? ':scope > .pill.closed' : ':scope > .pill.closed');
     if (hide && !pill) {
@@ -155,10 +179,10 @@
       act.disabled = true;
       apply(eyes, hide).then(function (done) {
         if (!done) return;
+        // chained order: the «после …» pills change -- reload once the undo window is over
         offerUndo((hide ? 'Скрыто: ' : 'Показано: ') + done, function () {
           apply(eyes, !hide).then(function (back) { if (back) { toast('Отменено'); reloadIfChained(); } });
-        });
-        if (cat.getAttribute('data-chained')) reloadIfChained();
+        }, reloadIfChained);
       }).then(function () { act.disabled = false; });
     });
     bar.addEventListener('change', function (e) {
@@ -175,13 +199,13 @@
         li.classList.add('just-moved');
         setTimeout(function () { li.classList.remove('just-moved'); }, 700);
       });
-      window.hpSaveLayout();
+      window.hpSaveLayout({ noReload: true });
       offerUndo('Перенесено в «' + (name ? name.textContent : 'блок') + '»: ' + rows.length, function () {
         back.slice().reverse().forEach(function (b) {
           b.list.insertBefore(b.li, b.next && b.next.parentNode === b.list ? b.next : null);
         });
         window.hpSaveLayout();
-      });
+      }, reloadIfChained);
     });
   }
 })();

@@ -2400,8 +2400,17 @@ class PoolServer:
         return newest or (base if self.store.exists(base) else None)
 
     def _dependents(self, ref: str) -> list[str]:
-        return sorted(r for r in self.store.list() if r != ref and (
-            ref in self.store.get(r).parents or self._live_base(self.store.get(r).base) == ref))
+        live: dict[str, str | None] = {}           # hundreds of images share one base: resolve it once
+        out = []
+        for r in self.store.list():
+            if r == ref:
+                continue
+            img = self.store.get(r)
+            if img.base and img.base not in live:
+                live[img.base] = self._live_base(img.base)
+            if ref in img.parents or (img.base and live[img.base] == ref):
+                out.append(r)
+        return sorted(out)
 
     def _foreign_courses(self, name: str, tag: str, n: int) -> list["course_model.Course"]:
         """Courses of someone other than the repository's owner showing revision n of name:tag."""

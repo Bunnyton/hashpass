@@ -34,7 +34,7 @@
   var cat = document.getElementById('cat');
   var layoutUrl = (cat && cat.getAttribute('data-layout-url')) || '/web/catalog/layout';
 
-  function save() {
+  function save(opts) {          // opts.noReload: the caller reloads later (an undo window is open)
     var body = { blocks: snapshot() };
     var rev = cat && cat.getAttribute('data-rev');
     if (rev !== null && rev !== undefined && rev !== '') body.rev = parseInt(rev, 10);
@@ -49,7 +49,9 @@
           .catch(function () {});
         toast('Порядок сохранён');
         // blocks / tasks open in order: the chain moved with them -- show the new «после …»
-        if (cat && cat.getAttribute('data-chained')) setTimeout(function () { location.reload(); }, 900);
+        if (cat && cat.getAttribute('data-chained') && !(opts && opts.noReload)) {
+          setTimeout(function () { location.reload(); }, 900);
+        }
         return;
       }
       toast(r.status === 403 ? 'Порядок заданий меняет только администратор'
