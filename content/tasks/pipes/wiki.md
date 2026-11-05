@@ -83,8 +83,6 @@ tags: конвейер, grep, текст, перенаправление
 ## Источники
 
 - `man bash` — [на man7.org](https://man7.org/linux/man-pages/man1/bash.1.html), раздел Pipelines.
-- [Конвейер (Unix) — Википедия](https://ru.wikipedia.org/wiki/Конвейер_(Unix)) — идея и
-  история: Дуглас Макилрой, 1973.
 - [LinuxCommand.org: I/O Redirection](https://linuxcommand.org/lc3_lts0070.php) — конвейеры и
   фильтры на простых примерах.
 - `man tee` — [на man7.org](https://man7.org/linux/man-pages/man1/tee.1.html).

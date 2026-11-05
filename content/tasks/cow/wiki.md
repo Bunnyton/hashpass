@@ -116,6 +116,5 @@ RES у обоих почти одинаковый, а `Private_Dirty` отлич
   smaps и smaps_rollup.
 - [The /proc Filesystem — документация ядра](https://www.kernel.org/doc/html/latest/filesystems/proc.html)
   — Rss, Pss, Private/Shared.
-- [Копирование при записи — Википедия](https://ru.wikipedia.org/wiki/Копирование_при_записи)
 - [Redis persistence](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/)
   — как fork и COW используют на практике.

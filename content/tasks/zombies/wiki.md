@@ -101,6 +101,5 @@ tags: процессы, зомби, ps, systemd
   STAT.
 - [man proc(5) (man7.org)](https://man7.org/linux/man-pages/man5/proc.5.html) —
   `/proc/sys/kernel/pid_max`.
-- [Процесс-зомби — Википедия](https://ru.wikipedia.org/wiki/Процесс-зомби) — по-русски.
 - [man systemd.service (man7.org)](https://man7.org/linux/man-pages/man5/systemd.service.5.html) —
   `Restart=` и почему служба встаёт снова.

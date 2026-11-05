@@ -124,4 +124,3 @@ Docker создаёт из образа новый контейнер, запу�
   ключи `docker run`.
 - [Изучаем Docker, часть 1: основы](https://habr.com/ru/companies/ruvds/articles/438796/) —
   цикл статей на Хабре по-русски.
-- [Docker — Википедия](https://ru.wikipedia.org/wiki/Docker) — история проекта.

@@ -96,7 +96,6 @@ curl видит пустой абзац и скрипт; браузер пока
   подробности: адреса, протоколы, `-P`.
 - [docker container run](https://docs.docker.com/reference/cli/docker/container/run/) — все
   ключи, в том числе `-d` и `-p`.
-- [Window.atob() — MDN](https://developer.mozilla.org/ru/docs/Web/API/Window/atob) и
-  [Base64 — Википедия](https://ru.wikipedia.org/wiki/Base64).
+- [Window.atob() — MDN](https://developer.mozilla.org/ru/docs/Web/API/Window/atob) — как браузер раскодирует Base64.
 - [Изучаем Docker, часть 5: команды](https://habr.com/ru/companies/ruvds/articles/440660/) —
   по-русски.

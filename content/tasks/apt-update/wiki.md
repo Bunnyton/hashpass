@@ -122,4 +122,3 @@ tags: apt, пакеты, debian, установка
 - [Apt — Debian Wiki (русский)](https://wiki.debian.org/ru/Apt)
 - [Debian Handbook: apt-get и apt](https://www.debian.org/doc/manuals/debian-handbook/sect.apt-get.ru.html)
   — подробно и по-русски.
-- [Advanced Packaging Tool — Википедия](https://ru.wikipedia.org/wiki/Advanced_Packaging_Tool)

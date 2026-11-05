@@ -132,5 +132,4 @@ tags: права, chmod, файлы, каталоги
   особые биты.
 - [Права и атрибуты файлов — ArchWiki (русский)](https://wiki.archlinux.org/title/File_permissions_and_attributes_(Русский))
   — подробно и с примерами, включая каталоги.
-- [chmod — Википедия](https://ru.wikipedia.org/wiki/Chmod) — история и таблицы.
 - [Chmod Calculator](https://chmod-calculator.com/) — галочки ↔ цифры ↔ буквы.

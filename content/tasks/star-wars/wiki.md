@@ -93,8 +93,6 @@ telnet передаёт всё **открытым текстом**, включа
 
 - [telnet(1) — manpages.debian.org](https://manpages.debian.org/trixie/inetutils-telnet/telnet.1.en.html)
   — команды после `Ctrl+]`.
-- [Telnet — Википедия](https://ru.wikipedia.org/wiki/Telnet) — история и устройство протокола.
 - [RFC 854](https://www.rfc-editor.org/rfc/rfc854) — спецификация Telnet 1983 года.
 - [telehack.com](https://telehack.com/) — тот же Telehack, только в браузере.
-- [Telehack — Wikipedia](https://en.wikipedia.org/wiki/Telehack)
 - [ASCIIMation](https://www.asciimation.co.nz/) — «Звёздные войны» Саймона Янсена.

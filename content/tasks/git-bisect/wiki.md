@@ -117,4 +117,3 @@ tags: git, bisect, отладка, поиск
 - [Pro Git: Обнаружение ошибок с помощью Git](https://git-scm.com/book/ru/v2/Инструменты-Git-Обнаружение-ошибок-с-помощью-Git) —
   blame и bisect, на русском.
 - [git-revert](https://git-scm.com/docs/git-revert) — отмена коммита новым коммитом.
-- [Двоичный поиск — Википедия](https://ru.wikipedia.org/wiki/Двоичный_поиск) — сам алгоритм.

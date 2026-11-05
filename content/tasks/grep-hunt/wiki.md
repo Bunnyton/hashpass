@@ -111,7 +111,5 @@ tags: grep, текст, поиск, файлы
 - [GNU grep — руководство](https://www.gnu.org/software/grep/manual/grep.html) — все ключи с
   примерами.
 - `man grep` — [на man7.org](https://man7.org/linux/man-pages/man1/grep.1.html).
-- [grep — Википедия](https://ru.wikipedia.org/wiki/Grep) — откуда взялось странное имя
-  (g/re/p из редактора ed).
 - [LinuxCommand.org: I/O Redirection](https://linuxcommand.org/lc3_lts0070.php) — grep как
   фильтр в конвейере, на английском.

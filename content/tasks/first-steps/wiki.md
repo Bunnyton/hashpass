@@ -95,7 +95,6 @@ tags: основы, echo, перенаправление, файлы
 - [`man 1 echo`](https://man7.org/linux/man-pages/man1/echo.1.html) — все ключи echo.
 - [Bash Reference Manual — Redirections](https://www.gnu.org/software/bash/manual/bash.html#Redirections)
   — официально про `>`, `>>`, `2>` и остальное.
-- [Перенаправление ввода-вывода — Википедия](https://ru.wikipedia.org/wiki/Перенаправление_ввода-вывода).
 - [Перенаправление ввода-вывода в Linux — Losst](https://losst.pro/perenapravlenie-vvoda-vyvoda-linux)
   — по-русски, с примерами.
 - [Команда echo в Linux — Losst](https://losst.pro/komanda-echo-v-linux).

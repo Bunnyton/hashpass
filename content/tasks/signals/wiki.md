@@ -111,5 +111,3 @@ KILL мгновенный — и поэтому грязный. Процесс �
   сигналы по имени.
 - [man bash (man7.org)](https://man7.org/linux/man-pages/man1/bash.1.html) — встроенная
   `trap`.
-- [Сигнал (Unix) — Википедия](https://ru.wikipedia.org/wiki/Сигнал_(Unix)) — по-русски, с
-  историей.

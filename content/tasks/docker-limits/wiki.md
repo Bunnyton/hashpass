@@ -123,4 +123,3 @@ killer, но выбирало бы жертву по всей машине.
   документация ядра: memory.max, cpu.max и остальные файлы.
 - `man 7 signal` — [на man7.org](https://man7.org/linux/man-pages/man7/signal.7.html): номера
   сигналов, SIGKILL и SIGTERM.
-- [cgroups — Википедия](https://ru.wikipedia.org/wiki/Cgroups)

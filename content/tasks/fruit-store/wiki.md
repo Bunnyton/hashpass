@@ -126,4 +126,3 @@ tags: sort, uniq, wc, текст, конвейер
 - `man sort` — [на man7.org](https://man7.org/linux/man-pages/man1/sort.1.html).
 - `man uniq` — [на man7.org](https://man7.org/linux/man-pages/man1/uniq.1.html).
 - `man wc` — [на man7.org](https://man7.org/linux/man-pages/man1/wc.1.html).
-- [Конвейер (Unix) — Википедия](https://ru.wikipedia.org/wiki/Конвейер_(Unix)).

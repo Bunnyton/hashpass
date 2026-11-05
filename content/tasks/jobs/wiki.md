@@ -110,5 +110,3 @@ Ctrl+C достаётся только тому, кто сейчас на пер
   переживающий выход.
 - [man signal(7) (man7.org)](https://man7.org/linux/man-pages/man7/signal.7.html) — INT, TSTP,
   CONT, HUP.
-- [Сигнал (Unix) — Википедия](https://ru.wikipedia.org/wiki/Сигнал_(Unix)) — коротко о
-  сигналах по-русски.

@@ -118,7 +118,5 @@ tags: xargs, awk, cut, текст, архивы
 
 - `man xargs` — [на man7.org](https://man7.org/linux/man-pages/man1/xargs.1.html).
 - `man cut` — [на man7.org](https://man7.org/linux/man-pages/man1/cut.1.html).
-- [AWK — Википедия](https://ru.wikipedia.org/wiki/AWK) — язык целиком, не только `print $2`.
-- [xargs — Википедия](https://ru.wikipedia.org/wiki/Xargs).
 - `man tar` — [на man7.org](https://man7.org/linux/man-pages/man1/tar.1.html); `man file` —
   [на man7.org](https://man7.org/linux/man-pages/man1/file.1.html).

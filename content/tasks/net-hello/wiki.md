@@ -143,4 +143,3 @@ nginx применяют `sudo systemctl reload nginx`.
   русском: как nginx отдаёт файлы, `root`, перезагрузка настроек.
 - [Обзор протокола HTTP — MDN](https://developer.mozilla.org/ru/docs/Web/HTTP/Overview) —
   что такое запрос, ответ и коды.
-- [SSH — Википедия](https://ru.wikipedia.org/wiki/SSH) — как устроен протокол.

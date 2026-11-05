@@ -102,5 +102,4 @@ VS Code, Discord, Zoom) — тогда его скачивают руками и
 - [dpkg-deb(1) по-русски](https://manpages.debian.org/trixie/dpkg/dpkg-deb.1.ru.html) —
   заглянуть в `.deb` без установки.
 - [deb — Debian Wiki (русский)](https://wiki.debian.org/ru/deb) — формат пакета.
-- [dpkg — Википедия](https://ru.wikipedia.org/wiki/Dpkg)
 - [wget(1) на man7.org](https://man7.org/linux/man-pages/man1/wget.1.html)

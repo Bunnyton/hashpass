@@ -93,7 +93,5 @@ tags: перенаправление, bash, файлы
   правилами.
 - [LinuxCommand.org: I/O Redirection](https://linuxcommand.org/lc3_lts0070.php) — `>` и `>>`
   простым языком.
-- [Стандартные потоки — Википедия](https://ru.wikipedia.org/wiki/Стандартные_потоки) — откуда
-  берётся вывод и куда его можно направить.
 - [BashGuide (Greg's Wiki)](https://mywiki.wooledge.org/BashGuide) — хороший учебник bash,
   раздел Input and Output.

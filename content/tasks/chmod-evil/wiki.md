@@ -107,5 +107,4 @@ tags: права, chmod, chgrp, файлы
 - [chmod(1) на man7.org](https://man7.org/linux/man-pages/man1/chmod.1.html) — раздел
   «SYMBOLIC MODES» и «NUMERIC MODE».
 - [Права и атрибуты файлов — ArchWiki (русский)](https://wiki.archlinux.org/title/File_permissions_and_attributes_(Русский))
-- [chmod — Википедия](https://ru.wikipedia.org/wiki/Chmod) — таблицы перевода.
 - [Chmod Calculator](https://chmod-calculator.com/) — проверить себя: галочки ↔ цифры ↔ буквы.

@@ -123,7 +123,6 @@ tags: bash, скрипты, path, файлы
 
 - `man bash` — [на man7.org](https://man7.org/linux/man-pages/man1/bash.1.html), разделы Command Substitution (`$( )`) и ARITHMETIC
   EVALUATION (`$(( ))`).
-- [PATH (переменная) — Википедия](https://ru.wikipedia.org/wiki/PATH_(переменная)).
 - `man 7 hier` — [на man7.org](https://man7.org/linux/man-pages/man7/hier.7.html): какой
   каталог для чего (`/tmp`, `/var/tmp`, `/usr/local`).
 - [BashGuide (Greg's Wiki)](https://mywiki.wooledge.org/BashGuide) — лучший вводный учебник

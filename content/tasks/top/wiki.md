@@ -93,4 +93,3 @@ tags: процессы, top, мониторинг, kill
 - [man kill (man7.org)](https://man7.org/linux/man-pages/man1/kill.1.html) — как послать сигнал.
 - [man proc (man7.org)](https://man7.org/linux/man-pages/man5/proc.5.html) — откуда top берёт
   цифры.
-- [top — Википедия](https://ru.wikipedia.org/wiki/Top) — коротко и по-русски.

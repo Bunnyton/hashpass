@@ -126,4 +126,3 @@ tags: docker, redis, тома, данные, базы
   — RDB-снимки и журнал AOF.
 - [Изучаем Docker, часть 6: работа с данными](https://habr.com/ru/companies/ruvds/articles/441574/)
   — тома по-русски, на Хабре.
-- [Redis — Википедия](https://ru.wikipedia.org/wiki/Redis)

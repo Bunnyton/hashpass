@@ -140,7 +140,6 @@ tags: файлы, find, поиск, шаблоны
 
 - [`man 1 find`](https://man7.org/linux/man-pages/man1/find.1.html) — разделы TESTS, OPERATORS,
   ACTIONS.
-- [find — Википедия](https://ru.wikipedia.org/wiki/Find)
 - [Команда find в Linux — Losst](https://losst.pro/komanda-find-v-linux) — много примеров
   по-русски.
 - [`man 7 glob`](https://man7.org/linux/man-pages/man7/glob.7.html) — шаблоны `*`, `?`, `[...]`

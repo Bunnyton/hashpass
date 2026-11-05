@@ -112,7 +112,6 @@ tags: потоки, перенаправление, bash, stderr
 ## Источники
 
 - `man bash` — [на man7.org](https://man7.org/linux/man-pages/man1/bash.1.html), раздел REDIRECTION.
-- [Стандартные потоки — Википедия](https://ru.wikipedia.org/wiki/Стандартные_потоки).
 - `man 3 stdin` — [на man7.org](https://man7.org/linux/man-pages/man3/stdin.3.html): что такое
   стандартные потоки для программиста.
 - `man 4 null` — [на man7.org](https://man7.org/linux/man-pages/man4/null.4.html): устройства

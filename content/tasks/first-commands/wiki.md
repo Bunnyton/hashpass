@@ -128,6 +128,5 @@ tags: основы, ls, cat, man, справка
 - [`man 1 ls`](https://man7.org/linux/man-pages/man1/ls.1.html) и
   [`man 1 cat`](https://man7.org/linux/man-pages/man1/cat.1.html) — все ключи.
 - [`man 1 man`](https://man7.org/linux/man-pages/man1/man.1.html) — разделы и поиск.
-- [man (Unix) — Википедия](https://ru.wikipedia.org/wiki/Man_(Unix)) — история и разделы.
 - [Команда ls в Linux — Losst](https://losst.pro/komanda-ls-linux) — ключи ls по-русски.
 - [explainshell.com](https://explainshell.com/) — вставь команду, и сайт объяснит каждый её ключ.

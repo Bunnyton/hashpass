@@ -95,7 +95,6 @@ directory). Вся хитрость — в том, как записать, **к
 - [`man 1 pwd`](https://man7.org/linux/man-pages/man1/pwd.1.html)
 - [`man 7 hier`](https://man7.org/linux/man-pages/man7/hier.7.html) — что лежит в `/etc`, `/usr`,
   `/var` и других каталогах.
-- [cd (команда) — Википедия](https://ru.wikipedia.org/wiki/Cd_(команда))
 - [Команда cd в Linux — Losst](https://losst.pro/komanda-cd-linux)
 - [Горячие клавиши терминала Linux — Losst](https://losst.pro/goryachie-klavishi-terminala-linux)
   — Tab и другие сочетания.

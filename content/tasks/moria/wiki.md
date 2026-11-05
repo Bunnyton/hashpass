@@ -97,11 +97,6 @@ tags: приз, права, grep, скрипты, толкин
 
 ## Источники
 
-- [Мория — Википедия](https://ru.wikipedia.org/wiki/Мория) и
-  [Doors of Durin — Wikipedia](https://en.wikipedia.org/wiki/Doors_of_Durin) — о вратах и надписи.
-- [Синдарин — Википедия](https://ru.wikipedia.org/wiki/Синдарин) — язык надписи.
-- [Криптографическая хеш-функция — Википедия](https://ru.wikipedia.org/wiki/Криптографическая_хеш-функция)
-  и [SHA-2](https://ru.wikipedia.org/wiki/SHA-2).
 - [sha256sum(1)](https://man7.org/linux/man-pages/man1/sha256sum.1.html) и
   [grep(1)](https://man7.org/linux/man-pages/man1/grep.1.html) на man7.org.
 - [carbonyl на GitHub](https://github.com/fathyb/carbonyl) — браузер в терминале.

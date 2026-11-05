@@ -146,5 +146,4 @@ curl сам говорит, на каком шаге сломалось:
 - [systemd — ArchWiki (рус.)](https://wiki.archlinux.org/title/Systemd_(Русский)) — systemd
   по-русски, с примерами.
 - [man ss (man7.org)](https://man7.org/linux/man-pages/man8/ss.8.html) — кто слушает порты.
-- [man hosts (man7.org)](https://man7.org/linux/man-pages/man5/hosts.5.html) и
-  [hosts — Википедия](https://ru.wikipedia.org/wiki/Hosts) — формат и история `/etc/hosts`.
+- [man hosts (man7.org)](https://man7.org/linux/man-pages/man5/hosts.5.html) — формат `/etc/hosts`.

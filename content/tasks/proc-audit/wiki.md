@@ -121,5 +121,3 @@ tags: процессы, ps, pstree, proc
   `/proc/PID`.
 - [man fuser (man7.org)](https://man7.org/linux/man-pages/man1/fuser.1.html) — ещё один
   инструмент psmisc.
-- [Процесс (информатика) — Википедия](https://ru.wikipedia.org/wiki/Процесс_(информатика)) —
-  понятие по-русски.

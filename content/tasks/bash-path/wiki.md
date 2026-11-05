@@ -127,7 +127,6 @@ $ source vars.sh; echo [$NEWVAR]
   COMMAND EXECUTION (поиск по PATH) и INVOCATION (какие файлы читаются при старте).
 - `man 7 environ` — [на man7.org](https://man7.org/linux/man-pages/man7/environ.7.html), про
   `PATH`.
-- [PATH (переменная) — Википедия](https://ru.wikipedia.org/wiki/PATH_(переменная)).
 - [Environment variables — ArchWiki](https://wiki.archlinux.org/title/Environment_variables) —
   где задавать переменные надолго.
 - [bash-handbook](https://github.com/denysdovhan/bash-handbook) и

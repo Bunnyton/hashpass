@@ -117,6 +117,4 @@ tags: файлы, ссылки, ln, symlink
 - [`man 1 ln`](https://man7.org/linux/man-pages/man1/ln.1.html) — ключи `-s`, `-f`, `-r`.
 - [`man 7 symlink`](https://man7.org/linux/man-pages/man7/symlink.7.html) — как система
   обрабатывает символьные ссылки.
-- [Символическая ссылка — Википедия](https://ru.wikipedia.org/wiki/Символическая_ссылка)
-- [Жёсткая ссылка — Википедия](https://ru.wikipedia.org/wiki/Жёсткая_ссылка)
 - [Символические и жёсткие ссылки Linux — Losst](https://losst.pro/simvolicheskie-i-zhestkie-ssylki-linux)

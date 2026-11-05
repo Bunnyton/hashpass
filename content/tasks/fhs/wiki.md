@@ -105,4 +105,3 @@ tags: fhs, каталоги, etc, proc, система
 - `man 5 passwd` — [на man7.org](https://man7.org/linux/man-pages/man5/passwd.5.html): поля /etc/passwd.
 - `man 5 proc` — [на man7.org](https://man7.org/linux/man-pages/man5/proc.5.html): что есть в /proc.
 - [UsrMerge — Debian Wiki](https://wiki.debian.org/UsrMerge) — почему /bin стал ссылкой.
-- [FHS — Википедия](https://ru.wikipedia.org/wiki/FHS) — коротко и по-русски.
