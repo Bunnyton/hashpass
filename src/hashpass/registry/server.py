@@ -2841,10 +2841,14 @@ class PoolServer:
                 for rev in idx.revisions(tag):
                     ref = f"{repo}:{revision_version(tag, rev.n)}"
                     courses = self._course_names(self._foreign_courses(repo, tag, rev.n), viewer)
-                    others = [d for d in self._dependents(ref)
-                              if _owner_of(d.partition(":")[0]) != _owner_of(repo)]
-                    if courses or others:
-                        risks[f"{tag}_v{rev.n}"] = {"courses": courses, "images": others}
+                    # every live image on it, one's own too: each blocks the deletion (user 2026-11-06)
+                    images = [d for d in self._dependents(ref) if self._is_live(d)]
+                    foreign = [d for d in images if _owner_of(d.partition(":")[0]) != _owner_of(repo)]
+                    if courses or images:
+                        risks[f"{tag}_v{rev.n}"] = {
+                            "courses": courses, "images": images,
+                            "whose": ("чужие " if len(foreign) == len(images) else "в том числе чужие ")
+                            if foreign else ""}
         return self._html(render_versions(repo, idx.as_dict(), owner=owner, risks=risks))
 
     def _web_repo_settings(self, repo: str) -> Response:

@@ -80,4 +80,21 @@ def test_the_versions_page_warns_before_deleting_one_someones_course_shows(pool:
     v1 = html[at1:]
     assert "в чужих курсах" in v1 and "eve/evecourse" in v1                     # said before deleting
     v2 = html[at2:at1]
-    assert "чужие образы" in v2 and "DELETE /revisions/bob/lab/1/2" not in v2   # blocked: no button
+    assert "строятся чужие образы: eve/kit:1_v1" in v2 and "DELETE /revisions/bob/lab/1/2" not in v2   # blocked: no button
+
+
+@pytest.mark.tier1
+def test_the_versions_page_lists_ones_own_images_on_a_version_too(pool: _Pool) -> None:
+    """User 2026-11-06: every live image on a version is shown -- they all block its deletion."""
+    import http.cookiejar  # noqa: PLC0415
+    import urllib.parse  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+    pool.push("bob/lab", "1", image="one", task="t1", parents=BASE)
+    pool.push("bob/kit", "1", image="k", task="k", parents=("bob/lab:1",))      # bob's own image on lab v1
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    opener.open(urllib.request.Request(f"{pool.url}/web/login", data=urllib.parse.urlencode(  # noqa: S310
+        {"user": "bob", "password": "pw-correct1"}).encode()), timeout=10)
+    html = opener.open(f"{pool.url}/web/versions/bob/lab", timeout=10).read().decode()
+    v1 = html[html.index(">1_v1<"):]
+    assert "на ней строятся образы: bob/kit:1_v1" in v1
+    assert "DELETE /revisions/bob/lab/1/1" not in v1                             # blocked: no button

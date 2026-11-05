@@ -23,7 +23,7 @@
 {% if not loop.last %}<a class='btn sm ghost' href='/web/compare/{{ repo }}?from={{ t }}_v{{ ordered[loop.index].n }}&to={{ t }}_v{{ r.n }}'>сравнить с предыдущей</a>{% endif %}
 {% set risk = risks.get(t ~ '_v' ~ r.n) %}
 {% if owner and risk and risk.courses %}<span class='pill warn sm' title='{{ risk.courses | join(", ") }}'>в чужих курсах: {{ risk.courses | join(', ') }}</span>{% endif %}
-{% if owner and risk and risk.images %}<span class='pill no sm' title='{{ risk.images | join(", ") }}'>на ней строятся чужие образы: {{ risk.images | join(', ') }} — удалить нельзя</span>
+{% if owner and risk and risk.images %}<span class='pill no sm' title='{{ risk.images | join(", ") }}'>на ней строятся {{ risk.whose }}образы: {{ risk.images[:8] | join(', ') }}{% if risk.images | length > 8 %} и ещё {{ risk.images | length - 8 }}{% endif %} — удалить нельзя</span>
 {% elif owner %}<form class='inline' data-api='DELETE /revisions/{{ repo }}/{{ t }}/{{ r.n }}' data-confirm='Удалить версию {{ r.n }} тега {{ t }}? Вернуть её нельзя, номер {{ r.n }} больше не займёт ни одна версия.{% if risk and risk.courses %} Она стоит в чужих курсах ({{ risk.courses | join(", ") }}) — удаление подождёт решения администратора.{% endif %}'><button class='sm ghost' type='submit'>удалить</button></form>{% endif %}
 </li>
 {% endfor %}
