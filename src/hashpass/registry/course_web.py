@@ -79,8 +79,10 @@ class CourseWeb:
                 except (ValueError, OSError, KeyError, UnicodeDecodeError):
                     continue
                 _html, tags, title = render_page(text)
-                items.append({"repo": repo, "title": title or repo.rpartition("/")[2], "tags": tags,
-                              "intro": snippet(text, "", 220), "href": f"/web/wiki/{repo}"})
+                items.append({"repo": repo, "page": "wiki.md", "title": title or repo.rpartition("/")[2],
+                              "tags": tags, "snippet": snippet(text, "", 220), "href": f"/web/wiki/{repo}",
+                              # unfolded in place: read the whole course on one page (user 2026-11-05)
+                              "html": self.server._wiki_main(repo)})                  # noqa: SLF001
             if items:
                 blocks.append({"id": block["id"], "name": block["name"], "wikis": items})
         one = next((b["name"] for b in course.blocks if b["id"] == want), "") if want else ""

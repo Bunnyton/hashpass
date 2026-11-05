@@ -178,6 +178,7 @@ def test_the_course_wiki_gathers_its_tasks_wikis_by_block(pool) -> None:
     html = _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux/wiki")[1]
     assert html.index("Теория git") < html.index("Регулярки")                  # course order, by block
     assert "href='/web/wiki/bob/regex'" in html and "Первый абзац про Регулярки" in html
+    assert "<details class='card item-card wiki-fold'" in html and "<h1>Регулярки</h1>" in html   # unfolds in place
     assert "Черновик" not in html                                               # a hidden task stays hidden
     block = _page(_browser(pool, "eve"), f"{pool.url}/c/bob/linux/wiki?block={second}")[1]
     assert "Регулярки" in block and "Теория git" not in block

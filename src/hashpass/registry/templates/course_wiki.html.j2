@@ -1,22 +1,37 @@
 {% extends 'base.html.j2' %}
+{% from '_files.html.j2' import icon %}
 {% block main %}
 <nav class='crumb' aria-label='Путь'><a href='/c/{{ course.ref }}'>← {{ course.title or course.ref }}</a>{% if block_name %} · <a href='/c/{{ course.ref }}/wiki'>wiki всего курса</a>{% endif %}</nav>
-<h1>Wiki {% if block_name %}блока «{{ block_name }}»{% else %}курса «{{ course.title or course.ref }}»{% endif %}</h1>
-<p class='sub'>Теория заданий — для чтения в любой момент, в том числе тем, кто задание ещё не открыл.</p>
+<div class='cat-head'><h1>Wiki {% if block_name %}блока «{{ block_name }}»{% else %}курса «{{ course.title or course.ref }}»{% endif %}</h1>
+{% if blocks %}<div class='row'><button type='button' class='sm ghost' data-wiki-fold='open'>Раскрыть все</button><button type='button' class='sm ghost' data-wiki-fold='close'>Свернуть все</button></div>{% endif %}</div>
+<p class='sub'>Теория заданий — для чтения в любой момент, в том числе тем, кто задание ещё не открыл. Нажмите на карточку — она раскроется здесь же.</p>
 {% for b in blocks %}
-<section class='wiki-block'>
-{% if not block_name %}<h2 class='side-h'><a href='/c/{{ course.ref }}/wiki?block={{ b.id }}'>{{ b.name }}</a></h2>{% endif %}
-<div class='repo-grid'>
+<section class='explore-section' aria-labelledby='wb-{{ b.id }}'>
+{% if not block_name %}<div class='section-head'><h2 id='wb-{{ b.id }}'>{{ b.name }}</h2><a class='more' href='/c/{{ course.ref }}/wiki?block={{ b.id }}'>только этот блок →</a></div>{% endif %}
+<div class='grid wiki-grid'>
 {% for w in b.wikis %}
-<a class='card wiki-card' href='{{ w.href }}'>
-<b>{{ w.title }}</b> <span class='mono small dim'>{{ w.repo }}</span>
-{% if w.tags %}<div class='wiki-tags'>{% for t in w.tags %}<span class='pill sm'>#{{ t }}</span> {% endfor %}</div>{% endif %}
-<p class='sub small'>{{ w.intro }}</p>
-</a>
+<details class='card item-card wiki-fold' id='w-{{ w.repo | replace("/", "-") }}'>
+<summary>
+<span class='item-head'><span class='kind kind-task'>{{ icon('file') }} wiki</span><span class='mono small dim'>{{ w.repo }}</span></span>
+<span class='item-title'>{{ w.title }}</span>
+{% if w.snippet %}<span class='sub small clamp fold-snippet'>{{ w.snippet }}</span>{% endif %}
+{% if w.tags %}<span class='item-tags'>{% for t in w.tags %}<span class='tagchip'>#{{ t }}</span>{% endfor %}</span>{% endif %}
+</summary>
+<div class='md-body fold-body'>{{ w.html | safe }}
+<p><a href='{{ w.href }}'>открыть wiki полностью — все её страницы →</a></p></div>
+</details>
 {% endfor %}
 </div>
 </section>
 {% else %}
 <div class='empty card'><p class='sub'>У заданий {% if block_name %}этого блока{% else %}курса{% endif %} пока нет wiki.</p></div>
 {% endfor %}
+<script>
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-wiki-fold]');
+  if (!b) return;
+  var open = b.getAttribute('data-wiki-fold') === 'open';
+  document.querySelectorAll('details.wiki-fold').forEach(function (d) { d.open = open; });
+});
+</script>
 {% endblock %}

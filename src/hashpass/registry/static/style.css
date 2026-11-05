@@ -631,6 +631,8 @@ ol.history .why{color:var(--muted);font-style:italic}
 .needs-tasks{margin:4px 0}
 .needs-tasks summary{cursor:pointer}
 .needs-group{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:4px 0}
-.wiki-block{margin:18px 0}
-.wiki-card{display:block;text-decoration:none;color:inherit}
-.wiki-card:hover{border-color:var(--accent)}
+.wiki-fold>summary{list-style:none;cursor:pointer;display:flex;flex-direction:column;gap:8px}
+.wiki-fold>summary::-webkit-details-marker{display:none}
+.wiki-fold[open]{grid-column:1/-1}
+.wiki-fold[open] .fold-snippet{display:none}
+.wiki-fold .fold-body{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
