@@ -1,6 +1,6 @@
 {# Home page body: the showcase (no query) or the search results (a query) -- live search swaps it. #}
 {% from '_files.html.j2' import icon %}
-{% from '_cards.html.j2' import course_card, repo_card, user_tile, sort_bar, wiki_card %}
+{% from '_cards.html.j2' import avatar, course_card, repo_card, user_tile, sort_bar, wiki_card %}
 {% if not searching %}
 {% for key, title, rows in sections %}
 <section class='explore-section' aria-labelledby='ex-{{ key }}'>
@@ -8,6 +8,8 @@
 {% if not rows %}<div class='empty card'><p class='sub'>Пока пусто.</p></div>
 {% elif key == 'courses' %}<div class='grid'>{% for r in rows %}{{ course_card(r, role_ru) }}{% endfor %}</div>
 {% elif key == 'users' %}<div class='user-list'>{% for p in rows %}{{ user_tile(p) }}{% endfor %}</div>
+{% elif key == 'wiki' %}<div class='grid'>{% for r in rows %}{{ wiki_card(r) }}{% endfor %}</div>
+{% elif key == 'authors' %}<ol class='top-authors'>{% for a in rows %}<li><a class='card user-row' href='/u/{{ a.user | q }}'><span class='rank'>{{ loop.index }}</span>{{ avatar(a.user, 'sm') }}<span class='mono'>{{ a.user }}</span><span class='sp'></span><span class='small dim'>{{ a.tasks | plural('задание', 'задания', 'заданий') }} · решили {{ a.solves | plural('раз', 'раза', 'раз') }}</span></a></li>{% endfor %}</ol>
 {% else %}<div class='grid'>{% for r in rows %}{{ repo_card(r) }}{% endfor %}</div>{% endif %}
 </section>
 {% endfor %}

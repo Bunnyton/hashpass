@@ -636,3 +636,6 @@ ol.history .why{color:var(--muted);font-style:italic}
 .wiki-fold[open]{grid-column:1/-1}
 .wiki-fold[open] .fold-snippet{display:none}
 .wiki-fold .fold-body{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.top-authors{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.top-authors .user-row{display:flex;align-items:center;gap:10px}
+.top-authors .rank{font-weight:800;color:var(--muted);min-width:1.4em;text-align:right}

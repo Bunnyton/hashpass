@@ -12,6 +12,7 @@ the viewer may see. The private comment is never shown here (user: «виден 
 курсом»), and users are found by login only.
 """
 import re
+from collections import Counter
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -146,11 +147,14 @@ class SearchWeb:
         Return the wiki pages `user` may read that match `q` (spec 2026-11-03 «wiki заданий»).
 
         `#тег` -- the wikis whose wiki.md carries that tag, exactly; else a page whose text,
-        title or tags contain `q`. Nothing without signing in: a wiki is read signed in only.
+        title or tags contain `q`; no `q` -- every wiki's main page, freshest first (the home
+        page's «Wiki», 2026-11-05). Nothing without signing in: a wiki is read signed in only.
         """
-        if user is None or not q:
+        if user is None:
             return []
         root = Path(self.server.store.root) / ".repos"
+        if not q:
+            return self._wiki_mains(user, root)
         tag = q[1:].strip().casefold() if q.startswith("#") else None
         rows: list[dict] = []
         for index in sorted(root.glob("*/*/wiki/versions.json")) if root.is_dir() else []:
@@ -227,14 +231,19 @@ class SearchWeb:
         kind = request.args.get("type", "")
         if kind not in found:
             kind = next((k for k, _t in _KINDS if found[k]), "courses")
-        shown = {"courses": 6, "tasks": 9, "images": 6, "users": 24}
+        shown = {"courses": 6, "tasks": 9, "images": 6, "users": 24, "wiki": 6}
         pool = self.server._pool_url().rstrip("/")   # noqa: SLF001
         ctx = {"q": q, "kind": kind, "searching": bool(q or request.args.get("type")), "role_ru": _ROLE_RU, "counts": {k: len(v) for k, v in found.items()},
                "kinds": [{"key": k, "title": t, "count": len(found[k])} for k, t in _KINDS],
                "rows": found[kind][:_LIMIT], "more": max(0, len(found[kind]) - _LIMIT),
                "sections": [(k, t, found[k][:shown[k]]) for k, t in
-                            (("courses", "Курсы"), ("tasks", "Задания"), ("images", "Образы"),
+                            (("courses", "Курсы"), ("tasks", "Задания"),
+                             *((("wiki", "Wiki"),) if user else ()), ("images", "Образы"),
                              ("users", "Пользователи"))]}
+        if not ctx["searching"]:                     # the showcase only: «Топ авторов» (2026-11-05)
+            top = self._top_authors(user)
+            ctx["sections"].insert(2, ("authors", "Топ авторов", top))
+            ctx["counts"] = {**ctx["counts"], "authors": len(top)}
         if request.args.get("partial") == "1":       # live search: only the results part
             return self.server._html(_env.get_template("_results.html.j2").render(**ctx))  # noqa: SLF001
         html = _env.get_template("explore.html.j2").render(
@@ -371,6 +380,47 @@ class SearchWeb:
                          "done": done, "total": len(refs),
                          "pct": round(100 * done / len(refs)) if refs else 0})
         return sorted(rows, key=lambda r: r["ref"])
+
+    def _wiki_mains(self, user: str, root: Path) -> list[dict]:
+        """Every readable wiki's main page, the freshest first."""
+        rows = []
+        indexes = sorted(root.glob("*/*/wiki/versions.json"), key=lambda p: p.stat().st_mtime, reverse=True) \
+            if root.is_dir() else []
+        for index in indexes:
+            repo = f"{index.parent.parent.parent.name}/{index.parent.parent.name}"
+            if not self.server._may_see_repo(user, repo):         # noqa: SLF001
+                continue
+            try:
+                text = self.server.wiki(repo).read("wiki.md").decode("utf-8", "replace")
+            except (ValueError, OSError, KeyError):
+                continue
+            tags, body = parse_tags(text)
+            rows.append({"repo": repo, "page": "wiki.md", "title": page_title(body) or repo, "tags": tags,
+                         "snippet": snippet(text, ""), "href": f"/web/wiki/{repo}/wiki.md"})
+        return rows
+
+    def _top_authors(self, user: str | None, limit: int = 8) -> list[dict]:
+        """
+        Rank authors by how often others solved their tasks, then by how many they have (2026-11-05).
+
+        Counted over the tasks `user` may see; one's own solves of one's own tasks do not count.
+        """
+        root = Path(self.server.store.root) / ".repos"
+        tasks: Counter[str] = Counter()
+        for index in sorted(root.glob("*/*/repo.json")) if root.is_dir() else []:
+            repo = f"{index.parent.parent.name}/{index.parent.name}"
+            if self.server.repo(repo).tags() and self.server._may_see_repo(user, repo):   # noqa: SLF001
+                tasks[repo.partition("/")[0]] += 1
+        solves: Counter[str] = Counter()
+        for profile in self.server.users.all_users():
+            login = str(profile["user"])
+            for ref, rec in self.server.progress().get(login).items():
+                owner = ref.partition("/")[0]
+                if isinstance(rec, dict) and rec.get("status") == "passed" and owner != login and owner in tasks:
+                    solves[owner] += 1
+        authors = [a for a in tasks if self.server.users.has(a)]
+        authors.sort(key=lambda a: (-solves[a], -tasks[a], a))
+        return [{"user": a, "tasks": tasks[a], "solves": solves[a]} for a in authors[:limit]]
 
     def _users(self, q: str) -> list[dict]:
         """Logins containing `q` -- only the login, never the private comment."""
