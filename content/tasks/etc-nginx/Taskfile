@@ -33,6 +33,7 @@ stage
   on pass say "Правка в файле — только половина дела: служба узнаёт о ней, когда перечитает конфиг."
   hint output "Permission denied" say "Настройки в /etc принадлежат root — править их можно только через sudo."
   hint output "Failed to connect" say "На 8473 nginx никого не ждёт. А откуда он вообще узнаёт, какой порт слушать?"
+  hint output "Welcome to nginx" read sites.md
   hint output "E212" say "vim не может записать файл: настройки в /etc принадлежат root. Открой его через sudo."
   hint tries 5 say "Откуда nginx узнаёт, какой порт слушать, — и когда он это узнаёт?"
   hint tries 7 read reload.md
