@@ -69,8 +69,9 @@ stage
   accept cmd "git diff"
   accept output "(?m)^\+.*Отчёт"
   neutral ls cat pwd cd
+  on enter read show.md
   on pass say "Минус — строка, какой она была, плюс — какой стала. Такой формат зовут diff, и читают его все программисты."
-  hint tries 5 say "git log перечисляет коммиты. А как показать содержимое одного — спроси у git help."
-  hint tries 10 say "git show показывает последний коммит целиком, с изменениями."
+  hint tries 5 say "Какой хеш у второго коммита? git log показывает свежие коммиты первыми."
+  hint tries 10 say "git show без хеша открывает последний коммит."
 
 exec finale

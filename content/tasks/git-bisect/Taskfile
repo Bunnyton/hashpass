@@ -44,8 +44,9 @@ stage
     git revert --no-edit fbb73db
   check exec state fixed
   neutral ls cat pwd cd
+  on enter read finish.md
   on pass say "Тест снова молчит. git bisect log покажет, как шёл поиск, — его можно приложить к разбору ошибки."
-  hint output "currently bisecting" say "Поиск ещё не завершён: git стоит посреди истории. Как закончить — в git bisect --help, слово reset."
+  hint output "currently bisecting" say "Поиск ещё не завершён: git стоит посреди истории. Как его заканчивают — сказано в начале шага."
   hint output "HEAD detached" say "Ты не на ветке, а на коммите посреди истории — поиск не завершён. Вернись в main."
   hint output "HEAD is now at" say "reset переставил ветку — а коммиты после этого места? Журнал git помнит, где была main."
   hint tries 5 say "Как отменить один старый коммит, не трогая остальные, ты уже делал — в магазине с портом 80800."

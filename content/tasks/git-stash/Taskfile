@@ -56,9 +56,10 @@ stage
     git stash pop
   check exec state restored
   neutral ls cat pwd cd
+  on enter read pop.md
   on pass say "pop снимает с полки и убирает её; apply — достаёт, а полку оставляет: пригодится, если ту же недоделку хочешь положить в две ветки."
   hint output "No stash entries found" say "Полка пуста. Отложенное точно ушло на полку? git stash list покажет."
-  hint tries 5 say "Что ещё умеет git stash, кроме как класть? Загляни в git stash --help."
+  hint tries 5 say "Что на полке сейчас? git stash list покажет — а git stash --help скажет, каким словом это забрать."
   hint tries 10 say "Снять верхнее с полки — по-английски «pop», как со стопки тарелок."
 
 exec finale
