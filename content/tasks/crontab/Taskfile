@@ -2,8 +2,8 @@
 # в crontab (crontab -e / -l), системные лежат в /etc/crontab и /etc/cron.d. Шаги: каждую минуту
 # дописывать время в ~/alive.log → weekly-report по будням в 9:30 → кто-то каждую минуту стирает
 # ~/drafts (задача root в /etc/cron.d/tidy-drafts; черновики кладёт on enter apply drafts) —
-# найти и остановить. crontab пользователя закрыт от чужих (0600 root:crontab), cron работает
-# только в живой консоли — шаги принимает check live.
+# найти и остановить. Первый шаг принимается по выводу crontab -l (пользователь, 2026-11-05),
+# остальные — check live: crontab пользователя закрыт от чужих (0600 root:crontab).
 
 image crontab:1
 
@@ -27,14 +27,17 @@ say "Админ, который всё делает руками в три ча�
 read brief.md
 
 stage
-  say "Пусть каждую минуту в ~/alive.log дописывается текущее время"
-  solve echo '* * * * * date >> /home/student/alive.log' | crontab -
-  check live crontab -l -u student 2>/dev/null | grep -qE '^[[:space:]]*(\*|\*/1)[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*[[:space:]].*alive\.log' && test -s /home/student/alive.log
-  neutral ls pwd cd cat crontab tail
-  on pass say "Каждую минуту — новая строка, и никто об этом не просил вслух. cron проверяет расписание раз в минуту, поэтому чаще, чем раз в минуту, он не умеет."
-  hint output "No such file or directory" say "Файла пока нет? cron просыпается раз в минуту — подожди и посмотри снова."
+  say "Пусть каждую минуту в ~/alive.log дописывается текущее время. Покажи своё расписание"
+  solve:
+    echo '* * * * * date >> /home/student/alive.log' | crontab -
+    crontab -l
+  accept cmd "crontab -l"
+  accept output "(?m)^[ \t]*(\*|\*/1)[ \t]+\*[ \t]+\*[ \t]+\*[ \t]+\*[ \t]+[^\n]*alive\.log"
+  neutral ls pwd cd cat tail
+  on pass say "Каждую минуту — новая строка, и никто об этом не просил вслух: загляни в ~/alive.log через минуту-другую. cron проверяет расписание раз в минуту, поэтому чаще он не умеет."
+  hint output "1 * * * *" say "1 в поле минут — это «в 1-ю минуту каждого часа», то есть раз в час. «Каждую минуту» — это любая минута: * или */1 (шаг в одну минуту)."
   hint output "no crontab for" say "Твоё расписание пока пустое. Как его открыть на правку — в теории."
-  hint tries 5 say "Что показывает crontab -l? Сколько звёздочек в строке и что стоит после них?"
+  hint tries 5 say "Сколько звёздочек в строке и что стоит после них?"
   hint tries 10 say "Пять полей времени, потом команда. «Каждую минуту» — это когда все пять полей «любое»."
 
 stage
