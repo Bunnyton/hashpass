@@ -442,7 +442,9 @@ class PoolServer:
         block = next((b for b in course.blocks if any(t is task for t in b["tasks"])), {})
         if task.get("hidden") or not block.get("open", True):
             return True
-        return bool(block.get("needs")) and bool(course_model.waiting_for(course, block, self.passed_refs(user)))
+        if not (block.get("needs") or task.get("needs")):
+            return False
+        return bool(course_model.task_waiting(course, block, task, self.passed_refs(user)))
 
     def _reachable_in_course(self, user: str | None, ref: str) -> bool:
         """Whether a private image `ref` is a parent/base of a task `user` gets through a course."""
@@ -1155,13 +1157,13 @@ class PoolServer:
         passed = self.passed_refs(user)
         rows: list[dict[str, object]] = []
         for block in course.blocks:
-            waiting = course_model.waiting_for(course, block, passed)   # a locked block: seen, not run
             for task in block["tasks"]:
                 visible = block.get("open", True) and not task.get("hidden")
                 own = task.get("added_by") == user
                 if not visible and not (sees or own):
                     continue
-                visible = visible and not waiting
+                own_wait = course_model.task_waiting(course, block, task, passed)   # its block's + its own
+                visible = visible and not own_wait
                 latest = self.repo(task["repo"]).latest(task["tag"])
                 n = course_model.effective_n(course, task, latest=latest.n if latest else None)
                 rev = self.repo(task["repo"]).get(task["tag"], n)
@@ -1173,7 +1175,8 @@ class PoolServer:
                              "available": visible, "hidden": task.get("hidden", False),
                              "block_open": block.get("open", True), "course": course.ref}
                             | ({"preview": True} if not visible and (sees or own) else {})
-                            | ({"waiting_for": waiting} if waiting else {})
+                            | ({"waiting_for": own_wait} if own_wait else {})
+                            | ({"block_waiting_for": bw} if (bw := course_model.waiting_for(course, block, passed)) else {})
                             | ({"mine": True, "owner": user} if own else {})
                             | ({"pending_update": True} if own and latest and latest.n > n else {})
                             | ({"solved_n": solved} if solved else {})

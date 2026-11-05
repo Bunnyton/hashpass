@@ -121,7 +121,8 @@ class TaskRow:
     solved_n: int = 0               # the version the credit was earned in (an older one still counts)
     outside: bool = False           # earned outside this course (`hashpass run`, another course)
     mine: bool = False              # sent by this viewer: its task in the course or its proposal
-    waiting_for: tuple[str, ...] = ()   # the block opens once these blocks are solved (2026-11-01)
+    waiting_for: tuple[str, ...] = ()   # the task opens once these blocks/tasks are solved (2026-11-01, -05)
+    block_waiting_for: tuple[str, ...] = ()   # what its block (the header) still waits for
 
     def locked_word(self) -> str:
         """«откроется, когда решите: «Git», «Regex»» for a block still waiting, else ""."""
@@ -690,7 +691,8 @@ class PoolTUI(App):
                 owner=str(e.get("owner") or ""),
                 n=int(e.get("n") or 0), solved_n=int(e.get("solved_n") or 0),
                 outside=bool(e.get("outside")), mine=bool(e.get("mine")),
-                waiting_for=tuple(str(b) for b in e.get("waiting_for") or ())))
+                waiting_for=tuple(str(b) for b in e.get("waiting_for") or ()),
+                block_waiting_for=tuple(str(b) for b in e.get("block_waiting_for") or ())))
         with self._rows_lock:
             self.rows = rows
         self._paint_tree()
@@ -893,8 +895,9 @@ class PoolTUI(App):
                 head += "   [dim]· ваши задания, которых ещё нет в курсе[/]"
             elif not block_rows[0].block_open:
                 head += "   [yellow]· закрыт для проходящих курс[/]"
-            if block_rows[0].waiting_for:
-                head += f"   [yellow]🔒 {escape(block_rows[0].locked_word())}[/]"
+            if block_rows[0].block_waiting_for:
+                said = ", ".join(f"«{b}»" for b in block_rows[0].block_waiting_for)
+                head += f"   [yellow]🔒 {escape('откроется, когда решите: ' + said)}[/]"
             b_node = tree.root.add(head, expand=True, data=block_rows[0].block_id or None)
             for row in block_rows:
                 self._leaf_nodes[row.ref] = b_node.add_leaf(row.tree_label(), data=row)
@@ -1085,7 +1088,7 @@ class PoolTUI(App):
             event.node.toggle()
             return
         if row.hidden:
-            self._flash(f"Блок {row.locked_word()}" if row.waiting_for else "Задание закрыто преподавателем")
+            self._flash(row.locked_word().capitalize() if row.waiting_for else "Задание закрыто преподавателем")
             return
         if row.state == "грузится":
             self._flash(f"{row.ref} загружается — Enter, когда будет готово")

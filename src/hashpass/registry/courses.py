@@ -414,40 +414,144 @@ def remove_block(course: Course, block_id: str) -> None:
             set_block_needs(course, block["id"], [i for i in block["needs"] if i != block_id])
 
 
+def _is_task_ref(need: str) -> bool:
+    """Tell a task need (`owner/name:tag`, no version -- user 2026-11-05) from a block id."""
+    return ":" in need
+
+
+def _ordered_needs(course: Course, wanted: set[str]) -> list[str]:
+    """Blocks first, then tasks, each in course order; refuses what the course has not."""
+    for need in wanted:
+        if _is_task_ref(need):
+            repo, _, tag = need.partition(":")
+            if course.find_task(repo, tag) is None:
+                msg = f"такого задания нет в курсе: {need}"
+                raise ValueError(msg)
+        else:
+            _block(course, need)
+    blocks = [b["id"] for b in course.blocks if b["id"] in wanted]
+    tasks = [f"{t['repo']}:{t['tag']}" for _b, t in course.tasks() if f"{t['repo']}:{t['tag']}" in wanted]
+    return blocks + tasks
+
+
+def _check_no_cycles(course: Course) -> None:
+    """
+    Refuse conditions that wait for each other -- nothing among them would ever open.
+
+    Nodes: a block or a task being open, a block or a task being done. A block is open once its
+    needs are done; a block is done once its tasks are; a task is done once it is open; a task is
+    open once its block is open and its own needs are done.
+    """
+    edges: dict[str, list[str]] = {}
+
+    def done(need: str) -> str:
+        return f"done:{need}"
+
+    for block in course.blocks:
+        edges[f"open:{block['id']}"] = [done(n) for n in block.get("needs", [])]
+        edges[done(block["id"])] = [done(f"{t['repo']}:{t['tag']}") for t in block["tasks"] if not t.get("hidden")]
+        for task in block["tasks"]:
+            ref = f"{task['repo']}:{task['tag']}"
+            edges[done(ref)] = [f"open:{ref}"]
+            edges[f"open:{ref}"] = [f"open:{block['id']}", *(done(n) for n in task.get("needs", []))]
+    state: dict[str, int] = {}
+
+    def visit(node: str) -> None:
+        state[node] = 1
+        for nxt in edges.get(node, ()):
+            if state.get(nxt) == 1:
+                msg = "блоки и задания ждут друг друга — так ничего из них не откроется"
+                raise ValueError(msg)
+            if nxt not in state:
+                visit(nxt)
+        state[node] = 2
+
+    for node in edges:
+        if node not in state:
+            visit(node)
+
+
+def _set_needs(course: Course, holder: dict, needs: list[str]) -> None:
+    """Put `needs` on a block or a task, undoing it when the conditions would wait for each other."""
+    before = holder.get("needs")
+    holder.pop("needs", None)
+    if needs:
+        holder["needs"] = needs
+    try:
+        _check_no_cycles(course)
+    except ValueError:
+        holder.pop("needs", None)
+        if before:
+            holder["needs"] = before
+        raise
+
+
 def set_block_needs(course: Course, block_id: str, needs: Iterable[str]) -> None:
     """
-    Make block `block_id` open to a student once every block of `needs` is solved (user 2026-11-01).
+    Make block `block_id` open to a student once every block and task of `needs` is solved.
 
-    Kept in course order, once each; [] -- no condition (the default). Blocks waiting for each
-    other would never open, so that is refused.
+    Blocks (user 2026-11-01) and particular tasks, `owner/name:tag` without a version (user
+    2026-11-05). Kept in course order, once each; [] -- no condition (the default). Conditions
+    waiting for each other would never open, so that is refused.
     """
     block = _block(course, block_id)
-    wanted = set(needs)
-    for need in wanted:
-        _block(course, need)
+    wanted = {str(n) for n in needs}
     if block_id in wanted:
         msg = "блок не может ждать сам себя"
         raise ValueError(msg)
-    after = {b["id"]: set(b.get("needs", [])) for b in course.blocks} | {block_id: wanted}
-    seen, todo = set(), list(wanted)
-    while todo:                                       # does any needed block wait for this one?
-        bid = todo.pop()
-        if bid == block_id:
-            msg = "блоки ждут друг друга — так ни один не откроется"
-            raise ValueError(msg)
-        if bid not in seen:
-            seen.add(bid)
-            todo.extend(after.get(bid, ()))
-    block.pop("needs", None)
-    if wanted:
-        block["needs"] = [b["id"] for b in course.blocks if b["id"] in wanted]
+    _set_needs(course, block, _ordered_needs(course, wanted))
+
+
+def set_task_needs(course: Course, repo: str, tag: str, needs: Iterable[str]) -> None:
+    """Make one task open once every block and task of `needs` is solved (user 2026-11-05)."""
+    task = course.find_task(repo, tag)
+    if task is None:
+        msg = f"такого задания нет в курсе: {repo}:{tag}"
+        raise ValueError(msg)
+    wanted = {str(n) for n in needs}
+    if f"{repo}:{tag}" in wanted:
+        msg = "задание не может ждать само себя"
+        raise ValueError(msg)
+    _set_needs(course, task, _ordered_needs(course, wanted))
+
+
+def need_name(course: Course, need: str) -> str:
+    """How a condition is named to people: the block's name, or the task's short name."""
+    if _is_task_ref(need):
+        return need.partition(":")[0].rpartition("/")[2]
+    return next((b["name"] for b in course.blocks if b["id"] == need), need)
+
+
+def unmet(course: Course, needs: Iterable[str], passed: set[str]) -> list[str]:
+    """
+    Names of the conditions not met yet.
+
+    A block -- any of its tasks not hidden and not in `passed`; a task -- not in `passed` (a hidden
+    one asks nothing: nobody could solve it).
+    """
+    by_id = {b["id"]: b for b in course.blocks}
+    out = []
+    for need in needs:
+        if _is_task_ref(need):
+            repo, _, tag = need.partition(":")
+            task = course.find_task(repo, tag)
+            if task is not None and not task.get("hidden") and need not in passed:
+                out.append(need_name(course, need))
+        elif need in by_id and any(f"{t['repo']}:{t['tag']}" not in passed
+                                   for t in by_id[need]["tasks"] if not t.get("hidden")):
+            out.append(by_id[need]["name"])
+    return out
 
 
 def waiting_for(course: Course, block: dict, passed: set[str]) -> list[str]:
-    """Names of the blocks `block` needs that are not solved yet: a task not hidden and not in `passed`."""
-    by_id = {b["id"]: b for b in course.blocks}
-    return [by_id[i]["name"] for i in block.get("needs", []) if i in by_id
-            and any(f"{t['repo']}:{t['tag']}" not in passed for t in by_id[i]["tasks"] if not t.get("hidden"))]
+    """Names of the blocks and tasks `block` needs that are not solved yet."""
+    return unmet(course, block.get("needs", []), passed)
+
+
+def task_waiting(course: Course, block: dict, task: dict, passed: set[str]) -> list[str]:
+    """Return what a task still waits for: its block's conditions first, then its own."""
+    out = waiting_for(course, block, passed)
+    return out + [n for n in unmet(course, task.get("needs", []), passed) if n not in out]
 
 
 def add_task(course: Course, repo: str, tag: str, n: int, block_id: str, *, by: str,  # noqa: PLR0913
@@ -479,10 +583,16 @@ def parse_place(place: str) -> tuple[str, str]:
 
 
 def remove_task(course: Course, repo: str, tag: str) -> bool:
+    gone = f"{repo}:{tag}"
     for block in course.blocks:
         kept = [t for t in block["tasks"] if (t["repo"], t["tag"]) != (repo, tag)]
         if len(kept) != len(block["tasks"]):
             block["tasks"] = kept
+            for holder in [*course.blocks, *(t for _b, t in course.tasks())]:   # no condition left behind
+                if gone in holder.get("needs", []):
+                    holder["needs"] = [n for n in holder["needs"] if n != gone]
+                    if not holder["needs"]:
+                        holder.pop("needs")
             return True
     return False
 

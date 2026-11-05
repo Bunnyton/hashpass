@@ -217,7 +217,8 @@ def _apply(struct: dict, change: dict) -> None:  # noqa: C901
         _insert(blocks, by_id[change["id"]], change["after"], lambda b: b["id"])
     elif op == "block_needs" and change["id"] in by_id:
         by_id[change["id"]].pop("needs", None)
-        if needs := [i for i in change["new"] if i in by_id]:
+        # a block id still here, or a task of this course (`owner/name:tag`, user 2026-11-05)
+        if needs := [i for i in change["new"] if i in by_id or _task_block(struct, i) is not None]:
             by_id[change["id"]]["needs"] = needs
     elif op == "block_remove" and change["id"] in by_id:
         blocks.remove(by_id[change["id"]])

@@ -168,7 +168,8 @@ def test_a_locked_block_says_what_opens_it(tmp_path: Path) -> None:
     class _Locked(_Client):
         def catalog(self, *, token: str) -> list[dict]:  # noqa: ARG002
             return [{"number": 1, "ref": "bob/prize:1", "block_id": "b2", "block_name": "Приз",
-                     "available": False, "waiting_for": ["Git", "Regex"]}]
+                     "available": False, "waiting_for": ["Git", "Regex"],
+                     "block_waiting_for": ["Git", "Regex"]}]
 
     home = Home(tmp_path / "h")
     my_courses.choose(home.root, URL, "bob/open")

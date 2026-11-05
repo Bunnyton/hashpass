@@ -628,3 +628,6 @@ ol.history .why{color:var(--muted);font-style:italic}
 .join-form{display:grid;gap:8px;margin:8px 0}
 .join-form button{justify-self:start}
 .people.waiting .member-head{gap:10px;align-items:center}
+.needs-tasks{margin:4px 0}
+.needs-tasks summary{cursor:pointer}
+.needs-group{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:4px 0}

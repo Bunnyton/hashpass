@@ -40,6 +40,14 @@ def _rights_said(boxes: list[str] | None, extras: list[str]) -> str:
     return said + (f" (+ {', '.join(perms.EXTRA_LABELS[e].lower() for e in extras)})" if extras else "")
 
 
+def _own_needs(course: Course, task: dict, passed: set[str]) -> dict:
+    """Return a task's own conditions and what of them `passed` still lacks (user 2026-11-05)."""
+    if not task.get("needs"):
+        return {}
+    waiting = cm.unmet(course, task["needs"], passed)
+    return {"needs": task["needs"]} | ({"waiting_for": waiting} if waiting else {})
+
+
 class Enrollments:
     """Which courses a user has started: `<root>/<user>.json` = {course_id: at}."""
 
@@ -276,7 +284,7 @@ class CourseApi:
                 if staff or task.get("added_by") == user:
                     row |= {"pinned": task.get("pinned", False), "hidden": task.get("hidden", False),
                             "latest": latest, "added_by": task.get("added_by", "")}
-                tasks.append(row)
+                tasks.append(row | _own_needs(course, task, passed))
             if tasks or block.get("open", True) or sees:
                 waiting = cm.waiting_for(course, block, passed)        # opens once these are solved
                 blocks.append({"id": block["id"], "name": block["name"], "open": block.get("open", True),
@@ -775,12 +783,16 @@ class CourseApi:
             for key in ("hidden", "pinned"):
                 if key in body:
                     t[key] = bool(body[key])
+            if "needs" in body:                 # user 2026-11-05: a task waits for tasks / blocks
+                cm.set_task_needs(c, repo, tag, [str(i) for i in body["needs"] or []])
             if body.get("move") in (-1, 1):
                 cm.move_task(c, repo, tag, int(body["move"]))
         said = ([f"{repo}:{tag} → версия {new_n}"] if new_n is not None else []) + [
             f"{repo}:{tag} {w}" for k, on, off in (("hidden", "скрыто", "показано"), ("pinned", "закреплено", "откреплено"))
             if k in body for w in [on if body[k] else off]] + (
-            [f"{repo}:{tag} передвинуто"] if body.get("move") in (-1, 1) else [])
+            [f"{repo}:{tag} передвинуто"] if body.get("move") in (-1, 1) else []) + (
+            [f"{repo}:{tag} откроется после: {', '.join(cm.need_name(course, str(i)) for i in body['needs'])}"
+             if body["needs"] else f"{repo}:{tag} открыто без условий"] if "needs" in body else [])
         err = self._edit(course.ref, change, by=user, what="; ".join(said))
         return err or self._json(HTTPStatus.OK, {"task": self.courses.get(course.ref).find_task(repo, tag)})
 

@@ -296,3 +296,27 @@ def test_hashpass_add_asks_a_comment_for_the_team_and_accepts_an_invitation(pool
     assert any("авторы и админы курса" in q for q in asked)
     cid = pool.call("GET", "/courses/bob/linux", "bob")[1]["id"]
     assert CourseNotes(pool.r.store.root / ".course-notes").of_course(cid) == {"kid": "Иванов И., ИУ7-31"}
+
+
+@pytest.mark.tier2
+def test_a_task_that_waits_for_another_task_opens_after_it(pool: _Courses, tmp_path: Path) -> None:
+    """User 2026-11-05: «конкретное задание (без версии) если выполнилось, открывается другое»."""
+    pool.push("bob/next", "1", image="n", task="tn")
+    block = pool.call("GET", "/courses/bob/linux", "bob")[1]["blocks"][0]["id"]
+    pool.call("POST", "/courses/bob/linux/tasks", "bob", {"repo": "bob/next", "tag": "1", "block_id": block})
+    code, body = pool.call("PUT", "/courses/bob/linux/tasks/bob/next:1", "bob", {"needs": ["bob/git-init:1"]})
+    assert code == 200, body  # noqa: PLR2004
+    client, tok = _join_kid(pool, tmp_path)
+    rows = {r["ref"]: r for r in client.catalog(token=tok)}
+    assert rows["bob/next:1"]["waiting_for"] == ["git-init"] and not rows["bob/next:1"]["available"]
+    view = pool.call("GET", "/courses/bob/linux", "kid")[1]
+    seen = {t["ref"]: t for b in view["blocks"] for t in b["tasks"]}
+    assert seen["bob/next:1"]["waiting_for"] == ["git-init"]
+    from tests.registry.test_course_web import _browser, _page  # noqa: PLC0415
+    assert "🔒 откроется после: «git-init»" in _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
+    assert "🔒 откроется, когда решите: «git-init»" in _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")[1]
+    nxt = _digest(pool, "bob/next")
+    assert client.submit("bob/next:1", nxt, passed=True, token=tok)["status"] != "passed"       # not yet
+    assert client.submit("bob/git-init:1", _digest(pool), passed=True, token=tok)["status"] == "passed"
+    assert client.submit("bob/next:1", nxt, passed=True, token=tok)["status"] == "passed"       # opened
+    assert pool.call("PUT", "/courses/bob/linux/tasks/bob/next:1", "bob", {"needs": ["bob/nope:1"]})[0] == 400  # noqa: PLR2004
