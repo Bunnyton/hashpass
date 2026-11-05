@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Журнал доступа nginx для задания var-log (детерминированно, seed 7).
 
-Обычные посетители (≈15 адресов) ходят по страницам сайта и получают 200/304; сканер
-203.0.113.66 перебирает типичные «дыры» и получает только 404. Других 404 в журнале нет.
+Вечер 2 ноября — утро 3-го. Обычные посетители (≈40 адресов 10.20.x.x) ходят по страницам
+и получают 200/304. Ночью (≈01:00–04:00) сайт перебирают сканеры: 23 адреса из сетей для
+документации, каждый пробует типичные «дыры» по нескольку раз и получает 404. Других 404 в
+журнале нет. Ответ шага — 23 уникальных адреса.
 Запуск: python3 data/gen-access.py > data/nginx/access.log
 """
 import random
 from datetime import datetime, timedelta
 
 random.seed(7)
-visitors = [f"10.20.{random.randint(1, 9)}.{random.randint(2, 250)}" for _ in range(15)]
+visitors = sorted({f"10.20.{random.randint(1, 9)}.{random.randint(2, 250)}" for _ in range(40)})
+scanners = sorted({f"{net}.{random.randint(2, 250)}"
+                   for net in ("203.0.113", "198.51.100", "192.0.2") for _ in range(8)})[:23]
 pages = ["/", "/index.html", "/news/", "/news/2026-10-28.html", "/contacts.html", "/price.pdf",
          "/css/site.css", "/js/app.js", "/img/logo.png", "/zayavka.html", "/favicon.ico"]
 agents = ["Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
@@ -18,13 +22,14 @@ agents = ["Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.
 probes = ["/wp-login.php", "/wp-admin/", "/.env", "/.git/config", "/phpmyadmin/", "/admin.php",
           "/xmlrpc.php", "/config.php.bak", "/backup.zip", "/server-status", "/.aws/credentials",
           "/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php", "/cgi-bin/luci", "/boaform/admin/formLogin"]
-t = datetime(2026, 11, 3, 6, 0, 0)
+night_from, night_to = datetime(2026, 11, 3, 1, 0), datetime(2026, 11, 3, 4, 0)
+t = datetime(2026, 11, 2, 19, 0, 0)
 lines = []
-for i in range(640):
-    t += timedelta(seconds=random.randint(5, 140))
+while t < datetime(2026, 11, 3, 9, 0):
+    t += timedelta(seconds=random.randint(5, 60))
     stamp = t.strftime("%d/%b/%Y:%H:%M:%S +0300")
-    if 300 < i < 380 and random.random() < 0.85:
-        ip, path, code, size = "203.0.113.66", random.choice(probes), 404, 162
+    if night_from <= t < night_to and random.random() < 0.8:
+        ip, path, code, size = random.choice(scanners), random.choice(probes), 404, 162
         agent = "Mozilla/5.0 zgrab/0.x"
     else:
         ip, path = random.choice(visitors), random.choice(pages)
