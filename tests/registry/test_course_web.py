@@ -267,3 +267,22 @@ def test_course_cards_mark_copies(pool: _Courses) -> None:
     _copies(pool)
     _status, html = _page(_browser(pool, "ann"), f"{pool.url}/?type=courses")
     assert "зеркало bob/linux" in html and "форк bob/linux" in html
+
+
+@pytest.mark.tier1
+def test_the_owner_hides_and_moves_tasks_in_place(pool: _Courses) -> None:
+    """User 2026-11-06: «сделай удобнее интерфейс управления порядком и сокрытием тасков»."""
+    owner = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")[1]
+    assert "data-toggle-url='/courses/bob/linux/tasks/bob/git-init:1' data-field='hidden'" in owner
+    assert "data-field='open'" in owner                                   # the block's eye
+    assert "data-move='up'" in owner and "data-move='down'" in owner     # in the row, not in ⋯
+    assert "class='tsel'" in owner and "class='bulkbar card'" in owner
+    assert "/static/courseedit.js" in owner
+    kid = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")[1]
+    assert "data-toggle-url" not in kid and "courseedit.js" not in kid
+    code, body = pool.call("PUT", "/courses/bob/linux/tasks/bob/git-init:1", "bob", {"hidden": True})
+    assert code == 200 and body["task"]["hidden"] is True  # noqa: PLR2004
+    rev = body["rev"]                                                     # the page saves the layout with it
+    block = pool.call("GET", "/courses/bob/linux", "bob")[1]["blocks"][0]["id"]
+    code, body = pool.call("PUT", f"/courses/bob/linux/blocks/{block}", "bob", {"open": False})
+    assert code == 200 and body["rev"] == rev + 1  # noqa: PLR2004

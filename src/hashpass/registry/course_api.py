@@ -699,7 +699,8 @@ class CourseApi:
                       else f"блок «{was}» откроется после: {', '.join(needs)}" if needs
                       else f"блок «{was}» открыт без условий" if "needs" in body else ""))
         err = self._edit(course.ref, change, by=actor, what=what)
-        return err or self._json(HTTPStatus.OK, {"id": block_id})
+        # rev: the page saves the layout next with it (inline toggles do not reload, 2026-11-06)
+        return err or self._json(HTTPStatus.OK, {"id": block_id, "rev": self.courses.get(course.ref).rev})
 
     def layout(self, owner: str, name: str) -> Response:
         course, actor, err = self._load(owner, name, "content", structure=True)
@@ -823,7 +824,8 @@ class CourseApi:
             [f"{repo}:{tag} откроется после: {', '.join(cm.need_name(course, str(i)) for i in body['needs'])}"
              if body["needs"] else f"{repo}:{tag} открыто без условий"] if "needs" in body else [])
         err = self._edit(course.ref, change, by=user, what="; ".join(said))
-        return err or self._json(HTTPStatus.OK, {"task": self.courses.get(course.ref).find_task(repo, tag)})
+        fresh = self.courses.get(course.ref)
+        return err or self._json(HTTPStatus.OK, {"task": fresh.find_task(repo, tag), "rev": fresh.rev})
 
     def proposal(self, owner: str, name: str, pid: str) -> Response:
         course, user, err = self._load(owner, name, "propose", structure=True)

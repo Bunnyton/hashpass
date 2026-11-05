@@ -2,6 +2,10 @@
 {% from '_files.html.j2' import icon %}
 {% from '_cards.html.j2' import avatar %}
 {% from '_install.html.j2' import cmd, install_cmd %}
+{% macro eye(url, field, shown, what) -%}
+{#- one click: visible <-> hidden, in place (user 2026-11-06: «сделай удобнее … сокрытием тасков») -#}
+<button type='button' class='icon-btn eye' data-toggle-url='{{ url }}' data-field='{{ field }}' aria-pressed='{{ 'false' if shown else 'true' }}' aria-label='{{ ('Скрыть ' if shown else 'Показать ') ~ what }}' title='{{ 'Скрыть от проходящих курс' if shown else 'Скрыто — показать проходящим курс' }}'><svg class='i-eye' viewBox='0 0 24 24' width='18' height='18' aria-hidden='true'><path d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z'/><circle cx='12' cy='12' r='3'/></svg> <svg class='i-eyeoff' viewBox='0 0 24 24' width='18' height='18' aria-hidden='true'><path d='M17.94 17.94A10.07 10.07 0 0 1 12 19c-6.5 0-10-7-10-7a18.5 18.5 0 0 1 5.06-5.94'/><path d='M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19'/><path d='M14.12 14.12a3 3 0 1 1-4.24-4.24'/><path d='M2 2l20 20'/></svg></button>
+{%- endmacro %}
 {% macro act(method, path, label, cls='menu-item', fields={}, confirm='', then='') -%}
 <form class='inline' data-api='{{ method }} {{ path }}'{% if confirm %} data-confirm='{{ confirm }}'{% endif %}{% if then %} data-then='{{ then }}'{% endif %}>
 {%- for k, v in fields.items() %}<input type='hidden' name='{{ k }}' value='{{ v }}'{% if v is sameas true or v is sameas false %} data-type='bool'{% elif v is number %} data-type='int'{% endif %}>{% endfor -%}
@@ -225,11 +229,11 @@
 {% if own %}<span class='pill warn sm'>🔒 откроется после: {{ need_names(own, block_names) }}</span>{% endif %}
 {% elif b.waiting_for %}<span class='pill warn sm'>🔒 откроется, когда решите: {% for n in b.waiting_for %}«{{ n }}»{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 <span class='sp'></span>
+{% if may.content %}{{ eye(api ~ '/blocks/' ~ b.id, 'open', b.open, 'блок «' ~ b.name ~ '»') }}{% endif %}
 {% if may.edit and b.tasks | length > 1 %}{{ order_switch('Задания по порядку', b.tasks_in_order, {'block': b.id, 'tasks': not b.tasks_in_order}, 'Снять порядок: задания блока откроются сразу' if b.tasks_in_order else 'Каждое задание блока откроется, когда решено предыдущее') }}{% endif %}
 {% if may.content %}
 <details class='menu block-menu'><summary class='menu-dot' title='действия с блоком'>⋯</summary>
 <div class='menu-list card'>
-{{ act('PUT', api ~ '/blocks/' ~ b.id, 'Сделать доступным' if not b.open else 'Скрыть от проходящих курс', fields={'open': not b.open}) }}
 {% if may.edit and c.blocks | length > 1 %}<form class='block-needs' data-api='PUT {{ api }}/blocks/{{ b.id }}'>
 <span class='small dim'>Откроется, когда решено:</span>
 {% if c.blocks_in_order %}<span class='small dim'>Блоки идут по порядку — предыдущий блок ставится сам; другие блоки здесь не нужны.</span>{% endif %}
@@ -242,7 +246,7 @@
 <ul class='tasklist' data-block-id='{{ b.id }}'>
 {% for t in b.tasks %}
 <li class='titem{% if t.hidden %} task-hidden{% endif %}' data-ref='{{ t.ref }}'>
-{% if may.edit %}<span class='grip' title='перетащите'>⠿</span>{% endif %}
+{% if may.edit %}<input type='checkbox' class='tsel' aria-label='выбрать {{ t.ref }}' title='выбрать (Shift — диапазон)'><span class='grip' tabindex='0' role='button' aria-label='переместить {{ t.ref }}: перетащите или Alt+↑/↓' title='перетащите · Alt+↑/↓'>⠿</span>{% endif %}
 {% set rp = t.revision.rpartition('_v') %}<span class='tref has-tip'><a class='mono ref' href='/web/image/{{ t.revision | ref_url }}' aria-describedby='tip-{{ loop.index }}-{{ b.id }}'>{{ rp[0] }}</a> <span class='pill sm ver'>версия {{ rp[2] }}</span>{% if t.at %} <span class='small dim'>обновлено {{ ago(t.at) }}</span>{% endif %}
 <span class='tip card' role='tooltip' id='tip-{{ loop.index }}-{{ b.id }}'><span class='kind kind-task'>{{ icon('task') }} задание</span><b class='mono'>{{ rp[0] }}</b><span class='sub small'>{{ t.about or 'без описания' }}</span><a class='small' href='/web/image/{{ t.revision | ref_url }}'>открыть задание →</a></span></span>
 {% if t.has_wiki %}<a class='small' href='/web/wiki/{{ t.repo }}' title='теория задания'>wiki</a>{% endif %}
@@ -253,13 +257,14 @@
 {% elif t.waiting_for %}<span class='pill warn sm'>🔒 откроется, когда решите: {% for n in t.waiting_for %}«{{ n }}»{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 {% if t.latest and t.latest > t.n %}<span class='pill warn sm'>есть версия {{ t.latest }}</span>{% endif %}
 <span class='sp'></span>
+{% if may.edit %}<span class='row-tools'>
+<button type='button' class='icon-btn' data-move='up' aria-label='Выше' title='Выше (Alt+↑)'><svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true'><path d='M18 15l-6-6-6 6'/></svg></button>
+<button type='button' class='icon-btn' data-move='down' aria-label='Ниже' title='Ниже (Alt+↓)'><svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+{{ eye(api ~ '/tasks/' ~ t.ref, 'hidden', not t.hidden, t.ref) }}</span>{% endif %}
 {% if may.edit or (may.add and t.added_by == signed_in) %}
 <details class='menu task-menu'><summary class='menu-dot' title='действия'>⋯</summary>
 <div class='menu-list card'>
 {% if may.edit %}
-{{ act('PUT', api ~ '/tasks/' ~ t.ref, '↑ Выше', fields={'move': -1}) }}
-{{ act('PUT', api ~ '/tasks/' ~ t.ref, '↓ Ниже', fields={'move': 1}) }}
-{{ act('PUT', api ~ '/tasks/' ~ t.ref, 'Показать' if t.hidden else 'Скрыть', fields={'hidden': not t.hidden}) }}
 <form class='block-needs' data-api='PUT {{ api }}/tasks/{{ t.ref }}'>
 <span class='small dim'>Откроется, когда решено:</span>
 {% if b.tasks_in_order %}<span class='small dim'>Задания блока идут по порядку — предыдущее ставится само.</span>{% endif %}
@@ -275,6 +280,15 @@
 </ul>
 </div>
 {% endfor %}
+{% if may.edit %}<div class='bulkbar card' role='region' aria-label='Выбранные задания' hidden>
+<span><b class='bulk-n'>0</b> <span class='bulk-word'>выбрано</span></span>
+<button type='button' class='btn sm ghost' data-bulk='hide'>Скрыть</button>
+<button type='button' class='btn sm ghost' data-bulk='show'>Показать</button>
+<label class='bulk-move'><span class='visually-hidden'>Перенести в блок</span><select data-bulk-move>
+<option value=''>Перенести в блок…</option>{% for bb in c.blocks %}<option value='{{ bb.id }}'>{{ bb.name }}</option>{% endfor %}</select></label>
+<span class='sp'></span>
+<button type='button' class='btn sm ghost' data-bulk='clear'>Снять выбор</button>
+</div>{% endif %}
 </div>
 {% else %}
 <div class='empty card'><p class='sub'>Заданий пока нет.</p></div>
@@ -488,4 +502,5 @@
 {% if may.people %}<script src='/static/usersearch.js'></script>{% endif %}
 <script src='/static/filter.js'></script>
 {% if may.edit %}<script src='/static/catalog.js'></script>{% endif %}
+{% if may.content %}<script src='/static/courseedit.js'></script>{% endif %}
 {% endblock %}

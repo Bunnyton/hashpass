@@ -10,6 +10,8 @@
     if (!toastEl) {
       toastEl = document.createElement('div');
       toastEl.className = 'toast';
+      toastEl.setAttribute('role', 'status');          // read out, never takes the focus
+      toastEl.setAttribute('aria-live', 'polite');
       document.body.appendChild(toastEl);
     }
     toastEl.textContent = text;
@@ -58,6 +60,9 @@
       setTimeout(function () { location.reload(); }, 1600);
     });
   }
+
+  window.hpSaveLayout = save;      // courseedit.js: bulk «перенести в блок»
+  window.hpToast = toast;
 
   // -- pointer drag: the row floats under the pointer, a placeholder marks the drop spot
   var drag = null;   // {li, ph, startX, startY, dx, dy, active, origin:{list, next}, before}

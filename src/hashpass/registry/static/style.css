@@ -665,3 +665,47 @@ button.switch.on .knob::after{transform:translateX(12px)}
 .flow-step.off .flow-chip{border-style:dashed;color:var(--muted)}
 @media (max-width:640px){.order-head .sp{display:none}}
 .wiki-fold-bar{gap:8px;margin-bottom:12px}
+/* course editor: inline order / visibility tools, selection, bulk bar (2026-11-06) */
+.row-tools{display:inline-flex;gap:2px;opacity:.45;transition:opacity .15s}
+.titem:hover .row-tools,.titem:focus-within .row-tools,.titem.selected .row-tools{opacity:1}
+@media (hover:none){.row-tools{opacity:1}}
+.icon-btn{margin:0;padding:0;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;
+  background:transparent;border:1px solid transparent;border-radius:8px;color:var(--muted);cursor:pointer}
+.icon-btn:hover{background:var(--surface);border-color:var(--border);color:var(--text)}
+.icon-btn:disabled{opacity:.5;cursor:progress}
+.icon-btn svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.icon-btn.eye .i-eyeoff,.icon-btn.eye[aria-pressed=true] .i-eye{display:none}
+.icon-btn.eye[aria-pressed=true] .i-eyeoff{display:inline}
+.icon-btn.eye[aria-pressed=true]{color:var(--danger)}
+.block-head .icon-btn.eye{opacity:.7}.block-head .icon-btn.eye:hover{opacity:1}
+.titem .tsel{margin:0;width:16px;height:16px;flex:0 0 auto;accent-color:var(--accent);cursor:pointer}
+.titem .grip:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.titem.selected{border-color:var(--accent);background:var(--accent-soft)}
+.bulkbar{position:sticky;bottom:16px;z-index:40;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  margin:16px 0 0;padding:10px 14px;box-shadow:var(--shadow-lg);border-color:var(--accent)}
+.bulkbar[hidden]{display:none}
+.bulkbar .btn,.bulkbar button{margin:0}
+.bulkbar .sp{flex:1}
+.bulkbar .bulk-move{margin:0}
+.bulkbar select{margin:0;width:auto;padding:6px 10px}
+@media (max-width:640px){
+  .block-head{flex-wrap:wrap}
+  .block-head .block-rename{flex:1 1 100%}
+  .titem{flex-wrap:wrap}
+  .titem .tref{flex:1 1 calc(100% - 64px)}
+  .titem>.sp{display:none}
+  .titem .row-tools{margin-left:auto}
+}
+/* ui-ux checklist (2026-11-06): 44px touch targets, readable idle icons, undo toast, reduced motion */
+.row-tools{opacity:.7}
+@media (pointer:coarse){.icon-btn{width:44px;height:44px}.titem .tsel{width:22px;height:22px}}
+.toast.undo{display:flex;align-items:center;gap:14px;bottom:72px}
+.toast.undo.show{pointer-events:auto}
+.toast .undo-btn{margin:0;padding:4px 10px;font-size:13px;background:transparent;color:inherit;
+  border:1px solid currentColor;border-radius:8px}
+.toast .undo-btn:hover{background:rgba(255,255,255,.12)}
+@media (prefers-reduced-motion:reduce){
+  .titem.just-moved{animation:none}
+  .row-tools,.toast{transition:none}
+  .titem.floating{transform:none}
+}
