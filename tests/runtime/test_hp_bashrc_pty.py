@@ -590,3 +590,43 @@ def test_a_wiped_path_still_ships_the_students_commands(tmp_path):
     child.expect(pexpect.EOF)
     cmds = [r for r in _requests(log) if r.startswith("cmd ")]
     assert cmds == ["cmd PATH=/nonexistent", "cmd echo after"], cmds
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("key", ["q", "й"])
+def test_pager_skips_on_the_bare_key_without_enter(key):
+    """
+    The pause says «пропустить: q» -- one key, no Enter (2026-11-06).
+
+    It used to read a whole line: «q» sat there, the student typed `env` + Enter, the pager got
+    «qenv» = «next page» and the command was gone.
+    """
+    answers: list[bytes] = []
+    port, t = _pager_host(answers)
+    child = pexpect.spawn("bash", [str(_HP_IO), "hello"], env={**os.environ, "HP_PORT": str(port)},
+                          encoding="utf-8", timeout=5)
+    child.expect("пропустить: q")
+    child.send(key)                                        # no Enter
+    child.expect("page-three")
+    child.expect(pexpect.EOF)
+    t.join(5)
+    assert answers == [b"q"]
+
+
+@pytest.mark.tier1
+def test_pager_other_keys_do_not_turn_the_page():
+    answers: list[bytes] = []
+    port, t = _pager_host(answers)
+    child = pexpect.spawn("bash", [str(_HP_IO), "hello"], env={**os.environ, "HP_PORT": str(port)},
+                          encoding="utf-8", timeout=5)
+    child.expect("пропустить: q")
+    child.send("env")                                      # typed too early: not an answer
+    with pytest.raises(pexpect.TIMEOUT):
+        child.expect("page-two", timeout=1)
+    child.send("\r")                                       # Enter: the next page
+    child.expect("page-two")
+    child.send(" ")                                        # space: the next page too
+    child.expect("page-three")
+    child.expect(pexpect.EOF)
+    t.join(5)
+    assert answers == [b"x", b"x"]

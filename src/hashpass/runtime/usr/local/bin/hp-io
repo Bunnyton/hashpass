@@ -38,19 +38,31 @@ while IFS= read -r -N1 ch <&3; do
             continue
         fi
         printf '\x1b[2m  — далее: Enter · пропустить: q —\x1b[0m' > /dev/tty
-        # Enter -> next page; «q» (or «й» on a Russian layout) or Ctrl+C -> the host prints the
-        # rest at once. Ctrl+C is trapped so it answers the pager instead of killing this reply.
-        ans="" skip=0
+        # ONE key, no Enter (the line says so): Enter / space -> next page; «q» (or «й» on a
+        # Russian layout) or Ctrl+C -> the host prints the rest at once; any other key is not an
+        # answer. A whole-line read kept a bare «q» waiting: the student then typed `env` + Enter,
+        # the pager got «qenv» = «next page» and the command was gone (2026-11-06).
+        # Ctrl+C is trapped so it answers the pager instead of killing this reply.
+        ans="" skip=0 next=0
         trap 'skip=1' INT
         # bash's `read` is not interrupted by a trapped Ctrl+C -- poll in short slices instead
-        # (canonical tty mode: a half-typed line is not consumed by a timed-out read).
-        while [ "$skip" -eq 0 ]; do
-            IFS= read -r -t 0.2 ans < /dev/tty && break
-            [ $? -le 128 ] && skip=1            # EOF / tty gone: skip
+        # (-n1 reads in non-canonical mode; a timed-out slice consumes nothing).
+        while [ "$skip" -eq 0 ] && [ "$next" -eq 0 ]; do
+            key=""
+            IFS= read -r -s -n1 -t 0.2 key < /dev/tty
+            rc=$?
+            if [ $rc -gt 128 ]; then continue; fi  # the slice timed out
+            [ $rc -ne 0 ] && { skip=1; break; }      # EOF / tty gone: skip
+            if [ "$key" = $'\xd0' ]; then           # LC_ALL=C: «й» / «Й» is two bytes
+                IFS= read -r -s -n1 -t 0.2 more < /dev/tty && key+=$more
+            fi
+            case "$key" in
+                ''|' ') next=1 ;;                   # Enter (the delimiter) or space
+                q|Q|й|Й) ans=q skip=1 ;;
+            esac
         done
         trap skip_rest INT
         printf '\r\x1b[K' > /dev/tty
-        case "$ans" in q|Q|й|Й) skip=1 ;; esac
         if [ "$skip" -eq 1 ]; then skip_rest; else printf 'x' >&3; fi
         buf=${buf#*$'\x01'}
     done
