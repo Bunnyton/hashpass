@@ -327,6 +327,18 @@ class RemoteRegistry:
             raise
         return headers.get(_DIGEST_HEADER) or None
 
+    def image_head(self, ref: str) -> tuple[str | None, str | None]:
+        """Return (the revision the pool serves for `ref`, its digest); (None, None) when absent."""
+        name, version = split_ref(ref)
+        try:
+            _body, headers = self._request("HEAD", f"/image/{name}/{version}{self._cq()}",
+                                           headers=self._reader_headers())
+        except urllib.error.HTTPError as exc:
+            if exc.code == HTTPStatus.NOT_FOUND:
+                return None, None
+            raise
+        return headers.get("X-Image-Ref") or None, headers.get(_DIGEST_HEADER) or None
+
     def download_image(self, ref: str, dest: Path, *,
                        on_bytes: Callable[[int, int | None], None] | None = None) -> str:
         """

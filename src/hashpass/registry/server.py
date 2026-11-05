@@ -200,6 +200,14 @@ def _owner_of(name: str) -> str | None:
     return head if sep else None
 
 
+def _base_tag(base: str | None) -> str | None:
+    """`bunnyton/debian:trixie_v6` -> `bunnyton/debian:trixie`: a task runs on its base's newest."""
+    if not base:
+        return None
+    name, _, version = base.rpartition(":")
+    return f"{name}:{parse_version(version)[0]}"
+
+
 def _ownership_message(name: str) -> str:
     """Return the Russian 403 reason for `name`: no namespace -> admin-only; else -> wrong-author."""
     owner = _owner_of(name)
@@ -458,7 +466,7 @@ class PoolServer:
                 top = f"{task['repo']}:{revision_version(task['tag'], eff)}"
                 with contextlib.suppress(KeyError):
                     chain = closure_refs(top, self.store)
-                    bases = [b for r in chain if (b := self.store.get(r).base)]
+                    bases = [b for r in chain if (b := self._live_base(self.store.get(r).base))]
                     if ref in chain or ref in bases:
                         return True
         return False
@@ -2375,9 +2383,25 @@ class PoolServer:
         tag, n, _latest = parse_version(version)
         return n is None or self.repo(name).get(tag, n) is not None
 
+    def _live_base(self, base: str | None) -> str | None:
+        """
+        Return the revision an image's `base` runs on now.
+
+        The newest of its tag (user 2026-11-05: «ссылаться на latest»), else the recorded one
+        while it is still stored.
+
+        A base is not a `from`: it is pinned at push only to say what the task was built on.
+        """
+        if not base:
+            return None
+        name, _, version = base.rpartition(":")
+        tag, _n, _latest = parse_version(version)
+        newest = self.resolve(name, tag)
+        return newest or (base if self.store.exists(base) else None)
+
     def _dependents(self, ref: str) -> list[str]:
         return sorted(r for r in self.store.list() if r != ref and (
-            ref in self.store.get(r).parents or self.store.get(r).base == ref))
+            ref in self.store.get(r).parents or self._live_base(self.store.get(r).base) == ref))
 
     def _foreign_courses(self, name: str, tag: str, n: int) -> list["course_model.Course"]:
         """Courses of someone other than the repository's owner showing revision n of name:tag."""
@@ -2504,8 +2528,8 @@ class PoolServer:
                                         ("sources", self.sources(), "."))
             ) if latest_ref else False
             if (latest is not None and not changed_files
-                    and (image_digest, t_digest, tuple(pinned), base)
-                    == (latest.image_digest, latest.task_digest, latest.parents, prev_base)):
+                    and (image_digest, t_digest, tuple(pinned), _base_tag(base))
+                    == (latest.image_digest, latest.task_digest, latest.parents, _base_tag(prev_base))):
                 st.remove()
                 return self._json(HTTPStatus.OK, {"ref": latest_ref, "n": latest.n, "unchanged": True})
             n = idx.peek_next(tag)
@@ -2621,7 +2645,7 @@ class PoolServer:
             missing = str(exc.args[0]) if exc.args else ref
             return self._not_found(missing)
         if request.args.get("revisions") == "1":
-            bases = {r: b for r in refs if (b := self.store.get(r).base) and self.store.exists(b)}
+            bases = {r: b for r in refs if (b := self._live_base(self.store.get(r).base))}
             try:                                      # the pinned bases come first, with their chains
                 below = [x for b in dict.fromkeys(bases.values()) for x in closure_refs(b, self.store)]
             except KeyError:

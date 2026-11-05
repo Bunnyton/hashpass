@@ -302,3 +302,29 @@ def test_a_pulled_revision_runs_on_its_pinned_base(registry, tmp_path):
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "h")}, default_home=tmp_path)
     layer = cli.ensure_base_image(env, dest, for_ref=ref)          # no rootfs.tar, no build
     assert layer == dest.get("bunnyton/debian:trixie_v1").layer
+
+
+@pytest.mark.tier2
+def test_a_pulled_revision_runs_on_the_newest_base(registry, tmp_path):
+    """User 2026-11-05: «ссылаться на latest» -- a task pulled on base v1 runs on v2 once it is out."""
+    from hashpass import cli  # noqa: PLC0415
+    registry.users.add("bunnyton", "pw-correct", role="admin")
+    local = ImageStore(tmp_path / "local")
+    _seed(local, tmp_path, "bunnyton/debian", (), "BASE")
+    local.save("bunnyton/debian", "trixie", tmp_path / "src-bunnyton_debian", ())
+    ref = _seed(local, tmp_path, "bunnyton/lab", (), "LAB")
+    client = RemoteRegistry(registry.base_url, cache=CredentialCache(tmp_path / "creds.json"))
+    client.login("bunnyton", "pw-correct")
+    client.push(local, "bunnyton/debian:trixie")
+    client.push(local, ref, base="bunnyton/debian:trixie")
+    dest = ImageStore(tmp_path / "dest")
+    reader = RemoteRegistry(registry.base_url)
+    reader.pull(ref, dest)
+    assert dest.get(ref).base == "bunnyton/debian:trixie_v1"
+    (tmp_path / "src-bunnyton_debian" / "marker.txt").write_text("BASE2", encoding="utf-8")
+    local.save("bunnyton/debian", "trixie", tmp_path / "src-bunnyton_debian", ())
+    client.push(local, "bunnyton/debian:trixie", force=True)            # base v2
+    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "h")}, default_home=tmp_path)
+    layer = cli.ensure_base_image(env, dest, pool=reader, for_ref=ref)
+    assert layer == dest.get("bunnyton/debian:trixie_v2").layer
+    assert (layer / "marker.txt").read_text(encoding="utf-8") == "BASE2"

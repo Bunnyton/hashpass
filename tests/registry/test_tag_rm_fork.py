@@ -122,6 +122,21 @@ def test_the_base_a_revision_was_built_on_cannot_be_removed(pool: _Pool) -> None
 
 
 @pytest.mark.tier1
+def test_an_older_base_revision_goes_the_newest_stays(pool: _Pool) -> None:
+    """Tasks run on the base's newest revision (2026-11-05), so only that one is held."""
+    sid = _http("POST", f"{pool.url}/revisions/bob/lab/1", token=pool.tok["bob"],
+                body={"base": "bunnyton/debian:trixie"})[1]["staging"]
+    pool.put("image", "bob/lab", "1", sid, pool.blob("bob/lab", "1", "one"))
+    pool.commit("bob/lab", "1", sid)
+    pool.push("bunnyton/debian", "trixie", image="base2", user="bunnyton")
+    url = f"{pool.url}/revisions/bunnyton/debian/trixie"
+    assert _http("DELETE", f"{url}/2", token=pool.tok["bunnyton"])[0] == 409  # noqa: PLR2004
+    assert _http("DELETE", f"{url}/1", token=pool.tok["bunnyton"])[0] == 200  # noqa: PLR2004
+    body = _http("GET", f"{pool.url}/closure/bob/lab/1?revisions=1", token=pool.tok["bob"])[1]
+    assert body["refs"] == ["bunnyton/debian:trixie_v2", "bob/lab:1_v1"]
+
+
+@pytest.mark.tier1
 def test_an_unknown_base_is_refused(pool: _Pool) -> None:
     sid = _http("POST", f"{pool.url}/revisions/bob/lab/1", token=pool.tok["bob"],
                 body={"base": "bunnyton/nothere:1"})[1]["staging"]

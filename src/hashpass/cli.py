@@ -253,8 +253,9 @@ def ensure_base_image(env: Home, store: ImageStore, *, pool: RemoteRegistry | No
     base at all -- it is built once from the out-of-band rootfs tarball, exactly as before.
     """
     pinned = _pinned_base(store, for_ref)
-    if pinned is not None:                 # a pool revision runs on the base it was built on
-        return pinned
+    if pinned is not None:                 # a pool revision: on its base's newest revision
+        newest = _newest_base(store, pool, for_ref, io or _default_io()) if pool is not None else None
+        return newest or pinned
     ref = base_ref()
     if pool is not None:
         layer = _base_from_pool(store, pool, ref, io or _default_io())
@@ -280,6 +281,32 @@ def _pinned_base(store: ImageStore, ref: str | None) -> Path | None:
     if not base or not store.exists(base):
         return None
     return store.get(base).layer
+
+
+def _newest_base(store: ImageStore, pool: RemoteRegistry, ref: str, io: Io) -> Path | None:
+    """
+    Return the layer of the newest revision of the base `ref` was pulled on; None -- keep that one.
+
+    User 2026-11-05: «ссылаться на latest» -- a task pulled on `trixie_v6` runs on `trixie_v7`
+    once it is out, without re-pulling the task. Pulled under its revision name, so the next
+    task pulled on it shares the download. A pool error keeps the recorded base.
+    """
+    base = store.get(ref).base or ""
+    name, _, version = base.rpartition(":")
+    tag, n, _latest = parse_version(version)
+    if n is None:
+        return None
+    try:
+        served, digest = pool.image_head(f"{name}:{tag}")
+        if not served or served == base:
+            return None
+        if not store.exists(served) or (digest and store.get(served).pool_digest != digest):
+            io.write(f"\x1b[2mобновляю базу: {base} → {served}\x1b[0m\n")
+            pool.pull_many([served], store, refresh=True)
+        store.set_meta_field(ref, "base", served)
+        return store.get(served).layer
+    except (RuntimeError, ValueError, OSError, KeyError, urllib.error.URLError):
+        return None
 
 
 def _base_intact(layer: Path) -> bool:

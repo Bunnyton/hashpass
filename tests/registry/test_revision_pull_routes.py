@@ -79,12 +79,25 @@ def test_images_mark_the_newest_revision(pool: _Pool) -> None:
 
 
 @pytest.mark.tier1
-def test_closure_brings_the_pinned_base_first(pool: _Pool) -> None:
+def test_closure_brings_the_newest_base_first(pool: _Pool) -> None:
+    """User 2026-11-05: «ссылаться на latest» -- a task runs on the base's newest revision."""
     sid = _http("POST", f"{pool.url}/revisions/bob/lab/1", token=pool.tok["bob"],
                 body={"base": "bunnyton/debian:trixie"})[1]["staging"]
     pool.put("image", "bob/lab", "1", sid, pool.blob("bob/lab", "1", "one"))
     pool.commit("bob/lab", "1", sid)
     pool.push("bunnyton/debian", "trixie", image="base2", user="bunnyton")   # a newer base
     body = _http("GET", f"{pool.url}/closure/bob/lab/1?revisions=1", token=pool.tok["bob"])[1]
-    assert body["refs"] == ["bunnyton/debian:trixie_v1", "bob/lab:1_v1"]
-    assert body["bases"] == {"bob/lab:1_v1": "bunnyton/debian:trixie_v1"}
+    assert body["refs"] == ["bunnyton/debian:trixie_v2", "bob/lab:1_v1"]
+    assert body["bases"] == {"bob/lab:1_v1": "bunnyton/debian:trixie_v2"}
+
+
+@pytest.mark.tier1
+def test_a_new_base_alone_makes_no_new_task_revision(pool: _Pool) -> None:
+    blob = pool.blob("bob/lab", "1", "one")
+    for _ in range(2):
+        sid = _http("POST", f"{pool.url}/revisions/bob/lab/1", token=pool.tok["bob"],
+                    body={"base": "bunnyton/debian:trixie"})[1]["staging"]
+        pool.put("image", "bob/lab", "1", sid, blob)
+        _code, body = pool.commit("bob/lab", "1", sid)
+        pool.push("bunnyton/debian", "trixie", image="base2", user="bunnyton")
+    assert body == {"ref": "bob/lab:1_v1", "n": 1, "unchanged": True}
