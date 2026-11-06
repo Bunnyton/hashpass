@@ -142,6 +142,7 @@ def test_the_page_says_the_condition(pool: _Courses) -> None:
     pool.call("PUT", f"/courses/bob/linux/blocks/{prize}", "bob", {"needs": [git]})
     code, html = _page(_browser(pool, "bob"), f"{pool.url}/c/bob/linux")
     assert code == 200 and "🔒 откроется после: «Git»" in html  # noqa: PLR2004
-    assert f"value='{git}' data-type='list' checked" in html            # the form shows what is set
+    assert f'data-needs=\'["{git}"]\'' in html                        # the opener carries what is set
+    assert "id='needs-dlg'" in html and "Когда откроется…" in html     # one dialog, not a form per menu
     code, html = _page(_browser(pool, "kid"), f"{pool.url}/c/bob/linux")
-    assert "🔒 откроется, когда решите: «Git»" in html and "Сохранить условие" not in html
+    assert "🔒 откроется, когда решите: «Git»" in html and "needs-dlg" not in html

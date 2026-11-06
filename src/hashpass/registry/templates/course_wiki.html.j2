@@ -18,7 +18,8 @@
 {% if w.tags %}<span class='item-tags'>{% for t in w.tags %}<span class='tagchip'>#{{ t }}</span>{% endfor %}</span>{% endif %}
 </summary>
 <div class='md-body fold-body'>{{ w.html | safe }}
-<p><a href='{{ w.href }}'>открыть wiki полностью — все её страницы →</a></p></div>
+<p><a href='{{ w.href }}'>открыть wiki полностью — все её страницы →</a></p>
+<p class='fold-foot'><button type='button' class='sm ghost' data-fold-close>Свернуть ↑</button></p></div>
 </details>
 {% endfor %}
 </div>

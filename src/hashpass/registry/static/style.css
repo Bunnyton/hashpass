@@ -628,9 +628,6 @@ ol.history .why{color:var(--muted);font-style:italic}
 .join-form{display:grid;gap:8px;margin:8px 0}
 .join-form button{justify-self:start}
 .people.waiting .member-head{gap:10px;align-items:center}
-.needs-tasks{margin:4px 0}
-.needs-tasks summary{cursor:pointer}
-.needs-group{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:4px 0}
 .wiki-fold>summary{list-style:none;cursor:pointer;display:flex;flex-direction:column;gap:8px}
 .wiki-fold>summary::-webkit-details-marker{display:none}
 .wiki-fold[open]{grid-column:1/-1}
@@ -709,3 +706,39 @@ button.switch.on .knob::after{transform:translateX(12px)}
   .row-tools,.toast{transition:none}
   .titem.floating{transform:none}
 }
+/* «Когда откроется…»: one roomy dialog instead of a picker in a ⋯ menu (2026-11-06) */
+.menu-sep{border:0;border-top:1px solid var(--border);margin:4px 2px}
+button.pill-btn{margin:0;font:inherit;font-size:12px;font-weight:600;cursor:pointer;border:1px solid transparent}
+button.pill-btn:hover{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.dlg{width:min(640px,calc(100vw - 32px));max-height:min(86vh,760px);padding:0;border:1px solid var(--border);
+  border-radius:var(--radius);background:var(--surface);color:var(--text);box-shadow:var(--shadow-lg);overflow:hidden}
+.dlg[open]{display:flex;flex-direction:column}
+.dlg::backdrop{background:rgba(10,17,32,.45)}
+.dlg-body{display:flex;flex-direction:column;gap:12px;padding:18px 20px;margin:0;min-height:0;flex:1}
+.dlg-head{display:flex;align-items:center;gap:8px}
+.dlg-head h3{margin:0;font-size:17px;flex:1;overflow-wrap:anywhere}
+.dlg-head .dlg-x{margin:0}
+.dlg .sub{margin:-4px 0 0}
+.needs-note{margin:0;padding:8px 10px;border-radius:var(--radius-sm);background:var(--accent-soft);color:var(--accent)}
+.needs-sec{border:0;margin:0;padding:0;min-width:0;display:flex;flex-direction:column;gap:8px}
+.needs-sec legend{font-weight:600;font-size:13px;color:var(--muted);padding:0;margin-bottom:6px}
+.needs-sec:last-of-type{flex:1;min-height:0}
+.dlg .chips{display:flex;flex-wrap:wrap;gap:6px}
+.dlg .chip{white-space:nowrap}
+.dlg .chip[hidden],.dlg .chip-hidden,.dlg .needs-group[hidden]{display:none}
+.needs-find{margin:0}
+.needs-scroll{overflow:auto;min-height:80px;max-height:34vh;padding:2px;display:flex;flex-direction:column;gap:10px}
+.needs-group{display:flex;flex-direction:column;align-items:stretch;gap:5px;margin:0}
+.needs-gname{font-weight:600}
+.needs-none{margin:0}
+.dlg-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--border)}
+.dlg-foot .btn{margin:0}
+@media (max-width:640px){.dlg{width:100vw;max-width:100vw;max-height:92vh;margin:auto 0 0;border-radius:var(--radius) var(--radius) 0 0}
+  .needs-scroll{max-height:40vh}
+  .dlg-foot .needs-sum{flex-basis:100%}.dlg-foot .sp{display:none}.dlg-foot button[type=submit]{margin-left:auto}}
+/* an unfolded wiki card folds on a click into its empty space (2026-11-06: «тык в пустое поле») */
+.wiki-fold{scroll-margin-top:76px;transition:border-color .15s,background .15s}
+.wiki-fold.fold-hot{cursor:pointer;border-color:var(--accent);background:color-mix(in srgb,var(--accent-soft) 35%,var(--surface))}
+.fold-foot{margin:14px 0 0}
+.fold-foot button{margin:0}
+@media (prefers-reduced-motion:reduce){.wiki-fold{transition:none}}

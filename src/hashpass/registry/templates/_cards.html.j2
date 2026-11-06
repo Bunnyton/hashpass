@@ -27,7 +27,8 @@
 {% if r.tags %}<span class='item-tags'>{% for t in r.tags %}<a class='tagchip' href='/?q={{ ("#" ~ t) | q }}&type=wiki'>#{{ t }}</a>{% endfor %}</span>{% endif %}
 </summary>
 <div class='md-body fold-body'>{{ r.html | safe }}
-<p><a href='{{ r.href }}'>открыть страницу wiki отдельно →</a></p></div>
+<p><a href='{{ r.href }}'>открыть страницу wiki отдельно →</a></p>
+<p class='fold-foot'><button type='button' class='sm ghost' data-fold-close>Свернуть ↑</button></p></div>
 </details>
 {%- endmacro %}
 

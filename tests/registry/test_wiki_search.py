@@ -54,5 +54,6 @@ def test_a_found_wiki_unfolds_right_in_the_results(pool: _Courses) -> None:
     assert "<details class='card item-card wiki-fold'" in html
     assert "один или больше" in html                    # the page's own text, not just a snippet
     assert "data-wiki-fold='open'" in html               # «Раскрыть все»
+    assert "data-fold-close>Свернуть ↑" in html           # an unfolded card folds from its bottom too
     home = _page(_browser(pool, "eve"), f"{pool.url}/")[1]
     assert "wiki-fold" in home and "Вступление." in home  # the home page's «Wiki» unfolds too

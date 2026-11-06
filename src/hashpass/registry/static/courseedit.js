@@ -208,4 +208,117 @@
       }, reloadIfChained);
     });
   }
+  // «Когда откроется…»: one dialog for every block and task (user 2026-11-06: the ⋯ menu was too
+  // cramped for the picker). The opener carries the url, what is set now and what to leave out.
+  var dlg = document.getElementById('needs-dlg');
+  if (dlg && dlg.showModal) {
+    var form = dlg.querySelector('form'), opener = null;
+    var find = dlg.querySelector('.needs-find'), none = dlg.querySelector('.needs-none');
+    var boxes = [].slice.call(dlg.querySelectorAll('input[type=checkbox]'));
+    function plural(n, one, few, many) {
+      var m10 = n % 10, m100 = n % 100;
+      return n + ' ' + (m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many);
+    }
+    // a box counts when ticked and not the item itself / its own block (a filtered-out one still counts)
+    function counts(x) {
+      var chip = x.closest('.chip');
+      return x.checked && !x.closest('[hidden]') && chip.dataset.skip !== '1';
+    }
+    function summary() {
+      var b = 0, t = 0;
+      boxes.forEach(function (x) { if (counts(x)) { if (x.closest('[data-ref]')) t++; else b++; } });
+      var parts = [];
+      if (b) parts.push(plural(b, 'блок', 'блока', 'блоков'));
+      if (t) parts.push(plural(t, 'задание', 'задания', 'заданий'));
+      dlg.querySelector('.needs-sum').textContent = parts.length ? 'Ждёт: ' + parts.join(' и ') : 'Откроется сразу';
+    }
+    function filter() {
+      var q = (find.value || '').trim().toLowerCase(), any = false;
+      dlg.querySelectorAll('.needs-group').forEach(function (g) {
+        if (g.hidden) return;
+        var shown = 0;
+        g.querySelectorAll('[data-ref]').forEach(function (chip) {
+          var skip = chip.dataset.skip === '1';
+          var hit = !skip && (!q || chip.textContent.toLowerCase().indexOf(q) >= 0 ||
+                              g.querySelector('.needs-gname').textContent.toLowerCase().indexOf(q) >= 0);
+          chip.classList.toggle('chip-hidden', !hit);
+          if (hit) shown++;
+        });
+        g.classList.toggle('chip-hidden', !shown);
+        if (shown) any = true;
+      });
+      none.hidden = any;
+    }
+    function open(btn) {
+      opener = btn;
+      var have = JSON.parse(btn.getAttribute('data-needs') || '[]');
+      var skipBlock = btn.getAttribute('data-skip-block'), skipRef = btn.getAttribute('data-skip-ref');
+      dlg.querySelector('#needs-dlg-title').textContent = 'Когда откроется ' + btn.getAttribute('data-needs-title');
+      var note = dlg.querySelector('.needs-note'), noteText = btn.getAttribute('data-needs-note');
+      note.textContent = noteText || '';
+      note.hidden = !noteText;
+      dlg.querySelectorAll('.needs-sec > .chips > [data-block]').forEach(function (chip) {
+        chip.hidden = chip.getAttribute('data-block') === skipBlock;
+      });
+      dlg.querySelectorAll('.needs-group').forEach(function (g) {
+        var own = g.getAttribute('data-block') === skipBlock;
+        g.hidden = own;
+        g.dataset.skip = own ? '1' : '';
+        g.querySelectorAll('[data-ref]').forEach(function (chip) {
+          chip.dataset.skip = chip.getAttribute('data-ref') === skipRef ? '1' : '';
+        });
+      });
+      boxes.forEach(function (x) { x.checked = have.indexOf(x.value) >= 0; });
+      find.value = '';
+      filter();
+      summary();
+      dlg.showModal();
+      var first = dlg.querySelector('.needs-sec .chip:not([hidden]) input');
+      if (first) first.focus();
+    }
+    function close() {
+      dlg.close();
+      if (opener && document.contains(opener)) {
+        var menu = opener.closest('details.menu');
+        if (menu) menu.removeAttribute('open');
+        (menu ? menu.querySelector('summary') : opener).focus();
+      }
+    }
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('[data-needs-url]');
+      if (btn) { e.preventDefault(); open(btn); }
+    });
+    dlg.addEventListener('click', function (e) {
+      if (e.target === dlg || (e.target.closest && e.target.closest('[data-dlg-close]'))) close();
+      else if (e.target.closest && e.target.closest('[data-needs-clear]')) {
+        boxes.forEach(function (x) { x.checked = false; });
+        summary();
+      }
+    });
+    dlg.addEventListener('cancel', function (e) { e.preventDefault(); close(); });
+    dlg.addEventListener('change', summary);
+    find.addEventListener('input', filter);
+    find.addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!opener) return;
+      var needs = boxes.filter(counts).map(function (x) { return x.value; });
+      var save = form.querySelector('button[type=submit]');
+      save.disabled = true;
+      fetch(opener.getAttribute('data-needs-url'), {
+        method: 'PUT', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ needs: needs })
+      }).then(function (r) {
+        return r.text().then(function (t) {
+          var j = {};
+          try { j = t ? JSON.parse(t) : {}; } catch (err) { j = {}; }
+          if (!r.ok) throw new Error(j.error || ('Ошибка ' + r.status));
+          location.reload();
+        });
+      }).catch(function (err) {
+        save.disabled = false;
+        toast(err.message || 'Нет связи с пулом', true);
+      });
+    });
+  }
 })();
