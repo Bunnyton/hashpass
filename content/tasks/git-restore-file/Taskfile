@@ -1,0 +1,56 @@
+# git-restore-file — достать файл из прошлого: backup.sh трижды правили, потом удалили при
+# «уборке» (d98c8ee) → вернуть его последнюю версию (из коммита ПЕРЕД удалением: в самом
+# коммите удаления файла уже нет — на этой ошибке и учимся) → вернуть prices.txt к релизу v1.0,
+# не трогая остальное (posts/ — свидетель, что весь сайт в v1.0 не откатили).
+# Принимается по файлам (observe), эталон — solve. Продолжение git-remote.
+
+image git-restore-file:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/site + data/mkrepo.sh — руками; 44 коммита собирает mkrepo.sh
+copy data /var/tmp/hp-site
+run sh /var/tmp/hp-site/mkrepo.sh /var/tmp/hp-site /home/student/site
+run rm -rf /var/tmp/hp-site
+run chown -R student:student /home/student/site
+
+hidden hp
+
+settings
+  pager on
+
+say "Сайт «Пельменя» в ~/site живёт в git уже полгода. А сегодня понадобилось то, чего в нём давно нет."
+read brief.md
+
+stage
+  say "Скрипт резервной копии backup.sh удалили при «уборке». Верни его в ~/site таким, каким он был перед удалением"
+  solve:
+    cd /home/student/site
+    git restore --source=d98c8ee~1 backup.sh
+  observe /home/student/site/backup.sh
+  neutral ls cat pwd cd
+  on pass say "Удаление в git — тоже просто коммит: всё, что было до него, лежит в истории."
+  hint output "does not exist in" say "В этом коммите файла уже нет — его тут и удалили. А на шаг раньше?"
+  hint output "did not match any file" say "В этой версии файла нет. Если это коммит удаления — нужен тот, что перед ним."
+  hint output "exists on disk, but not in" say "В этом коммите файла уже нет — его тут и удалили. А на шаг раньше?"
+  hint tries 5 say "Какие коммиты трогали backup.sh? Последний из них — удаление."
+  hint tries 10 say "Как назвать коммит на шаг раньше другого, ты знаешь по HEAD~1 — тильда работает с любым коммитом."
+
+stage
+  say "После релиза v1.0 цены в prices.txt испортили. Верни prices.txt к версии из v1.0 — остальные файлы не трогай"
+  solve:
+    cd /home/student/site
+    git restore --source=v1.0 prices.txt
+  observe /home/student/site/prices.txt /home/student/site/posts /home/student/site/index.html
+  neutral ls cat pwd cd
+  block vim match "prices" say "Руками легко ошибиться в цифре, а в git лежит точная версия из релиза."
+  block vi match "prices" say "Руками легко ошибиться в цифре, а в git лежит точная версия из релиза."
+  block nano match "prices" say "Руками легко ошибиться в цифре, а в git лежит точная версия из релиза."
+  block sed match "prices" say "Руками легко ошибиться в цифре, а в git лежит точная версия из релиза."
+  on pass say "Тег — постоянное имя коммита: v1.0 через год укажет туда же, куда сегодня."
+  hint output "HEAD detached" say "Ты откатил весь сайт, а нужен один файл. Вернись в main — git switch main."
+  hint tries 5 say "Чем prices.txt сейчас отличается от релиза? git diff умеет сравнивать с тегом."
+  hint tries 10 say "Тем же способом, что и backup.sh, — только вместо хеша коммита имя тега."
+
+exec finale

@@ -1,0 +1,21 @@
+#!/bin/sh
+# Перенос в ветку: купоны под меткой coupons, main совпадает с сервером, сервер main не тронут.
+# state moved | pushed
+repo=/home/student/shop srv=/srv/git/shop.git
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+s() { git -C "$srv" -c safe.directory='*' "$@"; }
+TIP=c854635 SERVER=7ecc79c
+full() { g rev-parse "$1^{commit}" 2>/dev/null; }
+busy() { [ -f "$repo/.git/MERGE_HEAD" ] || [ -d "$repo/.git/rebase-merge" ] || [ -f "$repo/.git/CHERRY_PICK_HEAD" ]; }
+moved() {
+    ! busy && [ -z "$(g status --porcelain)" ] &&
+    [ "$(full coupons)" = "$(full $TIP)" ] &&
+    [ "$(full main)" = "$(full $SERVER)" ] &&
+    [ "$(s rev-parse main)" = "$(full $SERVER)" ]
+}
+pushed() { moved && [ "$(s rev-parse coupons 2>/dev/null)" = "$(full $TIP)" ]; }
+case "$2" in
+moved)  moved ;;
+pushed) pushed ;;
+*)      exit 1 ;;
+esac

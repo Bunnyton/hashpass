@@ -1,0 +1,16 @@
+#!/bin/sh
+# Олег чинит ветку promo: скидка только на заказы от 1500 ₽. Коммит прямо в ветку, не трогая
+# рабочий каталог студента (git commit-tree), от имени student — репозиторий его. Даты
+# зафиксированы: хеш одинаков на любой машине (его сверяет hp/state).
+set -e
+runuser -u student -- sh -c '
+  cd /home/student/kassa &&
+  blob=$(printf "%s\n" "#!/bin/sh" \
+    "# Акция «Пельмень-пятница»: скидка 10 % на заказ от 1500 ₽. ./promo.sh <сумма> — сумма со скидкой." \
+    "if [ \"\$1\" -ge 1500 ]; then echo \$(( \$1 - \$1 / 10 )); else echo \"\$1\"; fi" | git hash-object -w --stdin) &&
+  tree=$(git ls-tree promo | sed "s/^100755 blob [0-9a-f]*\tpromo.sh$/100755 blob $blob\tpromo.sh/" | git mktree) &&
+  c=$(GIT_AUTHOR_NAME="Олег Кузнецов" GIT_AUTHOR_EMAIL=oleg@pelmen.local GIT_AUTHOR_DATE=2026-10-20T11:00:00+03:00 \
+      GIT_COMMITTER_NAME="Олег Кузнецов" GIT_COMMITTER_EMAIL=oleg@pelmen.local GIT_COMMITTER_DATE=2026-10-20T11:00:00+03:00 \
+      git commit-tree "$tree" -p promo -m "Акция: скидка только от 1500 ₽") &&
+  git update-ref refs/heads/promo "$c"
+'

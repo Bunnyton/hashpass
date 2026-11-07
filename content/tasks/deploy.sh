@@ -51,6 +51,7 @@ BLOCKS=(
     'bunnyton/git | Git: git-init git-log git-branch git-graph git-remote'
     'bunnyton/git | Git — глубже: git-ignore git-reset git-conflict git-stash git-rebase git-squash git-cherry-pick'
     'bunnyton/git | Git — мастер: git-reflog git-bisect git-internals git-hooks git-deploy'
+    'bunnyton/git | Git — разбор полётов: git-amend git-wrong-branch git-pull-blocked git-restore-file git-filemode git-revert-merge'
     'bunnyton/docker | Docker: docker-run docker-web docker-ports docker-volume docker-db docker-build docker-layers'
     'bunnyton/docker | Docker — глубже: docker-debug docker-network docker-compose docker-multistage docker-registry'
     'bunnyton/docker | Docker — под капотом: docker-inside docker-limits docker-caps'

@@ -1,0 +1,52 @@
+# git-filemode — «git считает изменёнными 36 файлов»: проект вернулся с флешки (FAT), права
+# потеряны, все файлы стали 755. Настоящая правка одна — rotate 14 в logrotate/app.conf.
+# (1) найти и показать её среди шума (доза mode.md на «old mode»); (2) закоммитить только её —
+# с прежними правами 644 — и вернуть права остальным. Ловушка: git add берёт и смену прав
+# («mode change 100644 => 100755» в ответе commit). Состояние проверяет hp/state.
+# Продолжение git-remote: оттуда git и имя студента.
+
+image git-filemode:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/mkrepo.sh — конфиги генерирует он сам, «флешку» тоже
+copy data/mkrepo.sh /var/tmp/hp-ops.sh
+run sh /var/tmp/hp-ops.sh /home/student/ops
+run rm -f /var/tmp/hp-ops.sh
+run chown -R student:student /home/student/ops
+
+hidden hp
+
+settings
+  pager on
+
+say "Конфиги серверов «Пельменя» в ~/ops вернулись с флешки. Ты поменял там одну строчку, а git status насчитал 36 изменённых файлов."
+read brief.md
+
+stage
+  say "Найди среди 36 файлов тот, где на самом деле поменялось содержимое, и покажи эту правку"
+  solve git -C /home/student/ops diff logrotate/app.conf
+  accept output "\+ +rotate 14"
+  neutral ls cat pwd cd
+  on pass say "Это та самая строчка: журналы приложения теперь хранятся 14 дней."
+  hint output "old mode 100644" read mode.md
+  hint tries 5 say "Что именно git считает изменением в любом из этих файлов? Загляни в git diff одного файла."
+
+stage
+  say "Сохрани коммитом только эту правку — с прежними правами файла, — а остальным файлам верни их права"
+  solve:
+    cd /home/student/ops
+    chmod 644 logrotate/app.conf
+    git add logrotate/app.conf
+    git commit -q -m "logrotate: журналы приложения храним 14 дней"
+    git restore .
+  check exec state fixed
+  neutral ls cat pwd cd
+  on pass say "Если репозиторий живёт на флешке или в Windows-каталоге, git config core.fileMode false велит git не замечать права вовсе."
+  hint output "mode change 100644 => 100755" say "commit записал и новые права файла — конфигу исполняемость ни к чему. Поправь права и переделай последний коммит."
+  hint output "files changed" say "Сколько файлов вошло в коммит? Настоящая правка была одна."
+  hint tries 5 say "Что ещё показывает git status? Там должно стать чисто — и без потери твоей правки."
+  hint tries 10 say "Вернуть файлу вид из последнего коммита ты уже умеешь — права возвращаются вместе с содержимым."
+
+exec finale

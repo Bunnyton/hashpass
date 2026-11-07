@@ -1,0 +1,54 @@
+# git-revert-merge — откатить слияние: в main влили promo (78e8ff3), ./test.sh упал, после
+# слияния — ещё два хороших коммита. (1) отменить слияние целиком, сохранив коммиты после него
+# (git revert без -m отказывает → доза merge.md); (2) Олег чинит promo (hp/promo-fix на входе) →
+# влить её снова так, чтобы акция заработала: простой merge упирается в конфликт (доза
+# remerge.md: повторное слияние не вернёт отменённое — сначала отменить отмену). Состояние проверяет hp/state.
+# Продолжение git-remote: оттуда git (редактор — vim) и имя студента.
+
+image git-revert-merge:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/kassa + data/mkrepo.sh — руками; историю со слиянием собирает mkrepo.sh
+copy data /var/tmp/hp-kassa
+run sh /var/tmp/hp-kassa/mkrepo.sh /var/tmp/hp-kassa /home/student/kassa
+run rm -rf /var/tmp/hp-kassa
+run chown -R student:student /home/student/kassa
+
+hidden hp
+
+settings
+  pager on
+
+say "Касса «Пельменя» в ~/kassa. Вчера в main влили ветку promo с акцией — и с утра ./test.sh ругается на каждый заказ."
+read brief.md
+
+stage
+  say "Отмени слияние ветки promo целиком — так, чтобы ./test.sh снова молчал, а коммиты после слияния остались"
+  solve git -C /home/student/kassa revert --no-edit -m 1 78e8ff3
+  check exec state reverted
+  neutral ls cat pwd cd
+  block git match "reset +--hard" say "reset --hard выбросит и коммиты после слияния — а они хорошие."
+  on pass say "Отмена — обычный коммит: история честно помнит и слияние, и то, что его отменили."
+  hint output "is a merge but no -m option was given" read merge.md
+  hint output "mainline was specified but commit" say "-m нужен только для коммита слияния. Это точно хеш слияния?"
+  hint tries 5 say "Где в истории слияние? git log --oneline --graph покажет его развилкой."
+  hint tries 10 say "Отменять один коммит, не трогая остальные, ты уже умеешь. Здесь коммит — слияние."
+
+stage
+  say "Олег починил ветку promo: скидка теперь только от 1500 ₽. Влей promo в main снова, чтобы акция заработала, а ./test.sh молчал"
+  solve:
+    cd /home/student/kassa
+    git revert --no-edit HEAD
+    git merge -q --no-edit promo
+  check exec state remerged
+  neutral ls cat pwd cd
+  on enter apply promo-fix
+  on pass say "Заказ от 1500 ₽ — со скидкой, мелкие — по полной цене: ./price.sh пельмени-говядина 5 скажет 1755."
+  hint output "CONFLICT" read remerge.md
+  hint output "Already up to date" say "git считает promo уже влитой — слияние ведь было. Что тогда вернёт её правки?"
+  hint tries 5 say "Есть ли после твоих действий в ~/kassa файл promo.sh? Без него акции нет."
+  hint tries 10 say "Отменённую отмену делают той же командой, что и отмену."
+
+exec finale

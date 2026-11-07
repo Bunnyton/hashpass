@@ -1,0 +1,54 @@
+# git-pull-blocked — git pull отказывает: (1) в schedule.txt незакоммиченная правка, а напарница
+# уже отправила правку того же файла → убрать на полку, забрать, вернуть (или закоммитить и
+# слить); (2) напарница отправляет report.txt (hp/anna-report на входе во второй шаг), а у
+# студента вне git лежит свой черновик с тем же именем → отодвинуть черновик и забрать.
+# Состояние проверяет hp/state. Продолжение git-remote: оттуда git, имя студента, pull.rebase false.
+
+image git-pull-blocked:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/duty, data/report-draft.txt, data/mkrepo.sh — руками; сервер и клон собирает mkrepo.sh
+copy data /var/tmp/hp-duty
+run mkdir -p /srv/git
+run sh /var/tmp/hp-duty/mkrepo.sh /var/tmp/hp-duty /srv/git/duty.git /home/student/duty
+run rm -rf /var/tmp/hp-duty
+run chown -R student:student /srv/git /home/student/duty
+
+hidden hp
+
+settings
+  pager on
+
+say "Ты ведёшь расписание дежурств поддержки в ~/duty: меняешь субботу на себя и пишешь отчёт за октябрь. Напарница тоже не сидит без дела."
+read brief.md
+
+stage
+  say "Забери с сервера свежие правки напарницы, а свою незаконченную правку в schedule.txt не потеряй"
+  solve:
+    cd /home/student/duty
+    git stash -q
+    git pull -q --no-edit
+    git stash pop -q
+  check exec state schedule
+  neutral ls cat pwd cd
+  on pass say "Правка напарницы и твоя лежат в одном файле — git сложил их, потому что они в разных строках."
+  hint output "would be overwritten by merge" say "git не станет затирать незакоммиченное. Куда его можно временно убрать, ты уже знаешь."
+  hint output "CONFLICT" say "Правки столкнулись в одних строках. Как разбирать конфликт, ты уже знаешь: открой файл и оставь нужное."
+  hint tries 5 say "Что именно ответил git pull? Прочитай его ответ до последней строки."
+
+stage
+  say "Напарница отправила ещё коммит — забери и его. Свой черновик report.txt не потеряй"
+  solve:
+    cd /home/student/duty
+    mv report.txt report-draft.txt
+    git pull -q --no-edit
+  check exec state report
+  neutral ls cat pwd cd
+  on enter apply anna-report
+  on pass say "Неотслеживаемые файлы git не трогает: копии у него нет, и рисковать ими он не станет."
+  hint output "untracked working tree files would be overwritten" read untracked.md
+  hint tries 5 say "Что лежит у напарницы в новом коммите? git fetch и git log origin/main --stat покажут, не трогая твоих файлов."
+
+exec finale

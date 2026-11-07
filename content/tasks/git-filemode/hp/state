@@ -1,0 +1,17 @@
+#!/bin/sh
+# Одна правка в коммите, с прежними правами, и чистый каталог — права остальных возвращены.
+# state fixed
+repo=/home/student/ops
+g() { git -C "$repo" -c safe.directory='*' -c core.fileMode=true "$@"; }
+BASE=719732c
+fixed() {
+    [ "$(g rev-parse HEAD~1 2>/dev/null)" = "$(g rev-parse $BASE)" ] &&
+    [ "$(g diff-tree --no-commit-id -r --raw HEAD | wc -l)" -eq 1 ] &&
+    g diff-tree --no-commit-id -r --raw HEAD | grep -q '^:100644 100644 .*	logrotate/app\.conf$' &&
+    g show HEAD:logrotate/app.conf | grep -q 'rotate 14' &&
+    [ -z "$(g status --porcelain)" ]
+}
+case "$2" in
+fixed) fixed ;;
+*)     exit 1 ;;
+esac

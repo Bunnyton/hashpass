@@ -1,0 +1,30 @@
+#!/bin/sh
+# Забрать с сервера, ничего своего не потеряв.
+# state schedule | report
+repo=/home/student/duty
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+ANNA1=ddd3fea
+busy() { [ -f "$repo/.git/MERGE_HEAD" ] || [ -d "$repo/.git/rebase-merge" ] || [ -d "$repo/.git/rebase-apply" ]; }
+has() { g merge-base --is-ancestor "$1" HEAD 2>/dev/null; }
+schedule() {
+    ! busy && has $ANNA1 &&
+    grep -q '^сб  Студент$' "$repo/schedule.txt" && grep -q '^вт  Анна$' "$repo/schedule.txt" &&
+    ! grep -q '^[<>=]\{7\}' "$repo/schedule.txt"
+}
+# черновик жив: где-то в домашнем каталоге (вне .git) или на полке
+draft_alive() {
+    grep -rqs --exclude-dir=.git 'бот-ответ со ссылкой на трекинг' /home/student ||
+    g show 'stash@{0}^3:report.txt' 2>/dev/null | grep -q 'бот-ответ со ссылкой' ||
+    g stash list 2>/dev/null | while read -r s _; do
+        g show "${s%:}^3:report.txt" 2>/dev/null | grep -q 'бот-ответ со ссылкой' && echo y
+    done | grep -q y
+}
+report() {
+    schedule && [ "$(g log -1 --format=%s origin/main 2>/dev/null)" = "Отчёт за октябрь" ] &&
+    has origin/main && grep -q 'Среднее время ответа' "$repo/report.txt" && draft_alive
+}
+case "$2" in
+schedule) schedule ;;
+report)   report ;;
+*)        exit 1 ;;
+esac

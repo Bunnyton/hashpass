@@ -1,0 +1,22 @@
+#!/bin/sh
+# Слияние отменено (тест молчит, промо нет, хорошие коммиты целы) → влито снова с исправлением.
+# state reverted | remerged
+repo=/home/student/kassa
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+TIP=f23389e FIX=4ea2b27
+busy() { [ -f "$repo/.git/MERGE_HEAD" ] || [ -f "$repo/.git/REVERT_HEAD" ] || [ -d "$repo/.git/rebase-merge" ] || [ -d "$repo/.git/sequencer" ]; }
+base() {
+    ! busy && [ -z "$(g status --porcelain)" ] &&
+    [ "$(g symbolic-ref --short HEAD 2>/dev/null)" = main ] &&
+    g merge-base --is-ancestor $TIP HEAD && sh "$repo/test.sh" >/dev/null 2>&1
+}
+reverted() { base && [ ! -e "$repo/promo.sh" ] && ! grep -q promo "$repo/price.sh"; }
+remerged() {
+    base && g merge-base --is-ancestor $FIX HEAD 2>/dev/null &&
+    [ "$(sh "$repo/price.sh" пельмени-говядина 5)" = 1755 ]
+}
+case "$2" in
+reverted) reverted ;;
+remerged) remerged ;;
+*)        exit 1 ;;
+esac

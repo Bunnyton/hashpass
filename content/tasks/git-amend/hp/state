@@ -1,0 +1,25 @@
+#!/bin/sh
+# Последний коммит поправлен, а не добавлен новый: под ним — тот же коммит, что был до Васи.
+# state tariffs | author
+repo=/home/student/courier
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+BASE=82961d6
+same_place() {
+    [ "$(g rev-parse HEAD~1 2>/dev/null)" = "$(g rev-parse $BASE)" ] &&
+    [ "$(g symbolic-ref --short HEAD 2>/dev/null)" = main ] &&
+    g log -1 --format=%s | grep -q 'Тарифы'
+}
+tariffs() {
+    same_place && g show HEAD:tariffs.txt 2>/dev/null | grep -q '^север' &&
+    g show HEAD:courier.sh | grep -q tariffs.txt && [ -z "$(g status --porcelain)" ]
+}
+mine() {
+    [ "$(g log -1 --format=%ae)" = student@hashpass.local ] &&
+    [ -z "$(g config --file "$repo/.git/config" user.email)" ] &&
+    [ -z "$(g config --file "$repo/.git/config" user.name)" ]
+}
+case "$2" in
+tariffs) tariffs ;;
+author)  tariffs && mine ;;
+*)       exit 1 ;;
+esac

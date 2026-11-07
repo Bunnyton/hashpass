@@ -1,0 +1,24 @@
+#!/bin/sh
+# Напарница отправляет на сервер свой отчёт report.txt — то же имя, что у черновика студента.
+# От имени student: сервер принадлежит ему, а git под root не открывает чужой репозиторий.
+set -e
+tmp=$(mktemp -d)
+chown student:student "$tmp"
+cat > "$tmp/report.txt" <<'TXT'
+Отчёт за октябрь
+
+Обращений: 214. Среднее время ответа: 6 минут.
+Самая частая тема — сроки доставки (41 %).
+TXT
+chown student:student "$tmp/report.txt"
+runuser -u student -- sh -c "
+  cd '$tmp' &&
+  git clone -q /srv/git/duty.git c &&
+  mv report.txt c/ &&
+  cd c &&
+  git add report.txt &&
+  GIT_AUTHOR_DATE='2026-10-31T18:00:00+03:00' GIT_COMMITTER_DATE='2026-10-31T18:00:00+03:00' \
+    git -c user.name='Анна Смирнова' -c user.email=anna@pelmen.local commit -q -m 'Отчёт за октябрь' &&
+  git push -q origin main
+"
+rm -rf "$tmp"

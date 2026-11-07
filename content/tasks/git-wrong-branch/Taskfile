@@ -1,0 +1,52 @@
+# git-wrong-branch — закоммитил не в ту ветку: три коммита про купоны сделаны прямо в main
+# (на сервере main защищена хуком pre-receive) → перенести их в ветку coupons, а main вернуть
+# к серверному состоянию (origin/main) → отправить ветку coupons на сервер. Подсказки ведут к
+# git status («ahead of 'origin/main' by 3 commits»). Состояние проверяет hp/state.
+# Продолжение git-remote: оттуда git и имя студента.
+
+image git-wrong-branch:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/shop, data/pre-receive, data/mkrepo.sh — руками; сервер и клон собирает mkrepo.sh
+copy data /var/tmp/hp-shop
+run mkdir -p /srv/git
+run sh /var/tmp/hp-shop/mkrepo.sh /var/tmp/hp-shop /srv/git/shop.git /home/student/shop
+run install -m 755 /var/tmp/hp-shop/pre-receive /srv/git/shop.git/hooks/pre-receive
+run rm -rf /var/tmp/hp-shop
+run chown -R student:student /srv/git /home/student/shop
+
+hidden hp
+
+settings
+  pager on
+
+say "Купоны для кассы «Пельменя» готовы — три коммита в ~/shop. Одна беда: ты сделал их прямо в main."
+read brief.md
+
+stage
+  say "Перенеси три коммита про купоны в ветку coupons, а main верни к тому, что лежит на сервере"
+  solve:
+    cd /home/student/shop
+    git branch coupons
+    git reset -q --hard origin/main
+  check exec state moved
+  neutral ls cat pwd cd
+  on pass say "Коммиты никуда не переезжали: ты повесил на них новую метку, а старую отодвинул назад."
+  hint output "main защищена" say "Сервер не пустил купоны в main — и правильно. Где они должны лежать?"
+  hint output "already exists" say "Ветка с таким именем уже есть. Куда она указывает? git log --oneline coupons."
+  hint tries 5 say "Что пишет git status о том, насколько main ушла вперёд сервера?"
+  hint tries 10 say "Сначала метка для купонов, потом main назад — в таком порядке ничего не потеряется."
+
+stage
+  say "Отправь ветку coupons на сервер — на ревью"
+  solve git -C /home/student/shop push -q -u origin coupons
+  check exec state pushed
+  neutral ls cat pwd cd
+  on pass say "Ревьюер увидит купоны в ветке coupons, а main на сервере осталась чистой. После ревью ветку вольют в main."
+  hint output "Everything up-to-date" say "Отправлять из main нечего — она совпадает с сервером. Какую ветку ты отправляешь?"
+  hint output "main защищена" say "Сервер принимает в main только то, что прошло ревью. Отправь другую ветку."
+  hint tries 5 say "Что ответил git push? Если он сам предложил команду, прочитай её внимательно."
+
+exec finale

@@ -1,0 +1,52 @@
+# git-amend — поправить последний коммит, не плодя новых: в коммит «Тарифы доставки по зонам»
+# не попал tariffs.txt → добавить его в тот же коммит (amend) → коммит записан на Васю
+# (в .git/config его имя и почта) → убрать чужие настройки и переписать автора на себя.
+# Доза author.md при входе во второй шаг: откуда git берёт имя, local важнее global, автор
+# фиксируется при создании коммита. Состояние проверяет hp/state. Продолжение git-remote.
+
+image git-amend:1
+from git-remote:1
+
+# от git-remote наследуются git (редактор — vim) и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/courier + data/mkrepo.sh — руками; историю и Васины настройки собирает mkrepo.sh
+copy data /var/tmp/hp-courier
+run sh /var/tmp/hp-courier/mkrepo.sh /var/tmp/hp-courier /home/student/courier
+run rm -rf /var/tmp/hp-courier
+run chown -R student:student /home/student/courier
+
+hidden hp
+
+settings
+  pager on
+
+say "Вчера вечером ты доделывал курьерского бота за ноутбуком Васи и успел закоммитить. Сегодня проект у тебя в ~/courier, и git log подсказывает: с этим коммитом что-то не так."
+read brief.md
+
+stage
+  say "Коммит «Тарифы доставки по зонам» вышел без tariffs.txt. Положи файл в этот же коммит — нового коммита не делай"
+  solve:
+    cd /home/student/courier
+    git add tariffs.txt
+    git commit -q --amend --no-edit
+  check exec state tariffs
+  neutral ls cat pwd cd
+  on pass say "Хеш коммита сменился: amend не правит старый коммит, а ставит на его место новый. Старый ещё помнит git reflog."
+  hint tries 5 say "Что показывает git log --oneline: коммитов стало больше, чем было? Нужен тот же коммит, только с файлом."
+  hint tries 10 say "git commit --help — найди ключ со словом «amend»."
+
+stage
+  say "Коммит записан на Васю. Сделай так, чтобы и он, и все твои следующие коммиты в ~/courier были от твоего имени"
+  solve:
+    cd /home/student/courier
+    git config --unset user.name
+    git config --unset user.email
+    git commit -q --amend --no-edit --reset-author
+  check exec state author
+  neutral ls cat pwd cd
+  on enter read author.md
+  on pass say "За чужим компьютером одна команда git config user.email перед коммитом спасает от коммитов под чужим именем."
+  hint tries 5 say "Что ответит git config --list --show-origin: чьё имя записано в .git/config?"
+  hint tries 10 say "git commit --help — поищи слово author: там есть ключ, который берёт автора заново."
+
+exec finale
