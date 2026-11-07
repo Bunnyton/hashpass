@@ -1,0 +1,25 @@
+#!/bin/sh
+# Коммиты из detached HEAD спасены: ветка hotfix-1.0 на них, студент снова на main; потом
+# исправление в main (cherry-pick или merge — любой способ). state saved | moved
+repo=/home/student/booking
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+FIX=c1a9139 MAIN=e84fb81
+busy() { [ -f "$repo/.git/CHERRY_PICK_HEAD" ] || [ -f "$repo/.git/MERGE_HEAD" ] || [ -d "$repo/.git/rebase-merge" ]; }
+same() { [ "$(g rev-parse "$1" 2>/dev/null)" = "$(g rev-parse "$2")" ]; }
+on_main() { [ "$(g symbolic-ref -q HEAD)" = refs/heads/main ]; }
+saved() {
+    ! busy && [ -z "$(g status --porcelain)" ] && on_main &&
+    same hotfix-1.0 $FIX && same main $MAIN
+}
+moved() {
+    ! busy && [ -z "$(g status --porcelain)" ] && on_main &&
+    same hotfix-1.0 $FIX && g merge-base --is-ancestor $MAIN main &&
+    g show main:book.sh | grep -q 'завтра) day=tomorrow' &&
+    g show main:book.sh | grep -q 'le 10 ' &&
+    g show main:test.sh | grep -q '^t завтра 2' && g show main:test.sh | grep -q '^t 2026-12-31 11 '
+}
+case "$2" in
+saved) saved ;;
+moved) moved ;;
+*)     exit 1 ;;
+esac

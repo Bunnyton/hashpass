@@ -1,0 +1,52 @@
+# git-detached — коммиты без ветки: вчера студент встал на тег v1.0 (detached HEAD) и сделал
+# там два коммита-исправления; консоль начинается в этом состоянии. (1) вернуться в main, не
+# потеряв коммиты: ветка hotfix-1.0 на них (до или после switch — git switch сам печатает хеш
+# в предупреждении «leaving 2 commits behind»; reflog пройден) → (2) перенести исправление в
+# main (cherry-pick или merge, оба пройдены). Состояние — hp/state. Продолжение git-remote.
+
+image git-detached:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/mkrepo.sh — руками; историю, тег и вчерашние коммиты на v1.0 собирает он
+copy data /var/tmp/hp-booking
+run sh /var/tmp/hp-booking/mkrepo.sh /home/student/booking
+run rm -rf /var/tmp/hp-booking
+run chown -R student:student /home/student/booking
+
+hidden hp
+
+settings
+  pager on
+
+say "Вчера в ~/booking ты встал на версию v1.0, чтобы посмотреть, как бронь работала тогда, — и заодно научил её понимать «сегодня» и «завтра». Два коммита. Только вот в какой ветке?"
+read brief.md
+
+stage
+  say "Вернись в main, а вчерашние коммиты не потеряй: пусть на них указывает ветка hotfix-1.0"
+  solve:
+    cd /home/student/booking
+    git branch hotfix-1.0
+    git switch -q main
+  check exec state saved
+  neutral ls cat pwd cd
+  on pass say "Коммит, на который не смотрит ни одна ветка, git через пару недель удаляет как мусор. Теперь на них смотрит hotfix-1.0."
+  hint output "leaving 2 commits behind" say "git перечислил, что ты оставил позади, и подсказал, как это спасти. Прочитай предупреждение целиком."
+  hint output "HEAD detached" say "Ты не на ветке. Где сейчас вчерашние коммиты — и на что смотрит HEAD?"
+  hint tries 5 say "Ветка — метка на коммит. На какой коммит её нужно повесить?"
+  hint tries 10 say "Если хеш потерялся — вспомни, какой журнал помнит всё, где стоял HEAD."
+
+stage
+  say "Перенеси исправление в main: «завтра» должно работать и там, вместе с новыми правилами брони"
+  solve:
+    cd /home/student/booking
+    git cherry-pick 2567c0b c1a9139
+  check exec state moved
+  neutral ls cat pwd cd
+  on pass say "Ветка hotfix-1.0 пригодится и сама по себе: из неё можно выпустить v1.0.1 для тех, кто ещё на старой версии."
+  hint output "CONFLICT" say "Правки столкнулись. Разбери конфликт: в main нужны и новые правила, и вчерашнее «завтра»."
+  hint tries 5 say "Как переносят готовые коммиты из одной ветки в другую? Ты делал это в двух разных заданиях."
+  hint tries 10 say "./test.sh покажет, всё ли работает в main."
+
+exec finale

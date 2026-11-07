@@ -1,0 +1,28 @@
+#!/bin/sh
+# Разошедшиеся ветки: свой коммит поверх коммитов Олега, без слияний, сервер = локальный main;
+# потом — pull.rebase true в глобальных настройках. Скрипт: смотрим граф и конфиг.
+# state linear | configured
+repo=/home/student/menu srv=/srv/git/menu.git
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+s() { git -C "$srv" -c safe.directory='*' "$@"; }
+OLEG=9f72af5
+busy() { [ -d "$repo/.git/rebase-merge" ] || [ -d "$repo/.git/rebase-apply" ] || [ -f "$repo/.git/MERGE_HEAD" ]; }
+linear() {
+    ! busy && [ -z "$(g status --porcelain)" ] &&
+    [ "$(g rev-parse main)" = "$(s rev-parse main)" ] &&
+    g merge-base --is-ancestor $OLEG main &&
+    [ -z "$(g rev-list --merges main)" ] &&
+    grep -qx 'сырники' "$repo/menu.txt"
+}
+configured() {
+    [ "$(HOME=/home/student git config --global --get pull.rebase)" = true ] &&
+    ! busy && [ -z "$(g status --porcelain)" ] &&
+    [ "$(g rev-parse main)" = "$(s rev-parse main)" ] &&
+    [ -z "$(g rev-list --merges main)" ] &&
+    grep -qx 'сырники' "$repo/menu.txt" && grep -q '^флэт уайт' "$repo/menu.txt"
+}
+case "$2" in
+linear)     linear ;;
+configured) configured ;;
+*)          exit 1 ;;
+esac

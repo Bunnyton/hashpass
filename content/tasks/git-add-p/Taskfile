@@ -1,0 +1,54 @@
+# git-add-p — две правки в одном файле, а коммит нужен про одну: в calc.sh готово исправление
+# деления на ноль и недописанная степень (^). (1) закоммитить только исправление — git add -p
+# (y/n по кускам); доза patch.md — на естественную ошибку: коммит всего файла (его статистика
+# «4 insertions(+), 2 deletions(-)» или «2 files changed»), снять коммит — reset (пройден).
+# (2) строку README про деление на ноль — в тот же коммит, строку про степень — нет: она в
+# одном куске через строку → s (split) и amend. Состояние — hp/state. Продолжение git-remote.
+
+image git-add-p:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/calc + data/mkrepo.sh — руками; историю и правки на диске собирает mkrepo.sh
+copy data /var/tmp/hp-calc
+run sh /var/tmp/hp-calc/mkrepo.sh /var/tmp/hp-calc /home/student/calc
+run rm -rf /var/tmp/hp-calc
+run chown -R student:student /home/student/calc
+
+hidden hp
+
+settings
+  pager on
+
+say "Утром ты начал прикручивать к калькулятору в ~/calc возведение в степень, а тут прилетел баг: деление на ноль роняет скрипт. Баг ты починил — в том же файле."
+read brief.md
+
+stage
+  say "Закоммить только исправление деления на ноль. Недописанная степень пусть останется на диске, не в коммите"
+  solve:
+    cd /home/student/calc
+    printf 'n\ny\n' | git add -p calc.sh
+    git commit -q -m "Деление на ноль: понятная ошибка"
+  check exec state fix
+  neutral ls cat pwd cd
+  on pass say "git add -p — привычка, которая делает историю читаемой: один коммит — одна мысль."
+  hint output "4 insertions(+), 2 deletions(-)" read patch.md
+  hint output "2 files changed" read patch.md
+  hint tries 5 say "Что именно попадёт в коммит? git diff --cached покажет."
+  hint tries 10 say "Посмотри git add --help: какой ключ позволяет выбирать куски?"
+
+stage
+  say "Строку README про деление на ноль добавь в тот же коммит, а строку про степень оставь на потом"
+  solve:
+    cd /home/student/calc
+    printf 's\ny\nn\n' | git add -p README.md
+    git commit -q --amend --no-edit
+  check exec state readme
+  neutral ls cat pwd cd
+  on pass say "Если и s не делит кусок — строки стоят вплотную, — есть e: git откроет кусок в редакторе, и лишние строки можно убрать руками."
+  hint output "1 file changed, 1 insertion(+)" say "Коммит получился новый, а нужно было дописать в прежний. Как поправить последний коммит, ты уже знаешь."
+  hint tries 5 say "Обе строки git показал одним куском. Что предлагает ответ ? про куски, которые можно разделить?"
+  hint tries 10 say "Строки разделены одной неизменной — значит, кусок можно разбить на два."
+
+exec finale

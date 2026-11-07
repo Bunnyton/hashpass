@@ -1,0 +1,21 @@
+#!/bin/sh
+# Олег выпускает движок 1.1: комнаты с рамкой. От имени student: серверы принадлежат ему.
+set -e
+tmp=$(mktemp -d)
+cat > "$tmp/engine.sh" <<'SH'
+#!/bin/sh
+# Движок «Пельмень-квест»: engine_room <название> <описание> — показать комнату.
+ENGINE_VERSION=1.1
+engine_room() { printf '\n╔══ %s ══╗\n%s\n' "$1" "$2"; }
+SH
+chown -R student:student "$tmp"
+runuser -u student -- sh -c "
+  cd '$tmp' &&
+  git clone -q /srv/git/engine.git c &&
+  cat engine.sh > c/engine.sh &&
+  cd c &&
+  GIT_AUTHOR_DATE='2026-11-20T10:00:00+03:00' GIT_COMMITTER_DATE='2026-11-20T10:00:00+03:00' \
+    git -c user.name='Олег Кузнецов' -c user.email=oleg@games.local commit -q -am 'Движок 1.1: комнаты в рамке' &&
+  git push -q origin main
+"
+rm -rf "$tmp"

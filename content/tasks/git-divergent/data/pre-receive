@@ -1,0 +1,11 @@
+#!/bin/sh
+# Сервер команды: в main — только прямая история, коммиты слияния не принимаются.
+while read old new ref; do
+    [ "$ref" = refs/heads/main ] || continue
+    [ "$new" = 0000000000000000000000000000000000000000 ] && continue
+    range=$new; [ "$old" = 0000000000000000000000000000000000000000 ] || range=$old..$new
+    if [ -n "$(git rev-list --merges "$range")" ]; then
+        echo "main: только прямая история — коммиты слияния сюда не принимаются." >&2
+        exit 1
+    fi
+done

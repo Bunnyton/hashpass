@@ -1,0 +1,58 @@
+# git-secret — пароль в истории: в коммите «Подключение к базе» вместе с config.sh в git попал
+# .env с паролем от базы, поверх ещё два коммита. Удалить файл новым коммитом мало (пароль
+# виден в git log -p) → переписать коммит, где .env появился (rebase -i, edit, rm --cached,
+# amend) → закрыть .env в .gitignore. Доза history.md — на «delete mode … .env» (естественная
+# первая попытка). Ловушки по дороге: свой .env мешает rebase (untracked would be
+# overwritten — знакомо по git-pull-blocked), опустевший коммит удаления (rebase --skip),
+# refs/original после filter-branch. Состояние проверяет hp/state. Продолжение git-remote.
+
+image git-secret:1
+from git-remote:1
+
+# от git-remote наследуются git (редактор — vim) и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/bot + data/mkrepo.sh — руками; историю собирает mkrepo.sh
+copy data /var/tmp/hp-bot
+run sh /var/tmp/hp-bot/mkrepo.sh /var/tmp/hp-bot /home/student/bot
+run rm -rf /var/tmp/hp-bot
+run chown -R student:student /home/student/bot
+
+hidden hp
+
+settings
+  pager on
+
+say "Бот поддержки в ~/bot завтра откроют всей компании. Перед этим ты листаешь историю — и видишь в ней пароль от базы."
+read brief.md
+
+stage
+  say "Сделай так, чтобы пароля из .env не было ни в одном коммите. Сам .env останется у тебя на диске — бот без него не работает"
+  solve:
+    cd /home/student/bot
+    GIT_SEQUENCE_EDITOR="sed -i '1s/^pick/edit/'" git rebase -q -i HEAD~3
+    git rm -q --cached .env
+    git commit -q --amend --no-edit
+    git rebase -q --continue
+  check exec state clean
+  neutral ls cat pwd cd
+  on pass say "История переписана: у коммитов с третьего по пятый новые хеши. Пока репозиторий не ушёл на сервер, это никого не задевает."
+  hint output "delete mode 100644 .env" read history.md
+  hint output "untracked working tree files would be overwritten" say "Это твой .env на диске мешает: git возвращает коммит, где файл ещё был. Отодвинь его, как черновик отчёта у дежурных, и продолжай."
+  hint output "previous cherry-pick is now empty" say "Этот коммит только удалял .env, а удалять больше нечего. Его можно пропустить — как, git написал выше."
+  hint output "was rewritten" say "Старая история сохранилась под refs/original — пароль всё ещё в репозитории. git for-each-ref покажет все метки."
+  hint tries 5 say "Где ещё виден пароль? git log -p покажет каждый коммит с правками."
+  hint tries 10 say "В каком коммите .env появился? Его и нужно переписать."
+
+stage
+  say "Сделай так, чтобы .env больше никогда не попал в коммит случайно"
+  solve:
+    cd /home/student/bot
+    echo .env > .gitignore
+    git add .gitignore
+    git commit -q -m "gitignore: секреты не коммитим"
+  check exec state ignored
+  neutral ls cat pwd cd
+  on pass say "Если бы репозиторий уже лежал на сервере, пароль пришлось бы сменить: копии могли разойтись по чужим клонам."
+  hint tries 5 say "Как ты в прошлый раз заставил git не замечать журналы и сборку?"
+
+exec finale

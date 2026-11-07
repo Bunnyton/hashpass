@@ -1,0 +1,16 @@
+#!/bin/sh
+# Теги релизов: (1) аннотированный v2.0 на коммите «Релиз 2.0» — у студента и на сервере;
+# (2) v1.9 перевешен на «Релиз 1.9» — у студента и на сервере, аннотированный. state v20 | v19
+repo=/home/student/app srv=/srv/git/app.git
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+s() { git -C "$srv" -c safe.directory='*' "$@"; }
+REL20=102c3d9 REL19=7d4f463
+tag_ok() {  # tag_ok <git-func> <тег> <коммит>
+    [ "$($1 cat-file -t "refs/tags/$2" 2>/dev/null)" = tag ] &&
+    [ "$($1 rev-parse "$2^{commit}" 2>/dev/null)" = "$(g rev-parse $3)" ]
+}
+case "$2" in
+v20) tag_ok g v2.0 $REL20 && tag_ok s v2.0 $REL20 ;;
+v19) tag_ok g v2.0 $REL20 && tag_ok s v2.0 $REL20 && tag_ok g v1.9 $REL19 && tag_ok s v1.9 $REL19 ;;
+*)   exit 1 ;;
+esac

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Олег отправляет в search ещё коммит — дешёвые книги сверху. От имени student: сервер его.
+set -e
+tmp=$(mktemp -d)
+cat > "$tmp/search.sh" <<'SH'
+#!/bin/sh
+# Поиск по каталогу: ./search.sh <слово> — без учёта регистра, дешёвые сверху.
+grep -i -- "$1" books.txt | sort -t';' -k3 -n
+SH
+chown -R student:student "$tmp"
+runuser -u student -- sh -c "
+  cd '$tmp' &&
+  git clone -q -b search /srv/git/books.git c &&
+  cat search.sh > c/search.sh &&
+  cd c &&
+  GIT_AUTHOR_DATE='2026-11-20T10:00:00+03:00' GIT_COMMITTER_DATE='2026-11-20T10:00:00+03:00' \
+    git -c user.name='Олег Кузнецов' -c user.email=oleg@books.local commit -q -am 'Поиск: дешёвые сверху' &&
+  git push -q origin search
+"
+rm -rf "$tmp"

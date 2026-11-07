@@ -1,0 +1,31 @@
+#!/bin/sh
+# Пароль вычищен из истории: ни один коммит, достижимый из веток, тегов, полки и refs/original,
+# его не содержит; .env цел на диске; остальные файлы как были. Скрипт, а не observe: смотрим
+# всю историю, а не файлы. state clean | ignored
+repo=/home/student/bot
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+TIP=f8ded88 SECRET=Pe1men-Sup3r-2026
+busy() { [ -d "$repo/.git/rebase-merge" ] || [ -d "$repo/.git/rebase-apply" ] || [ -f "$repo/.git/MERGE_HEAD" ] || [ -f "$repo/.git/CHERRY_PICK_HEAD" ]; }
+clean_history() {
+    for c in $(g rev-list --all); do
+        g grep -q -F "$SECRET" "$c" -- 2>/dev/null && return 1
+    done
+    return 0
+}
+clean() {
+    ! busy && clean_history &&
+    ! g cat-file -e HEAD:.env 2>/dev/null &&
+    grep -q -F "DB_PASSWORD=$SECRET" "$repo/.env" 2>/dev/null &&
+    [ -z "$(g diff --name-only $TIP HEAD -- . ':!.env' ':!.gitignore')" ] &&
+    [ -z "$(g status --porcelain --untracked-files=no)" ] &&
+    [ "$(g rev-list --count HEAD)" -ge 4 ]
+}
+ignored() {
+    clean && g cat-file -e HEAD:.gitignore 2>/dev/null &&
+    g check-ignore -q .env && [ -z "$(g status --porcelain)" ]
+}
+case "$2" in
+clean)   clean ;;
+ignored) ignored ;;
+*)       exit 1 ;;
+esac

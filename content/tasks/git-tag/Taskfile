@@ -1,0 +1,57 @@
+# git-tag — теги релизов: (1) v2.0 не поставили — найти коммит «Релиз 2.0» (он не последний),
+# повесить аннотированный тег и отправить (git push теги сам не шлёт — подсказка на
+# «Everything up-to-date»); (2) v1.9 коллега повесил на коммит после релиза, и он уже на
+# сервере → перевесить (tag -f; «already exists» — подсказка) и перезаписать на сервере (доза
+# retag.md на «(already exists)» при push). Теги — из git-cherry-pick (hp/tags.md там),
+# --force — из перезаписи веток. Состояние — hp/state. Продолжение git-remote.
+
+image git-tag:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/mkrepo.sh — руками; сервер с тегами и клон собирает он
+copy data /var/tmp/hp-app
+run mkdir -p /srv/git
+run sh /var/tmp/hp-app/mkrepo.sh /srv/git/app.git /home/student/app
+run rm -rf /var/tmp/hp-app
+run chown -R student:student /srv/git /home/student/app
+
+hidden hp
+
+settings
+  pager on
+
+say "Релиз 2.0 приложения доставки уже у клиентов, а тега на него до сих пор нет. Репозиторий — в ~/app."
+read brief.md
+
+stage
+  say "Повесь аннотированный тег v2.0 на коммит, из которого вышел релиз 2.0, и отправь тег на сервер"
+  solve:
+    cd /home/student/app
+    git tag -a v2.0 -m "Версия 2.0" 102c3d9
+    git push -q origin v2.0
+  check exec state v20
+  neutral ls cat pwd cd
+  on pass say "Теперь git describe на любом коммите скажет, сколько он отстоит от последнего релиза."
+  hint output "Everything up-to-date" say "Ветки на сервере уже свежие, а теги git push сам не отправляет. Назови тег прямо в команде."
+  hint output "(already exists)" read retag.md
+  hint output "fatal: tag 'v2.0' already exists" say "Тег v2.0 уже есть. На какой коммит он смотрит? git show v2.0."
+  hint tries 5 say "На какой коммит смотрит твой тег? Тот ли это коммит, из которого вышел релиз?"
+  hint tries 10 say "git log --oneline покажет все коммиты с сообщениями — найди релизный."
+
+stage
+  say "Тег v1.9 коллега повесил не на тот коммит, и он уже на сервере. Перевесь его на релиз 1.9 — и у себя, и на сервере"
+  solve:
+    cd /home/student/app
+    git tag -f -a v1.9 -m "Версия 1.9" 7d4f463
+    git push -q --force origin v1.9
+  check exec state v19
+  neutral ls cat pwd cd
+  on pass say "Перевешивать теги — крайняя мера: кто успел скачать старый, будет жить с ним, пока не сделает git fetch --tags --force."
+  hint output "fatal: tag 'v1.9' already exists" say "Тег уже есть, и git не станет его тихо менять. Как заменить его — поищи в git tag --help слово replace."
+  hint output "(already exists)" read retag.md
+  hint tries 5 say "На какой коммит сейчас смотрит v1.9? git log --oneline --decorate покажет теги рядом с коммитами."
+  hint tries 10 say "Сначала тег у себя, потом на сервере — это два разных шага."
+
+exec finale

@@ -1,0 +1,68 @@
+# git-force-push — перезапись общей ветки после rebase: search уже на сервере, студент утром
+# перестроил её поверх main, а Олег после этого отправил в search свой коммит. (1) push
+# отклонён (fetch first) → забрать и посмотреть (fetch, log origin/search) → перенести коммит
+# Олега к себе (cherry-pick) → push --force. Кто сразу сделал --force — потерял коммит Олега:
+# доза lost.md («forced update») — забрать по хешу (сервер разрешает allowAnySHA1InWant) и
+# cherry-pick. (2) ревьюер просит сжать свои коммиты в один; на входе доза lease.md, Олег
+# отправляет ещё коммит (hp/oleg-more), обычный --force закрыт → --force-with-lease
+# отказывает (stale info) → fetch, cherry-pick, снова. Состояние — hp/state. Продолжение git-remote.
+
+image git-force-push:1
+from git-remote:1
+
+# от git-remote наследуются git (редактор — vim) и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/mkrepo.sh — руками; сервер, ветку Олега и перестроенный клон собирает он
+copy data /var/tmp/hp-books
+run mkdir -p /srv/git
+run sh /var/tmp/hp-books/mkrepo.sh /srv/git/books.git /home/student/books
+run rm -rf /var/tmp/hp-books
+run chown -R student:student /srv/git /home/student/books
+
+hidden hp
+
+settings
+  pager on
+
+say "Вчера ты отправил ветку search с поиском по каталогу книжного, а утром перестроил её поверх свежего main. Осталось отправить — ветка в ~/books."
+read brief.md
+
+stage
+  say "Отправь перестроенную ветку search на сервер. Олег тоже пишет в эту ветку — его работа должна уцелеть"
+  solve:
+    cd /home/student/books
+    git fetch -q
+    git cherry-pick origin/search
+    git push -q --force
+  check exec state pushed
+  neutral ls cat pwd cd
+  on pass say "Перед любым --force — git fetch и взгляд на origin/ветку. Секунда, а коллега не останется без коммита."
+  hint output "(forced update)" read lost.md
+  hint output "stale info" say "Сервер изменился с тех пор, как ты смотрел: кто-то отправил коммит. Забери и посмотри, что там."
+  hint output "couldn't find remote ref" say "По хешу сервер отдаёт коммит только целиком — все 40 знаков."
+  hint output "fetch first" say "На сервере в search есть то, чего нет у тебя. Забери и посмотри, что там, — не трогая свою ветку."
+  hint output "CONFLICT" say "Слияние тащит назад старые копии твоих коммитов. Отмени его: с сервера тебе нужен только чужой коммит."
+  hint output "Merge made by" say "Слияние притащило старые копии твоих коммитов. Верни ветку назад (ORIG_HEAD) — с сервера нужен только чужой коммит."
+  hint output "non-fast-forward" say "Сервер видит другую историю и не хочет её терять. Что нужно, чтобы он принял твою, — в брифе."
+  hint tries 5 say "Что лежит в origin/search, чего нет в твоей search? git log search..origin/search."
+  hint tries 10 say "Как перенести к себе один коммит из другой ветки?"
+
+stage
+  say "Ревьюер просит: два твоих коммита — в один, «Поиск по каталогу». Сожми их и снова отправь ветку"
+  solve:
+    cd /home/student/books
+    git fetch -q
+    GIT_SEQUENCE_EDITOR="sed -i '2s/^pick/fixup/'" git rebase -q -i main
+    git cherry-pick origin/search
+    git push -q --force-with-lease
+  check exec state squashed
+  neutral ls cat pwd cd
+  on enter read lease.md
+  on enter apply oleg-more
+  block git match "push.*(--force( |$)|-f( |$))" say "Сегодня в общих ветках — только осторожная перезапись."
+  on pass say "--force-with-lease спасает, пока ты не делал fetch вслепую: после fetch origin/search уже новая, и проверка ничего не скажет."
+  hint output "stale info" say "Сервер изменился с тех пор, как ты смотрел: кто-то отправил коммит. Забери, посмотри и перенеси к себе."
+  hint tries 5 say "Как ты сжимал черновые коммиты в задании про squash?"
+  hint tries 10 say "Что изменилось в origin/search после git fetch? git log search..origin/search."
+
+exec finale

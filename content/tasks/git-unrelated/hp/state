@@ -1,0 +1,22 @@
+#!/bin/sh
+# Блог на сервере: обе истории (Initial commit коллеги и три коммита студента) — предки main,
+# README собран из обоих, LICENSE на месте, сервер = локальный main. Скрипт: смотрим граф.
+# state pushed
+repo=/home/student/blog srv=/srv/git/blog.git
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+s() { git -C "$srv" -c safe.directory='*' "$@"; }
+INIT=e189935 MINE=7d6b7f8
+busy() { [ -f "$repo/.git/MERGE_HEAD" ] || [ -d "$repo/.git/rebase-merge" ] || [ -d "$repo/.git/rebase-apply" ]; }
+pushed() {
+    ! busy && [ -z "$(g status --porcelain --untracked-files=no)" ] &&
+    [ "$(g rev-parse main)" = "$(s rev-parse main)" ] &&
+    g merge-base --is-ancestor $INIT main && g merge-base --is-ancestor $MINE main &&
+    g cat-file -e main:LICENSE && g cat-file -e main:posts/03-lepka.txt &&
+    g show main:README.md | grep -q 'Рецепты и истории с кухни' &&
+    g show main:README.md | grep -q './build.sh' &&
+    ! g show main:README.md | grep -q -E '^(<<<<<<<|=======|>>>>>>>)'
+}
+case "$2" in
+pushed) pushed ;;
+*)      exit 1 ;;
+esac

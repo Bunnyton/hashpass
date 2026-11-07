@@ -1,0 +1,22 @@
+#!/bin/sh
+# Частичный коммит: в коммите — только исправление деления на ноль, недописанная степень
+# осталась в рабочем каталоге. Скрипт: сверяем содержимое коммита, индекса и диска (blob-хеши).
+# state fix | readme
+repo=/home/student/calc
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+TIP=0fc3d76
+CALC_FIX=7d172ab CALC_FULL=4a84c95 README_TIP=d514718 README_FIX=6ca538b README_FULL=bd7e0b1
+is() { case "$(g rev-parse "$1" 2>/dev/null)" in "$2"*) return 0 ;; esac; return 1; }
+disk() { case "$(g hash-object "$repo/$1" 2>/dev/null)" in "$2"*) return 0 ;; esac; return 1; }
+busy() { [ -d "$repo/.git/rebase-merge" ] || [ -f "$repo/.git/MERGE_HEAD" ]; }
+common() {
+    ! busy && is HEAD~1 $(g rev-parse $TIP) && is HEAD:calc.sh $CALC_FIX &&
+    disk calc.sh $CALC_FULL && disk README.md $README_FULL
+}
+fix()    { common && is HEAD:README.md $README_TIP; }
+readme() { common && is HEAD:README.md $README_FIX && g diff --cached --quiet; }
+case "$2" in
+fix)    fix ;;
+readme) readme ;;
+*)      exit 1 ;;
+esac

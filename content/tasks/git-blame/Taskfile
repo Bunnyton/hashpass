@@ -1,0 +1,51 @@
+# git-blame — кто и зачем поменял строку: в config.ini timeout = 1, ответы API рвутся.
+# git blame на строке показывает Васин коммит «Форматирование конфига» (только пробелы) →
+# доза blame.md на «(Вася Пупкин» в выводе blame → blame -w / blame <хеш>^ → настоящий
+# виновник e33ddc0 (Пётр, ради быстрых тестов) → (1) показать его (вывод начинается с хеша,
+# как в git-log) → (2) вернуть 30 отдельным коммитом со ссылкой на виновника (revert даёт
+# конфликт из-за форматирования — разбор знаком). Состояние (2) — hp/state. Продолжение git-remote.
+
+image git-blame:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/mkrepo.sh — руками; историю из 38 коммитов собирает он
+copy data /var/tmp/hp-api
+run sh /var/tmp/hp-api/mkrepo.sh /home/student/api
+run rm -rf /var/tmp/hp-api
+run chown -R student:student /home/student/api
+
+hidden hp
+
+settings
+  pager on
+
+say "После релиза 1.4 API доставки в ~/api рвёт соединения: в config.ini стоит timeout = 1. Было 30. Кто и зачем это сделал?"
+read brief.md
+
+stage
+  say "Найди коммит, в котором timeout на самом деле стал 1, и покажи его"
+  solve git -C /home/student/api show e33ddc0
+  # shown = the output STARTS with it: `git show <hash>`, `git log -L…`; a whole `git log -p` starts elsewhere
+  accept output "\A(?:\s|\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*\x07|\x1b?[=>])*(?:commit )?e33ddc0[0-9a-f]*\b"
+  neutral ls cat pwd cd
+  on pass say "Пётр ускорял тесты и поменял общий конфиг — тесты стали быстрыми, а прод медленным. Сообщение коммита рассказало то, чего не скажет ни один diff."
+  hint output "(Вася Пупкин" read blame.md
+  hint tries 5 say "Что сделал коммит, на который указал blame? Посмотри его целиком."
+  hint tries 10 say "Нашёл подозреваемого — покажи его одного: git show и хеш."
+
+stage
+  say "Верни timeout = 30 отдельным коммитом, а в его сообщении укажи хеш коммита-виновника"
+  solve:
+    cd /home/student/api
+    sed -i 's/^timeout = 1$/timeout = 30/' config.ini
+    git commit -q -am "timeout снова 30: e33ddc0 поменял его ради тестов"
+  check exec state fixed
+  neutral ls cat pwd cd
+  on pass say "Хеш в сообщении — ниточка для следующего, кто будет читать blame: он сразу увидит, что и почему откатили."
+  hint output "CONFLICT" say "Строку после того коммита переформатировали, и git не знает, какой вариант оставить. Разбери конфликт: нужна строка в новом формате, с 30."
+  hint tries 5 say "Нужен ровно один новый коммит, только строка timeout. Что показывает git show HEAD?"
+  hint tries 10 say "Хеш — первые семь знаков из git log подойдут."
+
+exec finale

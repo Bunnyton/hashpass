@@ -1,0 +1,26 @@
+#!/bin/sh
+# Подмодуль: (1) engine/ скачан на закреплённой версии d161764; (2) игра переведена на свежий
+# движок с сервера — новый коммит игры с обновлённой ссылкой, отправлен. state init | bumped
+repo=/home/student/game srv=/srv/git
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+e() { git -C "$repo/engine" -c safe.directory='*' "$@"; }
+ENGINE1=d161764
+# хеш коммита игры зависит от адреса сервера в .gitmodules — сверяем по сообщению и счёту
+base_ok() { [ "$(g log -1 --format=%s "$1")" = 'Движок — подмодулем' ] && [ "$(g rev-list --count "$1")" -eq 2 ]; }
+full() { g rev-parse "$1" 2>/dev/null; }
+clean() { [ -z "$(g status --porcelain)" ] && [ ! -f "$repo/.git/MERGE_HEAD" ]; }
+init() {
+    clean && base_ok HEAD &&
+    [ -f "$repo/engine/engine.sh" ] && e rev-parse HEAD | grep -q "^$ENGINE1"
+}
+bumped() {
+    new=$(git -C "$srv/engine.git" -c safe.directory='*' rev-parse main)
+    clean && base_ok HEAD~1 &&
+    [ "$(g rev-parse HEAD:engine)" = "$new" ] && [ "$(e rev-parse HEAD)" = "$new" ] &&
+    [ "$(full main)" = "$(git -C "$srv/game.git" -c safe.directory='*' rev-parse main)" ]
+}
+case "$2" in
+init)   init ;;
+bumped) bumped ;;
+*)      exit 1 ;;
+esac

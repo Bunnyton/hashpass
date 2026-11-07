@@ -1,0 +1,19 @@
+#!/bin/sh
+# Возврат timeout: один новый коммит поверх релиза, в нём только строка timeout = 30, а в
+# сообщении — хеш виновника (e33ddc0; git revert пишет его целиком). state fixed
+repo=/home/student/api
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+TIP=b5f8166 CULPRIT=e33ddc0
+busy() { [ -f "$repo/.git/REVERT_HEAD" ] || [ -f "$repo/.git/MERGE_HEAD" ] || [ -d "$repo/.git/rebase-merge" ]; }
+fixed() {
+    ! busy && [ -z "$(g status --porcelain)" ] &&
+    [ "$(g rev-parse HEAD~1)" = "$(g rev-parse $TIP)" ] &&
+    [ "$(g diff --name-only $TIP HEAD)" = config.ini ] &&
+    g show HEAD:config.ini | grep -qE '^timeout *= *30$' &&
+    [ "$(g show HEAD:config.ini | sed -E 's/^timeout *= *30$/timeout = 1/')" = "$(g show $TIP:config.ini)" ] &&
+    g log -1 --format=%B HEAD | grep -q $CULPRIT
+}
+case "$2" in
+fixed) fixed ;;
+*)     exit 1 ;;
+esac

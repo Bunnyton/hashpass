@@ -1,0 +1,28 @@
+#!/bin/sh
+# Перестроенная ветка search на сервере: поверх main, без слияний, правки Олега целы.
+# Скрипт: смотрим граф и авторов коммитов. state pushed | squashed
+repo=/home/student/books srv=/srv/git/books.git
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+s() { git -C "$srv" -c safe.directory='*' "$@"; }
+MAIN=c13829e
+busy() { [ -d "$repo/.git/rebase-merge" ] || [ -d "$repo/.git/rebase-apply" ] || [ -f "$repo/.git/MERGE_HEAD" ] || [ -f "$repo/.git/CHERRY_PICK_HEAD" ]; }
+base() {
+    ! busy && [ -z "$(g status --porcelain)" ] &&
+    [ "$(g rev-parse search)" = "$(s rev-parse search)" ] &&
+    [ "$(s rev-parse main)" = "$(g rev-parse $MAIN)" ] &&
+    g merge-base --is-ancestor $MAIN search &&
+    [ -z "$(g rev-list --merges $MAIN..search)" ] &&
+    g show search:search.sh | grep -q 'grep -i' &&
+    g show search:README.md | grep -q 'Поиск: ./search.sh'
+}
+pushed() { base; }
+squashed() {
+    base && g show search:search.sh | grep -q 'sort -t' &&
+    [ "$(g log --format=%ae $MAIN..search | grep -c student@)" -eq 1 ] &&
+    [ "$(g log --format=%ae $MAIN..search | grep -c oleg@)" -eq 2 ]
+}
+case "$2" in
+pushed)   pushed ;;
+squashed) squashed ;;
+*)        exit 1 ;;
+esac

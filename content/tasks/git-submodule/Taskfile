@@ -1,0 +1,61 @@
+# git-submodule — подмодули: игра склонирована без --recurse-submodules, engine/ пуст,
+# ./play.sh падает → доза submodule.md на «engine.sh: No such file» → submodule update --init
+# → (2) Олег выпустил движок 1.1 (hp/engine-update на входе, доза pinned.md: ссылка на
+# коммит) → поднять подмодуль (update --remote или fetch/switch внутри) → закоммитить и
+# отправить новую ссылку. Сервер — локальные голые репозитории, поэтому в системном конфиге
+# разрешён протокол file для подмодулей (иначе «transport 'file' not allowed»; с ssh/https
+# этого не нужно). Состояние — hp/state. Продолжение git-remote.
+
+image git-submodule:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+run git config --system protocol.file.allow always
+# data: data/mkrepo.sh — руками; серверы движка и игры и клон игры собирает он
+copy data /var/tmp/hp-game
+run mkdir -p /srv/git
+run sh /var/tmp/hp-game/mkrepo.sh /srv/git /home/student/game
+run rm -rf /var/tmp/hp-game
+run chown -R student:student /srv/git /home/student/game
+
+hidden hp
+
+settings
+  pager on
+
+say "Ты только что склонировал в ~/game «Пельмень-квест» — текстовую игру команды. Первым делом хочется сыграть."
+read brief.md
+
+stage
+  say "Запусти игру ./play.sh — так, чтобы она заработала"
+  solve:
+    cd /home/student/game
+    git submodule update --init
+    ./play.sh
+  check exec state init
+  neutral ls cat pwd cd
+  on pass say "У всех, кто склонирует игру, движок будет ровно той версии, на которой его закрепили, — и это не баг, а смысл подмодуля."
+  hint output "engine.sh: No such file" read submodule.md
+  hint output "transport 'file' not allowed" say "Это защита git от подмодулей с локальными путями. Здесь её уже сняли — попробуй ещё раз."
+  hint tries 5 say "Что лежит в каталоге engine? А что о нём говорит .gitmodules?"
+
+stage
+  say "Олег выпустил движок 1.1. Переведи игру на новую версию движка и отправь это на сервер"
+  solve:
+    cd /home/student/game
+    git submodule update --remote
+    git add engine
+    git commit -q -m "Движок 1.1"
+    git push -q
+  check exec state bumped
+  neutral ls cat pwd cd
+  on enter apply engine-update
+  on enter read pinned.md
+  on pass say "Теперь у каждого, кто сделает git pull и git submodule update, игра будет с движком 1.1."
+  hint output "You are not currently on a branch" say "Внутри подмодуля HEAD стоит на коммите, а не на ветке. Переключись на ветку движка — или подтяни подмодуль из корня игры."
+  hint output "new commits" say "Подмодуль уже на новой версии. Осталось закрепить это в самой игре."
+  hint tries 5 say "Что показывает git status в корне игры? А git submodule status?"
+  hint tries 10 say "Две части: сначала новый коммит внутри engine, потом коммит в самой игре."
+
+exec finale

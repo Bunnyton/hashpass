@@ -1,0 +1,58 @@
+# git-divergent — «divergent branches»: у студента неотправленный коммит, Олег за это время
+# отправил два своих. push отклонён (fetch first) → git pull останавливается: git 2.47 без
+# настройки не решает сам, сливать или перестраивать → по правилу команды (pre-receive не
+# пускает слияния в main) — pull --rebase и push → настроить pull.rebase true глобально и
+# забрать новый коммит Олега (hp/oleg-more на входе во второй шаг). Состояние — hp/state.
+# Продолжение git-remote; его системный pull.rebase false здесь снят — иначе вопроса не будет.
+
+image git-divergent:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги и настройка pull здесь не нужны
+run rm -rf /home/student/team /srv/git
+run git config --system --unset pull.rebase
+# data: data/pre-receive + data/mkrepo.sh — руками; сервер и клон собирает mkrepo.sh
+copy data /var/tmp/hp-menu
+run mkdir -p /srv/git
+run sh /var/tmp/hp-menu/mkrepo.sh /srv/git/menu.git /home/student/menu
+run install -m 755 /var/tmp/hp-menu/pre-receive /srv/git/menu.git/hooks/pre-receive
+run rm -rf /var/tmp/hp-menu
+run chown -R student:student /srv/git /home/student/menu
+
+hidden hp
+
+settings
+  pager on
+
+say "Кофейня «Зерно» добавляет в меню сырники. Ты закоммитил их в ~/menu, а Олег тем временем тоже не скучал."
+read brief.md
+
+stage
+  say "Отправь свой коммит на сервер. Правило команды: main — прямая линия, без коммитов слияния"
+  solve:
+    cd /home/student/menu
+    git pull -q --rebase
+    git push -q
+  check exec state linear
+  neutral ls cat pwd cd
+  on pass say "Твой коммит переехал поверх коммитов Олега и получил новый хеш — как в задании про rebase, только одной командой."
+  hint output "fetch first" say "На сервере есть коммиты, которых нет у тебя. Сначала их надо забрать."
+  hint output "Need to specify how to reconcile divergent branches" say "git не знает, как сложить твою историю с серверной, и перечислил варианты. Какой из них оставит прямую линию?"
+  hint output "Merge made by" say "Получился коммит слияния — сервер его не примет. Верни main на свой коммит (reset ты знаешь) и выбери другой вариант."
+  hint output "только прямая история" say "Сервер не принял коммит слияния. Верни main на свой коммит и сложи истории по-другому."
+  hint tries 5 say "Что именно ответил git pull? Дочитай его ответ до конца — варианты там."
+
+stage
+  say "Сделай так, чтобы во всех твоих репозиториях git pull сам выбирал этот способ, — и забери новый коммит Олега"
+  solve:
+    git config --global pull.rebase true
+    cd /home/student/menu
+    git pull -q
+  check exec state configured
+  neutral ls cat pwd cd
+  on enter apply oleg-more
+  on pass say "Теперь git pull = git fetch + git rebase. Свои неотправленные коммиты всегда будут сверху."
+  hint tries 5 say "git перечислил настройки в том же ответе. Чем «для всех репозиториев» отличается от «для этого»?"
+  hint tries 10 say "Где хранятся твои личные настройки git — имя и почта? Туда же."
+
+exec finale

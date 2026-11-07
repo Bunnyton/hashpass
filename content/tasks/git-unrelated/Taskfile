@@ -1,0 +1,50 @@
+# git-unrelated — «refusing to merge unrelated histories»: блог студента начат с git init
+# (три коммита), а коллега создал репозиторий на сервере через веб с README.md и LICENSE.
+# remote add → push -u отклонён (fetch first) → pull: отказ (истории без общего предка) →
+# доза unrelated.md → pull --allow-unrelated-histories → конфликт add/add в README.md
+# (разбор знаком по git-conflict) → коммит → push. Состояние — hp/state. Продолжение
+# git-remote (pull.rebase false оттуда: pull сливает).
+
+image git-unrelated:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+# data: data/mkrepo.sh — руками; сервер и блог собирает он
+copy data /var/tmp/hp-blog
+run mkdir -p /srv/git
+run sh /var/tmp/hp-blog/mkrepo.sh /srv/git/blog.git /home/student/blog
+run rm -rf /var/tmp/hp-blog
+run chown -R student:student /srv/git /home/student/blog
+
+hidden hp
+
+settings
+  pager on
+
+say "Ты неделю вёл блог о пельменях у себя в ~/blog. Сегодня коллега завела для него репозиторий на сервере: /srv/git/blog.git."
+read brief.md
+
+stage
+  say "Отправь блог в main репозитория /srv/git/blog.git. README и LICENSE, которые коллега положила туда, не потеряй"
+  solve:
+    cd /home/student/blog
+    git remote add origin /srv/git/blog.git
+    git pull -q --allow-unrelated-histories --no-edit origin main || true
+    printf '# Блог «Пельменная кухня»\n\nРецепты и истории с кухни.\n\nКак собрать: ./build.sh — склеит посты в index.html.\n' > README.md
+    git add README.md
+    git commit -q --no-edit
+    git push -q -u origin main
+  check exec state pushed
+  neutral ls cat pwd cd
+  on pass say "Если репозиторий на сервере ещё не нужен никому, можно иначе: создать его пустым, без README и LICENSE, — тогда push проходит сразу."
+  hint output "No such remote" say "git не знает сервера с таким именем. Как связать репозиторий с адресом сервера — в брифе."
+  hint output "does not appear to be a git repository" say "git не знает сервера с таким именем. Как связать репозиторий с адресом сервера — в брифе."
+  hint output "fetch first" say "На сервере уже есть коммит коллеги. Сначала забери его."
+  hint output "refusing to merge unrelated histories" read unrelated.md
+  hint output "CONFLICT (add/add)" say "README.md есть в обеих историях. Открой его и собери один: строки коллеги и твои."
+  hint output "There is no tracking information" say "Твоя ветка ещё не знает, с какой веткой сервера её связывать. Назови сервер и ветку прямо в команде."
+  hint tries 5 say "Что ответил git на последнюю команду? Прочитай до конца."
+  hint tries 10 say "Что лежит в main на сервере? git fetch и git log origin/main покажут."
+
+exec finale

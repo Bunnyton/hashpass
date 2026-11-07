@@ -1,0 +1,15 @@
+#!/bin/sh
+# Олег отправляет ещё один коммит — флэт уайт в меню. От имени student: сервер принадлежит ему.
+set -e
+tmp=$(mktemp -d)
+chown student:student "$tmp"
+runuser -u student -- sh -c "
+  cd '$tmp' &&
+  git clone -q /srv/git/menu.git c &&
+  cd c &&
+  printf 'флэт уайт\n' >> menu.txt &&
+  GIT_AUTHOR_DATE='2026-11-21T10:00:00+03:00' GIT_COMMITTER_DATE='2026-11-21T10:00:00+03:00' \
+    git -c user.name='Олег Кузнецов' -c user.email=oleg@coffee.local commit -q -am 'Меню: флэт уайт' &&
+  git push -q origin main
+"
+rm -rf "$tmp"
