@@ -1,0 +1,71 @@
+# git-pr-conflict — PR не сливается: пока одобренный PR студента «Комбо-обед» ждал, в main
+# влили PR Олега («Итого» вместо «К оплате» в чеке). (1) Лепка пишет «конфликт» (обе ветки
+# дописали строку наверх CHANGELOG.md) → забрать main и влить/перестроить у себя, разобрать,
+# отправить (доза update.md на входе) → (2) проверки красные: combo.sh разбирает чек старого
+# формата — семантический конфликт, которого git не видит → починить → (3) слить.
+# Наследует Лепку из git-pr; сценарий — data/bot.py, история — data/mkrepo.sh.
+
+image git-pr-conflict:1
+from git-pr:1
+
+# от git-pr наследуются Лепка (служба на 127.0.0.1:8930), python3 и git; кассу собираем заново
+run rm -rf /home/student/shop /srv/git /var/lib/lepka/*
+# data: всё руками; историю, PR и слияние Олега собирает mkrepo.sh
+copy data /var/tmp/hp-prc
+run install -m 644 /var/tmp/hp-prc/bot.py /usr/local/lib/lepka/bot.py
+run install -m 644 /var/tmp/hp-prc/lepka.json /etc/lepka.json
+run mkdir -p /srv/git
+run sh /var/tmp/hp-prc/mkrepo.sh /var/tmp/hp-prc /srv/git/shop.git /home/student/shop
+run rm -rf /var/tmp/hp-prc
+run chown -R student:student /srv/git /home/student/shop /var/lib/lepka
+
+hidden hp
+
+settings
+  pager on
+
+say "Вчера Анна одобрила твой pull request «Комбо-обед» в Лепке (http://localhost:8930), а слить ты не успел. Сегодня кнопка серая."
+read brief.md
+
+stage
+  say "Сделай так, чтобы у pull request «Комбо-обед» не было конфликта с main"
+  solve:
+    cd /home/student/shop
+    git fetch -q
+    git merge -q --no-edit origin/main || true
+    awk '!/^(<<<<<<<|=======|>>>>>>>)/' CHANGELOG.md > c && mv c CHANGELOG.md
+    git add CHANGELOG.md
+    git commit -q --no-edit
+    git push -q
+  check exec state updated
+  neutral ls cat pwd cd carbonyl
+  on enter read update.md
+  on pass say "Конфликт разобран у тебя, а не на сайте, — так на любом хостинге: сайт сливает только то, что сливается само."
+  hint output "CONFLICT" say "Конфликт там же, где его видит сайт. Открой файл и оставь обе строки — и твою, и Олега."
+  hint output "non-fast-forward" say "Ветку на сервере ты перестроил — обычный push её не заменит. Как перезаписать осторожно, ты знаешь."
+  hint output "main защищена" say "В main напрямую нельзя. Обновить нужно свою ветку combo."
+  hint tries 5 say "Что пишет сайт под кнопкой слияния? В каком файле конфликт?"
+
+stage
+  say "Конфликта нет, но проверки на pull request красные. Почини"
+  solve:
+    cd /home/student/shop
+    sed -i 's/К оплате:/Итого:/' combo.sh
+    git commit -q -am "Комбо: чек теперь «Итого»"
+    git push -q
+  check exec state green
+  neutral ls cat pwd cd carbonyl
+  on pass say "git сложил строки без конфликта, а программа сломалась: такой конфликт ловят только тесты. Потому их и гоняют на каждом PR."
+  hint tries 5 say "Что именно упало? Вывод проверок — на странице PR, а у себя их запускает ./test.sh."
+  hint tries 10 say "Что поменял Олег в чеке? А что ищет в нём combo.sh?"
+
+stage
+  say "Слей pull request «Комбо-обед»"
+  solve:
+    python3 /usr/local/lib/lepka/lepka.py merge shop 1 merge delete
+  check exec state merged
+  neutral ls cat pwd cd carbonyl git
+  on pass say "Комбо-обед в main, а ты разобрал оба вида конфликтов: тот, что видит git, и тот, что видят только тесты."
+  hint tries 5 say "Кнопка — внизу страницы pull request."
+
+exec finale

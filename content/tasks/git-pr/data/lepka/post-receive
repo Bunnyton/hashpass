@@ -1,0 +1,5 @@
+#!/bin/sh
+# Лепка узнаёт о push сразу: проверки и реакция коллег на новые коммиты в ветке PR.
+[ -n "$LEPKA_INTERNAL" ] && exit 0
+repo=$(basename "$PWD" .git)
+python3 /usr/local/lib/lepka/lepka.py sync "$repo" >/dev/null 2>&1 || true

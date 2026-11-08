@@ -1,0 +1,11 @@
+[Unit]
+Description=Лепка — учебный git-хостинг на порту 8930
+After=network.target
+
+[Service]
+User=student
+ExecStart=/usr/bin/python3 /usr/local/lib/lepka/lepka.py serve 8930
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

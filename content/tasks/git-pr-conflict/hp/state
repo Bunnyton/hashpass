@@ -1,0 +1,29 @@
+#!/bin/sh
+# PR #1 с конфликтом: (1) ветка combo на сервере включает свежий main, конфликта нет;
+# (2) проверки Лепки на её вершине зелёные; (3) PR слит. state updated | green | merged
+srv=/srv/git/shop.git
+s() { git -C "$srv" -c safe.directory='*' "$@"; }
+pr() {
+    python3 - "$1" <<'PY'
+import json, sys
+try:
+    p = [p for p in json.load(open("/var/lib/lepka/shop.json"))["prs"] if p["n"] == 1][0]
+except Exception:
+    sys.exit(1)
+sys.exit(0 if eval(sys.argv[1], {}, {"p": p}) else 1)
+PY
+}
+head() { s rev-parse -q --verify refs/heads/combo; }
+updated() {
+    h=$(head) && s merge-base --is-ancestor main "$h" &&
+    ! s grep -q -E '^(<<<<<<<|>>>>>>>)' "$h" -- . &&
+    s show "$h:CHANGELOG.md" | grep -q 'комбо' && s show "$h:CHANGELOG.md" | grep -q 'Итого'
+}
+green() { updated && h=$(head) && pr "p['checks'].get('$h', {}).get('status') == 'ok'"; }
+merged() { pr "p['state'] == 'merged'" && s show main:combo.sh >/dev/null 2>&1; }
+case "$2" in
+updated) updated ;;
+green)   green ;;
+merged)  merged ;;
+*)       exit 1 ;;
+esac

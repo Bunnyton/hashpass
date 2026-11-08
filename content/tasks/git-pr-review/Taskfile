@@ -1,0 +1,53 @@
+# git-pr-review — студент сам ревьюер: PR Олега «Скидка 5 % постоянным» в Лепке. Ошибка —
+# в echo скидка вычитается второй раз, всем клиентам; тесты Олег подогнал (700 → 665, 360 →
+# 342), поэтому проверки зелёные. (1) найти, оставить комментарий к строке (order.sh:9 или
+# test.sh:5–6) и запросить изменения → бот Олега чинит двумя коммитами (доза review.md на
+# входе; одобрить раньше — Анна останавливает) → (2) одобрить и слить squash'ем (правило
+# команды; обычное слияние сайт отклоняет с объяснением). Наследует Лепку из git-pr.
+
+image git-pr-review:1
+from git-pr:1
+
+# от git-pr наследуются Лепка (служба на 127.0.0.1:8930), python3 и git; кассу собираем заново
+run rm -rf /home/student/shop /srv/git /var/lib/lepka/*
+# data: всё руками; историю и PR Олега собирает mkrepo.sh
+copy data /var/tmp/hp-prr
+run install -m 644 /var/tmp/hp-prr/bot.py /usr/local/lib/lepka/bot.py
+run install -m 644 /var/tmp/hp-prr/lepka.json /etc/lepka.json
+run mkdir -p /srv/git
+run sh /var/tmp/hp-prr/mkrepo.sh /var/tmp/hp-prr /srv/git/shop.git /home/student/shop
+run rm -rf /var/tmp/hp-prr
+run chown -R student:student /srv/git /home/student/shop /var/lib/lepka
+
+hidden hp
+
+settings
+  pager on
+
+say "Олег открыл pull request «Скидка 5 % постоянным клиентам», Анна на выезде — ревьюер сегодня ты. Лепка: http://localhost:8930."
+read brief.md
+
+stage
+  say "Проверь pull request Олега. Если в нём ошибка — покажи Олегу, где она, и попроси исправить"
+  solve:
+    python3 -c "import sys; sys.path.insert(0, '/usr/local/lib/lepka'); import lepka; s = lepka.Store('shop'); d = s.__enter__(); p = lepka.find(d, 1); a = lepka.Api('shop', d); a.say(p, 'student', 'Скидка вычитается второй раз — всем', 'order.sh', 9); lepka.fire('shop', d, p, 'comment', path='order.sh', line=9, body='x'); a.review(p, 'student', 'changes', 'Поправь расчёт'); lepka.fire('shop', d, p, 'review', state='changes', body='x'); s.__exit__(None, None, None)"
+  check exec state fixed
+  neutral ls cat pwd cd carbonyl git
+  on enter read review.md
+  on pass say "Проверки были зелёными, а клиенты платили бы на 5 % меньше. Тесты проверяют то, что в них написали, — а ревьюер то, что задумали."
+  hint tries 5 say "Посчитай руками: обычный клиент, две порции говядины по 350. Сколько он должен заплатить? Что ждёт тест?"
+  hint tries 10 say "Сколько раз в order.sh вычитается скидка — и кому?"
+  hint tries 15 say "Ветку можно забрать и себе: git fetch, git switch regulars, ./test.sh и свои примеры."
+
+stage
+  say "Олег исправил. Одобри pull request и слей его по правилу команды: в main — один коммит на pull request"
+  solve:
+    python3 -c "import sys; sys.path.insert(0, '/usr/local/lib/lepka'); import lepka; s = lepka.Store('shop'); d = s.__enter__(); p = lepka.find(d, 1); lepka.Api('shop', d).review(p, 'student', 'approved', 'ok'); lepka.fire('shop', d, p, 'review', state='approved', body='ok'); s.__exit__(None, None, None)"
+    python3 /usr/local/lib/lepka/lepka.py merge shop 1 squash delete
+  check exec state merged
+  neutral ls cat pwd cd carbonyl git
+  on pass say "Squash собрал четыре коммита Олега в один — в истории main осталась одна понятная запись «Скидка 5 % постоянным клиентам (#1)»."
+  hint tries 5 say "Посмотри изменения ещё раз: Олег поправил то, о чём ты писал?"
+  hint tries 10 say "Под кнопкой слияния есть выбор способа. Какой из них даёт один коммит?"
+
+exec finale

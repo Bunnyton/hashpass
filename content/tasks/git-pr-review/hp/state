@@ -1,0 +1,28 @@
+#!/bin/sh
+# Ревью PR Олега: (1) ошибка найдена комментарием к строке и запрошены изменения — Олег
+# исправил; (2) PR одобрен и слит одним коммитом (squash) с исправленным кодом.
+# state fixed | merged
+srv=/srv/git/shop.git
+s() { git -C "$srv" -c safe.directory='*' "$@"; }
+pr() {
+    python3 - "$1" <<'PY'
+import json, sys
+try:
+    p = [p for p in json.load(open("/var/lib/lepka/shop.json"))["prs"] if p["n"] == 1][0]
+except Exception:
+    sys.exit(1)
+sys.exit(0 if eval(sys.argv[1], {}, {"p": p}) else 1)
+PY
+}
+fixed() { pr "p.get('fixed') is True"; }
+merged() {
+    fixed && pr "p['state'] == 'merged' and p['method'] == 'squash'" &&
+    [ "$(s rev-list --count main)" -eq 2 ] && [ -z "$(s rev-list --merges main)" ] &&
+    s show main:order.sh | grep -q '^echo "К оплате: \$total ₽"$' &&
+    s show main:test.sh | grep -q 'постоянный клиент'
+}
+case "$2" in
+fixed)  fixed ;;
+merged) merged ;;
+*)      exit 1 ;;
+esac

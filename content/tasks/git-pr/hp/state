@@ -1,0 +1,43 @@
+#!/bin/sh
+# Pull request в Лепке: ветка с варениками на сервере → PR открыт → Анна одобрила → PR слит,
+# у студента свежий main и нет ветки. Скрипт: смотрим и git, и данные Лепки.
+# state pushed | opened | approved | merged
+repo=/home/student/shop srv=/srv/git/shop.git
+g() { git -C "$repo" -c safe.directory='*' "$@"; }
+s() { git -C "$srv" -c safe.directory='*' "$@"; }
+pr() {  # pr <python-выражение над p (последний PR из ветки студента)> -- 0/1
+    python3 - "$1" <<'PY'
+import json, sys
+try:
+    d = json.load(open("/var/lib/lepka/shop.json"))
+except Exception:
+    sys.exit(1)
+ps = [p for p in d["prs"] if p["head"] != "main"]
+sys.exit(0 if ps and eval(sys.argv[1], {}, {"p": ps[-1]}) else 1)
+PY
+}
+feature() {  # ветка на сервере, где в menu.txt есть вареники
+    for b in $(s for-each-ref --format='%(refname:short)' refs/heads); do
+        [ "$b" = main ] && continue
+        s show "$b:menu.txt" 2>/dev/null | grep -q '^вареники' && { echo "$b"; return 0; }
+    done
+    return 1
+}
+# main на сервере не тронут: последний коммит — «Сметана к пельменям» (хеш зависит от данных)
+pushed() { feature >/dev/null && [ "$(s log -1 --format=%s main)" = "Сметана к пельменям" ]; }
+opened() { b=$(feature) && pr "p['state'] == 'open' and p['head'] == '$b'"; }
+approved() { pr "p.get('reviews', {}).get('anna', {}).get('state') == 'approved'"; }
+merged() {
+    pr "p['state'] == 'merged'" && s show main:menu.txt | grep -q '^вареники' &&
+    [ "$(g rev-parse main)" = "$(s rev-parse main)" ] &&
+    [ "$(g symbolic-ref -q HEAD)" = refs/heads/main ] && [ -z "$(g status --porcelain)" ] &&
+    head=$(python3 -c "import json;print([p for p in json.load(open('/var/lib/lepka/shop.json'))['prs'] if p['state']=='merged'][-1]['head'])") &&
+    [ -z "$(g branch --list "$head")" ]
+}
+case "$2" in
+pushed)   pushed ;;
+opened)   opened ;;
+approved) approved ;;
+merged)   merged ;;
+*)        exit 1 ;;
+esac

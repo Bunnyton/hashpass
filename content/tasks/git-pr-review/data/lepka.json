@@ -1,0 +1,8 @@
+{
+ "me": "student",
+ "users": {"student": "Студент", "anna": "Анна Смирнова", "oleg": "Олег Кузнецов"},
+ "repos": {
+  "shop": {"path": "/srv/git/shop.git", "about": "касса «Пельменя»", "ci": "./test.sh",
+           "bot": "/usr/local/lib/lepka/bot.py", "review_by": "student", "merge": ["merge", "squash"]}
+ }
+}

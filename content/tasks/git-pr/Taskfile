@@ -1,0 +1,85 @@
+# git-pr — pull request от начала до конца на учебном хостинге Лепка (сайт на 127.0.0.1:8930,
+# смотрят в carbonyl): (1) ветка с варениками → push (main на сервере защищена хуком) →
+# (2) открыть PR на сайте (доза site.md на входе) → бот Анна просит строку в CHANGELOG.md →
+# (3) доработать в той же ветке и отправить: PR обновляется сам, Анна одобряет → (4) слить
+# кнопкой на сайте, обновить main у себя, удалить ветку. Лепка — data/lepka/lepka.py
+# (stdlib Python), сценарий Анны — data/bot.py. Состояние — hp/state (git + данные Лепки).
+# Продолжение git-remote.
+
+image git-pr:1
+from git-remote:1
+
+# от git-remote наследуются git и имя студента; его каталоги здесь не нужны
+run rm -rf /home/student/team /srv/git
+run apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 >/dev/null
+# data: всё руками; Лепку ставит install.sh, сервер и клон собирает mkrepo.sh
+copy data /var/tmp/hp-pr
+run sh /var/tmp/hp-pr/install.sh /var/tmp/hp-pr
+run mkdir -p /srv/git
+run sh /var/tmp/hp-pr/mkrepo.sh /var/tmp/hp-pr /srv/git/shop.git /home/student/shop
+run rm -rf /var/tmp/hp-pr
+run chown -R student:student /srv/git /home/student/shop
+
+hidden hp
+
+settings
+  pager on
+
+say "В кассу «Пельменя» добавляют вареники. Код — в ~/shop, а в main у команды попадают только через pull request."
+read brief.md
+
+stage
+  say "Добавь в меню вареники-картошка за 290 ₽ — в своей ветке, не в main, — и отправь ветку на сервер"
+  solve:
+    cd /home/student/shop
+    git switch -q -c vareniki
+    printf 'вареники-картошка  290\n' >> menu.txt
+    git commit -q -am "Меню: вареники"
+    git push -q -u origin vareniki
+  check exec state pushed
+  neutral ls cat pwd cd
+  on pass say "Ветка на сервере. Теперь её надо предложить к слиянию."
+  hint output "main защищена" say "Сервер не пускает в main напрямую — так и задумано. Где должна жить твоя правка?"
+  hint output "has no upstream branch" say "Новая ветка ещё не знает, куда ей ехать на сервере. git подсказал команду выше."
+  hint tries 5 say "Как сделать ветку и отправить её на сервер, ты знаешь по заданию про коммиты не в той ветке."
+
+stage
+  say "Открой pull request из своей ветки в main на сайте команды"
+  solve:
+    python3 /usr/local/lib/lepka/lepka.py open shop vareniki student "Вареники в меню" "Вареники с картошкой, 290 ₽"
+  check exec state opened
+  neutral ls cat pwd cd git
+  on enter read site.md
+  on pass say "Анна уже заглянула в твой PR. Что она пишет?"
+  hint tries 5 say "Адрес сайта и как его открыть — в тексте выше."
+  hint tries 10 say "На странице репозитория shop у каждой ветки есть ссылка «открыть pull request»."
+
+stage
+  say "Анна просит доработать. Сделай так, чтобы она одобрила pull request"
+  solve:
+    cd /home/student/shop
+    sed -i 's/^# Что нового$/# Что нового\n\n- вареники с картошкой/' CHANGELOG.md
+    git commit -q -am "CHANGELOG: вареники"
+    git push -q
+  check exec state approved
+  neutral ls cat pwd cd carbonyl
+  on pass say "Pull request — живой: новые коммиты в ветке сразу появляются в нём, и проверки идут заново."
+  hint tries 5 say "Что именно Анна попросила? Перечитай её отзыв в pull request."
+  hint tries 10 say "Новый PR не нужен: допиши коммит в ту же ветку и отправь её."
+
+stage
+  say "Слей pull request, а у себя обнови main и убери ветку, которая больше не нужна"
+  solve:
+    python3 /usr/local/lib/lepka/lepka.py merge shop 1 merge delete
+    cd /home/student/shop
+    git switch -q main
+    git pull -q
+    git branch -q -d vareniki
+  check exec state merged
+  neutral ls cat pwd cd carbonyl
+  on pass say "Полный круг: ветка → pull request → ревью → слияние. Так выглядит почти любой рабочий день разработчика."
+  hint output "not fully merged" say "git не уверен, что ветка влита. Ты уже забрал свежий main с сервера?"
+  hint tries 5 say "Кнопка слияния — внизу страницы pull request. Она серая, пока что-то мешает: что пишет сайт?"
+  hint tries 10 say "После слияния на сайте main на сервере новее твоего. Как забрать его к себе?"
+
+exec finale
