@@ -1,0 +1,17 @@
+#!/bin/sh
+# rpm <версия> [requires]: rpmbuild собрал noarch-пакет pelmeni этой версии с /usr/bin/pelmeni;
+# с «requires» — ещё и зависимость от figlet и запись о версии в %changelog.
+shift   # $1 — команда студента (так зовёт проверки консоль), дальше — мои аргументы
+v=$1
+# своя пустая база: системная может быть не создана, а слой проверки — только для чтения
+R="rpm --dbpath $(mktemp -d)"
+for f in $(find /home/student/rpmbuild/RPMS -name "pelmeni-$v-*.noarch.rpm" 2>/dev/null); do
+    [ "$($R -qp --qf '%{NAME} %{VERSION}' "$f" 2>/dev/null)" = "pelmeni $v" ] || continue
+    $R -qpl "$f" 2>/dev/null | grep -qx /usr/bin/pelmeni || continue
+    if [ "${2:-}" = requires ]; then
+        $R -qp --requires "$f" 2>/dev/null | grep -qw figlet || continue
+        $R -qp --changelog "$f" 2>/dev/null | grep -q "$v" || continue
+    fi
+    exit 0
+done
+exit 1

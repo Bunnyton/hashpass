@@ -1,0 +1,8 @@
+#!/bin/sh
+# Живая проверка: hello записан в автозагрузку, учебное ядро перезагружено ПОСЛЕ этого — и hello
+# в нём загружен.
+H=/usr/local/lib/hpkernel/hpk
+f=$(grep -lsw hello /etc/modules-load.d/*.conf /etc/modules | head -n 1)
+[ -n "$f" ] || exit 1
+up=$($H run cut -d. -f1 /proc/uptime) || exit 1
+[ $(( $(date +%s) - up )) -gt "$(stat -c %Y "$f")" ] && $H run grep -q '^hello ' /proc/modules

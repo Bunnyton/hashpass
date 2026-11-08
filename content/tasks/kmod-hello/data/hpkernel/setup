@@ -1,0 +1,22 @@
+#!/bin/sh
+# Установка учебного ядра в образ (при сборке, root): initramfs, обёртки команд, служба.
+set -eu
+d=/usr/local/lib/hpkernel
+kver=$(ls /lib/modules | head -n 1)
+echo "$kver" > $d/release
+chmod 755 $d/hpk $d/wrap $d/depmod $d/uname $d/kernel $d/agent $d/shell $d/start $d/init
+tmp=$(mktemp -d)
+mkdir -p "$tmp/bin" "$tmp/lib/hpk"
+cp /bin/busybox "$tmp/bin/busybox"
+cp $d/init "$tmp/init"
+for m in fs/netfs/netfs net/9p/9pnet net/9p/9pnet_virtio fs/9p/9p; do
+    xz -dc "/lib/modules/$kver/kernel/$m.ko.xz" > "$tmp/lib/hpk/$(basename "$m").ko"
+done
+(cd "$tmp" && find . | cpio -o -H newc --quiet | gzip -9) > $d/initrd.gz
+rm -rf "$tmp"
+for c in insmod rmmod lsmod modprobe dmesg; do ln -sf $d/wrap /usr/local/bin/$c; done
+ln -sf $d/uname /usr/local/bin/uname
+ln -sf $d/depmod /usr/local/bin/depmod
+ln -sf $d/kernel /usr/local/bin/kernel
+cp $d/hpkernel.service /etc/systemd/system/
+systemctl enable hpkernel.service

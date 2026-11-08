@@ -1,0 +1,3 @@
+#!/bin/sh
+# Живая проверка: параметр who загруженного hello теперь «Боб».
+[ "$(/usr/local/lib/hpkernel/hpk run cat /sys/module/hello/parameters/who)" = "Боб" ]

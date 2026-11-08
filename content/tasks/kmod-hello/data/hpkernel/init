@@ -1,0 +1,26 @@
+#!/bin/busybox sh
+# /init учебного ядра (initramfs, busybox): подключить файловую систему консоли по 9p, своё
+# /proc /sys /dev поверх неё — и дальше всё в chroot: агент команд на ttyS1, шелл на ttyS0.
+/bin/busybox --install -s /bin
+trap 'poweroff -f' USR1 USR2 TERM
+mkdir -p /proc /sys /dev /r
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+for m in netfs 9pnet 9pnet_virtio 9p; do insmod /lib/hpk/$m.ko; done
+mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144,cache=none root /r || poweroff -f
+mount -t proc proc /r/proc
+mount -t sysfs sys /r/sys
+mount -t devtmpfs dev /r/dev
+mkdir -p /r/dev/pts && mount -t devpts devpts /r/dev/pts
+mount -t tmpfs tmpfs /r/tmp
+mount -t tmpfs tmpfs /r/run
+dmesg -n 1
+hostname "$(cat /r/etc/hostname 2>/dev/null || echo kernel)"
+# автозагрузка, как у systemd-modules-load: /etc/modules-load.d/*.conf и /etc/modules
+chroot /r sh -c 'cat /etc/modules-load.d/*.conf /etc/modules 2>/dev/null | sed "s/#.*//" | xargs -r -n1 modprobe' >/dev/null 2>&1
+stty -F /dev/ttyS1 raw -echo
+chroot /r /usr/local/lib/hpkernel/agent </dev/ttyS1 >/dev/ttyS1 2>/dev/null &
+while :; do
+    setsid cttyhack chroot /r /usr/local/lib/hpkernel/shell
+done

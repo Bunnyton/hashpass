@@ -1,0 +1,6 @@
+#!/bin/sh
+# uname консоли говорит о ядре, в котором живут модули, — об учебном.
+if grep -qw hpkernel /proc/cmdline 2>/dev/null; then exec /usr/bin/uname "$@"; fi
+out=$(/usr/bin/uname "$@") || exit $?
+r=$(/usr/bin/uname -r) R=$(cat /usr/local/lib/hpkernel/release)
+printf '%s\n' "$out" | sed "s|$r|$R|"

@@ -1,0 +1,163 @@
+#!/usr/bin/python3
+"""hpk — клиент учебного ядра (ВМ QEMU, служба hpkernel).
+
+  hpk run <команда> [арг…]   выполнить в учебном ядре от имени вызвавшего (root под sudo)
+  hpk shell                  интерактивный шелл в учебном ядре (выход — exit)
+  hpk wait [секунд]          дождаться, пока ядро загрузится
+"""
+import base64
+import fcntl
+import os
+import select
+import shlex
+import signal
+import socket
+import sys
+import termios
+import time
+import tty
+
+RUN = "/run/hpkernel"
+CTL, TTY, LOCK = RUN + "/ctl", RUN + "/tty", RUN + "/lock"
+EXIT_MARK = b"\x1b]hpkernel-exit\x07"
+
+
+def b64(data):
+    return base64.b64encode(data).decode() or "-"
+
+
+def connect(path, timeout):
+    end = time.time() + timeout
+    while True:
+        try:
+            s = socket.socket(socket.AF_UNIX)
+            s.connect(path)
+            return s
+        except OSError:
+            if time.time() > end:
+                return None
+            time.sleep(0.3)
+
+
+def request(s, line, timeout):
+    s.sendall(line.encode() + b"\n")
+    buf, end = b"", time.time() + timeout
+    while True:
+        while b"\n" in buf:
+            got, buf = buf.split(b"\n", 1)
+            yield got.decode(errors="replace").strip()
+        left = end - time.time()
+        if left <= 0:
+            return
+        r, _, _ = select.select([s], [], [], left)
+        if not r:
+            return
+        chunk = s.recv(65536)
+        if not chunk:
+            return
+        buf += chunk
+
+
+def ready(s, timeout):
+    for got in request(s, "ping", timeout):
+        if got == "pong":
+            return True
+    return False
+
+
+def run(argv, quiet_wait=False):
+    os.makedirs(RUN, exist_ok=True)
+    lock = open(LOCK, "a")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    s = connect(CTL, 5)
+    waited = False
+    end = time.time() + 120
+    while s is None or not ready(s, 2):
+        if time.time() > end:
+            print("учебное ядро не отвечает — systemctl status hpkernel", file=sys.stderr)
+            return 1
+        if not waited and not quiet_wait:
+            print("(учебное ядро ещё загружается…)", file=sys.stderr)
+            waited = True
+        if s is None:
+            s = connect(CTL, 5)
+    if not argv:
+        return 0
+    stdin = b"" if sys.stdin.isatty() else sys.stdin.buffer.read()
+    rid = str(os.getpid())
+    line = " ".join([rid, str(os.getuid()), b64(os.getcwd().encode()),
+                     b64(("exec " + shlex.join(argv)).encode()), b64(stdin)])
+    for got in request(s, line, 300):
+        parts = got.split(" ", 2)
+        if parts[0] != rid:
+            continue
+        out = base64.b64decode(parts[2]) if len(parts) > 2 else b""
+        if out.endswith(b"\n\n"):
+            out = out[:-1]
+        if out.strip():
+            sys.stdout.buffer.write(out)
+            sys.stdout.flush()
+        rc = int(parts[1])
+        if rc == 128 + signal.SIGKILL:   # ядро убило команду (oops) — пусть шелл скажет «Killed»
+            os.kill(os.getpid(), signal.SIGKILL)
+        return rc
+    print("учебное ядро не ответило (упало?) — подожди и повтори", file=sys.stderr)
+    return 1
+
+
+def shell():
+    if run([], quiet_wait=False):
+        return 1
+    s = connect(TTY, 5)
+    if s is None:
+        print("шелл учебного ядра недоступен", file=sys.stderr)
+        return 1
+    try:
+        cols, rows = os.get_terminal_size()
+    except OSError:
+        cols, rows = 0, 0
+    cols, rows = cols or 80, rows or 24
+    s.sendall(f"{rows} {cols}\n".encode())
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd) if os.isatty(fd) else None
+    if old:
+        tty.setraw(fd)
+    tail = b""
+    try:
+        while True:
+            r, _, _ = select.select([s, fd], [], [])
+            if s in r:
+                data = s.recv(65536)
+                if not data:
+                    break
+                tail = (tail + data)[-64:]
+                if EXIT_MARK in tail:
+                    data = data.split(EXIT_MARK)[0]
+                    os.write(1, data)
+                    break
+                os.write(1, data)
+            if fd in r:
+                data = os.read(fd, 4096)
+                if not data:
+                    break
+                s.sendall(data)
+    finally:
+        if old:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return 0
+
+
+def main():
+    a = sys.argv[1:]
+    if a and a[0] == "run":
+        return run(a[1:])
+    if a and a[0] == "shell":
+        return shell()
+    if a and a[0] == "wait":
+        return run([], quiet_wait=True)
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

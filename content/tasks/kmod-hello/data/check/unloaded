@@ -1,0 +1,4 @@
+#!/bin/sh
+# Живая проверка: hello выгружен, а в журнале учебного ядра он побывал.
+H=/usr/local/lib/hpkernel/hpk
+! $H run grep -q '^hello ' /proc/modules && $H run dmesg | grep -q 'hello'

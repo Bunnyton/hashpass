@@ -1,0 +1,70 @@
+# pkg-debsrc — пакет «по-дебиановски»: каталог debian/ + dpkg-buildpackage (debhelper).
+# (1) собрать 1.0: control/rules/changelog/source/format; ловушки — подпись (-us -uc), dh_usrlocal
+# (Makefile ставит в /usr/local → override_dh_auto_install с PREFIX=/usr); (2) 1.1 через dch;
+# (3) lintian без ошибок (нет debian/copyright). Образ и ~/pelmeni — из pkg-deb.
+
+image pkg-debsrc:1
+from pkg-deb:1
+
+hidden hp
+
+settings
+  pager on
+
+say "Руками собранный .deb — самоделка. Пакеты для настоящего репозитория Debian собирают иначе."
+read brief.md
+
+stage
+  say "Добавь в ~/pelmeni каталог debian/ и собери пакет pelmeni 1.0 через dpkg-buildpackage"
+  solve:
+    cd /home/student/pelmeni
+    mkdir -p debian/source
+    echo '3.0 (native)' > debian/source/format
+    printf '%s\n' 'Source: pelmeni' 'Section: utils' 'Priority: optional' 'Maintainer: Student <student@example.com>' 'Build-Depends: debhelper-compat (= 13)' 'Standards-Version: 4.7.0' '' 'Package: pelmeni' 'Architecture: all' 'Depends: figlet, ${misc:Depends}' 'Description: сколько варить и сколько кидать' ' Считает пельмени, воду и соль на заданное число порций.' > debian/control
+    printf '%s\n' '#!/usr/bin/make -f' '%:' '	dh $@' '' 'override_dh_auto_install:' '	$(MAKE) install DESTDIR=$(CURDIR)/debian/pelmeni PREFIX=/usr' > debian/rules
+    chmod 755 debian/rules
+    DEBEMAIL=student@example.com DEBFULLNAME=Student dch --create --package pelmeni -v 1.0 "Первый выпуск."
+    dpkg-buildpackage -us -uc
+  check exec deb10
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
+  on pass say "Рядом с .deb легли .buildinfo и .changes: с чем собирали и что выкладывать в репозиторий."
+  hint output "debian/changelog: No such file" read changelog.md
+  hint output "cannot read debian/changelog" read changelog.md
+  hint output "dh_usrlocal" read usrlocal.md
+  hint output "No secret key" say "dpkg-buildpackage хочет подписать результат твоим ключом. Для своей сборки подпись не нужна — ключи -us -uc."
+  hint output "unmet build dependencies" say "dpkg-buildpackage проверяет Build-Depends. Что из перечисленного там не установлено?"
+  hint output "debian/rules: Permission denied" say "debian/rules — программа (Makefile с #!), ей нужен бит исполнения."
+  hint output "missing separator" say "В Makefile команды начинаются с табуляции, а не с пробелов."
+  hint tries 5 say "Что dpkg-buildpackage сказал последним? Ошибка обычно в самом низу."
+  hint tries 8 say "Готовый пакет dpkg-buildpackage кладёт на уровень выше каталога исходников. Что внутри? dpkg-deb -c."
+
+stage
+  say "Выпусти 1.1: запись в debian/changelog — и новая сборка pelmeni_1.1"
+  on enter read dch.md
+  solve:
+    cd /home/student/pelmeni
+    DEBEMAIL=student@example.com DEBFULLNAME=Student dch -v 1.1 "Версия 1.1."
+    dpkg-buildpackage -us -uc
+  check exec deb11
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
+  on pass say "Версию пакета берут из changelog — сверху самая свежая. Править её где-то ещё не нужно."
+  hint tries 5 say "Какую версию собрал dpkg-buildpackage? Смотри первую строку debian/changelog."
+
+stage
+  say "Пусть lintian не находит в pelmeni_1.1 ошибок"
+  on enter read lintian.md
+  solve:
+    cd /home/student/pelmeni
+    printf '%s\n' 'Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/' 'Upstream-Name: pelmeni' '' 'Files: *' 'Copyright: 2026 Кухня hashpass' 'License: MIT' ' Permission is hereby granted, free of charge, to any person obtaining a copy' ' of this software, to deal in the Software without restriction.' > debian/copyright
+    dpkg-buildpackage -us -uc
+    cd ..
+    lintian pelmeni_1.1_all.deb
+  accept cmd "lintian"
+  check exec lint11
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
+  on pass say "Буква E — ошибка, W — предупреждение, I — совет. lintian -i объяснит любую строку подробно."
+  hint output "no-copyright-file" read copyright.md
+  hint output "E: " say "Непонятная строка? lintian -i объяснит каждую подробно — и подскажет, как исправить."
+  hint tries 5 say "Ты пересобрал пакет после правки? lintian смотрит на готовый .deb, а не на исходники."
+
+exec finale

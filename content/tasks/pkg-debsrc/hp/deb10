@@ -1,0 +1,3 @@
+#!/bin/sh
+# Шаг 1: dpkg-buildpackage собрал pelmeni 1.0.
+exec "$(dirname "$0")/check-deb" 1.0

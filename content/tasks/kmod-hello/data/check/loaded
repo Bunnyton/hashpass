@@ -1,0 +1,3 @@
+#!/bin/sh
+# Живая проверка: hello сейчас загружен в учебное ядро.
+/usr/local/lib/hpkernel/hpk run grep -q '^hello ' /proc/modules

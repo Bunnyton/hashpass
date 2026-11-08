@@ -54,6 +54,8 @@ BLOCKS=(
     'bunnyton/git | Git — разбор полётов: git-amend git-wrong-branch git-pull-blocked git-restore-file git-filemode git-revert-merge'
     'bunnyton/git | Git — разбор полётов 2: git-secret git-divergent git-force-push git-unrelated git-add-p git-blame git-detached git-submodule git-tag'
     'bunnyton/git | Git — pull request: git-pr git-pr-conflict git-pr-review'
+    'bunnyton/linux-advanced | Сборка пакетов: pkg-deb pkg-debsrc pkg-rpm pkg-arch pkg-appimage pkg-snap'
+    'bunnyton/linux-advanced | Модули ядра: kmod-hello kmod-param kmod-chardev kmod-oops kmod-autoload'
     'bunnyton/docker | Docker: docker-run docker-web docker-ports docker-volume docker-db docker-build docker-layers'
     'bunnyton/docker | Docker — глубже: docker-debug docker-network docker-compose docker-multistage docker-registry'
     'bunnyton/docker | Docker — под капотом: docker-inside docker-limits docker-caps'

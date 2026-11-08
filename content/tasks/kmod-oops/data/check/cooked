@@ -1,0 +1,4 @@
+#!/bin/sh
+# Живая проверка: pelmen загружен и сварил все пять.
+H=/usr/local/lib/hpkernel/hpk
+$H run grep -q '^pelmen ' /proc/modules && $H run dmesg | grep -q 'pelmen: сварено 5'

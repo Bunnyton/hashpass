@@ -1,0 +1,23 @@
+#!/bin/bash
+# Агент учебного ядра (внутри ВМ, в chroot файловой системы консоли): строка запроса
+#   <id> <uid> <base64 каталога> <base64 команды-скрипта> <base64 stdin>
+# → ответ «<id> <код> <base64 вывода>»; «ping» → «pong» — готовность. Команда живёт не дольше
+# 2 минут: зависшая (insmod, ждущий застрявший модуль) иначе заняла бы агента навсегда.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
+echo "ready"
+while read -r id uid dir cmd inp; do
+    [ "$id" = ping ] && { echo "pong"; continue; }
+    d=$(printf %s "$dir" | base64 -d)
+    printf %s "$cmd" | base64 -d > /tmp/.hpk-cmd
+    printf %s "$inp" | base64 -d > /tmp/.hpk-in
+    chmod 644 /tmp/.hpk-cmd /tmp/.hpk-in
+    if [ "$uid" = 0 ]; then
+        out=$(cd "$d" 2>/dev/null; HOME=/root timeout -s KILL 120 bash /tmp/.hpk-cmd </tmp/.hpk-in 2>&1)
+    else
+        u=$(getent passwd "$uid" | cut -d: -f1)
+        out=$(cd "$d" 2>/dev/null; setpriv --reuid="$uid" --regid="$(id -g "$u")" --init-groups \
+              env HOME="/home/$u" USER="$u" timeout -s KILL 120 bash /tmp/.hpk-cmd </tmp/.hpk-in 2>&1)
+    fi
+    rc=$?
+    echo "$id $rc $(printf '%s\n' "$out" | base64 -w0)"
+done

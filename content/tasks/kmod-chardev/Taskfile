@@ -1,0 +1,109 @@
+# kmod-chardev — свой драйвер: hello становится misc-устройством /dev/hashpass. (1) cat в учебном
+# ядре печатает «Hello, kernel!» (ловушка — read, который не возвращает 0: cat бесконечен);
+# (2) что записали, то и читается. Проверка — живая: запись/чтение в учебном ядре (hpk run).
+# Продолжение kmod-param (учебное ядро — из kmod-hello).
+
+image kmod-chardev:1
+from kmod-hello:1
+
+# data: data/kmod — руками: hello с параметром who из kmod-param
+copy data/kmod /home/student/kmod
+run chown -R student:student /home/student/kmod
+# живые проверки (hpk run в учебном ядре) — только root
+copy data/check /usr/local/lib/hpkernel/check
+run chmod 700 /usr/local/lib/hpkernel/check /usr/local/lib/hpkernel/check/*
+
+hidden hp
+
+settings
+  pager on
+
+say "Всё в Linux — файл. Даже твой драйвер скоро им станет."
+read brief.md
+
+stage
+  say "Преврати hello в устройство: cat /dev/hashpass в учебном ядре должен печатать Hello, kernel!"
+  on enter read chardev.md
+  solve:
+    cd /home/student/kmod
+    printf '%s\n' \
+      '#include <linux/module.h>' \
+      '#include <linux/miscdevice.h>' \
+      '#include <linux/fs.h>' \
+      'MODULE_LICENSE("GPL");' \
+      'static const char msg[] = "Hello, kernel!\n";' \
+      'static ssize_t hp_read(struct file *f, char __user *buf, size_t n, loff_t *off)' \
+      '{' \
+      '	return simple_read_from_buffer(buf, n, off, msg, sizeof(msg) - 1);' \
+      '}' \
+      'static const struct file_operations hp_fops = {' \
+      '	.owner = THIS_MODULE,' \
+      '	.read = hp_read,' \
+      '};' \
+      'static struct miscdevice hp_dev = {' \
+      '	.minor = MISC_DYNAMIC_MINOR,' \
+      '	.name = "hashpass",' \
+      '	.fops = &hp_fops,' \
+      '	.mode = 0444,' \
+      '};' \
+      'module_misc_device(hp_dev);' > hello.c
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+  accept cmd "kernel"
+  check live /usr/local/lib/hpkernel/check/read
+  neutral ls cat pwd cd less head tail vim nano make lsmod uname modinfo dmesg insmod rmmod
+  on pass say "ls -l /dev/hashpass в учебном ядре: первая буква c — character device, а 10 — номер драйвера misc."
+  hint output "No such file or directory" say "Файл устройства появляется, когда модуль загружен, — и только в учебном ядре. Где ты его ищешь?"
+  hint output "Permission denied" say "Файл устройства по умолчанию — только для root. Права для всех задаёт поле .mode в miscdevice, как у chmod; или читай через sudo."
+  hint output "Hello, kernel!Hello, kernel!" say "cat читает, пока read не вернёт 0. Где хранится, сколько уже прочитано?"
+  hint tries 5 say "Что выдал cat /dev/hashpass: ничего, бесконечный поток или ошибку?"
+  hint tries 8 say "Модуль пересобран и загружен заново? Старый hello в ядре про устройство не знает."
+
+stage
+  say "А теперь пусть /dev/hashpass запоминает: что в него записали, то cat и вернёт"
+  on enter read write.md
+  solve:
+    cd /home/student/kmod
+    printf '%s\n' \
+      '#include <linux/module.h>' \
+      '#include <linux/miscdevice.h>' \
+      '#include <linux/fs.h>' \
+      '#include <linux/uaccess.h>' \
+      'MODULE_LICENSE("GPL");' \
+      'static char msg[256] = "Hello, kernel!\n";' \
+      'static size_t len = 15;' \
+      'static ssize_t hp_read(struct file *f, char __user *buf, size_t n, loff_t *off)' \
+      '{' \
+      '	return simple_read_from_buffer(buf, n, off, msg, len);' \
+      '}' \
+      'static ssize_t hp_write(struct file *f, const char __user *buf, size_t n, loff_t *off)' \
+      '{' \
+      '	if (n > sizeof(msg))' \
+      '		n = sizeof(msg);' \
+      '	if (copy_from_user(msg, buf, n))' \
+      '		return -EFAULT;' \
+      '	len = n;' \
+      '	return n;' \
+      '}' \
+      'static const struct file_operations hp_fops = {' \
+      '	.owner = THIS_MODULE,' \
+      '	.read = hp_read,' \
+      '	.write = hp_write,' \
+      '};' \
+      'static struct miscdevice hp_dev = {' \
+      '	.minor = MISC_DYNAMIC_MINOR,' \
+      '	.name = "hashpass",' \
+      '	.fops = &hp_fops,' \
+      '	.mode = 0666,' \
+      '};' \
+      'module_misc_device(hp_dev);' > hello.c
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+  accept cmd "kernel"
+  check live /usr/local/lib/hpkernel/check/write
+  neutral ls cat pwd cd less head tail vim nano make lsmod uname modinfo dmesg insmod rmmod
+  on pass say "Ты только что написал драйвер. Настоящие устроены так же — только за read и write у них железо."
+  hint output "Invalid argument" say "Шелл получил от write ошибку. А есть ли у твоего устройства write вообще?"
+  hint output "Permission denied" say "Писать в устройство может только тот, кому разрешает .mode. Для всех — 0666."
+  hint tries 5 say "Запиши echo abc > /dev/hashpass: что ответил шелл и что потом показал cat?"
+  hint tries 8 say "Сколько байт ты вернул из write? Шелл пишет, пока ему не скажут, что всё принято."
+
+exec finale

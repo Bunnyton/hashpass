@@ -1,0 +1,3 @@
+#!/bin/sh
+# Живая проверка: /dev/hashpass в учебном ядре отдаёт ровно «Hello, kernel!» и кончается.
+[ "$(/usr/local/lib/hpkernel/hpk run timeout 5 head -c 4096 /dev/hashpass)" = "Hello, kernel!" ]

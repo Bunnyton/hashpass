@@ -1,0 +1,84 @@
+# pkg-deb — собрать .deb руками (dpkg-deb): (1) дерево pelmeni/DEBIAN/control + usr/bin → .deb 1.0;
+# (2) установить и запустить: pelmeni без figlet не работает → Depends: figlet, apt притащит сам
+# (ставить figlet руками закрыто block); (3) версия 1.1 с man-страницей, обновить установленное.
+# Образ — база всего блока «Сборка пакетов»: все сборщики стоят (figlet — нет, это нарочно);
+# остальные pkg-* — from pkg-deb:1, исходники pelmeni берут из ~/pelmeni.
+
+image pkg-deb:1
+
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends build-essential dpkg-dev debhelper devscripts lintian fakeroot rpm makepkg libarchive-tools zstd squashfs-tools snapd file desktop-file-utils wget xz-utils man-db >/dev/null 2>&1
+run ! dpkg -s figlet >/dev/null 2>&1
+# appimagetool и его runtime — для pkg-appimage (здесь, чтобы все сборщики жили в одной базе)
+run mkdir -p /opt/appimage && wget -q -O /opt/appimage/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage && wget -q -O /opt/appimage/runtime-x86_64 https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64 && chmod 755 /opt/appimage/appimagetool
+# data: data/pelmeni — руками: программа-скрипт, man, иконка, .desktop, Makefile с DESTDIR
+copy data/pelmeni /home/student/pelmeni
+run chown -R student:student /home/student/pelmeni
+
+hidden hp
+
+settings
+  pager on
+
+say "Программа pelmeni готова и даже работает. Осталось, чтобы её можно было поставить одной командой."
+read brief.md
+
+stage
+  say "Собери из ~/pelmeni пакет pelmeni версии 1.0: программа должна встать в /usr/bin"
+  solve:
+    cd /home/student
+    mkdir -p pkg/DEBIAN pkg/usr/bin
+    cp pelmeni/pelmeni pkg/usr/bin/
+    printf '%s\n' 'Package: pelmeni' 'Version: 1.0' 'Architecture: all' 'Maintainer: Student <student@example.com>' 'Description: сколько варить и сколько кидать' > pkg/DEBIAN/control
+    dpkg-deb --root-owner-group --build pkg pelmeni_1.0_all.deb
+  check exec built
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
+  on pass say "dpkg-deb -c покажет, что внутри, а dpkg-deb -I — паспорт. Загляни в свой пакет, как в чужой."
+  hint output "failed to open package info file" read control.md
+  hint output "missing 'Package' field" read control.md
+  hint output "missing 'Maintainer' field" read control.md
+  hint output "missing 'Description' field" read control.md
+  hint output "missing 'Architecture' field" read control.md
+  hint output "bad permissions" say "dpkg-deb требует, чтобы каталог DEBIAN был 0755 — не больше и не меньше. chmod поможет."
+  hint tries 5 say "Что лежит в пакете? dpkg-deb -c файл.deb — там должен быть ./usr/bin/pelmeni."
+  hint tries 8 say "Дерево пакета повторяет корень системы: что должно оказаться в /usr/bin, лежит в <каталог>/usr/bin."
+
+stage
+  say "Установи свой пакет и запусти pelmeni 2"
+  solve:
+    cd /home/student
+    sed -i '/^Architecture/a Depends: figlet' pkg/DEBIAN/control
+    dpkg-deb --root-owner-group --build pkg pelmeni_1.0_all.deb
+    sudo apt-get install -y ./pelmeni_1.0_all.deb
+    pelmeni 2
+  check exec installed
+  accept cmd "pelmeni" ok
+  block apt match "install( +-[^ ]+)* +figlet" say "Ставить figlet руками — значит, на каждом компьютере помнить про него. Пусть пакет скажет apt сам."
+  block apt-get match "install( +-[^ ]+)* +figlet" say "Ставить figlet руками — значит, на каждом компьютере помнить про него. Пусть пакет скажет apt сам."
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
+  on pass say "apt show pelmeni — твой пакет в одном ряду со всеми. А sudo apt remove pelmeni уберёт его так же чисто."
+  hint output "не найден figlet" read depends.md
+  hint output "dependency problems" say "dpkg ставит только этот файл, зависимости — не его забота. Кто их умеет доставать из репозитория?"
+  hint output "Could not open lock file" say "Ставить пакеты — дело root."
+  hint tries 5 say "Пакет стоит? dpkg -l pelmeni. А что говорит сама программа?"
+
+stage
+  say "Выпусти pelmeni 1.1 с man-страницей и обнови установленный: man pelmeni открывается, pelmeni --version — 1.1"
+  on enter read man.md
+  solve:
+    cd /home/student
+    sed -i 's/^VERSION=.*/VERSION=1.1/' pelmeni/pelmeni
+    cp pelmeni/pelmeni pkg/usr/bin/
+    mkdir -p pkg/usr/share/man/man1
+    gzip -9n -c pelmeni/pelmeni.1 > pkg/usr/share/man/man1/pelmeni.1.gz
+    sed -i 's/^Version: .*/Version: 1.1/' pkg/DEBIAN/control
+    dpkg-deb --root-owner-group --build pkg pelmeni_1.1_all.deb
+    sudo apt-get install -y ./pelmeni_1.1_all.deb
+  check exec upgraded
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
+  on pass say "apt сам понял, что 1.1 новее 1.0, и обновил. Сравнить версии по правилам Debian: dpkg --compare-versions 1.1 gt 1.0 && echo да."
+  hint output "pelmeni 1.0" say "Программа сама называет свою версию — она записана в самом скрипте."
+  hint output "No manual entry for pelmeni" say "man ищет страницы в /usr/share/man/man<раздел>. Что лежит там после установки? dpkg -L pelmeni."
+  hint tries 5 say "Какая версия стоит сейчас? dpkg -l pelmeni. А какая в твоём новом файле?"
+
+exec finale

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Живая проверка: hello установлен в каталог модулей учебного ядра и загружен (через modprobe).
+k=$(cat /usr/local/lib/hpkernel/release)
+find "/lib/modules/$k" -name 'hello.ko*' | grep -q . &&
+    /usr/local/lib/hpkernel/hpk run grep -q '^hello ' /proc/modules

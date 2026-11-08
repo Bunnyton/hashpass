@@ -1,0 +1,15 @@
+[Unit]
+Description=Учебное ядро (QEMU) для модулей
+After=local-fs.target
+
+[Service]
+ExecStartPre=/bin/mkdir -p -m 1777 /run/hpkernel
+ExecStartPre=/bin/sh -c 'touch /run/hpkernel/lock && chmod 666 /run/hpkernel/lock'
+UMask=0000
+ExecStartPre=/bin/rm -f /run/hpkernel/ctl /run/hpkernel/tty
+ExecStart=/usr/local/lib/hpkernel/start
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

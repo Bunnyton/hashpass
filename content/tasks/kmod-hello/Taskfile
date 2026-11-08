@@ -1,0 +1,110 @@
+# kmod-hello — первый модуль ядра: собрать hello.ko, загрузить, найти его строку в журнале ядра,
+# выгрузить, подписать (modinfo). Модули живут в «учебном ядре» — ВМ QEMU, которой отдана
+# файловая система консоли (data/hpkernel, служба hpkernel): insmod/rmmod/lsmod/modprobe/depmod/
+# dmesg и uname -r в консоли относятся к нему, kernel — шелл в нём. Ядро компьютера ученика не
+# трогается. Остальные задания блока — from kmod-hello:1. Решения — здесь, ученику не видны.
+
+image kmod-hello:1
+
+run apt-get update >/dev/null 2>&1
+run DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends linux-image-amd64 linux-headers-amd64 build-essential qemu-system-x86 busybox-static cpio xz-utils python3 kmod >/dev/null 2>&1
+# data: data/hpkernel — руками: initramfs, агент, обёртки команд, служба
+copy data/hpkernel /usr/local/lib/hpkernel
+run sh /usr/local/lib/hpkernel/setup
+run mkdir -p /home/student/kmod && chown student:student /home/student/kmod
+# живые проверки (hpk run в учебном ядре) — только root
+copy data/check /usr/local/lib/hpkernel/check
+run chmod 700 /usr/local/lib/hpkernel/check /usr/local/lib/hpkernel/check/*
+
+hidden hp
+
+settings
+  pager on
+
+say "Ядро — сердце системы, туда не пускают кого попало. Сегодня пустят тебя."
+read brief.md
+
+stage
+  say "Собери в ~/kmod свой первый модуль — hello.ko"
+  solve:
+    cd /home/student/kmod
+    printf '%s\n' \
+      '#include <linux/module.h>' \
+      '#include <linux/init.h>' \
+      'MODULE_LICENSE("GPL");' \
+      'static int __init hello_init(void)' \
+      '{' \
+      '	pr_info("hello: привет из ядра\n");' \
+      '	return 0;' \
+      '}' \
+      'static void __exit hello_exit(void)' \
+      '{' \
+      '	pr_info("hello: пока\n");' \
+      '}' \
+      'module_init(hello_init);' \
+      'module_exit(hello_exit);' > hello.c
+    echo 'obj-m += hello.o' > Makefile
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+  observe bool /home/student/kmod/hello.ko
+  neutral ls cat pwd cd less head tail vim nano uname
+  on pass say "hello.ko — обычный объектный файл с особыми секциями: из них ядро узнает, что звать при загрузке."
+  hint output "missing MODULE_LICENSE" read license.md
+  hint output "No targets" say "Kbuild не нашёл, что собирать. Что написано в Makefile — и как там названа цель?"
+  hint output "No rule to make target" say "make ищет файл, которого нет. Совпадают ли имена в Makefile и у твоего .c?"
+  hint tries 5 say "Что ответил make? Последние строки его вывода обычно говорят, чего ему не хватило."
+  hint tries 8 say "Kbuild собирает то, что перечислено в obj-m, — а имя там с расширением .o?"
+
+stage
+  say "Загрузи hello.ko в ядро и найди его привет в журнале ядра"
+  on enter read load.md
+  solve true
+  accept cmd "dmesg"
+  accept cmd "tail"
+  accept cmd "grep"
+  accept cmd "less"
+  accept cmd "head"
+  accept cmd "lsmod"
+  accept cmd "cat"
+  accept cmd "kernel"
+  check live /usr/local/lib/hpkernel/check/loaded
+  neutral ls pwd cd vim nano make uname modinfo
+  on pass say "Строку «taints kernel» видишь? Не ошибка: ядро помечает, что в нём побывал чужой, неподписанный код."
+  hint output "Operation not permitted" read root.md
+  hint output "File exists" say "Модуль с таким именем уже в ядре. Что показывает lsmod?"
+  hint tries 5 say "lsmod показывает, что сейчас в ядре. Есть там твой модуль?"
+  hint tries 8 say "Журнал ядра длинный, свежее — в конце. Что покажет dmesg | tail?"
+
+stage
+  say "Выгрузи модуль — и проверь по журналу, что он попрощался"
+  solve true
+  accept cmd "dmesg"
+  accept cmd "tail"
+  accept cmd "grep"
+  accept cmd "less"
+  accept cmd "head"
+  accept cmd "lsmod"
+  accept cmd "cat"
+  accept cmd "kernel"
+  check live /usr/local/lib/hpkernel/check/unloaded
+  neutral ls pwd cd vim nano make uname modinfo
+  on pass say "Загрузил, выгрузил — и компьютер не перезагружался. Так драйверы и обновляют на живой системе."
+  hint output "is not currently loaded" say "Такого модуля в ядре нет. Под каким именем он в lsmod?"
+  hint output "No such file or directory" say "rmmod берёт имя модуля из lsmod, а не путь к файлу."
+  hint tries 5 say "Загружал insmod. Как зовут команду, которая убирает модуль?"
+
+stage
+  say "Подпиши модуль: автор и описание. Пусть modinfo покажет их у hello.ko"
+  on enter read modinfo.md
+  solve:
+    cd /home/student/kmod
+    sed -i 's/^MODULE_LICENSE.*/&\nMODULE_AUTHOR("Студент");\nMODULE_DESCRIPTION("Первый модуль");/' hello.c
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+    /sbin/modinfo hello.ko
+  accept cmd "modinfo"
+  accept output "(?m)^author:\s+\S"
+  accept output "(?m)^description:\s+\S"
+  neutral ls cat pwd cd less head tail vim nano make uname
+  on pass say "modinfo читает файл, а не ядро: подпись видна до всякой загрузки. Так и выбирают, что грузить."
+  hint tries 5 say "modinfo показывает то, что записано в .ko. Ты пересобрал модуль после правки?"
+
+exec finale

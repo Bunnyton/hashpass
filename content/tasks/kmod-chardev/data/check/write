@@ -1,0 +1,8 @@
+#!/bin/sh
+# Живая проверка: записанное в /dev/hashpass читается обратно — дважды, второй раз короче
+# (длина должна запоминаться), строки каждый раз новые.
+H=/usr/local/lib/hpkernel/hpk
+a="moria-$(date +%s%N)"
+b="ok$$"
+[ "$($H run sh -c "echo $a > /dev/hashpass && timeout 5 head -c 4096 /dev/hashpass")" = "$a" ] &&
+[ "$($H run sh -c "echo $b > /dev/hashpass && timeout 5 head -c 4096 /dev/hashpass")" = "$b" ]

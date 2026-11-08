@@ -1,0 +1,7 @@
+#!/bin/sh
+# kernel — оказаться в учебном ядре: без аргументов шелл, с аргументами — одна команда.
+if grep -qw hpkernel /proc/cmdline 2>/dev/null; then
+    echo "ты уже в учебном ядре"; exit 0
+fi
+[ $# -eq 0 ] && exec /usr/local/lib/hpkernel/hpk shell
+exec /usr/local/lib/hpkernel/hpk run "$@"

@@ -1,0 +1,77 @@
+# kmod-autoload — модуль как у системных: (1) установить hello в /lib/modules/<версия> так, чтобы
+# работал modprobe hello (ловушка: скопировал без depmod → «not found» → доза depmod.md);
+# (2) автозагрузка: /etc/modules-load.d + перезапуск учебного ядра (его init читает этот каталог,
+# как systemd-modules-load); (3) параметр по умолчанию: /etc/modprobe.d/ options hello who=Сервер.
+# Продолжение kmod-param (учебное ядро — из kmod-hello).
+
+image kmod-autoload:1
+from kmod-hello:1
+
+# data: data/kmod — руками: hello с параметром who из kmod-param
+copy data/kmod /home/student/kmod
+run chown -R student:student /home/student/kmod
+copy data/check /usr/local/lib/hpkernel/check
+run chmod 700 /usr/local/lib/hpkernel/check /usr/local/lib/hpkernel/check/*
+
+hidden hp
+
+settings
+  pager on
+
+say "Свои модули грузят руками. Системные ядро находит само. Пора hello стать системным."
+read brief.md
+
+stage
+  say "Установи hello в систему так, чтобы его загружала команда sudo modprobe hello"
+  solve:
+    cd /home/student/kmod
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+    sudo make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules_install
+  accept cmd "modprobe" ok
+  check live /usr/local/lib/hpkernel/check/installed
+  neutral ls cat pwd cd less head tail vim nano make lsmod uname modinfo dmesg
+  on pass say "modprobe -r hello выгружает так же, по имени. А modinfo hello теперь найдёт модуль без пути."
+  hint output "not found in directory" read depmod.md
+  hint output "Permission denied" say "/lib/modules принадлежит root. Как одолжить его права?"
+  hint tries 5 say "Где modprobe ищет модули? Подсказка — в его же сообщении об ошибке."
+  hint tries 8 say "Сборщик ядра умеет ставить модули сам — какая у него для этого цель?"
+
+stage
+  say "Пусть hello загружается сам при старте ядра — перезагрузи учебное ядро и убедись"
+  on enter read boot.md
+  solve:
+    echo hello | sudo tee /etc/modules-load.d/hello.conf
+  accept cmd "dmesg"
+  accept cmd "tail"
+  accept cmd "grep"
+  accept cmd "less"
+  accept cmd "head"
+  accept cmd "lsmod"
+  accept cmd "cat"
+  accept cmd "kernel"
+  check live /usr/local/lib/hpkernel/check/boot
+  neutral ls pwd cd vim nano make uname modinfo
+  on pass say "Так при загрузке встают драйверы, которые никто не позвал: loop, vhost, твой hello."
+  hint tries 5 say "Файл в /etc/modules-load.d — на месте? А ядро после этого перезагружалось?"
+  hint tries 8 say "Каталог читают при старте ядра: без перезагрузки ничего не случится."
+
+stage
+  say "Пусть при автозагрузке hello здоровается с «Сервер»"
+  on enter read options.md
+  solve:
+    echo 'options hello who=Сервер' | sudo tee /etc/modprobe.d/hello.conf
+  accept cmd "dmesg"
+  accept cmd "tail"
+  accept cmd "grep"
+  accept cmd "less"
+  accept cmd "head"
+  accept cmd "lsmod"
+  accept cmd "cat"
+  accept cmd "kernel"
+  check live /usr/local/lib/hpkernel/check/server
+  neutral ls pwd cd vim nano make uname modinfo
+  on pass say "modprobe -c | grep hello покажет, что modprobe соберёт из всех файлов настроек."
+  hint tries 5 say "Что показывает /sys/module/hello/parameters/who в учебном ядре?"
+  hint tries 8 say "Настройки читаются при загрузке модуля. Он загружался после правки?"
+
+exec finale

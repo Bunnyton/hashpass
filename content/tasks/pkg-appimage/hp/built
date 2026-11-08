@@ -1,0 +1,7 @@
+#!/bin/sh
+# Шаг 1: в доме есть Pelmeni-x86_64.AppImage — исполняемый, и внутри него (squashfs после
+# runtime) лежит pelmeni.
+f=$(find /home/student -name 'Pelmeni-x86_64.AppImage' 2>/dev/null | head -n 1)
+[ -n "$f" ] && [ -x "$f" ] || exit 1
+cd "$(mktemp -d)" && APPIMAGE_EXTRACT_AND_RUN=1 "$f" --appimage-extract >/dev/null 2>&1 &&
+    find squashfs-root -name pelmeni -type f | grep -q .

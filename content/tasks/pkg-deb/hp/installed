@@ -1,0 +1,6 @@
+#!/bin/sh
+# Шаг «установи»: pelmeni установлен (dpkg: install ok installed) и в его Depends есть figlet,
+# а figlet стоит — его притащил apt по зависимости.
+[ "$(dpkg-query -W -f='${Status}' pelmeni 2>/dev/null)" = "install ok installed" ] || exit 1
+dpkg-query -W -f='${Depends}' pelmeni | grep -qw figlet || exit 1
+[ "$(dpkg-query -W -f='${Status}' figlet 2>/dev/null)" = "install ok installed" ]

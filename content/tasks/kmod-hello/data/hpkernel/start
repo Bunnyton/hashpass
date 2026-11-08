@@ -1,0 +1,11 @@
+#!/bin/sh
+# Запуск учебного ядра: файловая система консоли — корнем по 9p, ttyS0 — шелл, ttyS1 — агент.
+kver=$(cat /usr/local/lib/hpkernel/release)
+exec qemu-system-x86_64 -accel tcg -m 512 -smp 1 -display none -no-reboot -nic none \
+    -monitor none -kernel "/boot/vmlinuz-$kver" -initrd /usr/local/lib/hpkernel/initrd.gz \
+    -append "console=ttyS0 quiet loglevel=4 panic=1 hpkernel" \
+    -chardev socket,id=s0,path=/run/hpkernel/tty,server=on,wait=off \
+    -chardev socket,id=s1,path=/run/hpkernel/ctl,server=on,wait=off \
+    -serial chardev:s0 -serial chardev:s1 \
+    -fsdev local,id=r,path=/,security_model=passthrough \
+    -device virtio-9p-pci,fsdev=r,mount_tag=root </dev/null

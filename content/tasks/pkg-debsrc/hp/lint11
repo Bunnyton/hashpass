@@ -1,0 +1,7 @@
+#!/bin/sh
+# Шаг 3: pelmeni 1.1 собран dpkg-buildpackage, и lintian не находит в нём ошибок (E:). Исключение —
+# description-synopsis-is-duplicated: на кириллическом описании lintian (trixie) срабатывает
+# ложно — разные строки считает одинаковыми (видимо, сравнивает без не-ASCII букв).
+"$(dirname "$0")/check-deb" 1.1 || exit 1
+f=$(find /home/student -name 'pelmeni_1.1_all.deb' | head -n 1)
+! lintian "$f" 2>/dev/null | grep '^E: ' | grep -vq 'description-synopsis-is-duplicated'

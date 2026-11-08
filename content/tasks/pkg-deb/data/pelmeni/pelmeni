@@ -1,0 +1,17 @@
+#!/bin/sh
+# pelmeni — сколько варить и сколько кидать: pelmeni [порций]
+VERSION=1.0
+case ${1:-} in
+    --version) echo "pelmeni $VERSION"; exit 0 ;;
+    -h|--help) echo "Использование: pelmeni [порций]  (по умолчанию 1)"; exit 0 ;;
+esac
+n=${1:-1}
+case $n in ''|*[!0-9]*|0) echo "pelmeni: порций — целым числом больше нуля" >&2; exit 2 ;; esac
+if ! command -v figlet >/dev/null 2>&1; then
+    echo "pelmeni: не найден figlet — без него никакой красоты" >&2
+    exit 1
+fi
+figlet -f small PELMENI
+echo "Порций: $n"
+echo "Пельменей: $((n * 20)) шт., воды: $n л, соли: $n ч. л."
+echo "Варить 7 минут после всплытия. Сметану — по вкусу."

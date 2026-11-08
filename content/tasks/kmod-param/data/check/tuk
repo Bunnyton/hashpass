@@ -1,0 +1,4 @@
+#!/bin/sh
+# Живая проверка: hello загружен с who=Тук и поздоровался в журнале.
+H=/usr/local/lib/hpkernel/hpk
+[ "$($H run cat /sys/module/hello/parameters/who)" = "Тук" ] && $H run dmesg | grep -q 'Привет, Тук!'

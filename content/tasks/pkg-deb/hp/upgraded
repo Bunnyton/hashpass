@@ -1,0 +1,5 @@
+#!/bin/sh
+# Шаг «1.1»: установлен pelmeni 1.1 с man-страницей, и сама программа знает, что она 1.1.
+[ "$(dpkg-query -W -f='${Status} ${Version}' pelmeni 2>/dev/null)" = "install ok installed 1.1" ] || exit 1
+dpkg -L pelmeni | grep -Eq '^/usr/share/man/man1/pelmeni\.1(\.gz)?$' || exit 1
+[ "$(/usr/bin/pelmeni --version)" = "pelmeni 1.1" ]

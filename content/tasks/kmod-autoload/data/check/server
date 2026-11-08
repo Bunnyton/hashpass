@@ -1,0 +1,3 @@
+#!/bin/sh
+# Живая проверка: после перезагрузки учебного ядра hello сам загрузился с who=Сервер.
+[ "$(/usr/local/lib/hpkernel/hpk run cat /sys/module/hello/parameters/who)" = "Сервер" ]

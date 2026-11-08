@@ -1,0 +1,21 @@
+#!/bin/sh
+# Команды ядра в консоли уходят в учебное ядро (hpk). Внутри самого учебного ядра —
+# настоящие программы.
+n=$(basename "$0")
+if grep -qw hpkernel /proc/cmdline 2>/dev/null; then
+    for d in /usr/sbin /usr/bin /sbin /bin; do [ -x "$d/$n" ] && exec "$d/$n" "$@"; done
+fi
+H=/usr/local/lib/hpkernel/hpk
+# Учебное ядро вместо вечного ожидания: модуль, упавший в init (oops), застревает в состоянии
+# Loading, и второй insmod с тем же именем ждал бы его бесконечно. Отвечаем сразу, как на занятое имя.
+if [ "$n" = insmod ]; then
+    for a in "$@"; do
+        case $a in *.ko|*.ko.*) ;; *) continue ;; esac
+        m=$(modinfo -F name "$a" 2>/dev/null) || continue
+        if [ "$($H run awk -v m="$m" '$1 == m { print $5 }' /proc/modules)" = Loading ]; then
+            echo "insmod: ERROR: could not insert module $a: File exists" >&2
+            exit 1
+        fi
+    done
+fi
+exec $H run "$n" "$@"

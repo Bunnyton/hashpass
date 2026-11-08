@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Pelmeni
+Name[ru]=Пельмени
+Comment=Сколько варить и сколько кидать
+Exec=pelmeni
+Icon=pelmeni
+Terminal=true
+Categories=Utility;

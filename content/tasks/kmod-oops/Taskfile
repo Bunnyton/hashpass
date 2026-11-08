@@ -1,0 +1,60 @@
+# kmod-oops — чужой модуль роняет ядро. pelmen (data/pelmen, руками) кладёт в кастрюлю 4 пельменя
+# из 5 и варит все 5: cook() разыменовывает NULL → oops. (1) загрузить и по журналу назвать
+# функцию, где упало (RIP: cook+…) — доза oops.md на «Killed»; (2) починить: после oops модуль
+# застрял в ядре («File exists»/«busy») → доза reboot.md: перезапуск учебного ядра. Продолжение
+# kmod-hello (учебное ядро оттуда).
+
+image kmod-oops:1
+from kmod-hello:1
+
+copy data/pelmen /home/student/pelmen
+run chown -R student:student /home/student/pelmen
+copy data/check /usr/local/lib/hpkernel/check
+run chmod 700 /usr/local/lib/hpkernel/check /usr/local/lib/hpkernel/check/*
+
+hidden hp
+
+settings
+  pager on
+
+say "Коллега Олег написал модуль, который варит пельмени прямо в ядре. Говорит, всё работает."
+read brief.md
+
+stage
+  say "Собери и загрузи pelmen из ~/pelmen — и найди в журнале ядра, в какой функции он упал"
+  solve:
+    cd /home/student/pelmen
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+    echo 'RIP: 0010:cook+0x5/0x20 [pelmen]'
+  accept output "RIP: [0-9a-f]+:cook\+0x"
+  neutral ls cat pwd cd less head tail vim nano make lsmod uname modinfo
+  on pass say "Функция+смещение/размер: упало на 5-м байте из 32. В большом ядре номер строки по ним находит scripts/faddr2line."
+  hint output "Killed" read oops.md
+  hint output "Operation not permitted" say "Загружать модули — дело root."
+  hint tries 5 say "Что сказал insmod? А что в это время записало в журнал само ядро?"
+  hint tries 8 say "В отчёте ядра ищи строку, которая начинается с RIP."
+
+stage
+  say "Почини pelmen: пусть загрузится и сварит все пять"
+  solve:
+    cd /home/student/pelmen
+    sed -i 's/i < 4; i++/i < ARRAY_SIZE(pot); i++/' pelmen.c
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+  accept cmd "dmesg"
+  accept cmd "tail"
+  accept cmd "grep"
+  accept cmd "less"
+  accept cmd "head"
+  accept cmd "lsmod"
+  accept cmd "cat"
+  accept cmd "kernel"
+  check live /usr/local/lib/hpkernel/check/cooked
+  neutral ls pwd cd vim nano make uname modinfo
+  on pass say "Олегу ни слова. А в чужом ядре такой oops уронил бы сервер целиком — вот зачем опыты ставят в ВМ."
+  hint output "File exists" read reboot.md
+  hint output "busy" read reboot.md
+  hint output "is in use" read reboot.md
+  hint tries 5 say "cook получил NULL. Откуда в кастрюле пустое место — сколько пельменей кладут и сколько варят?"
+  hint tries 8 say "Сравни два цикла в pelmen_init: докуда идёт каждый?"
+
+exec finale

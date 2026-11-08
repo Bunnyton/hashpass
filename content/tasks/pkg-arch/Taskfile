@@ -1,0 +1,63 @@
+# pkg-arch — пакет для Arch Linux: PKGBUILD + makepkg (в Debian есть и makepkg, и pacman — с пустой базой).
+# (1) ~/arch: тарбол + PKGBUILD → pelmeni-1.0-1-any.pkg.tar.gz (сжатие — из makepkg.conf Debian); ловушка — контрольные суммы
+# («Integrity checks are missing» / «FAILED» → доза sums.md: makepkg -g); (2) depends=(figlet) и
+# pkgrel=2: makepkg проверяет зависимости по базе pacman, а она тут пустая → доза nodeps.md.
+# Образ и ~/pelmeni — из pkg-deb.
+
+image pkg-arch:1
+from pkg-deb:1
+
+# makepkg без бинаря pacman падает с «unknown error» (type -P pacman под trap ERR); база pacman
+# здесь пустая — системой правит apt, поэтому проверка depends не находит figlet → -d
+run apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends pacman-package-manager >/dev/null 2>&1
+run mkdir -p /var/lib/pacman
+
+hidden hp
+
+settings
+  pager on
+
+say "Arch Linux собирает пакеты одним коротким скриптом. Короче рецепта не бывает."
+read brief.md
+
+stage
+  say "Собери в ~/arch пакет pelmeni 1.0 для Arch: makepkg должен выдать pelmeni-1.0-1-any.pkg.tar"
+  solve:
+    mkdir -p /home/student/arch
+    cd /home/student
+    cp -r pelmeni pelmeni-1.0
+    tar czf arch/pelmeni-1.0.tar.gz pelmeni-1.0
+    rm -rf pelmeni-1.0
+    cd arch
+    printf '%s\n' 'pkgname=pelmeni' 'pkgver=1.0' 'pkgrel=1' 'pkgdesc="Сколько варить и сколько кидать"' "arch=('any')" "license=('MIT')" 'source=("$pkgname-$pkgver.tar.gz")' '' 'package() {' '    cd "$pkgname-$pkgver"' '    make install DESTDIR="$pkgdir" PREFIX=/usr' '}' > PKGBUILD
+    makepkg -g >> PKGBUILD
+    makepkg
+  check exec pkg 1.0-1
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file tar
+  on pass say "Внутри пакета — .PKGINFO с паспортом: bsdtar -xOf файл .PKGINFO. На Arch его поставил бы sudo pacman -U файл."
+  hint output "Integrity checks" read sums.md
+  hint output "FAILED" read sums.md
+  hint output "is not a clone of" say "makepkg не нашёл исходник. Лежит ли тарбол рядом с PKGBUILD под тем именем, что в source?"
+  hint output "was not found in the build directory" say "makepkg не нашёл исходник. Лежит ли тарбол рядом с PKGBUILD под тем именем, что в source?"
+  hint output "Running makepkg as root is not allowed" say "makepkg принципиально не работает от root: сборка не должна трогать систему. Запусти без sudo."
+  hint output "cd: pelmeni-1.0: No such file" say "package() заходит в каталог из распакованного тарбола. Какой каталог внутри? tar tzf."
+  hint tries 5 say "Что makepkg сказал последним? Строки с ==> ERROR: — главное."
+  hint tries 8 say "Готовый пакет makepkg кладёт рядом с PKGBUILD. Что там появилось?"
+
+stage
+  say "Пусть пакет требует figlet — это уже вторая сборка той же версии: pelmeni-1.0-2"
+  on enter read pkgrel.md
+  solve:
+    cd /home/student/arch
+    sed -i "s/^pkgrel=1/pkgrel=2/; /^license/a depends=('figlet')" PKGBUILD
+    makepkg -d
+  check exec pkg 1.0-2 figlet
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file tar
+  on pass say "На Arch pacman поставил бы figlet сам — как apt с Depends. Ключ -d нужен только здесь, где пакетами правит apt."
+  hint output "Missing dependencies" read nodeps.md
+  hint output "'pacman' returned a fatal error" read nodeps.md
+  hint output "Could not resolve all dependencies" read nodeps.md
+  hint output "already been built" say "Пакет с этим номером уже есть. Что меняется при каждой новой сборке той же версии?"
+  hint tries 5 say "bsdtar -xOf файл .PKGINFO — есть там depend = figlet?"
+
+exec finale

@@ -1,0 +1,9 @@
+#!/bin/sh
+# depmod консоли считает список модулей учебного ядра — здесь же, а не в нём: файлы общие, а
+# учебное ядро (эмуляция + 9p) обходило бы тысячи модулей минутами. Версию ядра, если её не
+# назвали, берём учебную (настоящий depmod взял бы ядро компьютера).
+if grep -qw hpkernel /proc/cmdline 2>/dev/null; then exec /usr/sbin/depmod "$@"; fi
+for a in "$@"; do
+    case $a in [0-9]*.*) exec /usr/sbin/depmod "$@" ;; esac
+done
+exec /usr/sbin/depmod "$@" "$(cat /usr/local/lib/hpkernel/release)"

@@ -1,0 +1,13 @@
+#!/bin/bash
+# Шелл учебного ядра на ttyS0: ждёт подключения (первая строка от клиента — «строк столбцов»),
+# потом обычный bash студента. Выход — метка, по которой клиент `kernel` отключается.
+stty -echo
+read -r rows cols
+stty echo
+stty rows "${rows:-24}" cols "${cols:-80}" 2>/dev/null
+cd /home/student 2>/dev/null
+echo "Ты в учебном ядре $(uname -r): здесь его /dev, /proc и /sys. Вернуться в консоль — exit."
+setpriv --reuid=student --regid=student --init-groups env -i HOME=/home/student USER=student \
+    LOGNAME=student TERM=xterm-256color LANG=C.UTF-8 HPKERNEL=1 \
+    PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin bash --login
+printf '\033]hpkernel-exit\007'
