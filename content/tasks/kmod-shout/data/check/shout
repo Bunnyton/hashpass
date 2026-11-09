@@ -1,0 +1,9 @@
+#!/bin/sh
+# Живая проверка: записанное в /dev/hashpass читается ЗАГЛАВНЫМИ — латиница поднята, цифры и знаки
+# как были; дважды, второй раз короче (длина по-прежнему запоминается), строки каждый раз новые.
+H=/usr/local/lib/hpkernel/hpk
+a="moria-$(date +%s%N)-ok"
+b="x$$y"
+A=$(echo "$a" | tr a-z A-Z) B=$(echo "$b" | tr a-z A-Z)
+[ "$($H run sh -c "echo $a > /dev/hashpass && timeout 5 head -c 4096 /dev/hashpass")" = "$A" ] &&
+[ "$($H run sh -c "echo $b > /dev/hashpass && timeout 5 head -c 4096 /dev/hashpass")" = "$B" ]

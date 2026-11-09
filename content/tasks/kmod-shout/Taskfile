@@ -1,0 +1,64 @@
+# kmod-shout — первый свой код в драйвере: в ~/kmod готовый hello из kmod-chardev (/dev/hashpass —
+# «что записали, то и читается»). (1) устройство кричит: записанное отдаётся ЗАГЛАВНЫМИ — цикл по
+# байтам + toupper из <linux/ctype.h> (libc в ядре нет — это и есть доза брифа); (2) параметр shouts
+# (int, 0444) считает записи. Кириллица не поднимается (байты UTF-8) — не ловушка, а добавка в on pass.
+# Проверки живые (hpk run в учебном ядре). Продолжение kmod-chardev (учебное ядро — из kmod-hello).
+
+image kmod-shout:1
+from kmod-hello:1
+
+# data: data/kmod — руками: решение kmod-chardev (эхо-устройство /dev/hashpass)
+copy data/kmod /home/student/kmod
+run chown -R student:student /home/student/kmod
+# живые проверки (hpk run в учебном ядре) — только root
+copy data/check /usr/local/lib/hpkernel/check
+run chmod 700 /usr/local/lib/hpkernel/check /usr/local/lib/hpkernel/check/*
+
+hidden hp
+
+settings
+  pager on
+
+say "Драйвер, который повторяет за тобой, уже есть. Пора научить его кое-чему своему."
+read brief.md
+
+stage
+  say "Пусть /dev/hashpass кричит: что в него записали, cat отдаёт ЗАГЛАВНЫМИ буквами"
+  solve:
+    cd /home/student/kmod
+    sed -i 's|#include <linux/uaccess.h>|&\n#include <linux/ctype.h>|' hello.c
+    sed -i 's|^\tlen = n;|\tfor (size_t i = 0; i < n; i++)\n\t\tmsg[i] = toupper(msg[i]);\n&|' hello.c
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+    sudo rmmod hello 2>/dev/null; sudo insmod hello.ko
+  accept cmd "kernel"
+  accept cmd "insmod"
+  check live /usr/local/lib/hpkernel/check/shout
+  neutral ls cat pwd cd less head tail vim nano make lsmod uname modinfo dmesg rmmod
+  on pass say "А echo привет > /dev/hashpass так и останется тихим: кириллица в UTF-8 — по два байта, и toupper их не знает. В ядре текст — просто байты."
+  hint output "implicit declaration of function" say "Компилятор не знает эту функцию: её объявление не подключено. Какой заголовок нужен — в брифе."
+  hint output "error:" say "Компилятор называет файл, строку и что ему не понравилось — первая ошибка главная, остальные часто из-за неё."
+  hint output "File exists" say "Старый hello ещё в ядре и кричать не умеет. Сначала выгрузи его."
+  hint tries 5 say "Что отдаёт cat /dev/hashpass после echo abc? Новый hello.ko точно загружен, а не старый?"
+  hint tries 8 say "Поднимать буквы удобнее всего сразу после copy_from_user: данные уже в msg, известно сколько их."
+
+stage
+  say "Пусть модуль считает крики: /sys/module/hello/parameters/shouts — сколько раз в устройство писали"
+  on enter read count.md
+  solve:
+    cd /home/student/kmod
+    sed -i 's|^static size_t len = 15;|&\nstatic int shouts;\nmodule_param(shouts, int, 0444);|' hello.c
+    sed -i 's|^\tlen = n;|&\n\tshouts++;|' hello.c
+    make -C /lib/modules/$(ls /lib/modules)/build M=$PWD modules
+    sudo rmmod hello; sudo insmod hello.ko
+  accept cmd "kernel"
+  accept cmd "insmod"
+  accept cmd "cat"
+  check live /usr/local/lib/hpkernel/check/count
+  neutral ls pwd cd less head tail vim nano make lsmod uname modinfo dmesg rmmod
+  on pass say "0444 — правильно: счётчик ведёт драйвер, а не root. Дай ему 0644, и кто угодно с sudo подкрутит статистику."
+  hint output "File exists" say "Старый hello ещё в ядре. Сначала выгрузи его."
+  hint output "Permission denied" say "Права файла параметра — третье число в module_param. Читать всем — 0444."
+  hint tries 5 say "Что показывает cat этого файла до и после echo в устройство? Растёт?"
+  hint tries 8 say "Считать нужно там, где запись принята, — в функции write."
+
+exec finale

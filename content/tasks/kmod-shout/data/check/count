@@ -1,0 +1,10 @@
+#!/bin/sh
+# Живая проверка: параметр shouts (у любого модуля) считает записи в /dev/hashpass: после двух echo
+# стал на 2 больше, а крик по-прежнему заглавный.
+H=/usr/local/lib/hpkernel/hpk
+# shellcheck disable=SC2016
+out=$($H run sh -c '
+    p=$(ls /sys/module/*/parameters/shouts 2>/dev/null | head -n 1); [ -n "$p" ] || exit 1
+    c0=$(cat "$p"); echo abc > /dev/hashpass; echo def > /dev/hashpass; c1=$(cat "$p")
+    echo "$((c1 - c0)) $(timeout 5 head -c 4096 /dev/hashpass)"') || exit 1
+[ "$out" = "2 DEF" ]
