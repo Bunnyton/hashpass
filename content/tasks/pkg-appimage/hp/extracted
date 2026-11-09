@@ -1,0 +1,3 @@
+#!/bin/sh
+# Шаг «загляни»: образец распакован (--appimage-extract кладёт squashfs-root с AppRun в текущий каталог).
+find /home/student -maxdepth 6 -path '*/squashfs-root/usr/bin/hello' 2>/dev/null | grep -q .

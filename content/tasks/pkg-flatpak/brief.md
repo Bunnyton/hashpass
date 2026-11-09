@@ -38,4 +38,5 @@ flatpak build-bundle repo hello.flatpak org.example.Hello   # приложени
 
 `flatpak run` здесь не запустится — по той же причине, что и сборщик.
 
-Исходники pelmeni — в `~/pelmeni`.
+В `~/flatpak` лежат образец `hello.flatpak` и каталог приложения, из которого он собран.
+Исходники твоей программы — в `~/pelmeni`.

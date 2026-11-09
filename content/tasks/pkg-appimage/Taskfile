@@ -1,9 +1,8 @@
-# pkg-appimage — «один файл на любой дистрибутив»: AppDir (AppRun, .desktop, иконка, usr/bin) →
-# appimagetool → Pelmeni-x86_64.AppImage. (1) собрать и запустить --version; ловушки — нет
-# AppRun/.desktop/иконки (дозы на ошибки appimagetool); (2) figlet в системе нет и ставить его
-# нельзя (block) → положить внутрь: apt download + dpkg -x, AppRun выставляет PATH и
-# FIGLET_FONTDIR; dpkg -x не делает ссылку-альтернативу /usr/bin/figlet (есть figlet-figlet).
-# appimagetool и runtime скачаны в pkg-deb (/opt/appimage); обёртка подставляет runtime.
+# pkg-appimage — «один файл на любой Linux»: «смотри готовый — собери так же». В ~/appimage при сборке
+# образа собран образец: data/Hello.AppDir → Hello-x86_64.AppImage. (1) запустить его и распаковать
+# (--appimage-extract → squashfs-root: AppRun, .desktop, иконка, usr/bin); (2) Pelmeni.AppDir по
+# образцу → appimagetool → Pelmeni-x86_64.AppImage --version. appimagetool и runtime скачаны в pkg-deb
+# (/opt/appimage); обёртка подставляет runtime. Образ и ~/pelmeni — из pkg-deb.
 
 image pkg-appimage:1
 from pkg-deb:1
@@ -11,10 +10,11 @@ from pkg-deb:1
 # fusermount — чтобы AppImage монтировал себя сам (FUSE)
 run apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends fuse3 >/dev/null 2>&1
 run printf '#!/bin/sh\n# appimagetool с заранее скачанным runtime (иначе он полез бы за ним в GitHub)\nexport ARCH=${ARCH:-x86_64}\nexec /opt/appimage/appimagetool --appimage-extract-and-run --runtime-file /opt/appimage/runtime-x86_64 "$@"\n' > /usr/local/bin/appimagetool && chmod 755 /usr/local/bin/appimagetool
-
-# figlet в систему не ставим ни на каком шаге — его кладут внутрь
-block apt match "install( +-[^ ]+)* +figlet" say "Ставить figlet в систему нельзя: смысл AppImage — всё своё носить с собой."
-block apt-get match "install( +-[^ ]+)* +figlet" say "Ставить figlet в систему нельзя: смысл AppImage — всё своё носить с собой."
+# data: data/Hello.AppDir — руками: образец AppDir, его упаковывают здесь же
+copy data/Hello.AppDir /home/student/appimage/Hello.AppDir
+run chown -R student:student /home/student/appimage
+run runuser -u student -- sh -c 'cd /home/student/appimage && HOME=/home/student appimagetool Hello.AppDir >/dev/null 2>&1 && rm -rf squashfs-root'
+run test -x /home/student/appimage/Hello-x86_64.AppImage
 
 hidden hp
 
@@ -25,46 +25,36 @@ say "Пакеты для каждого дистрибутива — это мн
 read brief.md
 
 stage
-  say "Собери из ~/pelmeni Pelmeni-x86_64.AppImage и запусти его с --version"
+  say "Запусти образец ~/appimage/Hello-x86_64.AppImage и распакуй его — посмотри, что внутри"
+  solve:
+    cd /home/student/appimage
+    ./Hello-x86_64.AppImage
+    ./Hello-x86_64.AppImage --appimage-extract
+  check exec extracted
+  neutral ls cat pwd cd less head tail tree file
+  on pass say "Внутри — тот же Hello.AppDir, что лежит рядом: AppRun, .desktop, иконка и usr/bin. Это и есть рецепт."
+  hint tries 5 say "Как распаковать AppImage — в теории: ключ у самого файла."
+
+stage
+  say "Собери так же Pelmeni-x86_64.AppImage и запусти его с --version"
   solve:
     cd /home/student
     mkdir -p Pelmeni.AppDir/usr/bin
     cp pelmeni/pelmeni Pelmeni.AppDir/usr/bin/
     cp pelmeni/pelmeni.desktop pelmeni/pelmeni.svg Pelmeni.AppDir/
-    printf '%s\n' '#!/bin/sh' 'HERE=$(dirname "$(readlink -f "$0")")' 'export PATH="$HERE/usr/bin:$PATH"' 'exec "$HERE/usr/bin/pelmeni" "$@"' > Pelmeni.AppDir/AppRun
+    sed 's/hello/pelmeni/' appimage/Hello.AppDir/AppRun > Pelmeni.AppDir/AppRun
     chmod 755 Pelmeni.AppDir/AppRun
     appimagetool Pelmeni.AppDir
     ./Pelmeni-x86_64.AppImage --version
   accept cmd "Pelmeni-x86_64.AppImage --version" ok
   check exec built
   neutral ls cat pwd cd less head tail vim nano mkdir cp tree file chmod
-  on pass say "Внутри — сжатый образ AppDir и маленький загрузчик. ./Pelmeni-x86_64.AppImage --appimage-extract распакует его обратно."
+  on pass say "Так раздают Krita, Inkscape и Obsidian: один файл, а внутри — свой маленький корень."
   hint output "AppRun" read apprun.md
-  hint output "Desktop file not found" say "В корне AppDir должен лежать .desktop-файл — описание приложения для меню. В ~/pelmeni такой есть."
+  hint output "Desktop file not found" say "В корне AppDir должен лежать .desktop-файл — как у образца. В ~/pelmeni такой есть."
   hint output "icon" say "Иконка ищется в корне AppDir по имени из строки Icon= в .desktop — с расширением .png или .svg."
   hint output "Permission denied" say "AppImage — программа: ему нужен бит исполнения."
-  hint tries 5 say "Что сказал appimagetool последним? Он перечисляет, чего не хватает в AppDir."
+  hint tries 5 say "Сравни свой AppDir с образцом: ls -R. Чего не хватает?"
   hint tries 8 say "Имя файла appimagetool берёт из Name= в .desktop и архитектуры. Что у тебя получилось? ls."
-
-stage
-  say "Пусть AppImage рисует заголовок и там, где figlet нет: запусти ./Pelmeni-x86_64.AppImage 2"
-  on enter read bundle.md
-  solve:
-    cd /home/student
-    apt-get download figlet
-    dpkg -x figlet_*.deb Pelmeni.AppDir
-    ln -sf figlet-figlet Pelmeni.AppDir/usr/bin/figlet
-    printf '%s\n' '#!/bin/sh' 'HERE=$(dirname "$(readlink -f "$0")")' 'export PATH="$HERE/usr/bin:$PATH"' 'export FIGLET_FONTDIR="$HERE/usr/share/figlet"' 'exec "$HERE/usr/bin/pelmeni" "$@"' > Pelmeni.AppDir/AppRun
-    appimagetool Pelmeni.AppDir
-    ./Pelmeni-x86_64.AppImage 2
-  accept cmd "Pelmeni-x86_64.AppImage" ok
-  check exec bundled
-  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file chmod dpkg ln
-  on pass say "Так и живут большие AppImage: Krita, Inkscape, Obsidian несут с собой свои библиотеки — и запускаются на любом Linux."
-  hint output "не найден figlet" say "figlet внутри AppDir лежит, а pelmeni его не видит. Где программа ищет команды — и кто ей это говорит, когда AppImage стартует?"
-  hint output "small.flf" say "figlet нашёлся, а шрифт — нет: он ищет шрифты в /usr/share/figlet системы. Куда его направить — в теории."
-  hint output "Unable to open font file" say "figlet нашёлся, а шрифт — нет: он ищет шрифты в /usr/share/figlet системы. Куда его направить — в теории."
-  hint tries 5 say "Что лежит в Pelmeni.AppDir/usr/bin после dpkg -x? Есть там файл с именем ровно figlet?"
-  hint tries 8 say "Поменял AppDir — пересобери AppImage: старый файл о правке не знает."
 
 exec finale

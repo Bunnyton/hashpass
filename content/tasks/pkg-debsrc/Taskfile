@@ -1,10 +1,15 @@
-# pkg-debsrc — пакет «по-дебиановски»: каталог debian/ + dpkg-buildpackage (debhelper).
-# (1) собрать 1.0: control/rules/changelog/source/format; ловушки — подпись (-us -uc), dh_usrlocal
-# (Makefile ставит в /usr/local → override_dh_auto_install с PREFIX=/usr); (2) 1.1 через dch;
-# (3) lintian без ошибок (нет debian/copyright). Образ и ~/pelmeni — из pkg-deb.
+# pkg-debsrc — пакет «по-дебиановски»: исходники + каталог debian/ + dpkg-buildpackage (debhelper).
+# «Смотри, как сделано у настоящего — сделай так же»: (1) apt-get source sl (в образе включены
+# deb-src) и найти в его debian/rules, чем он собирается (dh $@ — debhelper делает всё сам);
+# (2) для pelmeni: dh_make -n (заготовка debian/ одной командой) + dpkg-buildpackage -us -uc -b.
+# Makefile pelmeni ставит в PREFIX=/usr (иначе dh_usrlocal). Образ и ~/pelmeni — из pkg-deb.
 
 image pkg-debsrc:1
 from pkg-deb:1
+
+# исходники пакетов (apt-get source) и dh_make — заготовка каталога debian/
+run sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources && grep -q deb-src /etc/apt/sources.list.d/debian.sources
+run apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends dh-make >/dev/null 2>&1
 
 hidden hp
 
@@ -15,56 +20,33 @@ say "Руками собранный .deb — самоделка. Пакеты �
 read brief.md
 
 stage
-  say "Добавь в ~/pelmeni каталог debian/ и собери пакет pelmeni 1.0 через dpkg-buildpackage"
+  say "Скачай исходники пакета sl и найди в них, какой командой он собирается"
+  solve:
+    cd /home/student
+    apt-get source sl
+    cat sl-*/debian/rules
+  check exec srcs
+  accept output "dh \$@"
+  neutral ls pwd cd tree file
+  on pass say "Вся сборка sl — одна строка dh $@: debhelper сам знает, что делать с Makefile, куда класть файлы и как упаковать."
+  hint output "You must put some 'deb-src' URIs" say "apt не знает, где брать исходники. Здесь они уже подключены — список пакетов свежий?"
+  hint tries 5 say "Рецепт сборки лежит в каталоге debian/ внутри исходников. Какой файл в нём отвечает за сборку — в теории."
+  hint tries 8 say "debian/rules — обычный текстовый файл, cat его покажет."
+
+stage
+  say "Сделай так же для pelmeni: каталог debian/ — и пакет через dpkg-buildpackage"
   solve:
     cd /home/student/pelmeni
-    mkdir -p debian/source
-    echo '3.0 (native)' > debian/source/format
-    printf '%s\n' 'Source: pelmeni' 'Section: utils' 'Priority: optional' 'Maintainer: Student <student@example.com>' 'Build-Depends: debhelper-compat (= 13)' 'Standards-Version: 4.7.0' '' 'Package: pelmeni' 'Architecture: all' 'Depends: figlet, ${misc:Depends}' 'Description: сколько варить и сколько кидать' ' Считает пельмени, воду и соль на заданное число порций.' > debian/control
-    printf '%s\n' '#!/usr/bin/make -f' '%:' '	dh $@' '' 'override_dh_auto_install:' '	$(MAKE) install DESTDIR=$(CURDIR)/debian/pelmeni PREFIX=/usr' > debian/rules
-    chmod 755 debian/rules
-    DEBEMAIL=student@example.com DEBFULLNAME=Student dch --create --package pelmeni -v 1.0 "Первый выпуск."
-    dpkg-buildpackage -us -uc
-  check exec deb10
+    DEBFULLNAME=Student DEBEMAIL=student@example.com dh_make -n -s -y -p pelmeni_1.0
+    dpkg-buildpackage -us -uc -b
+  check exec built
   neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
-  on pass say "Рядом с .deb легли .buildinfo и .changes: с чем собирали и что выкладывать в репозиторий."
-  hint output "debian/changelog: No such file" read changelog.md
-  hint output "cannot read debian/changelog" read changelog.md
-  hint output "dh_usrlocal" read usrlocal.md
-  hint output "No secret key" say "dpkg-buildpackage хочет подписать результат твоим ключом. Для своей сборки подпись не нужна — ключи -us -uc."
+  on pass say "Рядом с .deb легли .buildinfo и .changes: с чем собирали и что выкладывать в репозиторий. Для настоящего выпуска в debian/control и debian/changelog ещё дописывают описание и историю."
+  hint output "No secret key" say "dpkg-buildpackage хочет подписать результат твоим ключом. Для своей сборки подпись не нужна — ключи в теории."
   hint output "unmet build dependencies" say "dpkg-buildpackage проверяет Build-Depends. Что из перечисленного там не установлено?"
-  hint output "debian/rules: Permission denied" say "debian/rules — программа (Makefile с #!), ей нужен бит исполнения."
-  hint output "missing separator" say "В Makefile команды начинаются с табуляции, а не с пробелов."
+  hint output "Could not find" say "dh_make хочет знать имя и версию: каталог pelmeni-1.0 или ключ -p имя_версия."
+  hint output "debian/ already exists" say "debian/ уже есть — второй раз заготовка не нужна. Собирай."
   hint tries 5 say "Что dpkg-buildpackage сказал последним? Ошибка обычно в самом низу."
-  hint tries 8 say "Готовый пакет dpkg-buildpackage кладёт на уровень выше каталога исходников. Что внутри? dpkg-deb -c."
-
-stage
-  say "Выпусти 1.1: запись в debian/changelog — и новая сборка pelmeni_1.1"
-  on enter read dch.md
-  solve:
-    cd /home/student/pelmeni
-    DEBEMAIL=student@example.com DEBFULLNAME=Student dch -v 1.1 "Версия 1.1."
-    dpkg-buildpackage -us -uc
-  check exec deb11
-  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
-  on pass say "Версию пакета берут из changelog — сверху самая свежая. Править её где-то ещё не нужно."
-  hint tries 5 say "Какую версию собрал dpkg-buildpackage? Смотри первую строку debian/changelog."
-
-stage
-  say "Пусть lintian не находит в pelmeni_1.1 ошибок"
-  on enter read lintian.md
-  solve:
-    cd /home/student/pelmeni
-    printf '%s\n' 'Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/' 'Upstream-Name: pelmeni' '' 'Files: *' 'Copyright: 2026 Кухня hashpass' 'License: MIT' ' Permission is hereby granted, free of charge, to any person obtaining a copy' ' of this software, to deal in the Software without restriction.' > debian/copyright
-    dpkg-buildpackage -us -uc
-    cd ..
-    lintian pelmeni_1.1_all.deb
-  accept cmd "lintian"
-  check exec lint11
-  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file
-  on pass say "Буква E — ошибка, W — предупреждение, I — совет. lintian -i объяснит любую строку подробно."
-  hint output "no-copyright-file" read copyright.md
-  hint output "E: " say "Непонятная строка? lintian -i объяснит каждую подробно — и подскажет, как исправить."
-  hint tries 5 say "Ты пересобрал пакет после правки? lintian смотрит на готовый .deb, а не на исходники."
+  hint tries 8 say "Готовый пакет dpkg-buildpackage кладёт на уровень выше каталога исходников. Что там?"
 
 exec finale

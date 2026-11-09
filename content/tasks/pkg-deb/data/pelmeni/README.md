@@ -6,4 +6,4 @@
     Порций: 3
     Пельменей: 60 шт., воды: 3 л, соли: 3 ч. л.
 
-Нужен `figlet`. Установка из исходников: `make install` (PREFIX=/usr/local, DESTDIR для пакетов).
+С `figlet` заголовок рисуется крупно. Установка из исходников: `sudo make install` (PREFIX=/usr, DESTDIR — для пакетов).

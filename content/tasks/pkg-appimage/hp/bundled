@@ -1,8 +1,0 @@
-#!/bin/sh
-# Шаг 2: в системе figlet нет, а AppImage всё равно рисует заголовок — figlet у него внутри,
-# и шрифт он нашёл (без шрифта pelmeni всё равно печатает расчёт, но без картинки).
-! command -v figlet >/dev/null 2>&1 || exit 1
-f=$(find /home/student -name 'Pelmeni-x86_64.AppImage' 2>/dev/null | head -n 1)
-[ -n "$f" ] || exit 1
-out=$(cd /tmp && APPIMAGE_EXTRACT_AND_RUN=1 env -i PATH=/usr/bin:/bin HOME=/tmp "$f" 2 2>&1) || exit 1
-echo "$out" | grep -q 'Порций: 2' && echo "$out" | grep -q '|_|' && ! echo "$out" | grep -q '^figlet:'

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Шаг «загляни»: где-то в доме разложен пакет sl — каталог с DEBIAN/control (Package: sl) и самой
+# игрой usr/games/sl (так делает dpkg-deb -R; dpkg -x паспорт не кладёт).
+for c in $(find /home/student -path '*/DEBIAN/control' 2>/dev/null); do
+    grep -qx 'Package: sl' "$c" || continue
+    [ -f "$(dirname "$(dirname "$c")")/usr/games/sl" ] && exit 0
+done
+exit 1

@@ -1,16 +1,17 @@
-# pkg-snap — snap: squashfs с meta/snap.yaml. snapcraft в консоли не работает (ему нужны LXD/
-# multipass), поэтому собираем, как он сам в конце: каталог prime → snap pack. (1) snap.yaml +
-# bin/pelmeni → pelmeni_1.0_all.snap (ловушки — поля и бит исполнения: snap pack проверяет);
-# (2) snap несёт всё своё: figlet внутрь (apt download + dpkg -x) и FIGLET_FONTDIR в environment:.
-# Ставить снап здесь некуда (snapd в контейнере не монтирует squashfs) — проверка распаковывает
-# его и запускает в окружении, как у snapd. Образ и ~/pelmeni — из pkg-deb.
+# pkg-snap — snap: squashfs с meta/snap.yaml. «Смотри готовый — собери так же». snapcraft в консоли не
+# работает (ему нужны LXD/multipass), поэтому собираем, как он сам в конце: каталог → snap pack. В ~/snaps
+# при сборке образа собран образец: data/hello-snap → hello_1.0_all.snap. (1) заглянуть внутрь
+# (unsquashfs -l / -cat meta/snap.yaml); (2) pelmeni 1.0 по образцу → snap pack. Ставить снап здесь
+# некуда (snapd в контейнере не монтирует squashfs) — проверка распаковывает его. Образ — из pkg-deb.
 
 image pkg-snap:1
 from pkg-deb:1
 
-# figlet в систему не ставим ни на каком шаге — его кладут внутрь
-block apt match "install( +-[^ ]+)* +figlet" say "Ставить figlet в систему нельзя: снап живёт в своей коробке и системного не увидит."
-block apt-get match "install( +-[^ ]+)* +figlet" say "Ставить figlet в систему нельзя: снап живёт в своей коробке и системного не увидит."
+# data: data/hello-snap — руками: образец каталога снапа, его упаковывают здесь же
+copy data/hello-snap /home/student/snaps/hello-snap
+run chown -R student:student /home/student/snaps
+run runuser -u student -- sh -c 'cd /home/student/snaps && snap pack hello-snap >/dev/null 2>&1'
+run test -f /home/student/snaps/hello_1.0_all.snap
 
 hidden hp
 
@@ -21,36 +22,30 @@ say "Ubuntu ставит Firefox не из .deb, а снапом. Посмотр
 read brief.md
 
 stage
-  say "Собери из ~/pelmeni снап pelmeni версии 1.0"
+  say "Загляни в образец ~/snaps/hello_1.0_all.snap: какие в нём файлы и какой у него паспорт"
+  solve:
+    unsquashfs -cat /home/student/snaps/hello_1.0_all.snap meta/snap.yaml
+  accept cmd "unsquashfs"
+  accept output "command: *bin/hello"
+  neutral ls cat pwd cd less head tail tree file
+  on pass say "Каталог, из которого снап собран, лежит рядом — ~/snaps/hello-snap. Это и есть рецепт."
+  hint tries 5 say "Как посмотреть файл внутри снапа, не распаковывая его, — в теории."
+
+stage
+  say "Собери так же из ~/pelmeni снап pelmeni версии 1.0"
   solve:
     cd /home/student
     mkdir -p snap-pelmeni/meta snap-pelmeni/bin
     cp pelmeni/pelmeni snap-pelmeni/bin/
-    printf '%s\n' 'name: pelmeni' "version: '1.0'" 'summary: Сколько варить и сколько кидать' 'description: Считает пельмени, воду и соль.' 'base: core24' 'confinement: strict' 'grade: stable' 'architectures: [all]' 'apps:' '  pelmeni:' '    command: bin/pelmeni' > snap-pelmeni/meta/snap.yaml
+    sed 's/hello/pelmeni/g; s/^summary: .*/summary: Сколько варить и сколько кидать/; s/^description: .*/description: Считает пельмени, воду и соль./' snaps/hello-snap/meta/snap.yaml > snap-pelmeni/meta/snap.yaml
     snap pack snap-pelmeni
-  check exec snaps built
+  check exec snaps
   neutral ls cat pwd cd less head tail vim nano mkdir cp tree file chmod
-  on pass say "unsquashfs -l pelmeni_1.0_all.snap покажет, что внутри: снап — просто сжатый образ каталога."
+  on pass say "На Ubuntu его поставил бы sudo snap install --dangerous pelmeni_1.0_all.snap: --dangerous — потому что снап не подписан магазином."
   hint output "cannot validate" read yaml.md
   hint output "bad permissions" say "snap pack проверяет, что команда приложения — исполняемый файл. Как дать файлу право на запуск?"
   hint output "does not exist" say "Путь в command считается от корня снапа. Лежит ли файл ровно там?"
-  hint tries 5 say "Что сказал snap pack последней строкой? Он называет поле, которое ему не понравилось."
+  hint tries 5 say "Сравни свой каталог с образцом: ls -R. Чего не хватает?"
   hint tries 8 say "Без meta/snap.yaml снап не соберётся: имя, версия, описание и приложения — оттуда."
-
-stage
-  say "Положи figlet внутрь снапа: в системе его нет, а заголовок должен рисоваться"
-  on enter read bundle.md
-  solve:
-    cd /home/student
-    apt-get download figlet
-    dpkg -x figlet_*.deb snap-pelmeni
-    ln -sf figlet-figlet snap-pelmeni/usr/bin/figlet
-    printf '%s\n' '    environment:' '      FIGLET_FONTDIR: $SNAP/usr/share/figlet' >> snap-pelmeni/meta/snap.yaml
-    snap pack snap-pelmeni
-  check exec snaps figlet
-  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file chmod dpkg ln unsquashfs
-  on pass say "Так и выходит, что снапы толстые: Firefox-снап несёт с собой сотни мегабайт своих библиотек."
-  hint tries 5 say "Что лежит в snap-pelmeni/usr/bin после dpkg -x? Есть там файл с именем ровно figlet?"
-  hint tries 8 say "figlet нашёлся, а шрифты? Он ищет их в /usr/share/figlet системы, а не снапа."
 
 exec finale

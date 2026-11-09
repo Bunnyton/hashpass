@@ -1,40 +1,23 @@
 # snap
 
 **snap** — пакеты Canonical: в Ubuntu так приходят Firefox, Chromium, VS Code. Снап — сжатый
-образ (squashfs) каталога с программой и **всем, что ей нужно**. Ставит их `snapd`, обновляет
-сам, а работает каждый снап в своей коробке: системные файлы ему не видны.
+образ (squashfs) каталога с программой; ставит его `snapd`, а работает каждый снап в своей
+коробке.
 
-Внутри снапа:
-
-```
-hello-cat-dir/
-├── meta/
-│   └── snap.yaml   ← паспорт
-└── bin/
-    └── hello-cat
-```
-
-`meta/snap.yaml`:
-
-```yaml
-name: hello-cat
-version: '0.3'
-summary: Печатает котика
-description: Печатает котика в терминал.
-base: core24              # минимальная система, поверх которой работает снап
-confinement: strict       # коробка закрыта
-grade: stable
-architectures: [all]      # скрипт — для любого процессора
-apps:
-  hello-cat:
-    command: bin/hello-cat   # путь — от корня снапа
-```
-
-Обычно снапы собирает `snapcraft` из рецепта `snapcraft.yaml`: он раскладывает файлы в каталог
-и в конце упаковывает его командой `snap pack`. Ей и соберём:
+Внутри снапа — программа и паспорт `meta/snap.yaml`: имя, версия, описание и какие команды он
+даёт (`apps`, путь к команде — от корня снапа). Заглянуть внутрь без распаковки:
 
 ```sh
-snap pack hello-cat-dir
+unsquashfs -l firefox_1.0_amd64.snap                    # список файлов
+unsquashfs -cat firefox_1.0_amd64.snap meta/snap.yaml   # показать один файл
 ```
 
-Исходники pelmeni — в `~/pelmeni`.
+Обычно снапы собирает `snapcraft`: он раскладывает файлы в каталог и в конце упаковывает его
+одной командой. Ей и соберём:
+
+```sh
+snap pack firefox-dir      # каталог с meta/snap.yaml → firefox_<версия>_<архитектура>.snap
+```
+
+В `~/snaps` лежат образец `hello_1.0_all.snap` и каталог, из которого он собран. Исходники твоей
+программы — в `~/pelmeni`.

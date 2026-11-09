@@ -1,0 +1,11 @@
+name: hello
+version: '1.0'
+summary: Здоровается
+description: Образец снапа — здоровается с тем, кого назовёшь.
+base: core24
+confinement: strict
+grade: stable
+architectures: [all]
+apps:
+  hello:
+    command: bin/hello

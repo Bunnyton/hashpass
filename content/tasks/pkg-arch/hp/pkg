@@ -1,12 +1,10 @@
 #!/bin/sh
-# pkg <версия-релиз> [figlet]: makepkg собрал pelmeni-<версия-релиз>-any.pkg.tar.zst с
-# usr/bin/pelmeni; с «figlet» — ещё и depend = figlet в .PKGINFO.
+# pkg <версия-релиз>: makepkg собрал pelmeni-<версия-релиз>-any.pkg.tar.* с usr/bin/pelmeni.
 shift   # $1 — команда студента (так зовёт проверки консоль), дальше — мои аргументы
 for f in $(find /home/student -name "pelmeni-$1-any.pkg.tar.*" 2>/dev/null); do
     info=$(bsdtar -xOf "$f" .PKGINFO 2>/dev/null) || continue
     echo "$info" | grep -qx 'pkgname = pelmeni' || continue
     echo "$info" | grep -qx "pkgver = $1" || continue
-    [ "${2:-}" = figlet ] && ! echo "$info" | grep -qx 'depend = figlet' && continue
     bsdtar -tf "$f" | grep -qx 'usr/bin/pelmeni' && exit 0
 done
 exit 1

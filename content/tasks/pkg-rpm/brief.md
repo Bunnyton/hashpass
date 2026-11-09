@@ -1,49 +1,31 @@
 # Пакет .rpm
 
-В Fedora, RHEL, CentOS, openSUSE пакеты — `.rpm`. Внутри то же, что в `.deb` — файлы и
-паспорт, — а рецепт сборки один файл: **spec**. Собирает `rpmbuild`.
+В Fedora, RHEL, CentOS, openSUSE пакеты — `.rpm`. Внутри то же, что в `.deb`: файлы и паспорт.
+Спросить файл пакета можно и без установки — ключ `-p` (package file):
 
-`rpmbuild` работает в своём дереве `~/rpmbuild`:
+```sh
+rpm -qpi cowsay-3.8-1.noarch.rpm     # паспорт
+rpm -qpl cowsay-3.8-1.noarch.rpm     # список файлов
+```
+
+Собирает пакеты `rpmbuild` по рецепту — файлу **spec**. Работает он в своём дереве `~/rpmbuild`:
 
 | Каталог | Что там |
 |---|---|
-| `SOURCES/` | исходники — архивом `имя-версия.tar.gz`, внутри каталог `имя-версия/` |
+| `SOURCES/` | исходники архивом `имя-версия.tar.gz`, внутри — каталог `имя-версия/` |
 | `SPECS/` | рецепты `.spec` |
-| `RPMS/` | готовые пакеты (`RPMS/noarch/…` для скриптов) |
-| `BUILD/`, `BUILDROOT/` | черновики сборки |
+| `RPMS/` | готовые пакеты (`RPMS/noarch/` — для скриптов) |
 
-spec — заголовок «поле: значение» и разделы-шаги со знака `%`. Пример для `hello-cat`:
+В spec сверху паспорт («поле: значение»), ниже — шаги со знака `%`: `%prep` распаковывает
+исходники, `%install` раскладывает файлы в будущий корень пакета, `%files` перечисляет, что в
+пакет войдёт.
 
-```
-Name:      hello-cat
-Version:   0.3
-Release:   1
-Summary:   Печатает котика
-License:   MIT
-BuildArch: noarch
-Source0:   %{name}-%{version}.tar.gz
-
-%description
-Печатает котика в терминал.
-
-%prep
-%setup -q
-
-%install
-install -Dm755 hello-cat %{buildroot}%{_bindir}/hello-cat
-
-%files
-%{_bindir}/hello-cat
-```
-
-- `%prep` — распаковать исходники (`%setup` сам распакует `Source0` и зайдёт внутрь);
-- `%install` — разложить файлы в `%{buildroot}` — это будущий корень пакета;
-- `%files` — что из `%{buildroot}` войдёт в пакет: **все** файлы, которые там появились.
-
-`%{_bindir}` — это `/usr/bin`, `%{_mandir}` — `/usr/share/man`. Собрать только бинарный пакет:
+Своя сборка — это архив исходников в `SOURCES` и spec, а дальше одна команда:
 
 ```sh
-rpmbuild -bb ~/rpmbuild/SPECS/hello-cat.spec
+tar czf ~/rpmbuild/SOURCES/cowsay-3.8.tar.gz cowsay-3.8    # каталог cowsay-3.8/ с исходниками
+rpmbuild -bb ~/rpmbuild/SPECS/cowsay.spec
 ```
 
-Исходники pelmeni — в `~/pelmeni`, и в нём есть `Makefile` с целью `install`.
+В `~/rpmbuild` уже собран пакет-образец `hello` — вместе с рецептом. Исходники твоей программы —
+в `~/pelmeni`.

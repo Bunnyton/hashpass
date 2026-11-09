@@ -7,11 +7,8 @@ case ${1:-} in
 esac
 n=${1:-1}
 case $n in ''|*[!0-9]*|0) echo "pelmeni: порций — целым числом больше нуля" >&2; exit 2 ;; esac
-if ! command -v figlet >/dev/null 2>&1; then
-    echo "pelmeni: не найден figlet — без него никакой красоты" >&2
-    exit 1
-fi
-figlet -f small PELMENI
+# заголовок покрасивее — если в системе есть figlet
+if command -v figlet >/dev/null 2>&1; then figlet -f small PELMENI; else echo "== PELMENI =="; fi
 echo "Порций: $n"
 echo "Пельменей: $((n * 20)) шт., воды: $n л, соли: $n ч. л."
 echo "Варить 7 минут после всплытия. Сметану — по вкусу."

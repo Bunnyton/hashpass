@@ -1,0 +1,9 @@
+#!/bin/sh
+# Шаг «собери»: dpkg-buildpackage собрал pelmeni 1.0* — рядом с .deb лежит .buildinfo (его делает
+# только dpkg-buildpackage), программа — исполняемый /usr/bin/pelmeni.
+for f in $(find /home/student -name 'pelmeni_1.0*.deb' 2>/dev/null); do
+    ls "$(dirname "$f")"/pelmeni_1.0*.buildinfo >/dev/null 2>&1 || continue
+    [ "$(dpkg-deb -f "$f" Package)" = pelmeni ] || continue
+    dpkg-deb -c "$f" | grep -Eq '^-rwx.* \./usr/bin/pelmeni$' && exit 0
+done
+exit 1

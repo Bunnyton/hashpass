@@ -1,0 +1,14 @@
+# Образец рецепта: пакет hello для Arch Linux
+pkgname=hello
+pkgver=1.0
+pkgrel=1
+pkgdesc="Здоровается"
+arch=('any')
+license=('MIT')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SUM')
+
+package() {
+    cd "$pkgname-$pkgver"
+    make install DESTDIR="$pkgdir"
+}

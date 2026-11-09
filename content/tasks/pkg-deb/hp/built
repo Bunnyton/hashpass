@@ -1,12 +1,13 @@
 #!/bin/sh
-# Шаг «собери»: в домашнем каталоге есть .deb пакета pelmeni 1.0 (all) с исполняемым
-# /usr/bin/pelmeni, у паспорта есть Maintainer и Description (dpkg-deb без них только
-# предупреждает). Имя файла и путь — любые: студенты называют по-разному.
+# Шаг «собери»: в доме есть .deb пакета pelmeni 1.0 (all) с исполняемым /usr/bin/pelmeni, у паспорта
+# есть Maintainer и Description (dpkg-deb без них только предупреждает) и Depends: figlet.
+# Имя файла и путь — любые.
 for f in $(find /home/student -name '*.deb' 2>/dev/null); do
     [ "$(dpkg-deb -f "$f" Package 2>/dev/null)" = pelmeni ] || continue
     [ "$(dpkg-deb -f "$f" Version)" = 1.0 ] || continue
     [ "$(dpkg-deb -f "$f" Architecture)" = all ] || continue
     [ -n "$(dpkg-deb -f "$f" Maintainer)" ] && [ -n "$(dpkg-deb -f "$f" Description)" ] || continue
+    dpkg-deb -f "$f" Depends | grep -qw figlet || continue
     dpkg-deb -c "$f" | grep -Eq '^-rwx.* \./usr/bin/pelmeni$' && exit 0
 done
 exit 1

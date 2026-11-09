@@ -1,0 +1,3 @@
+#!/bin/sh
+# Шаг «загляни»: исходники sl скачаны и распакованы — в доме есть каталог sl-*/debian/rules.
+find /home/student -maxdepth 3 -path '*/sl-*/debian/rules' 2>/dev/null | grep -q .

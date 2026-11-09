@@ -1,31 +1,24 @@
 # PKGBUILD
 
-В Arch Linux рецепт пакета — **PKGBUILD**: обычный bash-скрипт с переменными и функциями.
-Собирает `makepkg` — в том каталоге, где лежит PKGBUILD. Пример для `hello-cat`:
+В Arch Linux пакеты ставит и описывает **pacman**. Спросить файл пакета можно без установки —
+ключ `-p` (package file):
 
-```bash
-pkgname=hello-cat
-pkgver=0.3
-pkgrel=1
-pkgdesc="Печатает котика"
-arch=('any')
-license=('MIT')
-source=("$pkgname-$pkgver.tar.gz")
-sha256sums=('…')
-
-package() {
-    cd "$pkgname-$pkgver"
-    install -Dm755 hello-cat "$pkgdir/usr/bin/hello-cat"
-}
+```sh
+pacman -Qip cowsay-3.8-1-any.pkg.tar.zst     # паспорт
+pacman -Qlp cowsay-3.8-1-any.pkg.tar.zst     # список файлов
 ```
 
-- `source` — откуда брать исходники: ссылка или файл рядом с PKGBUILD. `makepkg` сам
-  распакует архив.
-- `package()` — разложить файлы в `$pkgdir` — будущий корень пакета.
-- `arch=('any')` — для любого процессора (скрипт).
+Рецепт пакета — **PKGBUILD**: обычный bash-скрипт с переменными (имя, версия, откуда брать
+исходники) и функцией `package()`, которая раскладывает файлы в `$pkgdir` — будущий корень
+пакета. Собирает `makepkg` в том каталоге, где лежат PKGBUILD и архив исходников:
 
-Результат — `имя-версия-релиз-архитектура.pkg.tar.<сжатие>` рядом с PKGBUILD: на Arch это
-`.zst`, а здешний `makepkg` по своим настройкам жмёт в `.gz`.
+```sh
+tar czf cowsay-3.8.tar.gz cowsay-3.8    # архив исходников рядом с PKGBUILD
+makepkg -g >> PKGBUILD                  # дописать в рецепт контрольную сумму этого архива
+makepkg                                 # собрать → cowsay-3.8-1-any.pkg.tar.…
+```
 
-`makepkg` и `pacman` есть и в Debian: собирать пакеты для Arch можно где угодно, а ставить их
-здесь некуда — системой правит `apt`. Исходники pelmeni — в `~/pelmeni`, и в нём есть `Makefile` с целью `install`.
+Контрольная сумма защищает сборку от подменённого архива: свой архив — своя сумма.
+
+В `~/arch-hello` уже собран пакет-образец `hello` — вместе с рецептом. Исходники твоей
+программы — в `~/pelmeni`.

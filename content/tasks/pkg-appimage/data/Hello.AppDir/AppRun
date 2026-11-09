@@ -1,0 +1,4 @@
+#!/bin/sh
+# AppRun запускается первым: находит себя и запускает программу из своего usr/bin
+HERE=$(dirname "$(readlink -f "$0")")
+exec "$HERE/usr/bin/hello" "$@"

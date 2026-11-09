@@ -1,5 +1,4 @@
 # Пакеты: исходный пакет Debian
 
-Каталог debian/ (control, rules с dh, changelog через dch, source/format) и dpkg-buildpackage.
-Ловушки — подпись (-us -uc) и dh_usrlocal: Makefile ставит в /usr/local, нужен
-override_dh_auto_install. Потом версия 1.1 через dch и чистый lintian (debian/copyright).
+Сначала — исходники настоящего пакета (apt-get source sl) и его debian/rules: вся сборка — dh $@.
+Потом то же для своей программы: заготовка debian/ через dh_make и пакет через dpkg-buildpackage.

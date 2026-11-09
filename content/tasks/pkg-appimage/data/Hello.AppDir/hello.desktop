@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Hello
+Comment=Здоровается
+Exec=hello
+Icon=hello
+Terminal=true
+Categories=Utility;

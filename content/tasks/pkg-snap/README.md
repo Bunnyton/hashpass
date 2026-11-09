@@ -1,5 +1,4 @@
 # Пакеты: snap
 
-meta/snap.yaml и snap pack — так snapcraft упаковывает снап в конце. Во втором шаге figlet
-кладётся внутрь, а шрифты указываются через environment: в snap.yaml. Ставить снап в консоли
-некуда — проверка распаковывает его и запускает в окружении, как у snapd.
+Образец hello уже собран в ~/snaps: заглянуть в него (unsquashfs -l, -cat meta/snap.yaml), потом
+по нему собрать pelmeni — каталог с meta/snap.yaml и snap pack.

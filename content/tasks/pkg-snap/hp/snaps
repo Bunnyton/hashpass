@@ -1,13 +1,6 @@
 #!/bin/sh
-# snaps <шаг>: найти .snap пакета pelmeni в доме и проверить.
-#   built   — meta/snap.yaml: name pelmeni, version 1.0, у приложения pelmeni есть command,
-#             и этот файл внутри снапа исполняемый;
-#   figlet  — то же, плюс снап работает сам по себе: распакованный, в окружении, какое даёт snapd
-#             ($SNAP, PATH с $SNAP/usr/bin и $SNAP/bin) и переменными из environment: в его
-#             snap.yaml, рисует заголовок без figlet в системе.
-shift   # $1 — команда студента (так зовёт проверки консоль), дальше — мои аргументы
-step=$1
-command -v figlet >/dev/null 2>&1 && [ "$step" = figlet ] && exit 1
+# Найти в доме .snap пакета pelmeni: в meta/snap.yaml name pelmeni и version 1.0, у приложения есть
+# command, этот файл внутри снапа исполняемый, и запущенный он считает пельмени.
 for f in $(find /home/student -name '*.snap' 2>/dev/null); do
     y=$(unsquashfs -cat "$f" meta/snap.yaml 2>/dev/null) || continue
     echo "$y" | grep -Eq "^name: *['\"]?pelmeni['\"]? *$" || continue
@@ -17,18 +10,6 @@ for f in $(find /home/student -name '*.snap' 2>/dev/null); do
     d=$(mktemp -d)
     unsquashfs -q -d "$d/s" "$f" >/dev/null 2>&1 || continue
     [ -x "$d/s/$cmd" ] || continue
-    [ "$step" = built ] && exit 0
-    # environment: KEY: value  (с подстановкой $SNAP и $PATH)
-    envs=$(echo "$y" | sed -n "/^ *environment:/,/^ *[a-z-]*:$/p" | sed -n "s/^ *\([A-Z_][A-Z0-9_]*\): *['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\} *$/\1=\2/p")
-    S=$d/s
-    P=$S/usr/sbin:$S/usr/bin:$S/sbin:$S/bin:/usr/sbin:/usr/bin:/sbin:/bin
-    set --
-    for kv in $envs; do
-        v=$(printf %s "${kv#*=}" | sed "s|\$SNAP|$S|g; s|\${SNAP}|$S|g; s|\$PATH|$P|g; s|\${PATH}|$P|g")
-        set -- "$@" "${kv%%=*}=$v"
-    done
-    out=$(cd /tmp && env -i HOME=/tmp SNAP="$S" PATH="$P" "$@" "$S/$cmd" 2 2>&1) &&
-        echo "$out" | grep -q 'Порций: 2' && echo "$out" | grep -q '|_|' &&
-        ! echo "$out" | grep -q '^figlet:' && exit 0
+    "$d/s/$cmd" 2 2>&1 | grep -q 'Порций: 2' && exit 0
 done
 exit 1

@@ -1,4 +1,4 @@
 #!/bin/sh
-# Шаг «pacman»: в базе pacman стоит pelmeni 1.0-2, и его программа на месте.
-[ "$(pacman -Q pelmeni 2>/dev/null)" = "pelmeni 1.0-2" ] || exit 1
+# Шаг «pacman»: в базе pacman стоит pelmeni 1.0-1, и его программа на месте.
+[ "$(pacman -Q pelmeni 2>/dev/null)" = "pelmeni 1.0-1" ] || exit 1
 pacman -Ql pelmeni 2>/dev/null | grep -q ' /usr/bin/pelmeni$' && [ -x /usr/bin/pelmeni ]

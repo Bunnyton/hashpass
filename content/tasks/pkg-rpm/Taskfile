@@ -1,14 +1,20 @@
-# pkg-rpm — пакет для Fedora/RHEL/openSUSE: rpmbuild + spec. (1) ~/rpmbuild/SOURCES/pelmeni-1.0.tar.gz
-# (тарбол делает студент: tar с каталогом pelmeni-1.0/) + SPECS/pelmeni.spec → noarch.rpm;
-# ловушки — нет тарбола в SOURCES, файлы не перечислены в %files, /usr/local вместо %{_bindir};
-# (2) Requires: figlet + 1.1 с %changelog. Ставить rpm на Debian нельзя — проверка по rpm -qp.
-# Образ и ~/pelmeni — из pkg-deb.
+# pkg-rpm — пакет для Fedora/RHEL/openSUSE: «смотри готовый — собери так же». В ~/rpmbuild при сборке
+# образа собран образец hello (data/hello-1.0 + data/hello.spec → RPMS/noarch/hello-1.0-1.noarch.rpm).
+# (1) заглянуть в пакет: rpm -qpi/-qpl — файл /usr/bin/hello; (2) pelmeni-1.0 по образцу: тарбол в
+# SOURCES + свой spec → noarch.rpm; естественная ошибка — %files без man/desktop/svg (доза files.md).
+# Ставить rpm на Debian незачем — проверка по rpm -qp. Образ и ~/pelmeni — из pkg-deb.
 
 image pkg-rpm:1
 from pkg-deb:1
 
 # rpm в Debian приходит без базы пакетов — rpmbuild на каждом шаге ругался бы на sqlite
 run rpmdb --initdb
+# data: data/hello-1.0, data/hello.spec — руками: образец пакета, его собирают здесь же
+copy data/hello-1.0 /home/student/rpmbuild/hello-1.0
+copy data/hello.spec /home/student/rpmbuild/SPECS/hello.spec
+run chown -R student:student /home/student/rpmbuild
+run runuser -u student -- sh -c 'cd /home/student/rpmbuild && mkdir -p SOURCES && tar czf SOURCES/hello-1.0.tar.gz hello-1.0 && rm -rf hello-1.0 && HOME=/home/student rpmbuild -bb SPECS/hello.spec >/dev/null 2>&1 && rm -rf BUILD BUILDROOT SRPMS'
+run test -f /home/student/rpmbuild/RPMS/noarch/hello-1.0-1.noarch.rpm
 
 hidden hp
 
@@ -19,41 +25,35 @@ say "Debian — не весь мир. В Fedora, RHEL и openSUSE пакеты �
 read brief.md
 
 stage
-  say "Собери из ~/pelmeni пакет pelmeni-1.0 для Fedora: noarch.rpm с программой в /usr/bin"
+  say "Загляни в готовый пакет hello из ~/rpmbuild/RPMS: что о нём сказано и какие файлы он ставит"
+  solve:
+    rpm -qpil /home/student/rpmbuild/RPMS/noarch/hello-1.0-1.noarch.rpm
+  accept cmd "rpm"
+  accept output "/usr/bin/hello"
+  neutral ls cat pwd cd less head tail tree file
+  on pass say "А рецепт, по которому он собран, лежит в ~/rpmbuild/SPECS/hello.spec. Прочитай — следующий шаг по нему."
+  hint output "is not an rpm package" say "rpm -q спрашивает базу установленных пакетов. Чтобы спросить файл, нужен ещё ключ — в теории."
+  hint output "is not installed" say "rpm -q спрашивает базу установленных пакетов. Чтобы спросить файл, нужен ещё ключ — в теории."
+  hint tries 5 say "Как спросить у файла .rpm его паспорт и список файлов — в теории."
+
+stage
+  say "Собери так же pelmeni-1.0: noarch.rpm с программой в /usr/bin"
   solve:
     cd /home/student
-    mkdir -p rpmbuild/SOURCES rpmbuild/SPECS
     cp -r pelmeni pelmeni-1.0
     tar czf rpmbuild/SOURCES/pelmeni-1.0.tar.gz pelmeni-1.0
     rm -rf pelmeni-1.0
-    printf '%s\n' 'Name: pelmeni' 'Version: 1.0' 'Release: 1' 'Summary: Сколько варить и сколько кидать' 'License: MIT' 'BuildArch: noarch' 'Source0: %{name}-%{version}.tar.gz' '' '%description' 'Считает пельмени, воду и соль.' '' '%prep' '%setup -q' '' '%install' 'make install DESTDIR=%{buildroot} PREFIX=/usr' '' '%files' '%{_bindir}/pelmeni' '%{_mandir}/man1/pelmeni.1*' '/usr/share/applications/pelmeni.desktop' '/usr/share/icons/hicolor/scalable/apps/pelmeni.svg' > rpmbuild/SPECS/pelmeni.spec
+    sed 's/^Name: .*/Name:      pelmeni/; s/^Summary: .*/Summary:   Сколько варить и сколько кидать/' rpmbuild/SPECS/hello.spec > rpmbuild/SPECS/pelmeni.spec
+    sed -i 's|^%{_bindir}/hello$|%{_bindir}/pelmeni\n%{_mandir}/man1/pelmeni.1*\n/usr/share/applications/pelmeni.desktop\n/usr/share/icons/hicolor/scalable/apps/pelmeni.svg|' rpmbuild/SPECS/pelmeni.spec
     rpmbuild -bb rpmbuild/SPECS/pelmeni.spec
   check exec rpm 1.0
   neutral ls cat pwd cd less head tail vim nano mkdir cp tree file tar
-  on pass say "rpm -qpil файл.rpm — паспорт и список файлов. Тот же пакет на Fedora ставится через sudo dnf install ./файл.rpm."
-  hint output "No such file or directory" say "rpmbuild ищет исходники в ~/rpmbuild/SOURCES. Что там лежит и как оно названо в Source0?"
+  on pass say "Тот же пакет на Fedora ставится одной командой: sudo dnf install ./pelmeni-1.0-1.noarch.rpm."
+  hint output "No such file or directory" say "rpmbuild ищет исходники в ~/rpmbuild/SOURCES под именем из Source0. Что там лежит у hello и что у тебя?"
   hint output "Installed (but unpackaged) file(s) found" read files.md
-  hint output "File not found:" say "В %files перечислен путь, которого после %install нет. Куда make install на самом деле положил файлы? Смотри строки install в выводе."
+  hint output "File not found:" say "В %files перечислен путь, которого после %install нет. Куда make install на самом деле положил файлы?"
   hint output "Bad exit status from" say "Упал один из разделов spec — какой, rpmbuild пишет в той же строке. Чуть выше — вывод его команд."
-  hint tries 5 say "Готовые пакеты rpmbuild кладёт в ~/rpmbuild/RPMS/<архитектура>/. Что там?"
+  hint tries 5 say "Готовые пакеты rpmbuild кладёт в ~/rpmbuild/RPMS/noarch/. Что там?"
   hint tries 8 say "%setup распаковывает тарбол и заходит в каталог имя-версия. Такой каталог в тарболе есть? tar tzf."
-
-stage
-  say "Выпусти pelmeni 1.1: пусть пакет требует figlet, а в истории будет запись о выпуске"
-  on enter read requires.md
-  solve:
-    cd /home/student
-    cp -r pelmeni pelmeni-1.1
-    tar czf rpmbuild/SOURCES/pelmeni-1.1.tar.gz pelmeni-1.1
-    rm -rf pelmeni-1.1
-    sed -i 's/^Version: 1.0/Version: 1.1/; /^BuildArch/a Requires: figlet' rpmbuild/SPECS/pelmeni.spec
-    printf '%s\n' '' '%changelog' '* Mon Nov 09 2026 Student <student@example.com> - 1.1-1' '- Требует figlet.' >> rpmbuild/SPECS/pelmeni.spec
-    rpmbuild -bb rpmbuild/SPECS/pelmeni.spec
-  check exec rpm 1.1 requires
-  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file tar
-  on pass say "rpm -qp --requires покажет и то, что rpmbuild добавил сам: /bin/sh — он заметил строку #! в скрипте."
-  hint output "bogus date in %changelog" say "Дата в %changelog — по-английски и строго: * Mon Nov 09 2026 Имя <почта> - версия-релиз. День недели должен совпасть с датой."
-  hint output "No such file or directory" say "Для новой версии нужен и новый тарбол: Source0 собирается из имени и версии."
-  hint tries 5 say "rpm -qp --requires файл.rpm — что пакет требует? rpm -qp --changelog — что в истории?"
 
 exec finale

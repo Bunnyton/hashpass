@@ -2,33 +2,28 @@
 
 `.deb` ставится в Debian и Ubuntu, `.rpm` — в Fedora. **AppImage** — один исполняемый файл,
 который запускается на любом Linux без установки: скачал, дал право на запуск — работает.
-Так раздают Krita, Inkscape, Obsidian.
 
-Внутри AppImage — сжатый каталог **AppDir** и маленький загрузчик. AppDir устроен так
-(пример — `HelloCat.AppDir`):
-
-```
-HelloCat.AppDir/
-├── AppRun              ← что запустить: скрипт или ссылка на программу
-├── hello-cat.desktop   ← описание для меню: имя, иконка, категория
-├── hello-cat.svg       ← иконка (имя — из строки Icon= в .desktop)
-└── usr/
-    └── bin/
-        └── hello-cat
-```
-
-`AppRun` запускается первым. Обычно это скрипт, который находит себя и запускает программу:
+Внутри AppImage — маленький загрузчик и сжатый каталог **AppDir**. Любой AppImage можно
+распаковать и посмотреть:
 
 ```sh
-#!/bin/sh
-HERE=$(dirname "$(readlink -f "$0")")
-exec "$HERE/usr/bin/hello-cat" "$@"
+./Krita-x86_64.AppImage --appimage-extract    # → ./squashfs-root/ — это и есть AppDir
 ```
 
-Упаковывает AppDir `appimagetool` (здесь он уже установлен):
+В корне AppDir лежат:
+
+| Файл | Зачем |
+|---|---|
+| `AppRun` | запускается первым: обычно скрипт, который запускает программу из `usr/bin` |
+| `*.desktop` | описание для меню: имя, иконка |
+| иконка | `.svg` или `.png`, имя — из строки `Icon=` в `.desktop` |
+| `usr/bin/…` | сама программа |
+
+Собрать свой — сложить такой каталог и упаковать:
 
 ```sh
-appimagetool HelloCat.AppDir
+appimagetool Krita.AppDir       # → Krita-x86_64.AppImage
 ```
 
-Исходники pelmeni — в `~/pelmeni`, вместе с `.desktop` и иконкой.
+В `~/appimage` лежат образец `Hello-x86_64.AppImage` и каталог, из которого он собран. Исходники
+твоей программы — в `~/pelmeni`, вместе с `.desktop` и иконкой.
