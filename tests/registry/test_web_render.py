@@ -231,11 +231,10 @@ def test_install_script_works_without_a_controlling_tty():
 
 
 @pytest.mark.tier1
-def test_install_script_adds_a_course_given_as_its_argument():
-    """`curl …/install.sh | bash -s -- <course link>`: install, then `hashpass add <link>`."""
+def test_install_script_adds_no_course():
+    """User 2026-11-09: `hashpass add` is gone -- a course is chosen in hashpass itself (key c)."""
     script = render_install_script("http://pool:8080")
-    assert 'COURSE="${1:-}"' in script
-    assert '"$BIN/hashpass" --no-update add "$COURSE"' in script
+    assert "COURSE" not in script and " add " not in script
 
 
 @pytest.mark.tier1

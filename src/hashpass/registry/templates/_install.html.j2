@@ -3,8 +3,8 @@
 {% macro cmd(text) -%}
 <div class='cmd'><span class='prompt' aria-hidden='true'>$</span><code>{{ text }}</code><button class='sm' onclick='hpcopy(this)' type='button'>копировать</button></div>
 {%- endmacro %}
-{% macro install_cmd(flags, url, course='') -%}
-{{ cmd('curl ' ~ flags ~ ' ' ~ url ~ '/install.sh | bash' ~ ((' -s -- ' ~ course) if course else '')) }}
+{% macro install_cmd(flags, url) -%}
+{{ cmd('curl ' ~ flags ~ ' ' ~ url ~ '/install.sh | bash') }}
 {%- endmacro %}
 {% macro install_steps(flags, url) -%}
 <div class='install-one'>

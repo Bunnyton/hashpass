@@ -40,8 +40,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("registry", nargs="?", help="адрес пула (по умолчанию — сохранённый)")
     p_sol = sub.add_parser("solution", help="показать своё решение задания (команды и вывод)")
     p_sol.add_argument("task", help="номер из каталога (напр. 1) или ref (имя:версия)")
-    p_add = sub.add_parser("add", help="добавить курс: ссылка со страницы курса или владелец/курс")
-    p_add.add_argument("link", help="ссылка вида https://<пул>/c/<владелец>/<курс>")
     p_search = sub.add_parser("search", help="найти курсы, задания и образы — на пуле и здесь: hashpass search git")
     p_search.add_argument("query", nargs="?", default="", help="что искать (пусто — всё)")
     p_courses = sub.add_parser("courses", help="мои курсы; с именем — сделать курс текущим")
@@ -93,8 +91,6 @@ def _dispatch(env: cli.Home, args: argparse.Namespace) -> int:   # noqa: PLR0911
         return cli.cmd_solution(env, args.task)
     if command == "config":
         return cli.cmd_config_pool(env, getattr(args, "url", None))
-    if command == "add":
-        return cli.cmd_course_add(env, args.link)
     if command == "courses":
         return cli.cmd_courses(env, args.course)
     if command == "search":

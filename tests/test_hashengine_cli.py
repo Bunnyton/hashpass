@@ -87,7 +87,7 @@ def test_one_binary_has_every_command():
     assert p.parse_args(["pull"]).ref is None and p.parse_args(["pull", "x:1"]).ref == "x:1"
     assert p.parse_args(["run", "3"]).task == "3"
     for cmd in (["work"], ["build", "T"], ["serve"], ["tag", "x:1", "s"], ["rm", "x:1_v1"], ["fork", "a/b:1"],
-                ["images"], ["remote"], ["migrate-courses"], ["search", "git"], ["add", "a/b"]):
+                ["images"], ["remote"], ["migrate-courses"], ["search", "git"]):
         assert p.parse_args(cmd).command == cmd[0]
 
 
@@ -98,9 +98,9 @@ def test_the_help_names_only_what_the_client_does(capsys):
         student_cli.build_parser().parse_args(["--help"])
     shown = capsys.readouterr().out
     assert "SUPPRESS" not in shown
-    for visible in ("build", "push", "clone", "pull", "run", "search", "add"):
+    for visible in ("build", "push", "clone", "pull", "run", "search"):
         assert f"    {visible} " in shown
-    for hidden in ("tag", "rm", "fork", "images", "remote", "work", "source", "catalog", "migrate-courses"):
+    for hidden in ("tag", "rm", "fork", "images", "remote", "work", "source", "catalog", "migrate-courses", "add"):
         assert f"    {hidden} " not in shown
 
 

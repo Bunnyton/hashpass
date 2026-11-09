@@ -1,4 +1,4 @@
-"""Tier1/2: a student adds a course by link and works through it -- catalog, pull, credit (spec §9)."""
+"""Tier1/2: a student joins a course and works through it -- catalog, pull, credit (spec §9)."""
 from pathlib import Path
 
 import pytest
@@ -48,6 +48,12 @@ def pool(registry, tmp_path: Path) -> _Courses:
     use_course(p.url, None)
 
 
+def _join(env: cli.Home, pool: _Courses, invite: str) -> None:
+    """Join bob/linux by its invite and make it current -- what the TUI does on a pasted link."""
+    assert pool.call("POST", "/courses/bob/linux/join", "kid", {"invite": invite})[0] == 200  # noqa: PLR2004
+    my_courses.choose(env.root, pool.url, "bob/linux")
+
+
 def _env(tmp_path: Path, pool: _Courses) -> cli.Home:
     env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "kid")}, default_home=tmp_path)
     cli.save_pool(env, pool.url, "kid")
@@ -59,9 +65,7 @@ def _env(tmp_path: Path, pool: _Courses) -> cli.Home:
 def test_add_by_invite_then_catalog_pull_and_credit_through_the_course(pool: _Courses, tmp_path: Path) -> None:
     env = _env(tmp_path, pool)
     invite = pool.call("GET", "/courses/bob/linux", "bob")[1]["invite"]
-    said: list[str] = []
-    io = cli.Io(read=lambda _p: "", write=said.append, clock=lambda: "")
-    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux?invite={invite}", io) == 0
+    _join(env, pool, invite)
     assert my_courses.current(env.root, pool.url) == "bob/linux"
     client = RemoteRegistry(pool.url, token=pool.tok["kid"])
     assert client.course == "bob/linux"
@@ -77,33 +81,7 @@ def test_add_by_invite_then_catalog_pull_and_credit_through_the_course(pool: _Co
 
 
 @pytest.mark.tier2
-def test_a_private_course_without_invite_asks_for_access(pool: _Courses, tmp_path: Path) -> None:
-    env = _env(tmp_path, pool)
-    said: list[str] = []
-    io = cli.Io(read=lambda p: "д" if "[Д/н]" in p else "я из ИТ-21", write=said.append, clock=lambda: "")
-    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux", io) == 0
-    assert "заявка" in said[-1]
-    assert [r["user"] for r in pool.call("GET", "/courses/bob/linux", "bob")[1]["requests"]] == ["kid"]
-
-
-@pytest.mark.tier2
-def test_a_newcomer_registers_right_from_the_course_link(pool: _Courses, tmp_path: Path,
-                                                         monkeypatch: pytest.MonkeyPatch) -> None:
-    """Was: `hashpass add <link>` without an account ended in a bare «HTTP Error 401»."""
-    env = cli.build_env({"HASHPASS_HOME": str(tmp_path / "new")}, default_home=tmp_path)
-    pool.call("PUT", "/courses/bob/linux", "bob", {"visibility": "public"})
-    monkeypatch.setattr(cli.getpass, "getpass", lambda _p: "pw-correct1!")
-    answers = iter(["newbie", "ИУ7-31"])          # the login, then the comment for the course's team
-    said: list[str] = []
-    io = cli.Io(read=lambda _p: next(answers), write=said.append, clock=lambda: "")
-    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux", io) == 0
-    assert pool.r.users.has("newbie")
-    assert my_courses.current(env.root, pool.url) == "bob/linux"
-    assert "регистр" in "".join(said).lower()
-
-
-@pytest.mark.tier2
-def test_search_courses_from_the_terminal_and_add_by_name(pool: _Courses, tmp_path: Path) -> None:
+def test_search_courses_from_the_terminal(pool: _Courses, tmp_path: Path) -> None:
     """User 2026-10-23: «хочу прямо из hashpass искать курсы»."""
     env = _env(tmp_path, pool)
     pool.call("POST", "/courses", "bob", {"name": "git-basics", "title": "Основы Git"})
@@ -111,13 +89,10 @@ def test_search_courses_from_the_terminal_and_add_by_name(pool: _Courses, tmp_pa
     io = cli.Io(read=lambda _p: "", write=said.append, clock=lambda: "")
     assert cli.cmd_course_search(env, "git", io) == 0
     text = "".join(said)
-    assert "bob/git-basics" in text and "Основы Git" in text and "hashpass add bob/git-basics" in text
+    assert "bob/git-basics" in text and "Основы Git" in text and "«Курсы и поиск»" in text
     assert "bob/linux" not in text                                    # not matching «git»
     # user 2026-10-23: tasks and images too -- on the pool and here -- each with how to run it
     assert "Задания на пуле" in text and "hashpass run bob/git-init:1" in text
-    said.clear()
-    assert cli.cmd_course_add(env, "bob/git-basics", io) == 0         # a name is enough on this pool
-    assert my_courses.current(env.root, pool.url) == "bob/git-basics"
 
 
 @pytest.mark.tier2
@@ -125,8 +100,7 @@ def test_a_credit_stays_when_the_course_moves_to_a_new_version(pool: _Courses, t
     """User 2026-10-23: «засчитывай, если прошёл одну версию, а потом пришла другая; пиши, какая решалась»."""
     env = _env(tmp_path, pool)
     invite = pool.call("GET", "/courses/bob/linux", "bob")[1]["invite"]
-    io = cli.Io(read=lambda _p: "", write=lambda _s: None, clock=lambda: "")
-    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux?invite={invite}", io) == 0
+    _join(env, pool, invite)
     client, tok = RemoteRegistry(pool.url, token=pool.tok["kid"]), pool.tok["kid"]
     index = RepoIndex(pool.r.store.root / ".repos", "bob/git-init")
     v1, v2 = index.get("1", 1).task_digest, index.get("1", 2).task_digest
@@ -144,8 +118,7 @@ def test_an_older_version_solved_after_the_update_still_counts(pool: _Courses, t
     """Downloaded v1, the course moved to v2 meanwhile: solving the v1 copy is still a pass."""
     env = _env(tmp_path, pool)
     invite = pool.call("GET", "/courses/bob/linux", "bob")[1]["invite"]
-    io = cli.Io(read=lambda _p: "", write=lambda _s: None, clock=lambda: "")
-    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux?invite={invite}", io) == 0
+    _join(env, pool, invite)
     client, tok = RemoteRegistry(pool.url, token=pool.tok["kid"]), pool.tok["kid"]
     v1 = RepoIndex(pool.r.store.root / ".repos", "bob/git-init").get("1", 1).task_digest
     pool.call("PUT", "/courses/bob/linux/tasks/bob/git-init:1", "bob", {"n": 2})
@@ -278,24 +251,6 @@ def test_a_closed_block_and_a_prize_not_yet_earned_credit_nothing(pool: _Courses
     pool.call("PUT", f"/courses/bob/linux/blocks/{first}", "bob", {"open": True})
     assert client.submit("bob/git-init:1", _digest(pool), passed=True, token=tok)["status"] == "passed"
     assert client.submit("bob/prize:1", prize_digest, passed=True, token=tok)["status"] == "passed"   # earned
-
-
-@pytest.mark.tier2
-def test_hashpass_add_asks_a_comment_for_the_team_and_accepts_an_invitation(pool: _Courses, tmp_path: Path) -> None:
-    """User 2026-11-04: on joining (web or hashpass) — «комментарий, который увидят авторы и админы курса»."""
-    from hashpass.registry.course_people import CourseNotes  # noqa: PLC0415
-    env = _env(tmp_path, pool)
-    pool.call("POST", "/courses/bob/linux/invites", "bob", {"users": "kid"})          # a private course
-    asked: list[str] = []
-
-    def read(prompt: str) -> str:
-        asked.append(prompt)
-        return "Иванов И., ИУ7-31"
-    io = cli.Io(read=read, write=lambda _s: None, clock=lambda: "")
-    assert cli.cmd_course_add(env, f"{pool.url}/c/bob/linux", io) == 0               # no invite token: invited
-    assert any("авторы и админы курса" in q for q in asked)
-    cid = pool.call("GET", "/courses/bob/linux", "bob")[1]["id"]
-    assert CourseNotes(pool.r.store.root / ".course-notes").of_course(cid) == {"kid": "Иванов И., ИУ7-31"}
 
 
 @pytest.mark.tier2

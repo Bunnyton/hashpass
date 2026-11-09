@@ -47,7 +47,7 @@ USAGE = (
 _SETTINGS = ("title", "description", "visibility", "name")
 
 
-# user 2026-11-04: asked on joining a course -- in the web, `hashpass add` and the TUI
+# user 2026-11-04: asked on joining a course -- in the web and the TUI
 JOIN_COMMENT_QUESTION = "Хотите добавить комментарий, который увидят авторы и админы курса?"
 
 class CourseApi:

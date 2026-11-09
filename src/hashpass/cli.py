@@ -2917,74 +2917,11 @@ def cmd_solution(env: Home, arg: str, io: Io | None = None) -> int:
     return 0
 
 
-def cmd_course_add(env: Home, link: str, io: Io | None = None) -> int:
-    """
-    `hashpass add <course link>`: join the course (switching pool if the link names another one).
-
-    A public course is joined at once; a private one with the link's invite token too; without
-    it the student may send an access request. The course becomes the current one. Without an
-    account the student signs in or, with a new login, registers on the spot.
-    """
-    from hashpass import my_courses  # noqa: PLC0415
-    from hashpass.course_cli import JOIN_COMMENT_QUESTION  # noqa: PLC0415
-    io = io or _default_io()
-    pool, ref, invite = my_courses.parse_link(_course_link(env, link))
-    saved = _pool_url(env)
-    if saved and registry_key(saved) != registry_key(pool):
-        answer = (io.read(f"Ссылка ведёт на другой пул ({pool}), сейчас — {saved}. Переключиться? [Д/н] ")
-                  or "д").strip().lower()
-        if answer not in ("д", "да", "y", "yes", ""):
-            io.write("остаёмся на прежнем пуле\n")
-            return 1
-    if not saved or registry_key(saved) != registry_key(pool):
-        save_pool(env, pool, "")
-    url, _user, token = account_current(env)
-    if not token:          # a newcomer follows a course link: sign in, or sign up right here
-        _require_pool_identity(env, io)
-        url, _user, token = account_current(env)
-    client = RemoteRegistry(url, token=token)
-    # user 2026-11-04: on joining -- «хотите ли Вы добавить комментарий, который увидят авторы и админы курса»
-    comment = (io.read(JOIN_COMMENT_QUESTION + " (Enter — без комментария): ") or "").strip()
-    try:
-        client.join(ref, invite, comment=comment or None)
-    except urllib.error.HTTPError as exc:
-        if exc.code == HTTPStatus.NOT_FOUND:
-            msg = f"на пуле нет курса {ref} (или курсы там ещё не включены)"
-            raise RuntimeError(msg) from exc
-        if exc.code != HTTPStatus.FORBIDDEN:
-            raise
-        answer = (io.read("Курс закрытый, приглашения нет. Попросить доступ? [Д/н] ") or "д").strip().lower()
-        if answer not in ("д", "да", "y", "yes"):
-            return 1
-        client.request_access(ref, comment)
-        io.write(f"заявка в {ref} отправлена — когда её примут, курс появится в hashpass\n")
-        my_courses.choose(env.root, url, ref)
-        return 0
-    my_courses.choose(env.root, url, ref)
-    io.write(f"курс {ref} добавлен и выбран — запустите hashpass\n")
-    return 0
-
-
-_COURSE_NAME = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
-
-
-def _course_link(env: Home, link: str) -> str:
-    """Turn `owner/name` into a link on the current pool; a real link stays as it is."""
-    if not _COURSE_NAME.match(link.strip()):
-        return link
-    current = _pool_url(env)
-    if not current:
-        msg = "пул не задан — дайте полную ссылку на курс или: hashpass login --pool <адрес>"
-        raise RuntimeError(msg)
-    return f"{current.rstrip('/')}/c/{link.strip()}"
-
-
 def cmd_course_search(env: Home, query: str = "", io: Io | None = None) -> int:
     """
     `hashpass search [запрос]`: courses, tasks and images -- on the pool and on this machine.
 
-    Each with the command that takes it: `hashpass add` for a course, `hashpass run` for a task
-    or an image (TODO 2026-10-23: «искать по образам всем … и их выполнять»).
+    Each with how to take it: a course -- in hashpass (key c), a task or an image -- `hashpass run` (TODO 2026-10-23: «искать по образам всем … и их выполнять»).
     """
     from hashpass.library import collect  # noqa: PLC0415
     io = io or _default_io()
@@ -3010,7 +2947,7 @@ def cmd_course_search(env: Home, query: str = "", io: Io | None = None) -> int:
         lock = "  \x1b[33m(приватный — по заявке или приглашению)\x1b[0m" if r.get("visibility") == "private" else ""
         role = f"  \x1b[36m[{r['role']}]\x1b[0m" if r.get("role") else ""
         io.write(f"  \x1b[1m{r.get('title') or r['ref']}\x1b[0m  \x1b[2m{r['ref']}\x1b[0m{lock}{role}\n"
-                 f"     hashpass add {r['ref']}\n")
+                 f"     в hashpass: клавиша c — «Курсы и поиск»\n")
     section = ""
     for e in found:
         if e.section != section:
@@ -3037,7 +2974,7 @@ def cmd_courses(env: Home, ref: str | None = None, io: Io | None = None) -> int:
     now = my_courses.current(env.root, url)
     rows = my_courses.mine(env.root, url)
     if not rows:
-        io.write("курсов пока нет — добавьте по ссылке: hashpass add <ссылка курса>\n")
+        io.write("курсов пока нет — выберите в hashpass: клавиша c — «Курсы и поиск»\n")
     for r in rows:
         io.write(f"{'▸' if r == now else ' '} {r}\n")
     return 0

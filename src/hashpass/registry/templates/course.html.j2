@@ -129,10 +129,9 @@
   {% elif not joined and c.visibility == 'public' and not c.role %}
   {{ join_form('Пройти курс') }}
   {% endif %}
-  <p class='sub small'>Пройти в терминале — курс появится в списке hashpass:</p>
-  {{ cmd('hashpass add ' ~ link) }}
-  <p class='sub small'>hashpass ещё не установлен? Одной командой — установка и курс:</p>
-  {{ install_cmd(curl_flags, pool, link) }}
+  <p class='sub small'>Пройти в терминале: запустите <code>hashpass</code>, нажмите <b>c</b> — «Курсы и поиск» — и выберите курс в списке или вставьте ссылку на эту страницу.</p>
+  <p class='sub small'>hashpass ещё не установлен? Одной командой:</p>
+  {{ install_cmd(curl_flags, pool) }}
   {% if copy.may_mirror or copy.may_fork %}
   {% macro copy_form(kind, label, hint) %}
   <details class='add-menu copy-menu'><summary class='btn ghost'>{{ label }}</summary>

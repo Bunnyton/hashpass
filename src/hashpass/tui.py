@@ -281,13 +281,15 @@ class PoolTUI(App):
     # would map Q/R/S to й/к/ы. Bind both plus uppercase; Enter needs no localisation.
     BINDINGS = [   # noqa: RUF012  (Textual expects a plain class-level list)
         Binding("q,Q,й,Й", "quit", "Выход"),
+        # user 2026-11-09: «кнопка курсы отсутствует» -- 6th in the footer, it fell off an 80-column
+        # terminal; the courses come first after quit
+        Binding("c,C,с,С", "courses", "Курсы и поиск"),     # a pool with courses (spec 2026-10-21 §9)
         Binding("r,R,к,К", "refresh", "Обновить"),
         Binding("s,S,ы,Ы", "resync", "Самопроверка"),
         # spec 2026-10-16: the own solution (commands + output), another account -- right after
         # the common keys: the staff keys below overflow the footer (user: «В футере нет»)
         Binding("p,P,з,З", "solution", "Решение"),
         Binding("L,Д", "relogin", "Сменить аккаунт"),
-        Binding("c,C,с,С", "courses", "Курсы и поиск"),     # a pool with courses (spec 2026-10-21 §9)
         # user 2026-10-23: search every task and image -- here and on the pool -- and run any
         Binding("slash,f,F,а,А", "library", "Все задания и образы"),
         # Catalog editing for staff (shown only to them, see check_action): the same rights as
@@ -530,8 +532,8 @@ class PoolTUI(App):
                 self.notify(str(exc), severity="warning", timeout=6)
                 return
             if registry_key(pool) != registry_key(self.url):
-                self.notify(f"Ссылка ведёт на другой пул ({pool}). Выйдите (q) и выполните: "
-                            f"hashpass add {choice.removeprefix(LINK_PREFIX)}", timeout=10)
+                self.notify(f"Ссылка ведёт на другой пул ({pool}). Выйдите (q), смените пул: "
+                            f"hashpass login --pool {pool} — и вставьте ссылку снова", timeout=10)
                 return
             self._enter_course(ref, invite)
             return
