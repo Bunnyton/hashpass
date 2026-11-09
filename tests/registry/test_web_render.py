@@ -346,3 +346,10 @@ def test_installer_leaves_rosetta_alone_when_the_user_says_no(tmp_path):
 def test_installer_says_how_to_turn_rosetta_on_when_the_vm_has_none(tmp_path):
     rc, out, calls = _rosetta(tmp_path, tag=False, answer="y\n")
     assert rc != 0 and calls == [] and "Enable Rosetta" in out and "Apple Virtualization" in out
+
+
+@pytest.mark.tier1
+def test_install_script_installs_rsync():
+    """User 2026-11-09: «rsync не установился автоматически» -- hashpass copies images with sudo rsync."""
+    script = render_install_script("http://pool.example/")
+    assert 'command -v rsync >/dev/null 2>&1 || missing="$missing rsync"' in script

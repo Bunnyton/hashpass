@@ -175,6 +175,8 @@ command -v python3 >/dev/null 2>&1 || missing="$missing $P_PY"
 python3 -m pip --version >/dev/null 2>&1 || missing="$missing $P_PIP"
 command -v git >/dev/null 2>&1 || missing="$missing git"
 command -v curl >/dev/null 2>&1 || missing="$missing curl"
+# images and consoles are copied with `sudo rsync` (root-owned files): run, build, cleanup
+command -v rsync >/dev/null 2>&1 || missing="$missing rsync"
 # the task consoles are systemd-nspawn machines driven by machinectl (both in systemd-container)
 if ! command -v systemd-nspawn >/dev/null 2>&1 || ! command -v machinectl >/dev/null 2>&1; then
   missing="$missing $P_NSPAWN"
