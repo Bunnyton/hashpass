@@ -2,6 +2,7 @@
 # (1) ~/arch: тарбол + PKGBUILD → pelmeni-1.0-1-any.pkg.tar.gz (сжатие — из makepkg.conf Debian); ловушка — контрольные суммы
 # («Integrity checks are missing» / «FAILED» → доза sums.md: makepkg -g); (2) depends=(figlet) и
 # pkgrel=2: makepkg проверяет зависимости по базе pacman, а она тут пустая → доза nodeps.md.
+# (3) установить его pacman -U (-dd: figlet в базе pacman не будет никогда; одно -d пропускает только версии), pacman -Q pelmeni = 1.0-2.
 # Образ и ~/pelmeni — из pkg-deb.
 
 image pkg-arch:1
@@ -59,5 +60,21 @@ stage
   hint output "Could not resolve all dependencies" read nodeps.md
   hint output "already been built" say "Пакет с этим номером уже есть. Что меняется при каждой новой сборке той же версии?"
   hint tries 5 say "bsdtar -xOf файл .PKGINFO — есть там depend = figlet?"
+
+stage
+  say "Поставь свой пакет так, как это сделали бы в Arch, — pacman-ом: pacman -Q pelmeni должен знать 1.0-2"
+  on enter read pacman.md
+  solve:
+    cd /home/student/arch
+    sudo pacman -U --noconfirm -dd pelmeni-1.0-2-any.pkg.tar.gz
+  check exec pacman
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file tar bsdtar
+  on pass say "pacman -Ql pelmeni — его файлы, pacman -Qi pelmeni — паспорт, sudo pacman -R pelmeni — убрать. Тот же dpkg -L, apt show и apt remove, только другими буквами."
+  hint output "unable to satisfy dependency" say "pacman проверяет зависимости по своей базе — а figlet в неё не попадёт никогда: здесь системой правит apt. Как в makepkg, проверку можно пропустить — тот же ключ; только pacman хочет его дважды, man pacman объяснит почему."
+  hint output "you cannot perform this operation unless you are root" say "Ставить пакеты — дело root."
+  hint output "failed to init transaction" say "pacman не смог занять свою базу. Ставить пакеты — дело root."
+  hint output "exists in filesystem" say "Файл уже лежит в системе, а pacman о нём не знает — он такого не перезаписывает. Откуда он взялся?"
+  hint tries 5 say "Что ответил pacman последней строкой? error: — главное."
+  hint tries 8 say "Ставит файл пакета ключ -U (upgrade): pacman -U файл."
 
 exec finale

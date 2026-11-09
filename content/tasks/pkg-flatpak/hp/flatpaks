@@ -1,0 +1,33 @@
+#!/bin/sh
+# flatpaks <шаг>: найти в доме бандл .flatpak приложения org.hashpass.Pelmeni и проверить.
+#   built   — в metadata name=org.hashpass.Pelmeni и command, этот файл в files/bin исполняемый;
+#   figlet  — плюс приложение работает само: как в песочнице, /app — его files/, PATH с /app/bin и
+#             переменные из [Environment]; рисует заголовок без figlet в системе.
+# Бандл импортируется во временный репозиторий ostree и достаётся checkout — запускать flatpak run
+# в консоли нельзя (bwrap), поэтому /app подставляется путём распакованного files/.
+shift   # $1 — команда студента (так зовёт проверки консоль), дальше — мои аргументы
+step=$1
+command -v figlet >/dev/null 2>&1 && [ "$step" = figlet ] && exit 1
+for f in $(find /home/student -name '*.flatpak' 2>/dev/null); do
+    d=$(mktemp -d)
+    ostree --repo="$d/r" init --mode=archive >/dev/null 2>&1 || continue
+    flatpak build-import-bundle "$d/r" "$f" >/dev/null 2>&1 || continue
+    ostree --repo="$d/r" checkout -U app/org.hashpass.Pelmeni/x86_64/master "$d/a" >/dev/null 2>&1 || continue
+    m=$d/a/metadata
+    grep -qx 'name=org.hashpass.Pelmeni' "$m" || continue
+    cmd=$(sed -n 's/^command=//p' "$m" | head -n 1)
+    [ -n "$cmd" ] || continue
+    A=$d/a/files
+    case $cmd in /*) exe=$A${cmd#/app} ;; *) exe=$A/bin/$cmd ;; esac
+    [ -f "$exe" ] && [ -x "$exe" ] || continue
+    [ "$step" = built ] && exit 0
+    P=$A/bin:/usr/bin:/bin
+    set --
+    for kv in $(sed -n '/^\[Environment\]/,/^\[/{/^[A-Za-z_][A-Za-z0-9_]*=/p}' "$m"); do
+        set -- "$@" "${kv%%=*}=$(printf %s "${kv#*=}" | sed "s|/app|$A|g")"
+    done
+    out=$(cd /tmp && env -i HOME=/tmp PATH="$P" "$@" "$exe" 2 2>&1) &&
+        echo "$out" | grep -q 'Порций: 2' && echo "$out" | grep -q '|_|' &&
+        ! echo "$out" | grep -q '^figlet:' && exit 0
+done
+exit 1

@@ -1,0 +1,68 @@
+# pkg-flatpak — flatpak: приложение = metadata + files/ (внутри песочницы — /app) поверх runtime.
+# flatpak-builder и flatpak run в консоли не работают: им нужен bwrap, а он в контейнере не монтирует
+# /proc; runtime/SDK — гигабайты из сети. Поэтому собираем, как flatpak-builder в конце: metadata
+# руками (build-init требует установленный SDK), build-finish --command, build-export в репозиторий
+# ostree, build-bundle в один файл. (1) бандл org.hashpass.Pelmeni с командой pelmeni;
+# (2) figlet внутрь (apt download + dpkg -x → files/), FIGLET_FONTDIR=/app/share/figlet через --env.
+# Проверка импортирует бандл во временный репозиторий, достаёт его (ostree checkout) и запускает
+# с /app → распакованный files/, как песочница. Образ и ~/pelmeni — из pkg-deb.
+
+image pkg-flatpak:1
+from pkg-deb:1
+
+run apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends flatpak ostree >/dev/null 2>&1
+
+# figlet в систему не ставим ни на каком шаге — его кладут внутрь
+block apt match "install( +-[^ ]+)* +figlet" say "Ставить figlet в систему нельзя: приложение flatpak живёт в песочнице и системного не увидит."
+block apt-get match "install( +-[^ ]+)* +figlet" say "Ставить figlet в систему нельзя: приложение flatpak живёт в песочнице и системного не увидит."
+
+hidden hp
+
+settings
+  pager on
+
+say "Snap — от Canonical. А у Fedora, GNOME и KDE своё «приложение на любой Linux» — flatpak."
+read brief.md
+
+stage
+  say "Собери из ~/pelmeni файл pelmeni.flatpak — приложение org.hashpass.Pelmeni, команда pelmeni"
+  solve:
+    cd /home/student
+    mkdir -p pelmeni-app/files/bin
+    cp pelmeni/pelmeni pelmeni-app/files/bin/
+    printf '%s\n' '[Application]' 'name=org.hashpass.Pelmeni' 'runtime=org.freedesktop.Platform/x86_64/24.08' 'sdk=org.freedesktop.Sdk/x86_64/24.08' > pelmeni-app/metadata
+    flatpak build-finish pelmeni-app --command=pelmeni
+    flatpak build-export repo pelmeni-app
+    flatpak build-bundle repo pelmeni.flatpak org.hashpass.Pelmeni
+  check exec flatpaks built
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file chmod ostree
+  on pass say "Бандл — это коммит ostree в одном файле: flatpak install --user pelmeni.flatpak поставил бы его как из Flathub."
+  hint output "not initialized" read metadata.md
+  hint output "not installed" read metadata.md
+  hint output "Names must contain at least 2 periods" say "Идентификатор приложения — перевёрнутый домен: минимум три части через точку."
+  hint output "is not a valid repository" say "build-bundle берёт приложение из репозитория. Кто его туда кладёт?"
+  hint output "not found" say "В репозитории нет приложения с таким именем. Какое имя записано в metadata?"
+  hint tries 5 say "Что лежит в каталоге приложения? metadata и files/ — и где внутри files/ команда?"
+  hint tries 8 say "Порядок такой: каталог приложения → build-finish → build-export в репозиторий → build-bundle в файл."
+
+stage
+  say "Положи figlet внутрь приложения: в системе его нет, а заголовок должен рисоваться"
+  on enter read bundle.md
+  solve:
+    cd /home/student
+    apt-get download figlet
+    dpkg -x figlet_*.deb figlet-root
+    cp -a figlet-root/usr/. pelmeni-app/files/
+    ln -sf figlet-figlet pelmeni-app/files/bin/figlet
+    printf '%s\n' '[Environment]' 'FIGLET_FONTDIR=/app/share/figlet' >> pelmeni-app/metadata
+    flatpak build-export repo pelmeni-app
+    flatpak build-bundle repo pelmeni.flatpak org.hashpass.Pelmeni
+  check exec flatpaks figlet
+  neutral ls cat pwd cd less head tail vim nano mkdir cp tree file chmod dpkg ln ostree
+  on pass say "Обычно так и не делают: figlet собрал бы из исходников flatpak-builder — модулем в манифесте. Но итог тот же: всё своё лежит в /app."
+  hint output "already finalized" say "build-finish дважды не работает: паспорт уже готов. Это обычный текстовый файл — допиши его сам."
+  hint tries 5 say "Что лежит в files/bin твоего приложения? Есть там файл с именем ровно figlet?"
+  hint tries 8 say "figlet нашёлся, а шрифты? Он ищет их в /usr/share/figlet, а в песочнице они лежат в /app."
+  hint tries 11 say "Поменял каталог приложения — снова build-export и build-bundle: старый файл о правке не знает."
+
+exec finale
